@@ -1,0 +1,10 @@
+{
+  "name": "@sylvan-stack/mycel",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Mycel 2: the rewrite of Mycel, the knowledge engine of the Sylvan Stack.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sylvan-stack/mycel.git"
+  }
+}
