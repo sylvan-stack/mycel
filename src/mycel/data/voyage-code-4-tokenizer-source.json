@@ -1,0 +1,12 @@
+{
+  "repository": "voyageai/voyage-code-4",
+  "revision": "ac780b405e54ff8b3aff681270e0e03840fed2f3",
+  "file": "voyage-code-4-tokenizer.json",
+  "sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+  "license": "Apache-2.0",
+  "source": "https://huggingface.co/voyageai/voyage-code-4/resolve/ac780b405e54ff8b3aff681270e0e03840fed2f3/tokenizer.json",
+  "repository_metadata": "https://huggingface.co/api/models/voyageai/voyage-code-4/revision/ac780b405e54ff8b3aff681270e0e03840fed2f3",
+  "tokenization_contract": "https://github.com/voyage-ai/voyageai-python/blob/main/voyageai/_base.py",
+  "model_limits_and_prompts": "https://docs.voyageai.com/docs/embeddings",
+  "tokenizers_release": "https://pypi.org/project/tokenizers/0.23.2/"
+}

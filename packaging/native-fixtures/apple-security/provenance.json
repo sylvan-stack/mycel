@@ -1,0 +1,13 @@
+{
+  "upstreamCommit": "db15acbe6a7f257a859ad9a3bb86097bfe0679d9",
+  "upstreamRepository": "https://github.com/apple-oss-distributions/Security",
+  "sourcePath": "OSX/libsecurity_keychain/regressions/kc-keychain-file-helpers.c",
+  "sourceSha256": "96b6cc13fa641e49c49a46ec06fa15c4ddd01de7e33fcbb2981241446060f9f2",
+  "licensePath": "OSX/libsecurity_keychain/APPLE_LICENSE",
+  "licenseSha256": "212846e0145aa50fb3a5aef254a370311a93acf6c1e792e47e0068d64c8c3885",
+  "array": "test_keychain",
+  "bytes": 45864,
+  "sha256": "87a34479ff2f4f9fd8c6c982a9e461f637a7bd9b88e82b03f3e765a58bf77582",
+  "purpose": "Public regression dummy material only; a current private copy is read via the actual installed Credentials override. No owner credential or default-keychain operation.",
+  "nativeResult": null
+}

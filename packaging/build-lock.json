@@ -1,0 +1,725 @@
+{
+  "schemaVersion": 1,
+  "python": "3.14.7",
+  "minimumMacOS": "14.0",
+  "development": {
+    "python": "3.14.7",
+    "dependencies": [],
+    "implementation": "stdlib wheel writer; no build backend, installer or resolver"
+  },
+  "targets": {
+    "macos-arm64": {
+      "runtime": {
+        "python": "3.14.7",
+        "distribution": "python-build-standalone/20260901/install_only_stripped",
+        "filename": "cpython-3.14.7+20260901-aarch64-apple-darwin-install_only_stripped.tar.gz",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.14.7%2B20260901-aarch64-apple-darwin-install_only_stripped.tar.gz",
+        "sha256": "4632cb1a6edad9e73d3c81b6d2e69131637d995173e3e85005df14102b0592ba",
+        "size": 26486008,
+        "licenses": [
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-LICENSE.txt",
+            "sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-AUTHORS.txt",
+            "sha256": "4eb1fb1705e2def898e81bcba19c3aac80620d27ba3569d6a6df7b4629d1b5c2"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-LICENSE.txt",
+            "sha256": "634300a669d49aeae65b12c6c48c924c51a4cdf3d1ff086dc3456dc8bcaa2104"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-cachecontrol-LICENSE.txt",
+            "sha256": "86eeee87be2a43f3ff1f56496f451f69243926f025fedbb033666c304c4c161b"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-certifi-LICENSE",
+            "sha256": "e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-distlib-LICENSE.txt",
+            "sha256": "808e10c8a6ab8deb149ff9b3fb19f447a808094606d712a9ca57fead3552599d"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-distro-LICENSE",
+            "sha256": "cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-idna-LICENSE.md",
+            "sha256": "1a9a4f0e3d479a27240ddd59a9137a66ab4a0f9dfdc8ca6188cc0bfd85187f04"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-msgpack-COPYING",
+            "sha256": "492dedba85da5872f78e6091bcd1fea474d660d35acb4dee964b8aab3f007427"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-packaging-LICENSE",
+            "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-packaging-LICENSE.APACHE",
+            "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-packaging-LICENSE.BSD",
+            "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-pkg_resources-LICENSE",
+            "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-platformdirs-LICENSE",
+            "sha256": "29e0fd62e929850e86eb28c3fdccf0cefdf4fa94879011cffb3d0d4bed6d4db6"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-pygments-LICENSE",
+            "sha256": "a9d66f1d526df02e29dce73436d34e56e8632f46c275bbdffc70569e882f9f17"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-pyproject_hooks-LICENSE",
+            "sha256": "1b22b049b5267d6dfc23a67bf4a84d8ec04b9fdfb1a51d360e42b4342c8b4154"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-requests-LICENSE",
+            "sha256": "09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-resolvelib-LICENSE",
+            "sha256": "f388fd38cad13112c1dc0f669bbe80e7f84541edbafb72f3030d2ca7642c3c9d"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-rich-LICENSE",
+            "sha256": "deed7c17a4318158190a3ea239cc879a5a50271cebb98ae7025f48fbe58dca15"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-tomli-LICENSE",
+            "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-tomli_w-LICENSE",
+            "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-truststore-LICENSE",
+            "sha256": "33be7b7e8fa4fd19b1760e1a8ed8a668bdab852c91b692dd41424bcb725a9fca"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-26.2.1.dist-info-licenses-src-pip-_vendor-urllib3-LICENSE.txt",
+            "sha256": "130e3a64d5fdd5d096a752694634a7d9df284469de86e5732100268041e3d686"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-cachecontrol-LICENSE.txt",
+            "sha256": "86eeee87be2a43f3ff1f56496f451f69243926f025fedbb033666c304c4c161b"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-certifi-LICENSE",
+            "sha256": "e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-distlib-LICENSE.txt",
+            "sha256": "808e10c8a6ab8deb149ff9b3fb19f447a808094606d712a9ca57fead3552599d"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-distro-LICENSE",
+            "sha256": "cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-idna-LICENSE.md",
+            "sha256": "1a9a4f0e3d479a27240ddd59a9137a66ab4a0f9dfdc8ca6188cc0bfd85187f04"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-msgpack-COPYING",
+            "sha256": "492dedba85da5872f78e6091bcd1fea474d660d35acb4dee964b8aab3f007427"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-packaging-LICENSE",
+            "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-packaging-LICENSE.APACHE",
+            "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-packaging-LICENSE.BSD",
+            "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-packaging-licenses-__init__.py",
+            "sha256": "fc9c745d1883ff9f296a5b169f22eb2ee879f59a4608f20f5cb29d668f4e26f4"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-packaging-licenses-_spdx.py",
+            "sha256": "596ec35e2ca0ebcba9fd8343ff0a51625af548786257815f24b41f7e08613314"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-pkg_resources-LICENSE",
+            "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-platformdirs-LICENSE",
+            "sha256": "29e0fd62e929850e86eb28c3fdccf0cefdf4fa94879011cffb3d0d4bed6d4db6"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-pygments-LICENSE",
+            "sha256": "a9d66f1d526df02e29dce73436d34e56e8632f46c275bbdffc70569e882f9f17"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-pyproject_hooks-LICENSE",
+            "sha256": "1b22b049b5267d6dfc23a67bf4a84d8ec04b9fdfb1a51d360e42b4342c8b4154"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-requests-LICENSE",
+            "sha256": "09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-resolvelib-LICENSE",
+            "sha256": "f388fd38cad13112c1dc0f669bbe80e7f84541edbafb72f3030d2ca7642c3c9d"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-rich-LICENSE",
+            "sha256": "deed7c17a4318158190a3ea239cc879a5a50271cebb98ae7025f48fbe58dca15"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-tomli-LICENSE",
+            "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-tomli_w-LICENSE",
+            "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-truststore-LICENSE",
+            "sha256": "33be7b7e8fa4fd19b1760e1a8ed8a668bdab852c91b692dd41424bcb725a9fca"
+          },
+          {
+            "path": "licenses/cpython-3.14.7-python-lib-python3.14-site-packages-pip-_vendor-urllib3-LICENSE.txt",
+            "sha256": "130e3a64d5fdd5d096a752694634a7d9df284469de86e5732100268041e3d686"
+          }
+        ]
+      },
+      "dependencies": [
+        {
+          "name": "anyio",
+          "version": "4.15.1",
+          "filename": "anyio-4.15.1-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/12/b8/4bd346e22b28902df4d651910f5242c28d84e4a5c2435ca5c3f797ed7e2e/anyio-4.15.1-py3-none-any.whl",
+          "sha256": "6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101",
+          "size": 132079,
+          "licenses": [
+            {
+              "path": "licenses/anyio-4.15.1-LICENSE",
+              "sha256": "5361ac9dc58f2ef5fd2e9b09c68297c17f04950909bbc8023bdb82eacf22c2b0"
+            }
+          ]
+        },
+        {
+          "name": "certifi",
+          "version": "2026.7.22",
+          "filename": "certifi-2026.7.22-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl",
+          "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
+          "size": 136983,
+          "licenses": [
+            {
+              "path": "licenses/certifi-2026.7.22-LICENSE",
+              "sha256": "e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7"
+            }
+          ]
+        },
+        {
+          "name": "click",
+          "version": "8.5.0",
+          "filename": "click-8.5.0-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/58/50/6c0d534c5f134586a8e1ba4e330569e32f057e33372ae556463212fb4cd3/click-8.5.0-py3-none-any.whl",
+          "sha256": "255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360",
+          "size": 125251,
+          "licenses": [
+            {
+              "path": "licenses/click-8.5.0-LICENSE.txt",
+              "sha256": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d"
+            }
+          ]
+        },
+        {
+          "name": "cloudpickle",
+          "version": "3.1.2",
+          "filename": "cloudpickle-3.1.2-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl",
+          "sha256": "9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a",
+          "size": 22228,
+          "licenses": [
+            {
+              "path": "licenses/cloudpickle-3.1.2-cloudpickle-3.1.2.dist-info-licenses-LICENSE",
+              "sha256": "3029ea34173e9fdc233ad315dc6b100bd1ea71f529b1c1af97664a272fdc55f5"
+            }
+          ]
+        },
+        {
+          "name": "filelock",
+          "version": "4.0.12",
+          "filename": "filelock-4.0.12-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/da/a1/b047e1c486a2c66283633b7dbb73872ca16ca1ce6a426f70d4d037fc8e1c/filelock-4.0.12-py3-none-any.whl",
+          "sha256": "5f17ee83ecee8a6f3e389c75822fb70a1c2f0506b99438a6dffa1d56793588c8",
+          "size": 111732,
+          "licenses": [
+            {
+              "path": "licenses/filelock-4.0.12-LICENSE",
+              "sha256": "608c89d5060ae9921adccf3236695bc654a9946e12323ef6c021dfa04e294d48"
+            }
+          ]
+        },
+        {
+          "name": "fsspec",
+          "version": "2026.9.0",
+          "filename": "fsspec-2026.9.0-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl",
+          "sha256": "8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f",
+          "size": 221738,
+          "licenses": [
+            {
+              "path": "licenses/fsspec-2026.9.0-LICENSE",
+              "sha256": "2dc35496ce53a7307915c008a844aad53e772b49b34cdd00445067691407ec94"
+            }
+          ]
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "filename": "h11-0.16.0-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl",
+          "sha256": "63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86",
+          "size": 37515,
+          "licenses": [
+            {
+              "path": "licenses/h11-0.16.0-LICENSE.txt",
+              "sha256": "37db5bb85926db28a427a25867f10b1232003aea1be69ccb851138adb8e6f361"
+            }
+          ]
+        },
+        {
+          "name": "hf-xet",
+          "version": "1.7.0",
+          "filename": "hf_xet-1.7.0-cp38-abi3-macosx_11_0_arm64.whl",
+          "url": "https://files.pythonhosted.org/packages/c3/47/a26ebdce7056a61e931f228439bc0ab08cbec239d1690f965e5e637cba79/hf_xet-1.7.0-cp38-abi3-macosx_11_0_arm64.whl",
+          "sha256": "59fba37039233c7fcbe196817d6cdcf1b40dfb17b410f229d85b0cf0a1848da4",
+          "size": 3560352,
+          "licenses": [
+            {
+              "path": "licenses/hf-xet-1.7.0-LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+            }
+          ]
+        },
+        {
+          "name": "httpcore",
+          "version": "1.0.9",
+          "filename": "httpcore-1.0.9-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl",
+          "sha256": "2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55",
+          "size": 78784,
+          "licenses": [
+            {
+              "path": "licenses/httpcore-1.0.9-LICENSE.md",
+              "sha256": "fdcb59154c74cbaba16a11242f7740bea9f23d6feb5547917d8c5f94a80392a5"
+            }
+          ]
+        },
+        {
+          "name": "httpx",
+          "version": "0.28.1",
+          "filename": "httpx-0.28.1-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl",
+          "sha256": "d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad",
+          "size": 73517,
+          "licenses": [
+            {
+              "path": "licenses/httpx-0.28.1-LICENSE.md",
+              "sha256": "4ec59d544f12b5f539a3a716fd321ac58ccd8030b465221f2c880200cdf28d8d"
+            }
+          ]
+        },
+        {
+          "name": "huggingface_hub",
+          "version": "1.33.0",
+          "filename": "huggingface_hub-1.33.0-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/fc/16/963096d224b80909432dc16561a615fd33d2d13beef3ce4c63fa25e40867/huggingface_hub-1.33.0-py3-none-any.whl",
+          "sha256": "04e434b06e100eddbce9a6e817d72693a7884b10a79bd67ab48080d5c07eb899",
+          "size": 846435,
+          "licenses": [
+            {
+              "path": "licenses/huggingface-hub-1.33.0-LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+            }
+          ]
+        },
+        {
+          "name": "idna",
+          "version": "3.20",
+          "filename": "idna-3.20-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl",
+          "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+          "size": 69583,
+          "licenses": [
+            {
+              "path": "licenses/idna-3.20-LICENSE.md",
+              "sha256": "1a9a4f0e3d479a27240ddd59a9137a66ab4a0f9dfdc8ca6188cc0bfd85187f04"
+            }
+          ]
+        },
+        {
+          "name": "joblib",
+          "version": "1.6.0",
+          "filename": "joblib-1.6.0-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/18/53/84099323c2ec4be98d935f63c033ac4151ee83836ca1050ede3b3aadf155/joblib-1.6.0-py3-none-any.whl",
+          "sha256": "3dbbf9f6e4b592a2357b854608e980fe6390d131d7a82f011a377ef2ebef7aba",
+          "size": 306115,
+          "licenses": [
+            {
+              "path": "licenses/joblib-1.6.0-joblib-1.6.0.dist-info-licenses-LICENSE.txt",
+              "sha256": "42612911c1872c5e4b43f6ae0e8ee59467cd350332241cf72ce90640264fae6a"
+            }
+          ]
+        },
+        {
+          "name": "narwhals",
+          "version": "2.27.1",
+          "filename": "narwhals-2.27.1-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/d1/89/5d4c86da1130d9059681e5b6cd7645df5c10279a6a079c5c37dcb2cc6f3f/narwhals-2.27.1-py3-none-any.whl",
+          "sha256": "d057df13f5852b8e157596e82eb5e955fad267425df5e420e0ee9863da483b31",
+          "size": 483211,
+          "licenses": [
+            {
+              "path": "licenses/narwhals-2.27.1-narwhals-2.27.1.dist-info-licenses-LICENSE.md",
+              "sha256": "811445f30147b8f0c9d444c9025fd528f9532c54b7b83f6e2368473dc91cfdf0"
+            }
+          ]
+        },
+        {
+          "name": "numpy",
+          "version": "2.5.4",
+          "filename": "numpy-2.5.4-cp314-cp314-macosx_14_0_arm64.whl",
+          "url": "https://files.pythonhosted.org/packages/d5/b2/c6ce165acffceb15a82c07b9cc77d391f86b3f379ba62911908ae5d34b91/numpy-2.5.4-cp314-cp314-macosx_14_0_arm64.whl",
+          "sha256": "956555e0603a4d38019ae6925711cb9dc43195c076a928accf7ea5d50bddfe53",
+          "size": 5455617,
+          "licenses": [
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-LICENSE.txt",
+              "sha256": "649a589ab31076e79e9ce62ba24eae9959598124176640dbc95f87bd10f34fcf"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-include-numpy-libdivide-LICENSE.txt",
+              "sha256": "fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-src-common-pythoncapi-compat-COPYING",
+              "sha256": "3f2c1ffa76383a55ae0aac01c9737cd70050dff63e1f026694fbe9d662573c98"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-src-highway-LICENSE",
+              "sha256": "e340270d4f64384569a91d546acb5b094d69ce47f0c015db77abb74dc6f815af"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-src-multiarray-dragon4_LICENSE.txt",
+              "sha256": "f7b14309e5f54e5022b26448eefd419988ada2aec01d3c1162d84a0ea8f21f2c"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-src-npysort-x86-simd-sort-LICENSE.md",
+              "sha256": "211e7d737d6179a08f791ebb0a99897ce7cd2457410c542876d125576edfe910"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-src-umath-svml-LICENSE",
+              "sha256": "c17011467b4fe6e20fbfbeda4df09e58c2bca5480a063e55735a4000a379aad9"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-fft-pocketfft-LICENSE.md",
+              "sha256": "a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-linalg-lapack_lite-LICENSE.txt",
+              "sha256": "a14cc25e10d40a3aa705b7de2fb764a6535d8ee9b2db4e1724900585457dfd55"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-ma-LICENSE",
+              "sha256": "05f3b88351988ecfad10abe92c0c50e5875c6452d5009a0084cc291551ffcca6"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-LICENSE.md",
+              "sha256": "103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-distributions-LICENSE.md",
+              "sha256": "469778be8f33d54e1bcaab28c281cc472916d2d273f835e55bc487d30503face"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-mt19937-LICENSE.md",
+              "sha256": "0e111337b25494a773106695f0e799f642b8567aaacca4f116a74a8177179156"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-pcg64-LICENSE.md",
+              "sha256": "e7d4f4fb20358f314210a892ae17351e04993813646f697ec387385ca2a36918"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-philox-LICENSE.md",
+              "sha256": "6f5828a57223d4cc7f8ea505a2623e7b978b242752c1515e355f46ba2cec1800"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-sfc64-LICENSE.md",
+              "sha256": "9d4098846018319cd68e228ee6220361787f73bccbf00237a85e4fc9621b998f"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-splitmix64-LICENSE.md",
+              "sha256": "268b0ca06759d31ea3ca68dd35f20e877916e927b1c2a835e4592a3c4354b1f9"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-_core-include-numpy-random-LICENSE.txt",
+              "sha256": "fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-ma-LICENSE",
+              "sha256": "05f3b88351988ecfad10abe92c0c50e5875c6452d5009a0084cc291551ffcca6"
+            },
+            {
+              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-random-LICENSE.md",
+              "sha256": "103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f"
+            }
+          ]
+        },
+        {
+          "name": "packaging",
+          "version": "26.3",
+          "filename": "packaging-26.3-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl",
+          "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+          "size": 129956,
+          "licenses": [
+            {
+              "path": "licenses/packaging-26.3-LICENSE",
+              "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48"
+            },
+            {
+              "path": "licenses/packaging-26.3-LICENSE.APACHE",
+              "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+            },
+            {
+              "path": "licenses/packaging-26.3-LICENSE.BSD",
+              "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+            }
+          ]
+        },
+        {
+          "name": "pathspec",
+          "version": "1.1.1",
+          "filename": "pathspec-1.1.1-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl",
+          "sha256": "a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189",
+          "size": 57328,
+          "licenses": [
+            {
+              "path": "licenses/pathspec-1.1.1-LICENSE",
+              "sha256": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85"
+            }
+          ]
+        },
+        {
+          "name": "psycopg",
+          "version": "3.3.6",
+          "filename": "psycopg-3.3.6-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/4e/de/748bd7609c71cae5d737f0ba9192f19329f70180ecda8fff3cac02c5abe3/psycopg-3.3.6-py3-none-any.whl",
+          "sha256": "a1db9f7148b06a28606767efaca51fa6f9398c5c0a3810519be69d7000bdb631",
+          "size": 215490,
+          "licenses": [
+            {
+              "path": "licenses/psycopg-3.3.6-LICENSE.txt",
+              "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
+            }
+          ]
+        },
+        {
+          "name": "psycopg-binary",
+          "version": "3.3.6",
+          "filename": "psycopg_binary-3.3.6-cp314-cp314-macosx_11_0_arm64.whl",
+          "url": "https://files.pythonhosted.org/packages/63/da/28befc84454cbc6374550de7746f591f8fe1b6165c1fce249652cc8291c4/psycopg_binary-3.3.6-cp314-cp314-macosx_11_0_arm64.whl",
+          "sha256": "5927b7ba63153cd8e9862987290a2b783a5c590daf2a4ef981700cc3569166d4",
+          "size": 4782318,
+          "licenses": [
+            {
+              "path": "licenses/psycopg-binary-3.3.6-LICENSE.txt",
+              "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
+            }
+          ]
+        },
+        {
+          "name": "PyYAML",
+          "version": "6.0.3",
+          "filename": "pyyaml-6.0.3-cp314-cp314-macosx_11_0_arm64.whl",
+          "url": "https://files.pythonhosted.org/packages/bd/9c/4d95bb87eb2063d20db7b60faa3840c1b18025517ae857371c4dd55a6b3a/pyyaml-6.0.3-cp314-cp314-macosx_11_0_arm64.whl",
+          "sha256": "34d5fcd24b8445fadc33f9cf348c1047101756fd760b4dacb5c3e99755703310",
+          "size": 173809,
+          "licenses": [
+            {
+              "path": "licenses/pyyaml-6.0.3-LICENSE",
+              "sha256": "8d3928f9dc4490fd635707cb88eb26bd764102a7282954307d3e5167a577e8a4"
+            }
+          ]
+        },
+        {
+          "name": "scikit-learn",
+          "version": "1.9.1",
+          "filename": "scikit_learn-1.9.1-cp314-cp314-macosx_12_0_arm64.whl",
+          "url": "https://files.pythonhosted.org/packages/9b/ed/d68115577c8b42b0442ebd8180945d4008880a33176094640e00b585128e/scikit_learn-1.9.1-cp314-cp314-macosx_12_0_arm64.whl",
+          "sha256": "8893bc6331f60f18d4ac75e12ed356e2dcf6a564bf767918b5b7ca54c8c8be49",
+          "size": 8279175,
+          "licenses": [
+            {
+              "path": "licenses/scikit-learn-1.9.1-macos-arm64-scikit_learn-1.9.1.dist-info-licenses-COPYING",
+              "sha256": "fc8dc597df0e3f51da65e2a71021e7f92e0b481998ec572a53c03ac0441db040"
+            },
+            {
+              "path": "licenses/scikit-learn-1.9.1-macos-arm64-sklearn-externals-array_api_compat-LICENSE",
+              "sha256": "4ffd978e3fa18d058d98c66771cfea7ed634aaf7023cf9612b8b55eee9a8f0fe"
+            },
+            {
+              "path": "licenses/scikit-learn-1.9.1-macos-arm64-sklearn-externals-array_api_extra-LICENSE",
+              "sha256": "58494398fe147fdce76a68b2decd4c08ce3a1ea237b6d6785001c15f822c6ed6"
+            },
+            {
+              "path": "licenses/scikit-learn-1.9.1-macos-arm64-sklearn-svm-src-liblinear-COPYRIGHT",
+              "sha256": "36f048db5651dd450f03e513016b77036cc99a44a66b2fdcecf4f6418657e0e1"
+            }
+          ]
+        },
+        {
+          "name": "scipy",
+          "version": "1.18.1",
+          "filename": "scipy-1.18.1-cp314-cp314-macosx_14_0_arm64.whl",
+          "url": "https://files.pythonhosted.org/packages/70/e8/6b0c288c50942d78193696c9f15f9a0874f5178aa0ddf40f83d9924b3e8d/scipy-1.18.1-cp314-cp314-macosx_14_0_arm64.whl",
+          "sha256": "011413b7426b75012840e35649e00fe0a2c3bae89fed433876e3a99251572efc",
+          "size": 20466839,
+          "licenses": [
+            {
+              "path": "licenses/scipy-1.18.1-macos-arm64-scipy-1.18.1.dist-info-LICENSE.txt",
+              "sha256": "09a1b9e19573045b0784a181cc4bef677039d4f2111631c747bf72b7f19017d4"
+            },
+            {
+              "path": "licenses/scipy-1.18.1-macos-arm64-scipy-_lib-_uarray-LICENSE",
+              "sha256": "c80c39b5fce06ba4897e14e0b0a88b54458334d951eb1361402ffad2cfb863b4"
+            },
+            {
+              "path": "licenses/scipy-1.18.1-macos-arm64-scipy-fft-_duccfft-LICENSE.md",
+              "sha256": "c254b2b5fd30ae3c89d36ba061730563b9760fca04f1b746a1b2c3157da2c789"
+            },
+            {
+              "path": "licenses/scipy-1.18.1-macos-arm64-scipy-integrate-LICENSE_DOP",
+              "sha256": "ed9bf58c6d74d3fad9d92d1d67d9bff8141d8ab60de784516b0711364fd43357"
+            },
+            {
+              "path": "licenses/scipy-1.18.1-macos-arm64-scipy-spatial-qhull_src-COPYING_QHULL.txt",
+              "sha256": "106d55c931fd6a84822e5345d900273d059f1c27310d02567ccb313c5d18c55d"
+            }
+          ]
+        },
+        {
+          "name": "threadpoolctl",
+          "version": "3.7.0",
+          "filename": "threadpoolctl-3.7.0-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/43/3f/f88a53f60a472b46f4023f56d204dd7de33d34c5d2acbfa0d70a674e639e/threadpoolctl-3.7.0-py3-none-any.whl",
+          "sha256": "cd8b60b5641b45c67bbf73c64c843235fc2d8a480c87389f52f5dbee893b86be",
+          "size": 26362,
+          "licenses": [
+            {
+              "path": "licenses/threadpoolctl-3.7.0-threadpoolctl-3.7.0.dist-info-licenses-LICENSE",
+              "sha256": "81ac619075248b06e53660b652d10e485f4675f5d0ae0f97ea22370da1f7e23b"
+            }
+          ]
+        },
+        {
+          "name": "tokenizers",
+          "version": "0.23.2",
+          "filename": "tokenizers-0.23.2-cp310-abi3-macosx_11_0_arm64.whl",
+          "url": "https://files.pythonhosted.org/packages/67/49/22da045a91732384d3a3771816bf188dc5a1f702c32e635afa7c679c0bef/tokenizers-0.23.2-cp310-abi3-macosx_11_0_arm64.whl",
+          "sha256": "986670e43691469dcee610ea0f846f91a8f84e91fc6f7a48d4c064414c0ec2bf",
+          "size": 3101593,
+          "licenses": [
+            {
+              "path": "licenses/tokenizers-0.23.2-LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "source": "https://raw.githubusercontent.com/huggingface/tokenizers/v0.23.2/LICENSE"
+            }
+          ]
+        },
+        {
+          "name": "tqdm",
+          "version": "4.70.1",
+          "filename": "tqdm-4.70.1-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
+          "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
+          "size": 80199,
+          "licenses": [
+            {
+              "path": "licenses/tqdm-4.70.1-LICENCE",
+              "sha256": "fcff87c3a47ce8028a8512aa182d4fcf0ad1c90544ee75cf9b343684cac194de"
+            }
+          ]
+        },
+        {
+          "name": "tree-sitter",
+          "version": "0.26.0",
+          "filename": "tree_sitter-0.26.0-cp314-cp314-macosx_11_0_arm64.whl",
+          "url": "https://files.pythonhosted.org/packages/b0/d9/efe62ec65dc9d096e834d27b8c058127e2146e42ff3380b822a233f016a6/tree_sitter-0.26.0-cp314-cp314-macosx_11_0_arm64.whl",
+          "sha256": "5fc2f41bf246ff2f70a9cc3690be35ec7580a4923151873d898c8bcb1a4503d3",
+          "size": 140805,
+          "licenses": [
+            {
+              "path": "licenses/tree-sitter-0.26.0-LICENSE",
+              "sha256": "1af0790543fffac99dd3bd290bf83ca963f4f8029065eb6f35638f4df863ae8e"
+            }
+          ]
+        },
+        {
+          "name": "tree-sitter-javascript",
+          "version": "0.25.0",
+          "filename": "tree_sitter_javascript-0.25.0-cp310-abi3-macosx_11_0_arm64.whl",
+          "url": "https://files.pythonhosted.org/packages/b1/8f/6b4b2bc90d8ab3955856ce852cc9d1e82c81d7ab9646385f0e75ffd5b5d3/tree_sitter_javascript-0.25.0-cp310-abi3-macosx_11_0_arm64.whl",
+          "sha256": "8264a996b8845cfce06965152a013b5d9cbb7d199bc3503e12b5682e62bb1de1",
+          "size": 66440,
+          "licenses": [
+            {
+              "path": "licenses/tree-sitter-javascript-0.25.0-LICENSE",
+              "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+            }
+          ]
+        },
+        {
+          "name": "tree-sitter-typescript",
+          "version": "0.23.2",
+          "filename": "tree_sitter_typescript-0.23.2-cp39-abi3-macosx_11_0_arm64.whl",
+          "url": "https://files.pythonhosted.org/packages/8f/2f/1f36fda564518d84593f2740d5905ac127d590baf5c5753cef2a88a89c15/tree_sitter_typescript-0.23.2-cp39-abi3-macosx_11_0_arm64.whl",
+          "sha256": "c7cc1b0ff5d91bac863b0e38b1578d5505e718156c9db577c8baea2557f66de8",
+          "size": 302008,
+          "licenses": [
+            {
+              "path": "licenses/tree-sitter-typescript-0.23.2-LICENSE",
+              "sha256": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+            }
+          ]
+        },
+        {
+          "name": "typing_extensions",
+          "version": "4.16.0",
+          "filename": "typing_extensions-4.16.0-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+          "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+          "size": 45571,
+          "licenses": [
+            {
+              "path": "licenses/typing-extensions-4.16.0-LICENSE",
+              "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

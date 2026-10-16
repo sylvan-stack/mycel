@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "scan": {
+    "document_endings": [
+      ".md"
+    ],
+    "code_endings": [
+      ".py",
+      ".svelte",
+      ".ts",
+      ".tsx",
+      ".mts",
+      ".cts",
+      ".js",
+      ".jsx",
+      ".mjs",
+      ".cjs",
+      ".sh",
+      ".bash",
+      ".plist",
+      ".plist.in",
+      ".swift"
+    ],
+    "skip_folders": [
+      ".arbol",
+      ".arco",
+      ".bare",
+      ".git",
+      ".mypy_cache",
+      ".next",
+      ".pytest_cache",
+      ".ruff_cache",
+      ".svelte-kit",
+      ".turbo",
+      ".venv",
+      "__pycache__",
+      "build",
+      "coverage",
+      "dist",
+      "node_modules",
+      "releases",
+      "site-packages",
+      "storybook-static",
+      "venv"
+    ]
+  },
+  "search": {
+    "shared_documents": [
+      {
+        "repo": "mycel",
+        "paths": [
+          "."
+        ]
+      },
+      {
+        "repo": "arbol",
+        "paths": [
+          "GLOSSARY.md"
+        ]
+      }
+    ]
+  },
+  "repositories": {
+    "test_patterns": [
+      "(\\.(spec|test)\\.[jt]sx?$)|(/__tests__/)|((^|/)test_[^/]*\\.py$)|(conftest\\.py$)|(_test\\.(py|go)$)"
+    ],
+    "generated_patterns": [
+      "(\\.generated\\.[jt]sx?$)|((^|/)gql/types\\.ts$)"
+    ]
+  }
+}

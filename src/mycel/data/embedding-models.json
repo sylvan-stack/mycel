@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "models": {
+    "voyage-code-4": {
+      "dimensions": [
+        256,
+        512,
+        1024,
+        2048
+      ],
+      "default_dimensions": 1024,
+      "tokenizer_repository": "voyageai/voyage-code-4",
+      "tokenizer_revision": "ac780b405e54ff8b3aff681270e0e03840fed2f3",
+      "tokenizer_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+      "tokenizer_file": "voyage-code-4-tokenizer.json",
+      "tokenizers_version": "0.23.2",
+      "planner_version": 1,
+      "provider_context_tokens": 32000,
+      "input_token_cap": 31744,
+      "batch_token_cap": 31744,
+      "batch_input_cap": 64,
+      "provider_input_cap": 1000,
+      "repository_in_flight_cap": 1,
+      "query_prompt": "Represent the query for retrieving supporting documents: ",
+      "document_prompt": "Represent the document for retrieval: ",
+      "counting_rule": "submitted-exact; planning-prompt-plus-exact-v1"
+    }
+  }
+}

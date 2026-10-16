@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "profile": "mycel-summary-prompts-v1",
+  "instruction": "You summarise clusters of related project documentation so the summary can be retrieved on its own. Be faithful and self-contained.\n",
+  "task": "Write a concise, self-contained summary of the following related documentation sections. Capture the key points and how they relate, with no preamble.\n\n$sections\n"
+}

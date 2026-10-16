@@ -1,0 +1,187 @@
+"""Configured-store proofs for unchanged parsing and fresh acquisition guards."""
+from dataclasses import replace
+from hashlib import sha256
+import os
+from unittest.mock import patch
+import unittest
+
+from psycopg.types.json import Jsonb
+
+from mycel import _capture
+from mycel._coverage import proves
+from mycel._disk_reconciliation import DiskCaptureStore
+from mycel._errors import MycelError
+from mycel._located_reconciliation import LocatedCaptureStore
+import test_located_reconciliation as _fixture_module
+
+
+class CaptureHistoryStoreTests(unittest.TestCase):
+    # Reuse genuine fixture setup without inheriting/discovering its proofs.
+    setUp = _fixture_module.LocatedReconciliationStoreTests.setUp
+    configure = _fixture_module.LocatedReconciliationStoreTests.configure
+    connect = _fixture_module.LocatedReconciliationStoreTests.connect
+    git = _fixture_module.LocatedReconciliationStoreTests.git
+    commit = _fixture_module.LocatedReconciliationStoreTests.commit
+    initialize = _fixture_module.LocatedReconciliationStoreTests.initialize
+    state = _fixture_module.LocatedReconciliationStoreTests.state
+
+    def populate(self, *, git=True):
+        (self.artifact / 'guide.md').write_bytes(
+            b'---\nrole: authored\nextra: !!set {beta: null, alpha: null}\n'
+            b'binary: !!binary YWJj\nnumber: .nan\n'
+            b'unknown_nul: "malformed\\0ref"\nunknown_surrogate: "\\uD800"\n'
+            b'"unknown\\0key": "\\uDFFF"\n---\n# Guide\nOriginal body.\n')
+        self.source = self.code / 'module.py'
+        self.source.write_bytes(b'def value():\n    return 1\n')
+        if git:
+            self.git('init', '--initial-branch=fixture-main')
+            self.commit()
+            self.git('branch', 'feature')
+            self.source.write_bytes(b'def value():\n    return 2\n')
+            self.git('stash', 'push', '--message', 'Saved')
+
+    @proves('MYC-1.7', kind='store')
+    def test_unchanged_disk_and_located_repeat_from_persisted_history_never_splits(self):
+        self.populate()
+        with self.connect() as connection:
+            first = LocatedCaptureStore(connection).apply(self.settings, 'fixture')
+            before = self.state(connection)
+            identities = tuple((file.binding, file.chunk_versions) for file in first.files)
+        # A new store object and connection must use persisted parser history,
+        # rather than process-local previous-manifest state.
+        with self.connect() as connection:
+            with patch.object(_capture, 'split_markdown', wraps=_capture.split_markdown) as markdown, \
+                    patch.object(_capture, 'chunk_code', wraps=_capture.chunk_code) as code:
+                store = LocatedCaptureStore(connection)
+                captured = store.capture(self.settings, 'fixture')
+                self.assertTrue(all(file.reused_parse for file in captured.disk.files))
+                self.assertTrue(all(location.reused for location in captured.locations[1:]))
+                frontmatter = next(file.parsed.frontmatter for file in captured.disk.files
+                                   if file.corpus == 'documents')
+                self.assertEqual(frontmatter['unknown_nul'], 'malformed\0ref')
+                self.assertEqual(frontmatter['unknown_surrogate'], '\ud800')
+                self.assertEqual(frontmatter['unknown\0key'], '\udfff')
+                repeat = store.apply(self.settings, 'fixture')
+            self.assertEqual((markdown.call_count, code.call_count), (0, 0))
+            self.assertFalse(repeat.changed)
+            self.assertEqual(tuple((file.binding, file.chunk_versions) for file in repeat.files), identities)
+            self.assertEqual(self.state(connection), before)
+        # The disk-only API also retains unchanged parse history without a Git
+        # publication catalog, while reading every selected disk file again.
+        self.git('update-ref', '-d', 'refs/stash')
+        self.git('update-ref', '-d', 'refs/heads/feature')
+        self.git('update-ref', '-d', 'refs/heads/fixture-main')
+        with self.connect() as connection:
+            disk = DiskCaptureStore(connection)
+            disk.apply(self.settings, 'fixture')
+            before = self.state(connection)
+            with patch.object(_capture, 'split_markdown', wraps=_capture.split_markdown) as markdown, \
+                    patch.object(_capture, 'chunk_code', wraps=_capture.chunk_code) as code:
+                repeat = disk.apply(self.settings, 'fixture')
+            self.assertEqual((markdown.call_count, code.call_count), (0, 0))
+            self.assertFalse(repeat.changed)
+            self.assertEqual(self.state(connection), before)
+
+    @proves('MYC-1.7', kind='store')
+    def test_changed_code_after_preliminary_scan_is_not_hidden_or_preemptively_stored(self):
+        self.populate(git=False)
+        with self.connect() as connection:
+            store = DiskCaptureStore(connection)
+            first = store.apply(self.settings, 'fixture')
+            original = next(file for file in first.files if file.binding.primary.path == 'module.py')
+            before = self.state(connection)
+            preliminary = store.capture(self.settings, 'fixture')
+            self.assertEqual(self.state(connection), before)
+            info = self.source.stat()
+            self.source.write_bytes(b'def value():\n    return 9\n')
+            os.utime(self.source, ns=(info.st_atime_ns, info.st_mtime_ns))
+            with self.assertRaises(MycelError):
+                store.apply(self.settings, preliminary)
+            self.assertEqual(self.state(connection), before)
+            with patch.object(_capture, 'split_markdown', wraps=_capture.split_markdown) as markdown, \
+                    patch.object(_capture, 'chunk_code', wraps=_capture.chunk_code) as code:
+                changed = store.apply(self.settings, 'fixture')
+            current = next(file for file in changed.files if file.binding.primary.path == 'module.py')
+            self.assertTrue(changed.changed)
+            self.assertEqual(markdown.call_count, 0)
+            self.assertGreater(code.call_count, 0)
+            self.assertEqual(current.binding.identifier, original.binding.identifier)
+            self.assertEqual(current.chunk_versions[0][0], original.chunk_versions[0][0])
+            self.assertNotEqual(current.chunk_versions[0][1], original.chunk_versions[0][1])
+            self.assertEqual(bytes(connection.execute('SELECT source_bytes FROM public.mycel_file_versions '
+                'WHERE id=%s', (current.binding.version,)).fetchone()[0]), self.source.read_bytes())
+
+    @proves('MYC-1.7', 'MYC-16.13', kind='store')
+    def test_reused_parses_preserve_late_disk_git_and_effective_settings_rollback_guards(self):
+        self.populate()
+        with self.connect() as connection:
+            store = LocatedCaptureStore(connection)
+            store.apply(self.settings, 'fixture')
+            initial_settings = self.config.read_bytes()
+            initial_source = self.source.read_bytes()
+            for stage in ('disk', 'git', 'settings'):
+                with self.subTest(stage=stage):
+                    before = self.state(connection)
+                    def late_change(repository, counts):
+                        if stage == 'disk':
+                            self.source.write_bytes(b'def value():\n    return 7\n')
+                        elif stage == 'git':
+                            self.git('branch', 'late-ref')
+                        else:
+                            self.config.write_bytes(initial_settings.replace(b'enabled=true', b'enabled=false'))
+                        return counts
+                    try:
+                        with self.assertRaises(MycelError):
+                            store.apply(self.settings, 'fixture', reply_counts=late_change)
+                        self.assertEqual(self.state(connection), before)
+                    finally:
+                        self.source.write_bytes(initial_source)
+                        self.config.write_bytes(initial_settings)
+                        if stage == 'git':
+                            self.git('branch', '--delete', 'late-ref')
+
+    @proves('MYC-1.7', kind='store')
+    def test_forged_incoming_parse_is_refused_and_corrupt_or_changed_parser_cache_reparses(self):
+        self.populate(git=False)
+        with self.connect() as connection:
+            store = DiskCaptureStore(connection)
+            store.apply(self.settings, 'fixture')
+            before = self.state(connection)
+            manifest = store.capture(self.settings, 'fixture')
+            document = next(file for file in manifest.disk.files if file.corpus == 'documents')
+            forged = replace(document, parsed=replace(document.parsed, chunks=(
+                replace(document.parsed.chunks[0], name='Forged', title='Forged'),)))
+            manifest = replace(manifest, locations=(replace(manifest.disk, files=tuple(
+                forged if file is document else file for file in manifest.disk.files)),))
+            with self.assertRaises(MycelError):
+                store.apply(self.settings, manifest)
+            self.assertEqual(self.state(connection), before)
+            connection.execute("UPDATE public.mycel_file_locations SET metadata=jsonb_set(metadata,"
+                "'{parseHistory,parsedHash}',%s) WHERE kind='disk'", (Jsonb('0' * 64),))
+            with patch.object(_capture, 'split_markdown', wraps=_capture.split_markdown) as markdown, \
+                    patch.object(_capture, 'chunk_code', wraps=_capture.chunk_code) as code:
+                captured = store.capture(self.settings, 'fixture')
+            self.assertTrue(captured.deletion_safe)
+            self.assertGreater(markdown.call_count, 0)
+            self.assertGreater(code.call_count, 0)
+            store.apply(self.settings, 'fixture')
+            location, metadata = connection.execute('SELECT l.id,l.metadata FROM public.mycel_file_locations l '
+                'JOIN public.mycel_file_versions v ON v.id=l.file_version '
+                "JOIN public.mycel_files f ON f.id=v.file_id WHERE f.corpus='code' AND l.kind='disk'").fetchone()
+            metadata['parseHistory']['parsed']['value'] = []
+            metadata['parseHistory']['parsedHash'] = sha256(
+                _capture._json(metadata['parseHistory']['parsed'])).hexdigest()
+            connection.execute('UPDATE public.mycel_file_locations SET metadata=%s WHERE id=%s',
+                               (Jsonb(metadata), location))
+            with patch.object(_capture, 'chunk_code', wraps=_capture.chunk_code) as code:
+                captured = store.capture(self.settings, 'fixture')
+            self.assertTrue(captured.deletion_safe)
+            self.assertGreater(code.call_count, 0)
+            store.apply(self.settings, 'fixture')
+            with patch.object(_capture, '_parser_revision', return_value='changed-parser'), \
+                    patch.object(_capture, 'split_markdown', wraps=_capture.split_markdown) as markdown, \
+                    patch.object(_capture, 'chunk_code', wraps=_capture.chunk_code) as code:
+                captured = store.capture(self.settings, 'fixture')
+            self.assertTrue(captured.deletion_safe)
+            self.assertGreater(markdown.call_count, 0)
+            self.assertGreater(code.call_count, 0)
