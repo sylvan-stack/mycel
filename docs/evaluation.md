@@ -286,3 +286,85 @@ mycel:@code/src/mycel/_coverage.py#run_on_demand_checks
 mycel:@code/src/mycel/_coverage.py#run_checks
 mycel:@code/tests/test_provider_deployment.py#SameRunProviderDeploymentCallerTests
 -->
+
+## Inspecting and executing one provider group
+
+The development operator script `scripts/qualify_providers.py` prepares an exact
+operation before any credential or model access. Its default invocation reads
+local source, registry, settings, labelled suite and reviewer executable bytes:
+
+```sh
+<source>/.venv/bin/python -B <source>/scripts/qualify_providers.py \
+  --settings /absolute/config.toml --suite /absolute/reviewed-cases.toml \
+  --repo <configured-repository>
+```
+
+The report gives semantic coverage floors, the exact complete Jev HTTP and
+reviewer stdin byte counts (including its final LF), configured limits,
+bounded maximum calls and the identities those inputs bind. These byte caps
+describe local wire fit; actual provider tokenizer/context fit remains
+unverified. The fixed embedding compatibility check allows one attempt for
+each of its two inputs. Preflight launches no
+reviewer, reads no credential, downloads no tokenizer and sends no provider
+request. Missing reviewer configuration leaves request sizes unknown. Required
+unavailable evidence stays a local no-call case. The plan omits fixture text,
+store addresses and credential-command arguments. Usage and cost remain null.
+
+Oversized Jev input may use complete direct review. Qualification still needs
+at least one common adjudicated Jev/reviewer case; a corpus whose every complete
+input bypasses Jev cannot establish that comparison. Preflight refuses such a
+plan before spending quota. It also refuses incomplete semantic coverage and
+reviewer requests that exceed their configured cap. A possible comparison is
+not a measured routed case or a guarantee of reviewer improvement.
+
+Development preflight reports `liveReady=false`. To bind an actual staged
+Build, use that Build's bundled interpreter under `-I -B`, and select its
+registry and hexadecimal number:
+
+```sh
+<registry>/<N>/program/runtime/bin/python3 -I -B \
+  <source>/scripts/qualify_providers.py \
+  --settings /absolute/config.toml --suite /absolute/reviewed-cases.toml \
+  --repo <configured-repository> --build-registry <registry> --build <N>
+```
+
+This verifies actual installed product imports, interpreter, immutable program
+manifest, exact source and complete check-input manifest, requirement registry,
+suite, settings and command identity. A freeform Build label cannot stand in
+for staged execution. A complete unpublished stage may be inspected; the
+operation never marks it working, installs a launcher or changes a selection.
+Missing, changed, failed or withdrawn stage evidence refuses live execution.
+
+Only after explicit operator selection of that concrete live operation, repeat
+the same staged invocation with `--live --expect-plan-sha256 <planSha256>` and
+`--output-dir /absolute/new-private-directory`. The directory must be new and
+outside the source repository. A shared Build run guard prevents pruning.
+All bindings are recomputed before the first credential boundary; changed
+source, fixture, settings, registry, program or executable bytes refuse the
+reviewed plan. Existing per-call settings guards additionally check the exact
+external settings/suite/source/registry/command bytes and staged program's
+unchanged file set, inodes and metadata before another request. The complete
+program manifest is rehashed at group boundaries. No limit is raised and no
+fixture or profile is substituted.
+
+The live branch calls `run_provider_checks` once, then passes its original
+proof and reports objects directly to `run_provider_deployment_checks` once.
+Failure never retries the group. Original proof objects remain available to
+an importing same-process caller through `run_operation`'s return value.
+Private `preflight.json`, `reports.json` and `receipt.json` retain the exact
+plan, measured reports and diagnostic check records. Saved records cannot be
+loaded as `OnDemandProofs`; exiting the script ends that same-process proof
+lifetime. Public `evaluate --live` alone does not perform this grouped proof
+handoff, so do not run it first to prepare acceptance evidence for this script.
+
+This operator preparation is separate from automatic Build qualification and
+does not carry earlier automatic acceptance onto changed source. Its unit
+fixtures are explicitly synthetic; they supply neither the original reviewed
+release corpus nor real provider qualification. MYC-4.25 retrieval evaluation
+remains a separate on-demand operation.
+
+<!-- sources:
+mycel:@code/scripts/qualify_providers.py#prepare_operation
+mycel:@code/scripts/qualify_providers.py#run_operation
+mycel:@code/tests/test_provider_operation.py
+-->
