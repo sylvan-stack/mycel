@@ -47,6 +47,83 @@ checkout; inspecting `ReviewCommandIdentity` starts no child. Local automatic
 proofs use scripted stand-ins. An explicit `evaluate --kind drift --live` run
 must qualify the actual pinned deployment before use in a working release.
 
+## Codex account adapter
+
+`scripts/review_with_codex.py` supplies a protocol-1 adapter for the owner's
+existing Codex account and its selected `gpt-6.1-sol` model at `ultra` effort.
+Use an immutable copy with Python 3.13 or later and a pinned Codex executable.
+Its explicit profile binds the script, Codex executable and owner configuration
+SHA-256 values. An explicit sealed model catalog and its SHA-256 also pin the
+selected model's unchanged tool, transport and generation metadata; normal
+Codex catalog refresh cannot alter that profile during qualification. The
+Python executable and literal arguments, including `-I -B`,
+also participate in Mycel's normal command identity. Change the adapter revision
+when any of these judgement-affecting inputs changes.
+
+The literal command has this shape; replace every placeholder with an inspected
+absolute path, recorded SHA-256 or immutable revision before use:
+
+```toml
+[drifts]
+review_command = ["/absolute/python", "-I", "-B", "/absolute/review_with_codex.py", "--codex", "/absolute/pinned/codex", "--codex-sha256", "<sha256>", "--adapter-sha256", "<sha256>", "--owner-config-sha256", "<sha256>", "--catalog", "/absolute/sealed/model-catalog.json", "--catalog-sha256", "<sha256>", "--revision", "<immutable-revision>"]
+review_provider = "openai-codex-account"
+review_model = "gpt-6.1-sol"
+review_revision = "<immutable-revision>"
+```
+
+`openai-codex-account` is the adapter's explicit Codex provider-route ID. It is
+an OpenAI provider definition with `requires_openai_auth=true`, no custom URL,
+API key, bearer token or authentication command. Codex chooses its normal account
+transport and owns authentication; the adapter opens no credential file. This
+separate route is necessary because Codex's reserved `openai` route cannot be
+overridden to disable its HTTP and stream retries. The adapter requires both
+retry counts to be zero, WebSockets disabled, and the separate unbounded
+connection-retry feature disabled. It verifies that the active account is a
+ChatGPT account without reporting account identifiers.
+
+Every attempt starts a fresh local app-server through the owner's clean login
+shell, in the inherited Mycel process group. It explicitly disables every named
+personal MCP server and all action, app, plugin, delegation, hook and discovery
+features used by the pinned CLI. Empty table overrides alone are insufficient:
+Codex merges them. Before a model turn, effective configuration must prove these
+controls, absence of endpoint overrides, the explicit catalog path and its
+command-line origin, and the chosen model and effort. Catalog bytes are checked
+before launch, immediately before the model turn and after its completion. The
+ephemeral thread must report the exact route/model/effort, read-only sandbox,
+approval policy `never` and no instruction sources. Provider-model fallback is
+explicitly disabled. On macOS, an additional `sandbox-exec` read-data denial
+excludes global `AGENTS.md` and `AGENTS.override.md`, their resolved targets and
+Data-volume aliases without restricting authentication files. A missing or
+incompatible control refuses the attempt before model work.
+
+Append `--preflight` to that command to perform only local initialization,
+configuration/account-type checks and ephemeral thread creation. It starts no
+model turn and reports `configuredUnverified`, selected route/model/effort,
+instruction sources and zero model turns. This is not provider qualification.
+Codex may update its normal local metadata while performing these local checks.
+
+The adapter validates canonical JSON plus exactly one LF, the input hash, pinned
+criteria, every supplied text snapshot and exact allowed locators. Mycel remains
+responsible for constructing the complete typed dependency selection and
+baseline. Complete evidence is sent in one model turn with a strict judgement
+schema. The wire limit is 1 MiB; the complete prompt, fixed instructions and
+output schema also have a conservative 400,000-byte admission bound under the
+explicit 500,000-token context profile. These are byte counts, not exact model
+token measurements; actual provider context refusal remains a failure. No text
+is truncated. Automatic pre-turn compaction has an explicit maximum threshold;
+turn-end compaction is disabled. Any compaction notification, tool item or
+request, reroute, changed session setting, second completion or cross-turn
+evidence rejects the attempt without feeding a tool result back to the model.
+
+The selected model comes from the trusted local thread response and the checked
+absence of rerouting, rather than model-generated self-identification. It does
+not attest an immutable server-side weights snapshot. Usage is copied only from
+one matching raw platform completion when explicit nonnegative input/output
+counts exist; otherwise it is omitted. No billing amount or synthetic provider
+attempt count is supplied. Parent and adapter deadlines, output caps and process
+cleanup remain active. Local fixture checks and request-capture probes establish
+these boundaries; a real same-profile qualification remains an explicit task.
+
 ## Complete evidence and one attempt
 
 `ReviewerClient.classify(..., deadline=..., before_call=..., cancelled=...)`
