@@ -121,7 +121,11 @@ not attest an immutable server-side weights snapshot. Usage is copied only from
 one matching raw platform completion when explicit nonnegative input/output
 counts exist; otherwise it is omitted. No billing amount or synthetic provider
 attempt count is supplied. Parent and adapter deadlines, output caps and process
-cleanup remain active. Local fixture checks and request-capture probes establish
+cleanup remain active. Closed structured Codex error codes and HTTP statuses
+become typed authentication, input or transient transport failures only after
+matching the selected thread and exact turn. Provider error prose is discarded;
+unknown codes and any automatic-retry notification are terminal refusals. Only
+Mycel schedules a bounded retry. Local fixture checks and request-capture probes establish
 these boundaries; a real same-profile qualification remains an explicit task.
 
 ## Complete evidence and one attempt

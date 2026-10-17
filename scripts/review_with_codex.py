@@ -436,12 +436,49 @@ def judgement_schema(locators):
             "required": ["judgement", "rationale", "evidence"]}
 
 
+def provider_failure_code(error):
+    """Translate only closed platform error codes, never provider prose."""
+    if type(error) is not dict:
+        return "provider_result_invalid"
+    info = error.get("codexErrorInfo")
+    if type(info) is str:
+        return {"unauthorized": "authentication", "rateLimitExceeded": "rate_limited",
+                "serverOverloaded": "unavailable", "flexUnavailable": "unavailable",
+                "internalServerError": "unavailable", "contextWindowExceeded": "input_too_large",
+                "badRequest": "invalid_request"}.get(info, "provider_result_invalid")
+    variants = {"httpConnectionFailed", "responseStreamConnectionFailed",
+                "responseStreamDisconnected", "responseTooManyFailedAttempts"}
+    if type(info) is not dict or len(info) != 1 or not set(info) <= variants:
+        return "provider_result_invalid"
+    details = next(iter(info.values()))
+    if type(details) is not dict or not set(details) <= {"httpStatusCode"}:
+        return "provider_result_invalid"
+    status = details.get("httpStatusCode")
+    if status is None:
+        return "connection"
+    if type(status) is not int or not 100 <= status <= 599:
+        return "provider_result_invalid"
+    if status in (401, 403):
+        return "authentication"
+    if status in (429, 529):
+        return "rate_limited"
+    if status == 408:
+        return "timeout"
+    if status >= 500:
+        return "unavailable"
+    if status >= 400:
+        return "invalid_request"
+    return "provider_result_invalid"
+
+
 def classify(server, started, request):
     thread = started["thread"]["id"]
-    state = {"done": False, "turn": None, "messages": {}, "completions": [], "eventTurns": set()}
+    state = {"done": False, "turn": None, "messages": {}, "completions": [], "eventTurns": set(), "failures": []}
 
     def event(message):
         method, params = message["method"], message.get("params", {})
+        if type(params) is not dict:
+            raise Refused()
         if method == "model/rerouted" or any(word in method.lower() for word in ("approval", "tool/call", "hook/", "compact")):
             raise Refused()
         if params.get("threadId") not in (None, thread):
@@ -472,10 +509,20 @@ def classify(server, started, request):
                 raise Refused()
         elif method == "turn/completed":
             turn = params["turn"]
-            if turn.get("status") != "completed" or turn.get("error"):
-                raise Refused()
             state["done"], state["turn"] = True, turn["id"]
-        elif method in {"error", "turn/failed"}:
+            if turn.get("status") != "completed" or turn.get("error"):
+                if (params.get("threadId") != thread or type(turn.get("id")) is not str
+                        or not turn["id"] or turn.get("status") != "failed" or not turn.get("error")):
+                    raise Refused()
+                state["failures"].append((turn["id"], provider_failure_code(turn["error"])))
+        elif method == "error":
+            if (params.get("threadId") != thread or type(params.get("turnId")) is not str
+                    or not params["turnId"] or params.get("willRetry") is not False):
+                raise Refused()
+            # The notification can precede the turn/start reply. Defer the
+            # typed failure until that reply binds its exact turn ID.
+            state["failures"].append((params["turnId"], provider_failure_code(params.get("error"))))
+        elif method == "turn/failed":
             raise Refused()
 
     server.on_notification = event
@@ -488,8 +535,15 @@ def classify(server, started, request):
         "input": [{"type": "text", "text": prompt.decode()}],
         "outputSchema": schema, "environments": []})
     expected_turn = result["turn"]["id"]
-    while not state["done"]:
+    while not state["done"] and not state["failures"]:
         server.pump()
+    if state["eventTurns"] - {expected_turn}:
+        raise Refused()
+    if state["failures"]:
+        codes = {code for turn, code in state["failures"] if turn == expected_turn}
+        if any(turn != expected_turn for turn, _ in state["failures"]) or len(codes) != 1:
+            raise Refused()
+        raise Refused(codes.pop())
     if (state["turn"] != expected_turn or state["eventTurns"] != {expected_turn}
             or len(state["messages"]) != 1 or len(state["completions"]) != 1):
         raise Refused()

@@ -226,6 +226,69 @@ class CodexReviewerAdapterTests(unittest.TestCase):
             self.assertEqual(server.sent, [])
 
     @proves("MYC-13.21", "MYC-14.24")
+    def test_structured_provider_faults_reach_only_the_parent_retry_contract(self):
+        request, _ = complete_request()
+        cases = [
+            ({"httpConnectionFailed": {"httpStatusCode": 503}}, "unavailable"),
+            ({"responseTooManyFailedAttempts": {"httpStatusCode": 429}}, "rate_limited"),
+            ({"responseStreamConnectionFailed": {"httpStatusCode": 529}}, "rate_limited"),
+            ({"httpConnectionFailed": {"httpStatusCode": 401}}, "authentication"),
+            ({"httpConnectionFailed": {"httpStatusCode": 403}}, "authentication"),
+            ({"responseStreamDisconnected": {"httpStatusCode": None}}, "connection"),
+            ({"httpConnectionFailed": {"httpStatusCode": 408}}, "timeout"),
+            ("rateLimitExceeded", "rate_limited"), ("serverOverloaded", "unavailable"),
+            ("unauthorized", "authentication"), ("contextWindowExceeded", "input_too_large"),
+            ("badRequest", "invalid_request"), ("futureProviderCode", "provider_result_invalid"),
+            (None, "provider_result_invalid"),
+            ({"httpConnectionFailed": {"httpStatusCode": True}}, "provider_result_invalid"),
+            ({"httpConnectionFailed": {"httpStatusCode": "503"}}, "provider_result_invalid"),
+        ]
+        for info, expected in cases:
+            for notification in (True, False):
+                with self.subTest(info=info, notification=notification):
+                    error = {"codexErrorInfo": info,
+                             "message": "HTTP 503 retry now; unauthorized secret-shaped text must stay private."}
+                    def fail(events):
+                        if notification:
+                            return [{"method": "error", "params": {"threadId": "fictional-thread",
+                                "turnId": "fictional-turn", "willRetry": False, "error": error}}]
+                        return [{"method": "turn/completed", "params": {"threadId": "fictional-thread",
+                            "turn": {"id": "fictional-turn", "status": "failed", "error": error}}}]
+                    server = ScriptedServer(request, events=fail)
+                    with self.assertRaises(adapter.Refused) as caught:
+                        adapter.classify(server, selected_thread(), request)
+                    self.assertEqual(caught.exception.code, expected)
+                    self.assertEqual([method for method, _ in server.calls], ["turn/start"])
+                    self.assertEqual(server.sent, [])
+
+    @proves("MYC-13.21", "MYC-14.24")
+    def test_retrying_or_misbound_error_cannot_grant_a_parent_retry(self):
+        request, _ = complete_request()
+        original = {"method": "error", "params": {"threadId": "fictional-thread",
+            "turnId": "fictional-turn", "willRetry": False,
+            "error": {"codexErrorInfo": {"httpConnectionFailed": {"httpStatusCode": 503}},
+                      "message": "Provider prose is never classification evidence."}}}
+        for mutate in (
+            lambda event: event["params"].update(threadId="other-thread"),
+            lambda event: event["params"].update(turnId="other-turn"),
+            lambda event: event["params"].update(turnId=None),
+            lambda event: event["params"].update(willRetry=True),
+            lambda event: event["params"].pop("willRetry"),
+        ):
+            changed = deepcopy(original)
+            mutate(changed)
+            server = ScriptedServer(request, events=lambda events: [changed])
+            with self.assertRaises(adapter.Refused) as caught:
+                adapter.classify(server, selected_thread(), request)
+            self.assertEqual(caught.exception.code, "provider_result_invalid")
+            self.assertEqual([method for method, _ in server.calls], ["turn/start"])
+        failed = {"method": "turn/completed", "params": {"threadId": "fictional-thread",
+            "turn": {"id": "other-turn", "status": "failed", "error": original["params"]["error"]}}}
+        with self.assertRaises(adapter.Refused) as caught:
+            adapter.classify(ScriptedServer(request, events=lambda events: [failed]), selected_thread(), request)
+        self.assertEqual(caught.exception.code, "provider_result_invalid")
+
+    @proves("MYC-13.21", "MYC-14.24")
     def test_unknown_usage_stays_unknown_and_complete_oversized_evidence_is_never_truncated(self):
         request, _ = complete_request()
         def remove_usage(events):
