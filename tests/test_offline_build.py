@@ -202,7 +202,7 @@ class InstalledAutomaticTests(unittest.TestCase):
 
     @proves("MYC-13.15")
     def test_staging_retains_all_named_automatic_failures_and_never_publishes_working(self):
-        from tests.test_build import _frozen_fixture, _wheel_fixture
+        from test_build import _frozen_fixture, _wheel_fixture
         from mycel_build._core import read_json
         for passed, launcher_passed in ((True, True), (True, False), (False, True), (False, False)):
             with self.subTest(passed=passed, launcher_passed=launcher_passed), tempfile.TemporaryDirectory() as directory:
