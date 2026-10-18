@@ -2313,7 +2313,7 @@
     },
     {
       "id": "MYC-14.1",
-      "text": "consider every changed source–dependant/related pair without a change-size gate, using exact Jev classification and the confidence/review policy above",
+      "text": "consider every changed source\u2013dependant/related pair without a change-size gate, using exact Jev classification and the confidence/review policy above",
       "origin": "New",
       "kind": "unit",
       "specification": "MYC-14",
