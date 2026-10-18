@@ -8,6 +8,18 @@ Each ordinary invocation writes exactly one JSON document with a final newline. 
 
 The installed launcher accepts `-v <number>` only as the first two arguments, removes them and passes every remaining argument unchanged. Its default is the highest intact compatible working Build; an explicitly named withdrawn Build runs with its reason on standard error. An unknown or malformed number returns `invalid_input`, an unavailable known Build returns `refused`, and a held distribution lock returns `busy`. Direct source execution has no numbered registry selection and returns `refused` for the otherwise valid reserved prefix. `grep` keeps its raw arguments and streamed-result boundary; the common boundary adds no JSON to its output.
 
+## Setting API keys
+
+Run `mycel api-key voyage` or `mycel api-key jev` from a terminal with valid settings. The prompt hides what you type. Mycel creates or replaces the corresponding generic password in the login Keychain and returns, for example:
+
+```json
+{"stored":"voyage","item":{"service":"mycel","account":"voyage-api-key"},"replaced":false}
+```
+
+The command takes only the provider name. Do not put a key in an argument or pipe it into standard input. Missing terminal access, empty or non-printable-ASCII input, or a key too long for secure native input returns `invalid_input`; a failed Keychain write returns `refused`. It does not open the index store or call a provider. The existing `embedding.key_command`, when configured, still takes precedence over the stored Voyage key for embedding.
+
+macOS can ask for permission when replacing an item's access rules. This is the login Keychain's native approval, separate from the hidden API-key prompt. A refusal or timeout returns no success; the key may already have changed before an access-rule update fails. The command never reads the previous key to determine whether it replaced an item.
+
 ## Grep and its related search tail
 
 `mycel grep` starts the first `grep` on PATH before loading settings or opening
@@ -163,7 +175,7 @@ retains independent committed successes and blocks parents of stale members.
 Removal atomically deletes the current set and returns its actual removed count.
 The [summary guide](summaries.md) describes lifecycle guards and complete replies.
 
-The contract below is checked against dispatch declarations. Change it in the same change as commands, common options or reply shapes. Feature handlers must extend their command guide and passing checks as they land. The complete 332-requirement registry and staged/release coverage gates distinguish accepted specifications from executed checks; unimplemented requirements remain pending. A release gate fails while any required proof is missing. Store proofs require an individually created and discarded `mycel_check_` database with private settings; mock store backends do not establish PostgreSQL acceptance.
+The contract below is checked against dispatch declarations. Change it in the same change as commands, common options or reply shapes. Feature handlers must extend their command guide and passing checks as they land. The complete 333-requirement registry and staged/release coverage gates distinguish accepted specifications from executed checks; unimplemented requirements remain pending. A release gate fails while any required proof is missing. Store proofs require an individually created and discarded `mycel_check_` database with private settings; mock store backends do not establish PostgreSQL acceptance.
 
 `mycel refs [--repo <name>] [--unresolved]` reads retained source declarations in one store snapshot. It returns each owning chunk with a portable address, original declaration and line, current resolution or fault, qualified ambiguity candidates, and separate baseline status. `--unresolved` selects resolution faults. Reporting does not retry refs or require their folders to be present. Explicit repository selectors preserve local selection errors alongside successful reports. The command writes no feature rows or activity.
 
@@ -479,6 +491,17 @@ atomic pass reconciliation and stable vectors on body-only edits.
         "options": [
           "-h",
           "--help"
+        ]
+      },
+      {
+        "name": "api-key",
+        "description": "Store a Voyage or Jev API key in the login Keychain",
+        "available": true,
+        "rawArguments": false,
+        "options": [
+          "-h",
+          "--help",
+          "voyage|jev"
         ]
       },
       {

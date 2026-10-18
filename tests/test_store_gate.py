@@ -1,6 +1,13 @@
 """Real PostgreSQL proof of the foundation gate, not product-schema acceptance."""
 
 import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import tempfile
+import textwrap
+import time
 import tomllib
 import unittest
 from unittest.mock import patch
@@ -21,6 +28,71 @@ def initialize_probe(backend, settings_file):
 
 class StoreGateTests(unittest.TestCase):
     initialize_store = staticmethod(initialize_probe)
+
+    @proves("MYC-13.4", kind="store")
+    def test_source_runner_cleans_real_store_after_failure_and_cancellation(self):
+        fixture = self.store_fixture
+        runner = Path(__file__).resolve().parents[1] / "scripts" / "run_checks.py"
+        with tempfile.TemporaryDirectory(prefix="runner_cleanup_", dir=fixture.root) as directory:
+            root = Path(directory)
+            module = root / "test_child_cleanup.py"
+            ready = root / "database.ready"
+            for mode, expected_status in (("failure", 1), ("cancel", 130)):
+                with self.subTest(mode=mode):
+                    ready.unlink(missing_ok=True)
+                    module.write_text(textwrap.dedent(f"""\
+                        from pathlib import Path
+                        import time
+                        import unittest
+                        from mycel._coverage import proves
+
+                        class ChildCleanupTests(unittest.TestCase):
+                            initialize_store = staticmethod(lambda backend, settings: None)
+
+                            @proves("MYC-13.4", kind="store")
+                            def test_cleanup(self):
+                                fixture = self.store_fixture
+                                ready = Path(__file__).with_name("database.ready")
+                                pending = ready.with_suffix(".pending")
+                                pending.write_text(fixture.database + "\\n" + str(fixture.settings_file))
+                                pending.chmod(0o600)
+                                pending.replace(ready)
+                                if {mode!r} == "failure":
+                                    self.fail("intentional disposable-store assertion failure")
+                                while True:
+                                    time.sleep(1)
+                        """), encoding="utf-8")
+                    command = [sys.executable, str(runner), "--tests", str(root),
+                               "--select", "test_child_cleanup.ChildCleanupTests.test_cleanup",
+                               "--workers", "2", "--store-settings", str(fixture.settings_file)]
+                    process = subprocess.Popen(command, cwd=runner.parents[1],
+                                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    try:
+                        deadline = time.monotonic() + 30
+                        while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+                            time.sleep(0.05)
+                        self.assertTrue(ready.exists(), "child store check did not publish its fixture")
+                        database, settings = ready.read_text(encoding="utf-8").splitlines()
+                        self.assertNotEqual(database, fixture.database)
+                        if mode == "cancel":
+                            self.assertTrue(fixture.backend.database_exists(database))
+                            # Interrupt only the runner: it must stop its worker
+                            # and let that worker remove the fixture it created.
+                            process.send_signal(signal.SIGINT)
+                        stdout, stderr = process.communicate(timeout=30)
+                        self.assertEqual(process.returncode, expected_status, (stdout, stderr))
+                        self.assertFalse(fixture.backend.database_exists(database))
+                        self.assertFalse(Path(settings).exists())
+                        self.assertTrue(fixture.backend.database_exists(fixture.database))
+                        self.assertEqual(os.environ["MYCEL_CONFIG"], str(fixture.settings_file))
+                    finally:
+                        if process.poll() is None:
+                            process.send_signal(signal.SIGINT)
+                            try:
+                                process.communicate(timeout=30)
+                            except subprocess.TimeoutExpired:
+                                process.kill()
+                                process.communicate()
 
     @proves("MYC-0.11", kind="store")
     def test_real_store_proofs_are_private_executed_and_discarded(self):

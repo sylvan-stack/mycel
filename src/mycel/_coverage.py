@@ -11,15 +11,19 @@ from dataclasses import asdict, dataclass
 from hashlib import sha256
 from importlib.resources import files
 import json
+import multiprocessing
 import os
 from pathlib import Path
 import re
+import queue
+import signal
 import shutil
 import socket
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import tomllib
 from typing import Callable, Iterator, Mapping, Protocol, Sequence
 import unittest
@@ -32,6 +36,8 @@ KINDS = frozenset({"unit", "store", "eval", "live"})
 AUTOMATIC_KINDS = frozenset({"unit", "store"})
 REQUIREMENT_ID = re.compile(r"MYC-(?:[0-9]|1[0-6])\.[1-9][0-9]*\Z")
 CHECK_DATABASE = re.compile(r"mycel_check_[a-z0-9_]+\Z")
+_WORKER_CANCEL_GRACE = 30
+_WORKER_TERMINATE_GRACE = 5
 
 
 class CoverageError(ValueError):
@@ -85,10 +91,10 @@ def load_registry(path: Path | str | None = None) -> dict[str, Requirement]:
         if requirement.id in registry:
             raise CoverageError(f"duplicate requirement: {requirement.id}")
         registry[requirement.id] = requirement
-    if len(registry) != 332 or {row.specification for row in registry.values()} != {
+    if len(registry) != 333 or {row.specification for row in registry.values()} != {
         f"MYC-{number}" for number in range(17)
     }:
-        raise CoverageError("registry must contain all 332 active MYC-0 through MYC-16 requirements")
+        raise CoverageError("registry must contain all 333 active MYC-0 through MYC-16 requirements")
     if "MYC-9.10" not in registry:
         raise CoverageError("the negative requirement MYC-9.10 remains active")
     return registry
@@ -500,6 +506,140 @@ def _execute_check(check: unittest.TestCase, proof: CheckDeclaration, backend: S
     return CheckResult(check.id(), proof.kind, proof.requirements, "passed")
 
 
+def discover_checks(directory: Path | str) -> unittest.TestSuite:
+    """Use the same top-level test names as plain unittest discovery."""
+    return unittest.TestLoader().discover(str(Path(directory).resolve()))
+
+
+def select_checks(suite: unittest.TestSuite, selectors: Sequence[str]) -> unittest.TestSuite:
+    checks = list(iter_checks(suite))
+    if not selectors:
+        return unittest.TestSuite(checks)
+    selected = []
+    for selector in selectors:
+        prefix = selector.removesuffix(".py")
+        matches = [check for check in checks if check.id() == prefix or check.id().startswith(prefix + ".")]
+        if not matches:
+            raise CoverageError(f"no checks match {selector}")
+        selected.extend(matches)
+    names = {check.id(): check for check in selected}
+    return unittest.TestSuite(names.values())
+
+
+def _check_worker(jobs, replies, canceled, directory: str, backend: StoreBackend | None) -> None:
+    # Environment and native network policy are process-local. Never use threads
+    # to execute checks: fixtures change MYCEL_CONFIG and patch socket/libpq.
+    sys.path.insert(0, directory)
+    interrupted = False
+
+    def interrupt(signum, frame):
+        nonlocal interrupted
+        # Product checks deliberately deliver and catch SIGINT. Only a real
+        # runner cancellation may suppress repeated signals during cleanup.
+        if canceled.value:
+            if interrupted:
+                return
+            interrupted = True
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGINT, interrupt)
+
+    def watch_cancellation():
+        # An Event/Condition can deadlock in notify_all when a crashed process
+        # leaves a counted waiter behind. A shared byte has no orphanable lock.
+        while not canceled.value:
+            time.sleep(0.05)
+        os.kill(os.getpid(), signal.SIGINT)
+
+    threading.Thread(target=watch_cancellation, daemon=True).start()
+    try:
+        while not canceled.value:
+            task = jobs.get()
+            if task is None:
+                return
+            index, name, proof = task
+            try:
+                loaded = list(iter_checks(unittest.TestLoader().loadTestsFromName(name)))
+                if len(loaded) != 1 or loaded[0].id() != name or declaration(loaded[0]) != proof:
+                    raise CoverageError("worker did not load the declared check")
+                result = _execute_check(loaded[0], proof, backend)
+            except KeyboardInterrupt:
+                result = CheckResult(name, proof.kind, proof.requirements, "failed", "check interrupted")
+                replies.put((index, result))
+                return
+            except BaseException as error:
+                result = CheckResult(name, proof.kind, proof.requirements, "failed",
+                                     f"worker could not execute check: {type(error).__name__}")
+            replies.put((index, result))
+    except KeyboardInterrupt:
+        return
+
+
+def _parallel_checks(selected, backend, workers: int, directory: Path | str):
+    context = multiprocessing.get_context("spawn")
+    jobs, replies, canceled = context.Queue(), context.Queue(), context.Value("b", False, lock=False)
+    processes = [context.Process(target=_check_worker,
+                                args=(jobs, replies, canceled, str(Path(directory).resolve()), backend))
+                 for _ in range(min(workers, len(selected)))]
+    results = {}
+    submitted = 0
+    try:
+        for process in processes:
+            process.start()
+        for _ in processes:
+            check, proof = selected[submitted]
+            jobs.put((submitted, check.id(), proof))
+            submitted += 1
+        while len(results) < len(selected):
+            try:
+                index, result = replies.get(timeout=0.1)
+            except queue.Empty:
+                if any(process.exitcode is not None for process in processes):
+                    raise CoverageError("check worker exited before returning every named result")
+                continue
+            check, proof = selected[index]
+            if (index in results or result.name != check.id() or result.kind != proof.kind
+                    or result.requirements != proof.requirements):
+                raise CoverageError("check worker returned a mismatched or repeated result")
+            results[index] = result
+            if len(selected) >= 100 and len(results) % 100 == 0:
+                print(f"Checks: {len(results)}/{len(selected)} complete", file=sys.stderr, flush=True)
+            if submitted < len(selected):
+                check, proof = selected[submitted]
+                jobs.put((submitted, check.id(), proof))
+                submitted += 1
+        for _ in processes:
+            jobs.put(None)
+    finally:
+        try:
+            # A second Ctrl-C must not interrupt cleanup of an acknowledged DB.
+            previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+            try:
+                if len(results) != len(selected):
+                    canceled.value = True
+                deadline = time.monotonic() + _WORKER_CANCEL_GRACE
+                for process in processes:
+                    if process.pid is not None:
+                        process.join(max(0, deadline - time.monotonic()))
+                for process in processes:
+                    if process.pid is not None and process.is_alive():
+                        process.terminate()
+                        process.join(_WORKER_TERMINATE_GRACE)
+                    if process.pid is not None and process.is_alive():
+                        process.kill()
+                        process.join(_WORKER_TERMINATE_GRACE)
+                    if process.pid is not None and process.is_alive():
+                        raise CoverageError("check worker could not be stopped; cleanup requires a stopped worker")
+            finally:
+                signal.signal(signal.SIGINT, previous)
+        finally:
+            jobs.cancel_join_thread()
+            replies.cancel_join_thread()
+            jobs.close()
+            replies.close()
+    return tuple(results[index] for index in range(len(selected)))
+
+
 def run_on_demand_checks(suite: unittest.TestSuite, *, kinds: frozenset[str],
                          implementation_identity: str,
                          registry: Mapping[str, Requirement] | None = None) -> OnDemandProofs:
@@ -536,7 +676,8 @@ def run_checks(suite: unittest.TestSuite, *, registry: Mapping[str, Requirement]
                claims: Mapping[str, Sequence[str]] | None = None, release: bool = False,
                store_backend: StoreBackend | None = None, kinds: frozenset[str] = AUTOMATIC_KINDS,
                on_demand_proofs: Sequence[OnDemandProofs] = (),
-               implementation_identity: str | None = None) -> CoverageReport:
+               implementation_identity: str | None = None, workers: int = 1,
+               tests_directory: Path | str | None = None) -> CoverageReport:
     """Execute automatic checks and validate explicitly named proof claims.
 
     The automatic gate never selects eval/live checks. Previously executed
@@ -548,6 +689,10 @@ def run_checks(suite: unittest.TestSuite, *, registry: Mapping[str, Requirement]
     claims = {} if claims is None else dict(claims)
     if kinds != AUTOMATIC_KINDS:
         raise CoverageError("the Build gate must select every unit and store check, and no eval/live checks")
+    if type(workers) is not int or workers < 1:
+        raise CoverageError("check workers must be a positive integer")
+    if workers > 1 and tests_directory is None:
+        raise CoverageError("process workers require the canonical tests directory")
     errors: list[str] = []
     selected: list[tuple[unittest.TestCase, CheckDeclaration]] = []
     seen = set()
@@ -571,7 +716,9 @@ def run_checks(suite: unittest.TestSuite, *, registry: Mapping[str, Requirement]
                 invalid = True
         if proof.kind in kinds and not invalid:
             selected.append((check, proof))
-    results = tuple(_execute_check(check, proof, store_backend) for check, proof in selected)
+    results = (_parallel_checks(selected, store_backend, workers, tests_directory)
+               if workers > 1 and selected else
+               tuple(_execute_check(check, proof, store_backend) for check, proof in selected))
     by_name = {result.name: result for result in results}
     accepted = []
     for evidence in on_demand_proofs:

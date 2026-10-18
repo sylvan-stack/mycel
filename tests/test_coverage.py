@@ -6,9 +6,11 @@ from dataclasses import replace
 from hashlib import sha256
 from importlib.resources import files
 import json
+import multiprocessing
 import os
 from pathlib import Path
 import socket
+import sys
 import tempfile
 import tomllib
 import unittest
@@ -17,7 +19,7 @@ from types import SimpleNamespace
 import psycopg
 
 from mycel._coverage import (AUTOMATIC_KINDS, CoverageError, PostgresBackend,
-                             disposable_store, load_claims, load_registry,
+                             disposable_store, discover_checks, iter_checks, select_checks, load_claims, load_registry,
                              proves, require_check_database, run_checks, run_on_demand_checks,
                              verify_specification_snapshot, no_network)
 from mycel._database import _native_connect as _CAPTURED_NATIVE_CONNECT
@@ -68,12 +70,96 @@ class SimulatedBackend:
 
 
 class CoverageTests(unittest.TestCase):
+    @proves("MYC-13.3", "MYC-13.15")
+    def test_process_workers_keep_canonical_outcomes_claims_and_network_denial(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "test_worker_proofs.py").write_text('''import signal
+import socket
+import unittest
+from mycel._coverage import proves
+class WorkerProofs(unittest.TestCase):
+    @proves("MYC-13.3")
+    def test_pass(self):
+        for _ in range(2):
+            with self.assertRaises(KeyboardInterrupt):
+                signal.raise_signal(signal.SIGINT)
+        with self.assertRaisesRegex(RuntimeError, "network access is forbidden"):
+            socket.create_connection(("127.0.0.1", 1))
+    @proves("MYC-13.3")
+    def test_failure(self):
+        self.fail("expected worker assertion")
+    @proves("MYC-13.3")
+    def test_skip(self):
+        self.skipTest("expected worker skip")
+''')
+            try:
+                suite = discover_checks(root)
+                names = [check.id() for check in iter_checks(suite)]
+                self.assertEqual(len(names), 3)
+                selected = select_checks(suite, ["test_worker_proofs.WorkerProofs.test_pass"])
+                report = run_checks(selected, workers=2, tests_directory=root,
+                                    claims={"MYC-13.3": [names[1]]})
+                self.assertTrue(report.passed, report.errors)
+                self.assertEqual(report.requirements["MYC-13.3"]["verified_by"], [names[1]])
+                report = run_checks(discover_checks(root), workers=2, tests_directory=root,
+                                    claims={"MYC-13.3": [names[1]]})
+                self.assertFalse(report.passed)
+                self.assertEqual([check.name for check in report.checks], names)
+                self.assertEqual([check.status for check in report.checks], ["failed", "passed", "skipped"])
+                with self.assertRaisesRegex(CoverageError, "no checks match"):
+                    select_checks(discover_checks(root), ["missing_module"])
+            finally:
+                sys.modules.pop("test_worker_proofs", None)
+
+    @proves("MYC-13.3", "MYC-13.15")
+    def test_worker_crash_rejects_gate_and_invalid_worker_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "test_worker_crash.py").write_text('''import os
+from pathlib import Path
+import signal
+import time
+import unittest
+from mycel._coverage import proves
+class WorkerCrash(unittest.TestCase):
+    @proves("MYC-13.3")
+    def test_a_stubborn(self):
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        Path(__file__).with_suffix(".ready").write_text("ready")
+        while True:
+            time.sleep(0.1)
+    @proves("MYC-13.3")
+    def test_z_exit(self):
+        deadline = time.monotonic() + 10
+        while not Path(__file__).with_suffix(".ready").exists():
+            if time.monotonic() > deadline:
+                self.fail("other worker did not start")
+            time.sleep(0.01)
+        os._exit(17)
+''')
+            try:
+                before = {child.pid for child in multiprocessing.active_children()}
+                with patch("mycel._coverage._WORKER_CANCEL_GRACE", 0.2), \
+                     patch("mycel._coverage._WORKER_TERMINATE_GRACE", 0.2):
+                    with self.assertRaisesRegex(CoverageError, "worker exited"):
+                        run_checks(discover_checks(root), workers=2, tests_directory=root)
+                self.assertEqual({child.pid for child in multiprocessing.active_children()}, before)
+                for workers in (0, -1, True):
+                    with self.assertRaisesRegex(CoverageError, "positive integer"):
+                        run_checks(unittest.TestSuite(), workers=workers)
+                with self.assertRaisesRegex(CoverageError, "canonical tests directory"):
+                    run_checks(unittest.TestSuite(), workers=2)
+            finally:
+                sys.modules.pop("test_worker_crash", None)
+
     @proves("MYC-13.15")
     def test_complete_registry_keeps_negative_requirement_active(self):
         registry = load_registry()
-        self.assertEqual(len(registry), 332)
+        self.assertEqual(len(registry), 333)
         counts = [sum(row.specification == f"MYC-{number}" for row in registry.values()) for number in range(17)]
-        self.assertEqual(counts, [12, 34, 27, 21, 29, 15, 20, 17, 29, 13, 14, 12, 15, 21, 27, 12, 14])
+        self.assertEqual(counts, [12, 34, 27, 21, 29, 16, 20, 17, 29, 13, 14, 12, 15, 21, 27, 12, 14])
         self.assertEqual(registry["MYC-9.10"].origin, "Dropped")
         self.assertEqual(registry["MYC-9.10"].kind, "store")
         self.assertIn("not show", registry["MYC-9.10"].text)
@@ -155,7 +241,7 @@ class CoverageTests(unittest.TestCase):
         check = example_check()
         report = run_checks(unittest.TestSuite([check]), claims={"MYC-13.3": [check.id()]})
         self.assertTrue(report.passed)
-        self.assertEqual(report.to_dict()["summary"], {"active": 332, "implemented": 1, "pending": 331})
+        self.assertEqual(report.to_dict()["summary"], {"active": 333, "implemented": 1, "pending": 332})
         self.assertEqual(report.requirements["MYC-13.3"]["verified_by"], [check.id()])
         self.assertEqual(report.requirements["MYC-13.3"]["specification_status"], "accepted")
         report = run_checks(unittest.TestSuite([example_check()]), claims={"MYC-13.3": ["imaginary.Check.test"]})
@@ -173,7 +259,7 @@ class CoverageTests(unittest.TestCase):
     def test_full_release_gate_rejects_all_pending_requirements(self):
         report = run_checks(unittest.TestSuite([example_check()]), release=True)
         self.assertFalse(report.passed)
-        self.assertEqual(report.to_dict()["summary"]["pending"], 332)
+        self.assertEqual(report.to_dict()["summary"]["pending"], 333)
         self.assertIn("MYC-9.10", report.errors[-1])
         self.assertIn("MYC-16.14", report.errors[-1])
         registry = load_registry()

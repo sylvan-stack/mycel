@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 from pathlib import Path
+import os
 import tempfile
 import json
 from types import SimpleNamespace
@@ -325,6 +326,220 @@ class NativeCheckRunnerTests(unittest.TestCase):
             self.assertFalse(backend.owns_database("mycel_check_cancel"))
             self.assertFalse(backend.database_exists("mycel_check_cancel"))
         self.assertEqual(sum(statement.startswith("DROP") for statement in calls), 2)
+
+    @proves("MYC-13.15")
+    def test_parent_recovers_exact_acknowledged_worker_database_after_admin_close_interrupt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Path(directory)
+            address = "postgresql://fixture@localhost/owner"
+            worker = NativePostgresBackend(address, _ownership_journal=journal)
+            name = "mycel_check_interrupted_worker"
+            databases = {"owner", "mycel_check_unrelated"}
+
+            class Connection:
+                created = False
+                def execute(self, statement):
+                    if statement.startswith("SELECT EXISTS"):
+                        return SimpleNamespace(description=[("exists",)], fetchall=lambda: [(False,)])
+                    databases.add(name)
+                    self.created = True
+                    return SimpleNamespace(description=None)
+
+            @contextmanager
+            def connect(address):
+                connection = Connection()
+                yield connection
+                if connection.created:
+                    # The acknowledgement must already be durable here, before
+                    # the child can resume or report anything to its parent.
+                    self.assertTrue((journal / (name + ".json")).is_file())
+                    raise KeyboardInterrupt()
+
+            with patch.object(worker, "_connect", connect):
+                with self.assertRaises(KeyboardInterrupt):
+                    worker.create_database(name)
+
+            parent = NativePostgresBackend(address, _ownership_journal=journal)
+            def drop(database, statement, **kwargs):
+                self.assertEqual(statement, f'DROP DATABASE IF EXISTS "{name}"')
+                databases.remove(database)
+                return ""
+            with patch.object(parent, "_execute", side_effect=drop) as execute:
+                self.assertEqual(parent.recover_owned_databases(), (name,))
+                execute.assert_called_once()
+            self.assertEqual(databases, {"owner", "mycel_check_unrelated"})
+            self.assertEqual(list(journal.iterdir()), [])
+
+    @proves("MYC-13.15")
+    def test_failed_collision_and_unacknowledged_create_grant_parent_no_cleanup_permission(self):
+        for collision in (False, True):
+            with self.subTest(collision=collision), tempfile.TemporaryDirectory() as directory:
+                address = "postgresql://fixture@localhost/owner"
+                journal = Path(directory)
+                worker = NativePostgresBackend(address, _ownership_journal=journal)
+                exists = collision
+                def execute(database, statement, **kwargs):
+                    nonlocal exists
+                    if statement.startswith("SELECT EXISTS"):
+                        return "t" if exists else "f"
+                    if statement.startswith("CREATE"):
+                        exists = True
+                        raise RuntimeError("private-provider-sentinel")
+                    self.fail("failed unacknowledged creation authorized cleanup")
+                with patch.object(worker, "_execute", side_effect=execute):
+                    with self.assertRaises(CoverageError):
+                        worker.create_database("mycel_check_unconfirmed")
+                self.assertTrue(exists)
+                self.assertEqual(list(journal.iterdir()), [])
+                parent = NativePostgresBackend(address, _ownership_journal=journal)
+                with patch.object(parent, "_execute") as boundary:
+                    self.assertEqual(parent.recover_owned_databases(), ())
+                    boundary.assert_not_called()
+
+    @proves("MYC-13.15")
+    def test_cleanup_failure_retains_record_and_parent_continues_other_exact_drops(self):
+        with tempfile.TemporaryDirectory() as directory:
+            address = "postgresql://fixture@localhost/owner"
+            journal = Path(directory)
+            worker = NativePostgresBackend(address, _ownership_journal=journal)
+            names = ("mycel_check_a_busy", "mycel_check_b_closed")
+            for name in names:
+                worker._begin_creation(name)
+                worker._acknowledge_creation(name)
+            parent = NativePostgresBackend(address, _ownership_journal=journal)
+            calls = []
+            def drop(database, statement, **kwargs):
+                calls.append(database)
+                if database == names[0]:
+                    raise RuntimeError("private-provider-sentinel")
+                return ""
+            with patch.object(parent, "_execute", side_effect=drop):
+                with self.assertRaisesRegex(RuntimeError, "failed for 1 ownership records") as error:
+                    parent.recover_owned_databases()
+            self.assertNotIn("private-provider-sentinel", str(error.exception))
+            self.assertEqual(calls, list(names))
+            self.assertEqual([path.stem for path in journal.iterdir()], [names[0]])
+            with patch.object(parent, "_execute", return_value=""):
+                self.assertEqual(parent.recover_owned_databases(), (names[0],))
+            self.assertEqual(list(journal.iterdir()), [])
+
+    @proves("MYC-13.15")
+    def test_recovery_rejects_owner_foreign_server_invalid_and_nonprivate_records(self):
+        for fault in ("owner", "server", "filename", "invalid", "public", "symlink"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
+                journal = Path(directory)
+                address = "postgresql://fixture@localhost/mycel_check_owner"
+                worker = NativePostgresBackend(address, _ownership_journal=journal)
+                name = "mycel_check_worker"
+                worker._begin_creation(name)
+                worker._acknowledge_creation(name)
+                record = journal / (name + ".json")
+                data = json.loads(record.read_text())
+                if fault == "owner":
+                    data["database"] = "mycel_check_owner"
+                    record.rename(journal / "mycel_check_owner.json")
+                    record = journal / "mycel_check_owner.json"
+                elif fault == "server":
+                    data["server"] = "foreign-server"
+                elif fault == "filename":
+                    record.rename(journal / "mycel_check_another.json")
+                    record = journal / "mycel_check_another.json"
+                elif fault == "invalid":
+                    data["database"] = "mycel_check_worker;DROP"
+                record.write_text(json.dumps(data))
+                if fault == "public":
+                    record.chmod(0o644)
+                elif fault == "symlink":
+                    record.rename(journal / "not-a-record")
+                    record.symlink_to(journal / "not-a-record")
+                parent = NativePostgresBackend(address, _ownership_journal=journal)
+                with patch.object(parent, "_execute") as boundary:
+                    with self.assertRaises(RuntimeError):
+                        parent.recover_owned_databases()
+                    boundary.assert_not_called()
+                self.assertTrue(record.exists())
+
+    @proves("MYC-13.15")
+    def test_ownership_records_publish_atomically_and_failed_writes_grant_parent_no_permission(self):
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Path(directory)
+            address = "postgresql://fixture@localhost/owner"
+            worker = NativePostgresBackend(address, _ownership_journal=journal)
+            name = "mycel_check_atomic"
+            original_replace = os.replace
+            def replace(source, destination):
+                self.assertEqual(json.loads(Path(source).read_text())["database"], name)
+                self.assertEqual(Path(source).stat().st_mode & 0o777, 0o600)
+                self.assertFalse(Path(destination).exists())
+                original_replace(source, destination)
+            worker._begin_creation(name)
+            with patch("mycel._check_store.os.replace", side_effect=replace) as publish:
+                worker._acknowledge_creation(name)
+                publish.assert_called_once()
+            with patch.object(worker, "_execute", return_value=""):
+                worker.drop_database(name)
+            worker._begin_creation(name)
+            with patch("mycel._check_store.json.dump", side_effect=OSError("private-file-sentinel")):
+                with self.assertRaisesRegex(RuntimeError, "ownership record failed"):
+                    worker._acknowledge_creation(name)
+            self.assertEqual(list(journal.iterdir()), [])
+            parent = NativePostgresBackend(address, _ownership_journal=journal)
+            with patch.object(parent, "_execute") as boundary:
+                self.assertEqual(parent.recover_owned_databases(), ())
+                boundary.assert_not_called()
+
+    @proves("MYC-13.15")
+    def test_ownership_journal_requires_existing_private_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            insecure = root / "public"
+            insecure.mkdir(mode=0o755)
+            link = root / "link"
+            link.symlink_to(root, target_is_directory=True)
+            for journal in (root / "missing", insecure, link):
+                with self.subTest(journal=journal), patch("mycel._check_store.store_connection") as boundary:
+                    with self.assertRaises(CoverageError):
+                        NativePostgresBackend("postgresql://fixture@localhost/owner", _ownership_journal=journal)
+                    boundary.assert_not_called()
+
+    @proves("MYC-13.15")
+    def test_preflight_really_creates_journals_and_drops_probe_before_returning_safe_label(self):
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Path(directory)
+            backend = NativePostgresBackend("postgresql://private-user@[::1]:6543/private-owner?sslmode=require",
+                                            _ownership_journal=journal)
+            statements = []
+            name = "mycel_check_preflight"
+            def execute(database, statement, **kwargs):
+                self.assertEqual(database, name)
+                statements.append(statement)
+                if statement.startswith("SELECT EXISTS"):
+                    return "f"
+                if statement.startswith("DROP"):
+                    self.assertTrue((journal / (name + ".json")).exists())
+                return ""
+            with patch("mycel._check_store.uuid4", return_value=SimpleNamespace(hex="preflight")), \
+                    patch.object(backend, "_execute", side_effect=execute):
+                self.assertEqual(backend.preflight(), "[::1]:6543")
+            self.assertEqual(sum(statement.startswith("CREATE") for statement in statements), 1)
+            self.assertEqual(sum(statement.startswith("DROP") for statement in statements), 1)
+            self.assertEqual(list(journal.iterdir()), [])
+
+    @proves("MYC-13.15")
+    def test_preflight_connect_and_create_failures_report_only_safe_one_line_server_label(self):
+        for connected in (False, True):
+            backend = NativePostgresBackend("postgresql://private-user@host%0aheader:6543/private-owner?sslmode=require")
+            def execute(database, statement, **kwargs):
+                if connected and statement.startswith("SELECT EXISTS"):
+                    return "f"
+                raise RuntimeError("private-provider-sentinel\nprivate-auth-body")
+            with patch.object(backend, "_execute", side_effect=execute):
+                with self.assertRaisesRegex(RuntimeError, "cannot create" if connected else "cannot connect") as error:
+                    backend.preflight()
+            message = str(error.exception)
+            self.assertIn("host?0aheader:6543", message)
+            self.assertNotIn("private", message)
+            self.assertNotIn("\n", message)
 
 
 if __name__ == "__main__":

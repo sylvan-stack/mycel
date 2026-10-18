@@ -53,7 +53,7 @@ def report(*, passed=True, errors=0):
             "checks": [{"name": "test_fixture.AutomaticTests.test_one", "kind": "unit",
                         "requirements": ["MYC-13.15"], "status": "passed" if passed else "failed",
                         "passed": passed, "detail": "private-password-provider-body"}],
-            "coverage": {"active": 332, "implemented": int(passed), "pending": 332 - int(passed)},
+            "coverage": {"active": 333, "implemented": int(passed), "pending": 333 - int(passed)},
             "gateErrorCount": errors, "gateErrors": ["private-password-provider-body"] * errors}
     contract = contract_fixture()
     result.update(requirements=requirement_results(contract, result['checks']), inventorySha256=contract['inventorySha256'])
@@ -202,7 +202,7 @@ class InstalledAutomaticTests(unittest.TestCase):
 
     @proves("MYC-13.15")
     def test_staging_retains_all_named_automatic_failures_and_never_publishes_working(self):
-        from tests.test_build import _frozen_fixture, _wheel_fixture
+        from test_build import _frozen_fixture, _wheel_fixture
         from mycel_build._core import read_json
         for passed, launcher_passed in ((True, True), (True, False), (False, True), (False, False)):
             with self.subTest(passed=passed, launcher_passed=launcher_passed), tempfile.TemporaryDirectory() as directory:

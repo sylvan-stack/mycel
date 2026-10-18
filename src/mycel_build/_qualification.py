@@ -20,7 +20,7 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
         data = json.loads(frozen['src/mycel/data/requirements.json'])
         registry = {row['id']: row for row in data['requirements']}
         if (type(data['schema_version']) is not int or data['schema_version'] != 1
-                or len(data['requirements']) != len(registry) or len(registry) != 332
+                or len(data['requirements']) != len(registry) or len(registry) != 333
                 or len(data['specifications']) != 17
                 or any(row['specification_status'] != 'accepted' for row in data['specifications'].values())
                 or {row['specification'] for row in registry.values()} != {f'MYC-{n}' for n in range(17)}
@@ -166,7 +166,7 @@ def qualification_certificate(*, number: str, source: dict, check_inputs: list[d
         return None
     automatic = next(row for row in results if row['name'] == 'installed_automatic_unit_store_gate')
     if (automatic.get('completeFrozenInventory') is not True or not isinstance(automatic.get('requirements'), dict)
-            or len(automatic['requirements']) != 332 or automatic.get('gateErrorCount') != 0
+            or len(automatic['requirements']) != 333 or automatic.get('gateErrorCount') != 0
             or type(automatic.get('build')) is not int or automatic['build'] != int(number, 16)
             or automatic.get('sourceInputsSha256') != source['inputsSha256']):
         return None

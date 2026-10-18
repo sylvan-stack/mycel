@@ -25,7 +25,7 @@ except ImportError:
 class StalenessUnitTests(unittest.TestCase):
     @proves('MYC-2.17')
     def test_hash_and_membership_decisions_are_pure_and_use_complete_selection(self):
-        from tests import test_reconciliation as values
+        import test_reconciliation as values
         from mycel._evidence import CaptureLocation, capture_baseline
         from mycel._resolver import SourceResolver
         dep = values.document('owner', 'answer.md', '# Answer\nClaim.\n')

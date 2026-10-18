@@ -96,6 +96,12 @@ def _settings_info(invocation: Invocation) -> Result:
     return Result(result)
 
 
+def _api_key(invocation: Invocation) -> Result:
+    from ._credentials import prompt_api_key, store_api_key
+    provider, = invocation.arguments
+    return Result(store_api_key(provider, prompt_api_key(provider)))
+
+
 def _init(invocation: Invocation) -> Result:
     if invocation.arguments:
         raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel init without arguments.")
@@ -369,6 +375,8 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         raise MycelError(ErrorCode.INVALID_INPUT, "Select named repositories or --all, with nonempty names.")
     if parsed.help:
         return Result(help_reply(name))
+    if name == "api-key" and tuple(parsed.arguments) not in {("voyage",), ("jev",)}:
+        raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel api-key voyage|jev.")
     if name == "search" and (len(parsed.arguments) > 1 or (parsed.arguments and not parsed.arguments[0].strip())
                               or not 1 <= parsed.k <= 100):
         raise MycelError(ErrorCode.INVALID_INPUT, "Search takes one nonempty query, --k 1..100, --only code|docs and --no-fresh.")
@@ -497,7 +505,7 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
                              (os.environ.get("MYCEL_GREP_PLAIN") == "1" or not snapshot.valid))
             if parsed.command not in {"info", "grep"}:
                 snapshot.require_valid()
-            selected_handlers = {"info": _settings_info, "grep": _plain_grep, "repos": _repos, "init": _init}
+            selected_handlers = {"api-key": _api_key, "info": _settings_info, "grep": _plain_grep, "repos": _repos, "init": _init}
             selected_handlers["read"] = _read_chunk
             from ._search import handle_search
             selected_handlers["search"] = handle_search

@@ -147,7 +147,7 @@ def _sanitize_report(raw: bytes, number: int, *, contract: dict) -> dict:
         for key in ("active", "implemented", "pending"):
             if type(report["coverage"][key]) is not int or report["coverage"][key] < 0:
                 raise ValueError("coverage counts")
-        if (report["coverage"]["active"] != 332
+        if (report["coverage"]["active"] != 333
                 or report["coverage"]["active"] != report["coverage"]["implemented"] + report["coverage"]["pending"]):
             raise ValueError("coverage total")
         expected_passed = not report["gateErrorCount"] and all(check["passed"] for check in report["checks"])
@@ -162,7 +162,7 @@ def _sanitize_report(raw: bytes, number: int, *, contract: dict) -> dict:
         implemented = sum(row['status'] == 'implemented' for row in requirements.values())
         if (report['requirements'] != requirements
                 or {key: report['coverage'][key] for key in ('active', 'implemented', 'pending')}
-                    != {'active': 332, 'implemented': implemented, 'pending': 332 - implemented}):
+                    != {'active': 333, 'implemented': implemented, 'pending': 333 - implemented}):
             raise ValueError('requirement proof results')
         return {"passed": report["passed"], "executed": True, "checks": report["checks"],
                 "coverage": {key: report["coverage"][key] for key in ("active", "implemented", "pending")},
