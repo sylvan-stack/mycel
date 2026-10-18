@@ -22,7 +22,7 @@
       "specification_status": "accepted"
     },
     "05-settings.md": {
-      "sha256": "ec05a4f8de867dc51aa7f4d952b845579e57900e5dc67e2a723003e31b0ae604",
+      "sha256": "7a5e58b29a813e53d6434af9b4113c9b6e0c2cc26b5176ff540077be38fb9d2b",
       "specification_status": "accepted"
     },
     "06-index-store.md": {
@@ -58,7 +58,7 @@
       "specification_status": "accepted"
     },
     "14-drift-detection.md": {
-      "sha256": "401937fc56d10e68c23f533a33a6d4db7365b8a2a54beb059b2fc24529e8e1f7",
+      "sha256": "7be251c822a6e6076a28798c6a9f43e3e53e262c291cf6b525f1bd2369e67b1b",
       "specification_status": "accepted"
     },
     "15-distribution-and-replacement.md": {
@@ -1161,7 +1161,7 @@
     },
     {
       "id": "MYC-5.14",
-      "text": "read Jev's key only for explicit classification or live drift qualification from the named Keychain item, forward none of Mycel's credentials to reviewer commands, and acquire none during dry-run",
+      "text": "read Jev's key only for explicit classification or live drift qualification from the named Keychain item, forward none of Mycel's credentials to reviewer commands, and acquire no Jev or Voyage credential during dry-run",
       "origin": "New",
       "kind": "unit",
       "specification": "MYC-5",
@@ -2473,7 +2473,7 @@
     },
     {
       "id": "MYC-14.21",
-      "text": "implement dry-run with no state writes, credential acquisition, executable launches or model calls, allowing local executable inspection/hash reads and exact eligibility/byte/call reporting",
+      "text": "implement dry-run with no state writes, Jev/reviewer/Voyage credential acquisition, adapter launches or model calls, reaching the store as every other command does (MYC-D41), allowing local executable inspection/hash reads and exact eligibility/byte/call reporting",
       "origin": "New",
       "kind": "unit",
       "specification": "MYC-14",
