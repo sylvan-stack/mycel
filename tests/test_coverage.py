@@ -74,12 +74,16 @@ class CoverageTests(unittest.TestCase):
     def test_process_workers_keep_canonical_outcomes_claims_and_network_denial(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "test_worker_proofs.py").write_text('''import socket
+            (root / "test_worker_proofs.py").write_text('''import signal
+import socket
 import unittest
 from mycel._coverage import proves
 class WorkerProofs(unittest.TestCase):
     @proves("MYC-13.3")
     def test_pass(self):
+        for _ in range(2):
+            with self.assertRaises(KeyboardInterrupt):
+                signal.raise_signal(signal.SIGINT)
         with self.assertRaisesRegex(RuntimeError, "network access is forbidden"):
             socket.create_connection(("127.0.0.1", 1))
     @proves("MYC-13.3")

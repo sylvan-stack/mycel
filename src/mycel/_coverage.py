@@ -534,9 +534,13 @@ def _check_worker(jobs, replies, canceled, directory: str, backend: StoreBackend
 
     def interrupt(signum, frame):
         nonlocal interrupted
-        if not interrupted:
+        # Product checks deliberately deliver and catch SIGINT. Only a real
+        # runner cancellation may suppress repeated signals during cleanup.
+        if canceled.value:
+            if interrupted:
+                return
             interrupted = True
-            raise KeyboardInterrupt
+        raise KeyboardInterrupt
 
     signal.signal(signal.SIGINT, interrupt)
 
