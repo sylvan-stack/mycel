@@ -60,7 +60,7 @@ def closed_reply(contract, *, failed=()):
     return {'passed': not failed, 'executed': True, 'python': '3.14.7', 'machine': 'arm64',
         'isolated': True, 'dontWriteBytecode': True, 'installedProductImports': True, 'build': 10,
         'checks': checks, 'requirements': requirements, 'inventorySha256': contract['inventorySha256'],
-        'coverage': {'active': 332, 'implemented': implemented, 'pending': 332 - implemented},
+        'coverage': {'active': 333, 'implemented': implemented, 'pending': 333 - implemented},
         'gateErrorCount': int(bool(failed)), 'gateErrors': ['private-provider-body'] if failed else []}
 
 
@@ -95,7 +95,7 @@ class AutomaticQualificationTests(unittest.TestCase):
         result = _sanitize_report(json_bytes(closed_reply(contract)), 10, contract=contract)
         self.assertTrue(result['completeFrozenInventory'])
         self.assertTrue(result['passed'])
-        self.assertEqual(len(result['requirements']), 332)
+        self.assertEqual(len(result['requirements']), 333)
         self.assertEqual(result['requirements']['MYC-13.3']['verified_by'],
             ['test_fixture.Proofs.test_two', 'test_fixture.Proofs.test_one'])
         for key in ('MYC-13.9', 'MYC-13.20'):
@@ -120,7 +120,7 @@ class AutomaticQualificationTests(unittest.TestCase):
                 # the independently frozen receiver expected to execute.
                 reply['requirements'] = requirement_results(contract, reply['checks'])
                 count = sum(row['status'] == 'implemented' for row in reply['requirements'].values())
-                reply['coverage'].update(implemented=count, pending=332 - count)
+                reply['coverage'].update(implemented=count, pending=333 - count)
                 with self.assertRaises(BuildError) as error:
                     _sanitize_report(json_bytes(reply), 10, contract=contract)
                 self.assertEqual(error.exception.code, 'refused')
@@ -133,7 +133,7 @@ class AutomaticQualificationTests(unittest.TestCase):
             lambda data: data['requirements']['MYC-13.9'].update(status='implemented', verified_by=['saved.live.report']),
             lambda data: data['requirements']['MYC-13.20'].update(status='implemented', verified_by=['saved.eval.report']),
             lambda data: data['requirements'].pop('MYC-9.10'),
-            lambda data: data['coverage'].update(implemented=332, pending=0)):
+            lambda data: data['coverage'].update(implemented=333, pending=0)):
             reply = closed_reply(contract)
             mutation(reply)
             with self.subTest(mutation=mutation), self.assertRaises(BuildError):

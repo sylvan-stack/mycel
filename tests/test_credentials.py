@@ -389,3 +389,281 @@ class CredentialsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ApiKeyTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.config = self.root / "config.toml"
+        self.config.write_text("[store]\naddress = 'postgresql://fixture@localhost/fixture'\n")
+
+    @proves("MYC-5.16", "MYC-5.11")
+    def test_both_api_keys_use_private_pipe_and_explicit_trusted_reader(self):
+        from mycel._credentials import store_api_key
+        secret = Secret(' public "key" \\ ascii ')
+        for provider, account in (("voyage", "voyage-api-key"), ("jev", "jev-api-key")):
+            calls = []
+            def child(argv, request, **limits):
+                calls.append((argv, request, limits))
+                return completed()
+            result = store_api_key(provider, secret, home=self.root, _runner=child)
+            self.assertEqual(result, {"stored": provider, "item": {"service": "mycel", "account": account}, "replaced": False})
+            argv, request, limits = calls[0]
+            self.assertEqual(argv, (SECURITY, "-q", "-i"))
+            self.assertNotIn(secret.reveal(), repr(argv) + repr(limits))
+            self.assertEqual(request.count(b"\n"), 1)
+            self.assertIn(b'-T "/usr/bin/security"', request)
+            self.assertNotIn(b" -A", request)
+            self.assertIn(b" -X " + secret.reveal().encode().hex().encode() + b" ", request)
+            self.assertIn(account.encode(), request)
+            self.assertIn(str(self.root / "Library/Keychains/login.keychain-db").encode(), request)
+            self.assertEqual(limits["home"], self.root.resolve())
+            self.assertGreater(limits["timeout_seconds"], 0)
+            self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["config.toml"])
+
+    @proves("MYC-5.16")
+    def test_replacement_only_follows_duplicate_without_reading_old_secret(self):
+        from mycel._credentials import store_api_key
+        calls = []
+        def child(argv, request, **kwargs):
+            calls.append(request)
+            return completed(returncode=45 if len(calls) == 1 else 0)
+        result = store_api_key("voyage", Secret(SENTINEL), home=self.root, _runner=child)
+        self.assertTrue(result["replaced"])
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(calls[0].startswith(b"add-generic-password -s "))
+        self.assertTrue(calls[1].startswith(b"add-generic-password -U -s "))
+        self.assertTrue(all(b"find-generic-password" not in request for request in calls))
+        self.assertTrue(all(request.count(b"\n") == 1 for request in calls))
+
+    @proves("MYC-5.16", "MYC-5.11")
+    def test_write_refusals_are_sanitized_and_do_not_retry_other_faults(self):
+        from mycel._credentials import store_api_key
+        for codes in ((1,), (36,), (45, 1), (45, 36)):
+            calls = []
+            def child(*args, **kwargs):
+                code = codes[len(calls)]
+                calls.append(args)
+                return completed(SENTINEL.encode(), returncode=code, stderr=SENTINEL.encode())
+            with self.assertRaises(MycelError) as error:
+                store_api_key("jev", Secret(SENTINEL), home=self.root, _runner=child)
+            self.assertEqual(error.exception.code, "refused")
+            self.assertNotIn(SENTINEL, str(error.exception.to_dict()))
+            self.assertEqual(len(calls), len(codes))
+        def fail(*args, **kwargs):
+            raise ChildProcessFailure("timeout")
+        with self.assertRaises(MycelError) as error:
+            store_api_key("jev", Secret(SENTINEL), home=self.root, _runner=fail)
+        self.assertEqual(error.exception.code, "refused")
+
+    @proves("MYC-5.16")
+    def test_invalid_or_overlong_keys_and_metadata_never_start_security(self):
+        from mycel._credentials import store_api_key
+        with patch("mycel._credentials.run_child") as child:
+            for value in ("", "a\0b", "a\nb", "a\rb", "a\tb", "λ", "x" * 3000, "\ud800"):
+                with self.subTest(size=len(value)), self.assertRaises(MycelError) as error:
+                    store_api_key("voyage", Secret(value), home=self.root)
+                self.assertEqual(error.exception.code, "invalid_input")
+            with self.assertRaises(MycelError):
+                store_api_key("unknown", Secret(SENTINEL), home=self.root)
+            with self.assertRaises(MycelError):
+                store_api_key("jev", Secret(SENTINEL), home=self.root / "bad\npath")
+            child.assert_not_called()
+
+    @proves("MYC-5.16")
+    def test_native_parser_path_quoting_is_not_shell_quoting(self):
+        from mycel._credentials import store_api_key
+        home = self.root / "space ' quote\" back\\slash"
+        calls = []
+        def child(argv, request, **kwargs):
+            calls.append(request)
+            return completed()
+        store_api_key("jev", Secret(SENTINEL), home=home, _runner=child)
+        expected = str(home.resolve() / "Library/Keychains/login.keychain-db")
+        expected = '"' + expected.replace('\\', '\\\\').replace('"', '\\"') + '"'
+        self.assertTrue(calls[0].endswith((expected + "\n").encode()))
+
+    @proves("MYC-5.16")
+    def test_prompt_requires_hidden_terminal_and_nonempty_complete_line(self):
+        from mycel._credentials import prompt_api_key
+        import getpass
+        with patch("mycel._credentials.open", side_effect=OSError), self.assertRaises(MycelError) as error:
+            prompt_api_key("voyage")
+        self.assertEqual(error.exception.code, "invalid_input")
+        from unittest.mock import MagicMock
+        terminal = MagicMock()
+        terminal.__enter__.return_value.isatty.return_value = True
+        for value in ("", "a\0b", "a\nb"):
+            with patch("mycel._credentials.open", return_value=terminal), \
+                    patch("mycel._credentials.getpass.getpass", return_value=value), self.assertRaises(MycelError):
+                prompt_api_key("jev")
+        for fault in (EOFError(), getpass.GetPassWarning("private")):
+            with patch("mycel._credentials.open", return_value=terminal), \
+                    patch("mycel._credentials.getpass.getpass", side_effect=fault), self.assertRaises(MycelError) as error:
+                prompt_api_key("jev")
+            self.assertEqual(error.exception.code, "invalid_input")
+            self.assertNotIn("private", str(error.exception.to_dict()))
+        with patch("mycel._credentials.open", return_value=terminal), \
+                patch("mycel._credentials.getpass.getpass", return_value=" exact "):
+            self.assertEqual(prompt_api_key("voyage").reveal(), " exact ")
+
+    @proves("MYC-5.16", "MYC-0.6")
+    def test_cli_returns_only_item_identity_and_replacement_result(self):
+        for provider in ("voyage", "jev"):
+            expected = {"stored": provider, "item": {"service": "mycel", "account": provider + "-api-key"}, "replaced": True}
+            out, err = io.StringIO(), io.StringIO()
+            with patch.dict(os.environ, {"MYCEL_CONFIG": str(self.config)}), \
+                    patch("mycel._credentials.prompt_api_key", return_value=Secret(SENTINEL)) as prompt, \
+                    patch("mycel._credentials.store_api_key", return_value=expected) as writer, \
+                    patch("mycel._cli.invocation_store") as store:
+                self.assertEqual(run(["api-key", provider], stdout=out, stderr=err), 0)
+            self.assertEqual(json.loads(out.getvalue()), expected)
+            self.assertEqual(out.getvalue().count("\n"), 1)
+            self.assertNotIn(SENTINEL, out.getvalue() + err.getvalue())
+            self.assertEqual(err.getvalue(), "")
+            prompt.assert_called_once_with(provider)
+            self.assertEqual(writer.call_args.args[1].reveal(), SENTINEL)
+            store.assert_not_called()
+
+    @proves("MYC-5.16", "MYC-0.6")
+    def test_cli_invalid_syntax_stops_before_prompt_or_write(self):
+        for arguments in ([], ["other"], ["voyage", SENTINEL], ["--repo", "x", "jev"], ["--all", "jev"]):
+            out = io.StringIO()
+            with patch("mycel._credentials.prompt_api_key") as prompt, patch("mycel._credentials.store_api_key") as writer:
+                self.assertEqual(run(["api-key", *arguments], stdout=out, stderr=io.StringIO()), 1)
+                self.assertEqual(json.loads(out.getvalue())["error"]["code"], "invalid_input")
+                prompt.assert_not_called()
+                writer.assert_not_called()
+            self.assertNotIn(SENTINEL, out.getvalue())
+
+    @proves("MYC-5.16")
+    def test_hidden_input_in_real_pseudoterminal_and_echo_restoration(self):
+        import errno
+        import hashlib
+        import pty
+        import select
+        import signal
+        import termios
+        import uuid
+        script = ("import hashlib,json,termios\n"
+                  "from mycel._credentials import prompt_api_key\n"
+                  "try:\n"
+                  " value=prompt_api_key('voyage')\n"
+                  " print(json.dumps({'hash':hashlib.sha256(value.reveal().encode()).hexdigest()}),flush=True)\n"
+                  "except KeyboardInterrupt:\n"
+                  " print('interrupted',flush=True)\n"
+                  "with open('/dev/tty') as tty:\n"
+                  " print('echo-restored='+str(bool(termios.tcgetattr(tty)[3]&termios.ECHO)),flush=True)\n")
+        for interrupt in (False, True):
+            master, slave = pty.openpty()
+            def controlling_terminal():
+                import fcntl
+                os.setsid()
+                fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+            env = {"PATH": os.defpath, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+                   "PYTHONDONTWRITEBYTECODE": "1", "HOME": str(self.root)}
+            process = subprocess.Popen([sys.executable, "-c", script], stdin=slave, stdout=slave, stderr=slave,
+                preexec_fn=controlling_terminal, env=env)
+            os.close(slave)
+            output = bytearray()
+            def collect_until(needle):
+                deadline = time.monotonic() + 10
+                while needle not in output:
+                    if time.monotonic() >= deadline:
+                        self.fail("API key terminal probe timed out")
+                    ready, _, _ = select.select([master], [], [], .1)
+                    if ready:
+                        try:
+                            block = os.read(master, 65536)
+                        except OSError as error:
+                            if error.errno == errno.EIO:
+                                break
+                            raise
+                        if not block:
+                            break
+                        output.extend(block)
+            try:
+                collect_until(b"API key: ")
+                self.assertIn(b"API key: ", output)
+                self.assertFalse(termios.tcgetattr(master)[3] & termios.ECHO)
+                value = ("public-probe-" + uuid.uuid4().hex).encode()
+                if interrupt:
+                    process.send_signal(signal.SIGINT)
+                else:
+                    os.write(master, value + b"\n")
+                collect_until(b"echo-restored=True")
+                self.assertEqual(process.wait(timeout=5), 0)
+                self.assertIn(b"echo-restored=True", output)
+                self.assertNotIn(value, output)
+                if interrupt:
+                    self.assertIn(b"interrupted", output)
+                else:
+                    self.assertIn(hashlib.sha256(value).hexdigest().encode(), output)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
+                os.close(master)
+
+    @proves("MYC-5.16", "MYC-5.11")
+    def test_real_pipe_child_never_receives_key_in_argv_environment_or_files(self):
+        import uuid
+        from mycel._credentials import store_api_key
+        value = "public-pipe-" + uuid.uuid4().hex
+        executable = self.root / "security-stand-in"
+        executable.write_text("#!" + sys.executable + "\nimport sys\nrequest=sys.stdin.buffer.read()\n"
+                              "sys.stdout.buffer.write(request)\nsys.stderr.buffer.write(request)\n")
+        executable.chmod(0o700)
+        out, err = io.StringIO(), io.StringIO()
+        before = set(self.root.rglob("*"))
+        with patch("mycel._credentials.SECURITY", str(executable)), \
+                patch("mycel._safeguards.subprocess.Popen", wraps=subprocess.Popen) as spawn, \
+                patch("sys.stdout", out), patch("sys.stderr", err):
+            result = store_api_key("jev", Secret(value), home=self.root)
+        self.assertFalse(result["replaced"])
+        self.assertEqual(spawn.call_count, 1)
+        argv = spawn.call_args.args[0]
+        options = spawn.call_args.kwargs
+        for representation in (repr(argv), repr(options["env"]), out.getvalue() + err.getvalue()):
+            self.assertNotIn(value, representation)
+            self.assertNotIn(value.encode().hex(), representation)
+        self.assertFalse(options["shell"])
+        self.assertTrue(options["close_fds"])
+        self.assertTrue(options["start_new_session"])
+        self.assertFalse(Path(options["cwd"]).exists())
+        self.assertEqual(set(self.root.rglob("*")), before)
+        for path in self.root.rglob("*"):
+            if path.is_file():
+                self.assertNotIn(value.encode(), path.read_bytes())
+                self.assertNotIn(value.encode().hex().encode(), path.read_bytes())
+
+    @proves("MYC-5.16", "MYC-0.6")
+    def test_real_cli_without_controlling_terminal_refuses_before_keychain(self):
+        environment = {"PATH": os.defpath, "HOME": str(self.root), "MYCEL_CONFIG": str(self.config),
+                       "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"), "PYTHONDONTWRITEBYTECODE": "1"}
+        script = "from mycel._cli import main\nraise SystemExit(main())\n"
+        result = subprocess.run([sys.executable, "-c", script, "api-key", "voyage"],
+            start_new_session=True, input=b"ignored-pipe-input\n", capture_output=True, env=environment, timeout=5)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)["error"]["code"], "invalid_input")
+        self.assertNotIn(b"ignored-pipe-input", result.stdout + result.stderr)
+
+    @proves("MYC-5.16")
+    def test_help_and_info_name_api_key_and_invalid_settings_prevent_prompt(self):
+        out = io.StringIO()
+        self.assertEqual(run(["api-key", "--help"], stdout=out), 0)
+        entry, = json.loads(out.getvalue())["commands"]
+        self.assertEqual(entry["name"], "api-key")
+        self.assertTrue(entry["available"])
+        self.assertNotIn("--repo <name>", entry["options"])
+        self.config.write_text("[unknown]\nvalue = true\n")
+        with patch.dict(os.environ, {"MYCEL_CONFIG": str(self.config)}), patch("mycel._credentials.prompt_api_key") as prompt:
+            out = io.StringIO()
+            self.assertEqual(run(["api-key", "jev"], stdout=out), 1)
+            self.assertEqual(json.loads(out.getvalue())["error"]["code"], "settings")
+            prompt.assert_not_called()
+            out = io.StringIO()
+            self.assertEqual(run(["info"], stdout=out), 0)
+            self.assertIn("api-key", json.loads(out.getvalue())["commands"])

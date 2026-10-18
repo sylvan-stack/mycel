@@ -91,10 +91,10 @@ def load_registry(path: Path | str | None = None) -> dict[str, Requirement]:
         if requirement.id in registry:
             raise CoverageError(f"duplicate requirement: {requirement.id}")
         registry[requirement.id] = requirement
-    if len(registry) != 332 or {row.specification for row in registry.values()} != {
+    if len(registry) != 333 or {row.specification for row in registry.values()} != {
         f"MYC-{number}" for number in range(17)
     }:
-        raise CoverageError("registry must contain all 332 active MYC-0 through MYC-16 requirements")
+        raise CoverageError("registry must contain all 333 active MYC-0 through MYC-16 requirements")
     if "MYC-9.10" not in registry:
         raise CoverageError("the negative requirement MYC-9.10 remains active")
     return registry

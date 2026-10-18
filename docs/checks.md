@@ -1,6 +1,6 @@
 # Requirement checks
 
-The packaged registry in `src/mycel/data/requirements.json` contains all 332 active requirements from the accepted MYC-0 through MYC-16 Requirements tables. It preserves each requirement's text, origin, check kind and source specification, plus the SHA-256 of each source chapter. MYC-9.10 remains active: its `Dropped` origin requires Mycel not to present code results as documented in the overview.
+The packaged registry in `src/mycel/data/requirements.json` contains all 333 active requirements from the accepted MYC-0 through MYC-16 Requirements tables. It preserves each requirement's text, origin, check kind and source specification, plus the SHA-256 of each source chapter. MYC-9.10 remains active: its `Dropped` origin requires Mycel not to present code results as documented in the overview.
 
 Specification acceptance authorizes implementation. It does not establish runtime acceptance, provider qualification or a distributable working Build. The registry records accepted specifications; `checks/claims.json` separately names the requirements this implementation claims and the exact checks that prove each one.
 
@@ -307,7 +307,7 @@ checks. `make check` selects the configured dedicated local server from
 `~/.mycel/config.toml`; `STORE_SETTINGS` overrides that path. Each store method
 gets a new generated database; the owner's
 actual database is never opened. The complete staged gate can now pass;
-full contract/release acceptance still fails until all 332 requirements have
+full contract/release acceptance still fails until all 333 requirements have
 passing proofs, packaged-runtime checks and explicit required live qualification.
 A run without a backend still fails its mandatory store checks.
 
@@ -411,7 +411,7 @@ continue to exercise the numbered package.
 For a numbered Build, the parent derives the automatic method inventory, registry
 and ordered proof claims from frozen source without importing the tests. The
 installed runner must discover that same complete inventory and return every
-named unit/store outcome plus the exact reconstructed 332-row requirement map.
+named unit/store outcome plus the exact reconstructed 333-row requirement map.
 Omitted, substituted or extra methods, changed requirement order/kinds, forged
 provider acceptance, or missing named proofs refuse qualification. Records never
 turn a pending eval/live requirement into an automatic pass.

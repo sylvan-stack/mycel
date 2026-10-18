@@ -2,7 +2,7 @@
   "schema_version": 1,
   "specifications": {
     "00-overview-and-legacy-map.md": {
-      "sha256": "41a50b9321eae9efed97d7ba51a33b1e1ee0b51844b2ff6597ccfadde4e6d973",
+      "sha256": "52a72767440ffeabf4674de6fae9e89fcb804a6b6c4862e3530038603141a0a5",
       "specification_status": "accepted"
     },
     "01-corpora-and-ingest.md": {
@@ -22,7 +22,7 @@
       "specification_status": "accepted"
     },
     "05-settings.md": {
-      "sha256": "e161e54850435d02b6eb5a8bee77c193b2fbf04db454b26a9a0d90d385c637a6",
+      "sha256": "ec05a4f8de867dc51aa7f4d952b845579e57900e5dc67e2a723003e31b0ae604",
       "specification_status": "accepted"
     },
     "06-index-store.md": {
@@ -1137,7 +1137,7 @@
     },
     {
       "id": "MYC-5.11",
-      "text": "never write a secret to standard output, standard error, the store, a file or the environment of a program it starts",
+      "text": "never write a secret to standard output, standard error, the store, a file outside its named encrypted Keychain item, or the environment of a program it starts",
       "origin": "Changed",
       "kind": "unit",
       "specification": "MYC-5",
@@ -1170,6 +1170,14 @@
     {
       "id": "MYC-5.15",
       "text": "validate the complete reviewer command/provider/model/revision configuration and exact argv/revision syntax, resolve only the first-member leading tilde, and document the protocol-1 setup without storing credentials or running a dry-run probe",
+      "origin": "New",
+      "kind": "unit",
+      "specification": "MYC-5",
+      "source": "05-settings.md"
+    },
+    {
+      "id": "MYC-5.16",
+      "text": "provide `mycel api-key voyage` and `mycel api-key jev` to read a nonempty printable-ASCII key from a terminal without echo, refuse absent or unsafe terminal input with `invalid_input`, create or replace its named login-Keychain item through `/usr/bin/security` with that program explicitly trusted for reading, keep the key out of argv, output, logs, plaintext files and child environments, and return only the provider, item identity and replacement flag",
       "origin": "New",
       "kind": "unit",
       "specification": "MYC-5",
@@ -2305,7 +2313,7 @@
     },
     {
       "id": "MYC-14.1",
-      "text": "consider every changed source–dependant/related pair without a change-size gate, using exact Jev classification and the confidence/review policy above",
+      "text": "consider every changed source\u2013dependant/related pair without a change-size gate, using exact Jev classification and the confidence/review policy above",
       "origin": "New",
       "kind": "unit",
       "specification": "MYC-14",

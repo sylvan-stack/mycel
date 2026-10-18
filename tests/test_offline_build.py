@@ -53,7 +53,7 @@ def report(*, passed=True, errors=0):
             "checks": [{"name": "test_fixture.AutomaticTests.test_one", "kind": "unit",
                         "requirements": ["MYC-13.15"], "status": "passed" if passed else "failed",
                         "passed": passed, "detail": "private-password-provider-body"}],
-            "coverage": {"active": 332, "implemented": int(passed), "pending": 332 - int(passed)},
+            "coverage": {"active": 333, "implemented": int(passed), "pending": 333 - int(passed)},
             "gateErrorCount": errors, "gateErrors": ["private-password-provider-body"] * errors}
     contract = contract_fixture()
     result.update(requirements=requirement_results(contract, result['checks']), inventorySha256=contract['inventorySha256'])

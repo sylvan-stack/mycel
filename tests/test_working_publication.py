@@ -58,9 +58,9 @@ def corrupt(path):
 def publication_contract_inputs():
     """Complete fictional protocol preconditions, never executed check evidence.
 
-    Every327 automatic requirement gets a named fixture row. The two ordered
+    Every328 automatic requirement gets a named fixture row. The two ordered
     unit IDs in the first declaration and two names for13.3 make the negative
-    ordering mutations substantive. The real332-row registry is unchanged.
+    ordering mutations substantive. The real333-row registry is unchanged.
     """
     registry_raw = (ROOT / 'src/mycel/data/requirements.json').read_bytes()
     registry = json.loads(registry_raw)['requirements']
@@ -78,7 +78,7 @@ def publication_contract_inputs():
             claims.setdefault(identifier, []).append(name)
         bodies.append(' @proves(' + ', '.join(repr(key) for key in identifiers)
                       + ', kind=' + repr(kind) + ')\n def ' + method + '(self): pass\n')
-    assert len(declarations) == len(claims) == 327
+    assert len(declarations) == len(claims) == 328
     assert len(claims['MYC-13.3']) == 2
     return {'src/mycel/data/requirements.json': registry_raw,
             'checks/claims.json': json_bytes({'schema_version': 1, 'implemented': claims}),

@@ -79,7 +79,11 @@ each purpose, including unavailable results. The internal reader uses fixed
 `/usr/bin/security` and the home login Keychain. Generic passwords use service
 `mycel` with accounts `voyage-api-key`, `store-password` and `jev-api-key`.
 Compatible editors create/replace the same items and explicitly trust
-`/usr/bin/security` for reading; Mycel never rewrites their access rules.
+`/usr/bin/security` for reading; credential readers never rewrite their access rules.
+
+Use `mycel api-key voyage` or `mycel api-key jev` to set either API key. With valid settings, the command reads one nonempty printable-ASCII key from a controlling terminal without echo and writes its named login-Keychain item. It returns only the provider, service/account identity and `replaced` flag. There is no secret argument, stdin fallback, settings change, store connection or provider call. An unavailable terminal or unsafe/empty input returns `invalid_input`; a failed native write returns `refused`. Native Keychain permission can be required when replacing access rules, and a failed access-rule update may follow a successful secret update.
+
+The writer passes one bounded hexadecimal-data command to `/usr/bin/security -q -i` over a private pipe, with `/usr/bin/security` explicitly trusted for reading. It never places the secret in OS argv, child environments, output, logs or plaintext files. Only duplicate-item status selects one replacement attempt; no previous secret is read. The store-password item is outside this command's scope.
 
 If `embedding.key_command` is configured, it supplies the embedding key instead
 of the Keychain. The executable is resolved once; its argv is literal and no

@@ -90,7 +90,7 @@ def _automatic(result, frozen, number):
     requirements = requirement_results(contract, checks)
     implemented = sum(row['status'] == 'implemented' for row in requirements.values())
     _require(result['requirements'] == requirements
-             and result['coverage'] == {'active': 332, 'implemented': implemented, 'pending': 332 - implemented})
+             and result['coverage'] == {'active': 333, 'implemented': implemented, 'pending': 333 - implemented})
     _require(result['build'] == build_number(number) and result['python'] == '3.14.7'
              and result['target'] == 'macos-arm64' and result['gateErrorCount'] == 0
              and result['required'] == result['passedCount'] == len(expected) and result['failedCount'] == 0)
