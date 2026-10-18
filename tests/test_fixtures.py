@@ -1,8 +1,14 @@
 """Acceptance for private feature-check helpers, separate from live providers."""
 
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from hashlib import sha256
+import importlib.util
+from io import StringIO
 import json
+import os
 from pathlib import Path
+import shutil
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -125,6 +131,145 @@ class ServiceFixtureTests(unittest.TestCase):
                                  stderr=StringIO())
                     self.assertEqual(status, 1)
                     self.assertEqual(json.loads(output.getvalue())["error"]["code"], "invalid_input")
+
+
+class RunnerFixtureTests(unittest.TestCase):
+    @staticmethod
+    @contextmanager
+    def source_runner():
+        source = Path(__file__).resolve().parents[1] / "scripts" / "run_checks.py"
+        name = "_mycel_runner_fixture"
+        specification = importlib.util.spec_from_file_location(name, source)
+        module = importlib.util.module_from_spec(specification)
+        with patch.dict(os.environ), patch.object(sys, "path", list(sys.path)):
+            sys.modules[name] = module
+            try:
+                specification.loader.exec_module(module)
+                yield module
+            finally:
+                sys.modules.pop(name, None)
+
+    @proves("MYC-13.15")
+    def test_runner_preflight_fails_every_store_check_once_without_repeating_provider_attempts(self):
+        with tempfile.TemporaryDirectory() as directory, self.source_runner() as runner:
+            root = Path(directory)
+            (root / "test_runner_preflight.py").write_text('''import unittest
+from mycel._coverage import proves
+class CliChecks(unittest.TestCase):
+    @proves("MYC-13.4", kind="store")
+    def test_first(self):
+        self.fail("unavailable store body unexpectedly executed")
+    @proves("MYC-13.4", kind="store")
+    def test_second(self):
+        self.fail("unavailable store body unexpectedly executed")
+    @proves("MYC-13.3")
+    def test_unit(self):
+        pass
+''')
+            config = root / "config.toml"
+            config.write_text('[store]\naddress="postgresql://private-user@host%0aheader:6543/private-owner?sslmode=require"\n')
+            claims = root / "claims.json"
+            prefix = "test_runner_preflight.CliChecks."
+            claims.write_text(json.dumps({"schema_version": 1, "implemented": {
+                "MYC-13.4": [prefix + "test_first", prefix + "test_second"],
+                "MYC-13.3": [prefix + "test_unit"],
+            }}))
+            report = root / "report.json"
+            arguments = ["run_checks.py", "--tests", str(root), "--select", "test_runner_preflight",
+                         "--workers", "1", "--claims", str(claims), "--store-settings", str(config),
+                         "--report", str(report)]
+            try:
+                for connected, expected_attempts in ((False, 1), (True, 4)):
+                    with self.subTest(connected=connected):
+                        statements = []
+
+                        def execute(backend, database, statement, **kwargs):
+                            statements.append(statement)
+                            if connected and statement.startswith("SELECT EXISTS"):
+                                return "f"
+                            raise RuntimeError("private-provider-sentinel\nprivate-auth-body")
+
+                        original_preflight = runner.NativePostgresBackend.preflight
+                        output, errors = StringIO(), StringIO()
+                        with patch.object(sys, "argv", arguments), \
+                                patch.object(runner.NativePostgresBackend, "_execute", autospec=True,
+                                             side_effect=execute), \
+                                patch.object(runner.NativePostgresBackend, "preflight", autospec=True,
+                                             side_effect=original_preflight) as preflight, \
+                                redirect_stdout(output), redirect_stderr(errors):
+                            self.assertEqual(runner.main(), 1)
+                        preflight.assert_called_once()
+                        self.assertEqual(len(statements), expected_attempts)
+                        self.assertEqual(sum(statement.startswith("CREATE") for statement in statements), int(connected))
+                        data = json.loads(report.read_text())
+                        self.assertFalse(data["passed"])
+                        self.assertEqual([(check["name"], check["status"]) for check in data["checks"]],
+                                         [(prefix + "test_first", "failed"), (prefix + "test_second", "failed"),
+                                          (prefix + "test_unit", "passed")])
+                        reason = "store checks unavailable at host?0aheader:6543: cannot connect or create a disposable database"
+                        self.assertEqual(errors.getvalue().splitlines().count(reason), 1)
+                        for check in data["checks"][:2]:
+                            self.assertEqual(check["detail"], "RuntimeError: " + reason)
+                        self.assertEqual(data["requirements"]["MYC-13.4"]["status"], "pending")
+                        self.assertEqual(data["requirements"]["MYC-13.4"]["verified_by"], [])
+                        self.assertEqual(data["requirements"]["MYC-13.3"]["status"], "implemented")
+                        self.assertIn("1 passed, 2 failed, 0 skipped", output.getvalue())
+                        for private in ("private-user", "private-owner", "private-provider", "private-auth", "postgresql://"):
+                            self.assertNotIn(private, output.getvalue() + errors.getvalue() + report.read_text())
+            finally:
+                sys.modules.pop("test_runner_preflight", None)
+
+    @proves("MYC-13.15")
+    def test_runner_retains_private_ownership_record_and_reports_path_when_recovery_fails(self):
+        journals = []
+        with tempfile.TemporaryDirectory() as directory, self.source_runner() as runner:
+            root = Path(directory)
+            (root / "test_runner_recovery.py").write_text('''import unittest
+from mycel._coverage import proves
+class CliChecks(unittest.TestCase):
+    @proves("MYC-13.3")
+    def test_unit(self):
+        pass
+''')
+            config = root / "config.toml"
+            config.write_text('[store]\naddress="postgresql://fixture@localhost/fixture-owner"\n')
+            claims = root / "claims.json"
+            claims.write_text('{"schema_version": 1, "implemented": {}}')
+
+            def fail_recovery(backend):
+                journal = backend._ownership_journal
+                journals.append(journal)
+                record = journal / "mycel_check_fictional_recovery.json"
+                record.write_text(json.dumps({"database": "mycel_check_fictional_recovery",
+                                              "server": backend._journal_server}))
+                record.chmod(0o600)
+                raise RuntimeError("injected ownership recovery failure")
+
+            output, errors = StringIO(), StringIO()
+            arguments = ["run_checks.py", "--tests", str(root), "--select", "test_runner_recovery",
+                         "--workers", "1", "--claims", str(claims), "--store-settings", str(config)]
+            try:
+                with patch.object(sys, "argv", arguments), \
+                        patch.object(runner.NativePostgresBackend, "recover_owned_databases", autospec=True,
+                                     side_effect=fail_recovery) as recover, \
+                        patch.object(runner.NativePostgresBackend, "_execute") as boundary, \
+                        redirect_stdout(output), redirect_stderr(errors):
+                    self.assertEqual(runner.main(), 1)
+                recover.assert_called_once()
+                boundary.assert_not_called()
+                self.assertEqual(len(journals), 1)
+                journal = journals[0]
+                self.assertTrue(journal.is_dir())
+                self.assertEqual(journal.stat().st_mode & 0o777, 0o700)
+                record = journal / "mycel_check_fictional_recovery.json"
+                self.assertEqual(record.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(json.loads(record.read_text())["database"], "mycel_check_fictional_recovery")
+                self.assertIn(str(journal), errors.getvalue())
+                self.assertNotIn("1 passed", output.getvalue())
+            finally:
+                sys.modules.pop("test_runner_recovery", None)
+                for journal in journals:
+                    shutil.rmtree(journal, ignore_errors=True)
 
 
 class RepositoryFixtureTests(unittest.TestCase):
