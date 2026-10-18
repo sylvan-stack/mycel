@@ -15,7 +15,7 @@ from unittest.mock import patch
 from mycel._classification_runner import ClassifyDependencies
 from mycel._coverage import proves
 from mycel._credentials import CredentialUnavailable
-from mycel._embedding_live import run_embedding_live_check
+from mycel._embedding_live import FIXED_QUERY, FIXED_TEXT, run_embedding_live_check
 from mycel._errors import MycelError
 from mycel._evaluation import DriftCase, EvaluationSet
 from mycel._evaluation_drift import FixtureStore, _Jev, _Reviewer, run_drift_evaluation
@@ -23,6 +23,7 @@ from mycel._provider_qualification import (CRITICAL_CATEGORIES, classification_d
     profile_fingerprint, qualify_profile, semantic_fingerprint)
 from mycel._safeguards import InvocationPolicy, model_call_allowed
 from mycel._settings import load_settings
+from mycel._voyage import ProviderFailure
 
 
 AT = '2026-10-15T12:00:00+00:00'
@@ -90,7 +91,7 @@ class ProviderEvaluationTests(unittest.TestCase):
             tokenizer_sha256='b' * 64, counting_rule='submitted-exact; planning-prompt-plus-exact-v1')
         tokenizer = SimpleNamespace(catalog=catalog, library_sha256='c' * 64,
             counts=lambda text, kind: (3, 5) if kind == 'document' else (2, 4))
-        for mismatch in (False, True):
+        for document_usage, query_usage in ((3, 2), (1, 1), (9, 7)):
             sent = []
             class Client:
                 _requests = 0
@@ -101,20 +102,67 @@ class ProviderEvaluationTests(unittest.TestCase):
                     self._requests += 1
                     sent.append((kind, inputs, model, dimensions))
                     return SimpleNamespace(vectors=(tuple(0.0 for _ in range(dimensions)),),
-                        provider_tokens=(9 if mismatch else 3) if kind == 'document' else 2, requests=1)
+                        provider_tokens=document_usage if kind == 'document' else query_usage, requests=1)
             with tempfile.TemporaryDirectory() as temporary:
                 loaded = settings(Path(temporary))
                 report = run_embedding_live_check(loaded, build='fixture', live=True,
                     _client_factory=Client, _tokenizer=tokenizer)
             self.assertEqual(sent[0], ('intent', InvocationPolicy('check', action='embedding', live=True), 1))
-            self.assertEqual((report['results'][0]['submittedTokens'], report['results'][0]['planningTokens']), (3, 5))
+            self.assertEqual(sent[1:], [('document', (FIXED_TEXT,), 'voyage-code-4', 1024),
+                ('query', (FIXED_QUERY,), 'voyage-code-4', 1024)])
+            self.assertEqual((report['reportVersion'], report['checkRevision']), (2, 'mycel-embedding-live-v2'))
             self.assertFalse(report['passed'])  # Internal stand-ins never prove live acceptance.
             self.assertEqual(report['providerExecution'], 'service-stand-ins')
-            self.assertEqual(len(report['results']), 1 if mismatch else 2)
-            if mismatch:
-                self.assertEqual(report['results'][0]['error']['kind'], 'token_count_mismatch')
-            else:
-                self.assertTrue(all(row['passed'] for row in report['results']))
+            self.assertFalse(report['incomplete'])
+            self.assertEqual(len(report['results']), 2)
+            for row, submitted, planning, provider in zip(report['results'], (3, 2), (5, 4),
+                                                         (document_usage, query_usage)):
+                self.assertEqual((row['submittedTokens'], row['planningTokens'], row['providerInputTextTokens']),
+                    (submitted, planning, provider))
+                self.assertEqual(row['usage'], {'inputTextTokens': provider})
+                self.assertEqual(row['tokenCountComparison'], {'matches': provider == submitted,
+                    'providerMinusSubmitted': provider - submitted})
+                self.assertTrue(row['passed'])
+                self.assertNotIn('error', row)
+                self.assertEqual(row['attempts'], 1)
+
+    @proves('MYC-0.10', 'MYC-13.7')
+    def test_embedding_compatibility_failures_stop_before_query(self):
+        catalog = SimpleNamespace(tokenizer_repository='fixture', tokenizer_revision='a' * 40,
+            tokenizer_sha256='b' * 64, counting_rule='submitted-exact; planning-prompt-plus-exact-v1')
+        for failure in ('dimension_mismatch', 'planning_count_mismatch', 'authentication',
+                        'missing_model', 'invalid_response', 'cancelled'):
+            tokenizer = SimpleNamespace(catalog=catalog, library_sha256='c' * 64,
+                counts=lambda text, kind: (3, 2 if failure == 'planning_count_mismatch' else 5))
+            sent = []
+            class Client:
+                _requests = 0
+                def __init__(self, credentials, policy, **options):
+                    pass
+                def _request(self, inputs, model, dimensions, kind):
+                    self._requests += 1
+                    sent.append(kind)
+                    if failure == 'cancelled':
+                        raise KeyboardInterrupt()
+                    if failure not in {'dimension_mismatch', 'planning_count_mismatch'}:
+                        raise ProviderFailure(failure)
+                    size = dimensions - 1 if failure == 'dimension_mismatch' else dimensions
+                    return SimpleNamespace(vectors=(tuple(0.0 for _ in range(size)),),
+                        provider_tokens=1, requests=1)
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                report = run_embedding_live_check(settings(Path(temporary)), build='fixture', live=True,
+                    _client_factory=Client, _tokenizer=tokenizer)
+                self.assertEqual(sent, ['document'])
+                self.assertFalse(report['passed'])
+                self.assertTrue(report['incomplete'])
+                self.assertEqual(len(report['results']), 1)
+                row = report['results'][0]
+                self.assertFalse(row['passed'])
+                self.assertEqual(row['error']['kind'], failure)
+                self.assertEqual(row['attempts'], 1)
+                if failure not in {'dimension_mismatch', 'planning_count_mismatch'}:
+                    self.assertIsNone(row['providerInputTextTokens'])
+                    self.assertIsNone(row['tokenCountComparison'])
 
     @proves('MYC-0.10', 'MYC-14.12')
     def test_missing_reviewer_or_key_stops_before_any_paid_case_and_preserves_settings(self):
