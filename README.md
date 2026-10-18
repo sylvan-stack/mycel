@@ -178,10 +178,25 @@ settings preflight. This checkout does not replace
 an installed Mycel executable.
 
 ```sh
-PYTHONPATH=src python3 -m mycel --help
+PYTHONPATH=src .venv/bin/python -m mycel --help
 make check
+make check TESTS=test_store_gate
 make check-release
 ```
+
+`make check` uses the prepared `.venv/bin/python`, six worker processes and
+`~/.mycel/config.toml` for the disposable-store server. `TESTS` accepts module,
+class or method names, including several space-separated selections. Override
+`WORKERS=6`, `STORE_SETTINGS=/path/to/config.toml` or
+`REPORT=/path/outside/repo/report.json` as needed. A focused run proves only its
+selected methods; full acceptance requires the complete gate. The check guide
+explains process isolation, server preflight and cleanup of recorded databases.
+
+<!-- sources:
+mycel:@code/Makefile
+mycel:@code/scripts/run_checks.py#main
+mycel:@code/src/mycel/_coverage.py#select_checks
+-->
 
 Python 3.13 or newer is required for development. A development environment
 may install the project with `pip install -e .` to get the `mycel` command.
@@ -238,7 +253,7 @@ and staged versus complete release gates. The complete registry contains
 all 332 active requirements from the accepted MYC-0 through MYC-16
 specifications. Acceptance and implementation are recorded separately.
 The automatic gate includes real PostgreSQL schema, fixture, concurrency and activity checks.
-Select the configured server with `--store-settings`; see the check
+Select the configured server with `STORE_SETTINGS`; see the check
 guide for the private database lifecycle and test initialization callback.
 
 Authoritative originals live in `~/Artifacts/mycel/specs/`; the task order
