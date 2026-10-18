@@ -1241,6 +1241,7 @@
       "test_store_cli.StoreCliTests.test_init_uses_one_snapshot_and_private_connection_without_child_forwarding"
     ],
     "MYC-6.3": [
+      "test_classify.FiniteClassifyStoreTests.test_public_dry_run_reaches_the_store_as_every_command_and_reads_only_its_password",
       "test_store_acceptance.ProductStoreTests.test_unreachable_target_refuses_init_but_info_and_plain_grep_remain_available"
     ],
     "MYC-6.4": [
@@ -2197,6 +2198,7 @@
       "test_classify.FiniteClassifyStoreTests.test_deadline_and_sigint_join_attempts_and_preserve_committed_prefix_and_inactive_exclusion",
       "test_classify.FiniteClassifyStoreTests.test_deterministic_caps_concurrency_live_leases_and_no_pass_locks_during_calls",
       "test_classify.FiniteClassifyStoreTests.test_oversize_review_and_changed_support_policy_with_atomic_activity_rollback",
+      "test_classify.FiniteClassifyStoreTests.test_public_dry_run_reaches_the_store_as_every_command_and_reads_only_its_password",
       "test_classify.FiniteClassifyStoreTests.test_read_only_dry_run_preserves_all_rows_then_nonblocking_busy_refuses_execution",
       "test_classify.FiniteClassifyStoreTests.test_transient_retries_honor_retry_after_and_terminal_failures_have_exact_stage_caps"
     ],
@@ -2298,10 +2300,11 @@
       "test_classification_local.LocalClassificationStoreTests.test_local_reads_preserve_waiting_review_errors_and_refuse_malformed_retained_metadata",
       "test_classify.FiniteClassifyStoreTests.test_deadline_and_sigint_join_attempts_and_preserve_committed_prefix_and_inactive_exclusion",
       "test_classify.FiniteClassifyStoreTests.test_deterministic_caps_concurrency_live_leases_and_no_pass_locks_during_calls",
+      "test_classify.FiniteClassifyStoreTests.test_dry_run_empty_enabled_repository_preserves_rows_sequences_and_all_known_guards",
       "test_classify.FiniteClassifyStoreTests.test_oversize_review_and_changed_support_policy_with_atomic_activity_rollback",
+      "test_classify.FiniteClassifyStoreTests.test_public_dry_run_reaches_the_store_as_every_command_and_reads_only_its_password",
       "test_classify.FiniteClassifyStoreTests.test_read_only_dry_run_preserves_all_rows_then_nonblocking_busy_refuses_execution",
-      "test_classify.FiniteClassifyStoreTests.test_transient_retries_honor_retry_after_and_terminal_failures_have_exact_stage_caps",
-      "test_classify.FiniteClassifyStoreTests.test_dry_run_empty_enabled_repository_preserves_rows_sequences_and_all_known_guards"
+      "test_classify.FiniteClassifyStoreTests.test_transient_retries_honor_retry_after_and_terminal_failures_have_exact_stage_caps"
     ],
     "MYC-14.19": [
       "test_reviewer.ReviewerExecutionTests.test_changed_executable_or_frozen_configuration_is_refused_at_fresh_launch_guard",
