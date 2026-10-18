@@ -243,6 +243,42 @@ class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
                 self.assertEqual((blocked['status'], blocked['error']['code'], blocked['jevCalls']), (1, 'busy', 0), blocked)
                 self.assertEqual(self.fixture.state(connection), before)
 
+    @proves('MYC-6.3', 'MYC-14.8', 'MYC-14.18', kind='store')
+    def test_public_dry_run_reaches_the_store_as_every_command_and_reads_only_its_password(self):
+        from io import StringIO
+        from mycel._classify import handle_classify
+        from mycel._cli import run
+        from mycel._credentials import Credentials
+        with self.base.connect() as connection:
+            prepared = self.prepare(connection)
+            before = self.fixture.state(connection)
+            # The configured check server decides whether the store item is needed.
+            expected = ['store'] if connection.pgconn.used_password else []
+        purposes, keychain = [], Credentials._keychain
+        def recorded(credentials, purpose, **limits):
+            purposes.append(purpose)
+            return keychain(credentials, purpose, **limits)
+        def forbidden(*args, **kwargs):
+            raise AssertionError('A dry-run took a model credential, launched an adapter or called a provider.')
+        dependencies = self.dependencies(forbidden, reviewer_factory=forbidden)
+        stdout, stderr = StringIO(), StringIO()
+        with patch.dict(os.environ, {'MYCEL_CONFIG': str(self.base.config)}), \
+                patch.object(Credentials, '_keychain', recorded), \
+                patch.object(Credentials, 'jev_key', forbidden), patch.object(Credentials, 'embedding_key', forbidden), \
+                patch('mycel._jev._https_request', forbidden), patch('mycel._reviewer.run_resolved_reviewer', forbidden):
+            status = run(['classify', '--repo', 'downstream', '--dry-run'], stdout=stdout, stderr=stderr,
+                         handlers={'classify': lambda invocation: handle_classify(invocation, dependencies)})
+        reply = json.loads(stdout.getvalue())
+        self.assertEqual((status, stderr.getvalue()), (0, ''), reply)
+        (entry,) = reply['repositories']
+        result = entry['result']
+        self.assertEqual((result['dryRun'], result['selected'], result['status']), (True, 1, 0), result)
+        self.assertEqual(result['maxCalls'], {'jev': 2, 'review': 0})
+        self.assertEqual(result['pairs'][0]['bytes']['jev'], len(JevRequest(prepared.decision).body))
+        self.assertEqual(purposes, expected)
+        with self.base.connect() as connection:
+            self.assertEqual(self.fixture.state(connection), before)
+
     @proves('MYC-13.18', 'MYC-14.18', 'MYC-14.25', kind='store')
     def test_unconfigured_reviewer_keeps_low_confidence_and_insufficient_work_open_without_repinning(self):
         with self.base.connect() as connection:
