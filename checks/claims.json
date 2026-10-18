@@ -1207,6 +1207,7 @@
       "test_settings_cli.SettingsCliTests.test_invalid_settings_prevent_every_feature_handler_before_access"
     ],
     "MYC-5.14": [
+      "test_classification_local.ClassificationCliBoundaryTests.test_dry_run_reaches_the_store_as_every_command_and_takes_no_model_credential",
       "test_credentials.CredentialsTests.test_cli_fault_conversion_does_not_disclose_credential_command_output",
       "test_credentials.CredentialsTests.test_each_invocation_reads_each_needed_credential_only_once_even_when_access_fails",
       "test_credentials.CredentialsTests.test_failed_access_has_no_secret_or_fallback_and_has_only_sanitized_faults",
@@ -2323,7 +2324,7 @@
     ],
     "MYC-14.21": [
       "test_classification_local.ClassificationCliBoundaryTests.test_classify_and_drift_options_are_preserved_and_invalid_caps_stop_before_work",
-      "test_classification_local.ClassificationCliBoundaryTests.test_dry_run_store_authentication_refuses_credential_acquisition_or_executable_calls",
+      "test_classification_local.ClassificationCliBoundaryTests.test_dry_run_reaches_the_store_as_every_command_and_takes_no_model_credential",
       "test_classify.ClassifyDryRunTests.test_exact_bytes_readiness_and_maximum_calls_without_any_execution_or_mutation",
       "test_classify.ClassifyDryRunTests.test_public_argument_validation_preserves_explicit_positive_cap_and_dry_run"
     ],

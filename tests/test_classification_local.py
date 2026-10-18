@@ -183,23 +183,40 @@ class ClassificationCliBoundaryTests(unittest.TestCase):
         self.assertEqual(entries['first']['result']['completed'], 2)
         self.assertEqual(entries['second']['error']['code'], 'refused')
 
-    @proves('MYC-14.21')
-    def test_dry_run_store_authentication_refuses_credential_acquisition_or_executable_calls(self):
+    @proves('MYC-14.21', 'MYC-5.14')
+    def test_dry_run_reaches_the_store_as_every_command_and_takes_no_model_credential(self):
+        from mycel._credentials import Secret
         settings = SimpleNamespace(values={'store': {'address': 'postgresql://fixture@127.0.0.1/test'},
                                           'embedding': {'dimensions': 1024}}, require_valid=Mock())
-        @contextmanager
-        def challenged(target, **_limits):
-            self.assertEqual(target.store_target().password, None)
-            target.store_target(password_requested=True)
-            yield None
-        with patch('mycel._database.store_connection', challenged), \
-                patch('mycel._credentials.Credentials') as credentials, patch('subprocess.Popen') as child:
-            with self.assertRaises(MycelError) as fault:
-                with classification_store(Invocation('classify', settings=settings), dry_run=True):
-                    self.fail('A challenged dry-run must not reach store execution.')
-            self.assertEqual(fault.exception.code, 'store_unavailable')
-            credentials.assert_not_called()
-            child.assert_not_called()
+        connection = object()
+        for challenged in (False, True):
+            purposes = []
+            def keychain(credentials, purpose, **_limits):
+                purposes.append(purpose)
+                return Secret('fictional-store-password')
+            @contextmanager
+            def connect(target, **_limits):
+                self.assertIsNone(target.store_target().password)
+                if challenged:
+                    password = target.store_target(password_requested=True).password
+                    self.assertEqual(password.reveal(), 'fictional-store-password')
+                for model_credential in (target.jev_key, target.embedding_key):
+                    with self.assertRaises(MycelError) as refused:
+                        model_credential()
+                    self.assertEqual(refused.exception.code, 'refused')
+                yield connection
+            @contextmanager
+            def checked(opened, **_options):
+                self.assertIs(opened, connection)
+                yield 'inspection'
+            with self.subTest(challenged=challenged), patch('mycel._database.store_connection', connect), \
+                    patch('mycel._store.checked_store', checked), \
+                    patch('mycel._credentials.Credentials._keychain', keychain), patch('subprocess.Popen') as child:
+                with classification_store(Invocation('classify', settings=settings), dry_run=True) as store:
+                    self.assertEqual(store, (connection, 'inspection'))
+                # The store item is read only when the store asks for a password.
+                self.assertEqual(purposes, ['store'] if challenged else [])
+                child.assert_not_called()
 
     @proves('MYC-14.21')
     def test_classify_and_drift_options_are_preserved_and_invalid_caps_stop_before_work(self):

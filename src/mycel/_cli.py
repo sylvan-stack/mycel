@@ -162,23 +162,16 @@ def invocation_store(invocation: Invocation, *, operation: str = "read"):
 
 @contextmanager
 def classification_store(invocation: Invocation, *, dry_run: bool = False):
-    """Permit dry-run store reads without invoking any credential reader."""
+    """Reach the store as every command does; a dry-run's policy refuses model credentials (MYC-D41)."""
     if invocation.settings is None:
         raise MycelError(ErrorCode.INTERNAL, "Settings were not loaded for this invocation.")
-    from ._credentials import Credentials, StoreTarget, configured_store_address
+    from ._credentials import Credentials
     from ._database import store_connection
     from ._deadline import deadline_seconds
     from ._safeguards import InvocationPolicy
     from ._store import checked_store
 
-    class LocalTarget:
-        def store_target(self, *, password_requested=False, **_limits):
-            if password_requested:
-                raise MycelError(ErrorCode.STORE_UNAVAILABLE,
-                    "Classification dry-run cannot acquire a store credential.")
-            return StoreTarget(configured_store_address(invocation.settings))
-
-    target = LocalTarget() if dry_run else Credentials(invocation.settings, InvocationPolicy('classify'))
+    target = Credentials(invocation.settings, InvocationPolicy('classify', dry_run=dry_run))
     with store_connection(target, timeout_seconds=deadline_seconds(5)) as connection:
         with checked_store(connection, dimensions=invocation.settings.values["embedding"]["dimensions"]) as inspection:
             yield connection, inspection
