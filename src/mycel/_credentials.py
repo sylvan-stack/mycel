@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+import getpass
 import math
 from pathlib import Path
+import warnings
 
 from ._errors import MycelError
 from ._safeguards import (
@@ -28,8 +30,12 @@ _ACCOUNTS = {
     "jev": "jev-api-key",
 }
 CREDENTIAL_TIMEOUT_SECONDS = 10.0
+CREDENTIAL_WRITE_TIMEOUT_SECONDS = 60.0
 CREDENTIAL_STDOUT_LIMIT = 64 * 1024
 CREDENTIAL_STDERR_LIMIT = 4 * 1024
+_API_KEY_PURPOSES = {"voyage": "embedding", "jev": "jev"}
+_SECURITY_DUPLICATE_ITEM = 45  # errSecDuplicateItem (-25299), as an exit status
+_SECURITY_LINE_BYTES = 4096
 
 
 @dataclass(frozen=True)
@@ -199,3 +205,73 @@ class Credentials:
         if key is None:
             raise CredentialUnavailable()
         return key
+
+
+def prompt_api_key(provider: str) -> Secret:
+    """Accept a secret only from a controlling terminal with echo disabled."""
+    if provider not in _API_KEY_PURPOSES:
+        raise MycelError("invalid_input", "Use mycel api-key voyage|jev.")
+    try:
+        # getpass opens /dev/tty itself. This preflight and warning guard forbid
+        # its fallback to an echoed stdin read when terminal access fails.
+        with open("/dev/tty", "w", encoding="utf-8") as terminal:
+            if not terminal.isatty():
+                raise OSError
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", getpass.GetPassWarning)
+                value = getpass.getpass(f"{provider.capitalize()} API key: ", stream=terminal)
+    except (OSError, EOFError, getpass.GetPassWarning):
+        raise MycelError("invalid_input", "An API key requires a terminal with hidden input.") from None
+    if not value or any(not " " <= character <= "~" for character in value):
+        raise MycelError("invalid_input", "An API key must be one nonempty line of printable ASCII text.")
+    return Secret(value)
+
+
+def _security_token(value: str) -> str:
+    # security's interactive parser is not a shell. Double quotes plus escapes
+    # protect spaces, apostrophes, backslashes and quotes in the login path.
+    if any(character in value for character in "\0\r\n"):
+        raise MycelError("invalid_input", "The Keychain item path is invalid.")
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def store_api_key(provider: str, secret: Secret, *, home: Path | None = None,
+                  _runner: Callable[..., CompletedChild] | None = None) -> dict:
+    """Write one named item without putting the secret in any OS argument."""
+    if provider not in _API_KEY_PURPOSES:
+        raise MycelError("invalid_input", "Use mycel api-key voyage|jev.")
+    value = secret.reveal()
+    if not value or any(not " " <= character <= "~" for character in value):
+        raise MycelError("invalid_input", "An API key must be one nonempty line of printable ASCII text.")
+    user_home = (home or Path.home()).resolve()
+    account = _ACCOUNTS[_API_KEY_PURPOSES[provider]]
+    login = user_home / "Library" / "Keychains" / "login.keychain-db"
+    encoded = value.encode("ascii").hex()
+    base = (f"add-generic-password -s {_security_token(KEYCHAIN_SERVICE)} "
+            f"-a {_security_token(account)} -T {_security_token(SECURITY)} "
+            f"-X {encoded} {_security_token(str(login))}")
+    # The native interpreter reads a 4096-byte line. Check the longer update
+    # before either attempt, so a long key cannot be split into commands.
+    if len((base + " -U\n").encode("utf-8")) >= _SECURITY_LINE_BYTES:
+        raise MycelError("invalid_input", "The API key is too long for secure Keychain input.")
+
+    def write(*, update: bool = False) -> CompletedChild:
+        # Exactly one command and EOF: a following quit/blank command could
+        # overwrite the native interpreter's last-command failure status.
+        command = base.replace("add-generic-password", "add-generic-password -U", 1) if update else base
+        return (_runner or run_child)((SECURITY, "-q", "-i"), (command + "\n").encode("utf-8"),
+            timeout_seconds=CREDENTIAL_WRITE_TIMEOUT_SECONDS, home=user_home,
+            stdout_limit=CREDENTIAL_STDOUT_LIMIT, stderr_limit=CREDENTIAL_STDERR_LIMIT)
+
+    try:
+        result = write()
+        replaced = result.returncode == _SECURITY_DUPLICATE_ITEM
+        if replaced:
+            result = write(update=True)
+        if result.returncode:
+            raise ChildProcessFailure("transport")
+    except ChildProcessFailure:
+        # Neither native output nor an exception can become a CLI diagnostic.
+        raise MycelError("refused", "The API key could not be stored in the login Keychain.") from None
+    return {"stored": provider, "item": {"service": KEYCHAIN_SERVICE, "account": account},
+            "replaced": replaced}

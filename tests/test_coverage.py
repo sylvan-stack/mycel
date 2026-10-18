@@ -157,9 +157,9 @@ class WorkerCrash(unittest.TestCase):
     @proves("MYC-13.15")
     def test_complete_registry_keeps_negative_requirement_active(self):
         registry = load_registry()
-        self.assertEqual(len(registry), 332)
+        self.assertEqual(len(registry), 333)
         counts = [sum(row.specification == f"MYC-{number}" for row in registry.values()) for number in range(17)]
-        self.assertEqual(counts, [12, 34, 27, 21, 29, 15, 20, 17, 29, 13, 14, 12, 15, 21, 27, 12, 14])
+        self.assertEqual(counts, [12, 34, 27, 21, 29, 16, 20, 17, 29, 13, 14, 12, 15, 21, 27, 12, 14])
         self.assertEqual(registry["MYC-9.10"].origin, "Dropped")
         self.assertEqual(registry["MYC-9.10"].kind, "store")
         self.assertIn("not show", registry["MYC-9.10"].text)
@@ -241,7 +241,7 @@ class WorkerCrash(unittest.TestCase):
         check = example_check()
         report = run_checks(unittest.TestSuite([check]), claims={"MYC-13.3": [check.id()]})
         self.assertTrue(report.passed)
-        self.assertEqual(report.to_dict()["summary"], {"active": 332, "implemented": 1, "pending": 331})
+        self.assertEqual(report.to_dict()["summary"], {"active": 333, "implemented": 1, "pending": 332})
         self.assertEqual(report.requirements["MYC-13.3"]["verified_by"], [check.id()])
         self.assertEqual(report.requirements["MYC-13.3"]["specification_status"], "accepted")
         report = run_checks(unittest.TestSuite([example_check()]), claims={"MYC-13.3": ["imaginary.Check.test"]})
@@ -259,7 +259,7 @@ class WorkerCrash(unittest.TestCase):
     def test_full_release_gate_rejects_all_pending_requirements(self):
         report = run_checks(unittest.TestSuite([example_check()]), release=True)
         self.assertFalse(report.passed)
-        self.assertEqual(report.to_dict()["summary"]["pending"], 332)
+        self.assertEqual(report.to_dict()["summary"]["pending"], 333)
         self.assertIn("MYC-9.10", report.errors[-1])
         self.assertIn("MYC-16.14", report.errors[-1])
         registry = load_registry()

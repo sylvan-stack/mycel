@@ -42,6 +42,8 @@ COMMANDS = (
                 extra_options=("--entry <id>", "--kind <kind>", "--k <count>")),
     CommandSpec("evaluate", "Explicitly evaluate retrieval or dependency review", extra_options=("--kind retrieval|drift", "--live")),
     CommandSpec("init", "Initialize the private index store", scope=False),
+    CommandSpec("api-key", "Store a Voyage or Jev API key in the login Keychain", scope=False,
+                extra_options=("voyage|jev",)),
     CommandSpec("info", "Report program and configuration diagnostics", scope=False),
 )
 
@@ -55,7 +57,7 @@ def help_reply(command: str | None = None) -> dict:
         "version": "2.0.0",
         "usage": "mycel <command> [arguments]",
         "commands": [
-            {"name": s.name, "description": s.description, "available": s.name in {"info", "grep", "repos", "init", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
+            {"name": s.name, "description": s.description, "available": s.name in {"api-key", "info", "grep", "repos", "init", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
              "rawArguments": s.raw_arguments,
              "options": ([] if s.raw_arguments else
                          ["-h", "--help"] + (["--repo <name>"] if s.scope else []) +

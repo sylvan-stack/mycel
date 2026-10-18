@@ -250,7 +250,7 @@ The [relation and verification guide](docs/relations.md) describes declared and 
 ownership, one-chunk commands, exact baselines, direct stale warnings and retained verification history.
 The [check guide](docs/checks.md) explains executed proofs, disposable stores,
 and staged versus complete release gates. The complete registry contains
-all 332 active requirements from the accepted MYC-0 through MYC-16
+all 333 active requirements from the accepted MYC-0 through MYC-16
 specifications. Acceptance and implementation are recorded separately.
 The automatic gate includes real PostgreSQL schema, fixture, concurrency and activity checks.
 Select the configured server with `STORE_SETTINGS`; see the check

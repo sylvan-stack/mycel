@@ -2813,6 +2813,20 @@
     ],
     "MYC-15.12": [
       "test_replacement.ReplacementTests.test_mycel_owned_help_and_replacement_guide_require_no_other_product_or_runtime_cleanup_command"
+    ],
+    "MYC-5.16": [
+      "test_credentials.ApiKeyTests.test_both_api_keys_use_private_pipe_and_explicit_trusted_reader",
+      "test_credentials.ApiKeyTests.test_replacement_only_follows_duplicate_without_reading_old_secret",
+      "test_credentials.ApiKeyTests.test_write_refusals_are_sanitized_and_do_not_retry_other_faults",
+      "test_credentials.ApiKeyTests.test_invalid_or_overlong_keys_and_metadata_never_start_security",
+      "test_credentials.ApiKeyTests.test_native_parser_path_quoting_is_not_shell_quoting",
+      "test_credentials.ApiKeyTests.test_prompt_requires_hidden_terminal_and_nonempty_complete_line",
+      "test_credentials.ApiKeyTests.test_cli_returns_only_item_identity_and_replacement_result",
+      "test_credentials.ApiKeyTests.test_cli_invalid_syntax_stops_before_prompt_or_write",
+      "test_credentials.ApiKeyTests.test_hidden_input_in_real_pseudoterminal_and_echo_restoration",
+      "test_credentials.ApiKeyTests.test_real_pipe_child_never_receives_key_in_argv_environment_or_files",
+      "test_credentials.ApiKeyTests.test_real_cli_without_controlling_terminal_refuses_before_keychain",
+      "test_credentials.ApiKeyTests.test_help_and_info_name_api_key_and_invalid_settings_prevent_prompt"
     ]
   }
 }

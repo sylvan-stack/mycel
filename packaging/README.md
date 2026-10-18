@@ -43,7 +43,7 @@ Internal `create_stage` stays staging-only. Development `create` continues via
 and packaged checks and every active automatic requirement proof pass. It
 recaptures the exact source, requires a separate private credential group, and
 revalidates all checked inputs under the nonwaiting registry maintenance lock.
-The current strict frozen inventory, full332 proof map, queued cancellation,
+The current strict frozen inventory, full333 proof map, queued cancellation,
 and exact16 ordered packaged cases at each of two relocations remain required.
 
 Publication writes final checks and the sanitized log before atomically
@@ -56,7 +56,7 @@ The selected private credential check currently returns a named unsupported,
 failed/unexecuted result before native, child, metadata or secret operations.
 A separate HOME and filesystem sandbox do not prove Keychain session isolation.
 This implementation therefore cannot publish a real working Build. Its new
-unit fixtures use complete fictional327-automatic/332-registry preconditions
+unit fixtures use complete fictional328-automatic/333-registry preconditions
 to test publication transactions; they are not executed native/gate evidence.
 No new test, application, provider qualification or working release is claimed
 by this source preparation, and all315 shared ordered claim lists stay unchanged.
