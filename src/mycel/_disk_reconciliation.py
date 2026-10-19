@@ -17,6 +17,7 @@ from uuid import UUID, uuid4
 from psycopg.types.json import Jsonb
 
 from ._activity import AppliedMutation, FileChange, IdentityChange, MutationActivity
+from ._entities import publish_entities
 from ._capture import (CapturedFile, CapturedLocation, CaptureManifest, FileAlias, LocationId,
                       _parse_value, capture_repository, file_from_parse_history, parse_history_record)
 from ._code import CODE_IDENTITY_REVISION, CodeChunk, code_identity_key
@@ -31,7 +32,7 @@ from ._scope import RepositoryLocations
 from ._settings import SettingsSnapshot
 from ._source_bindings import FileBinding, _observe
 from ._source_refs import SourceAddress
-from ._store import checked_store, search_text
+from ._store import ENTITY_KINDS, checked_store, search_text
 
 _OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z", re.ASCII)
 
@@ -262,7 +263,9 @@ def _chunk_input(source, comparison, metadata):
 def _known(file_id, old_location, rows):
     by_chunk = {}
     for row in rows:
-        if str(row[0]) == file_id:
+        # An entity row keeps its UUID in every location; the two matching
+        # rounds never see it (MYC-17).
+        if str(row[0]) == file_id and row[5].get('kind') not in ENTITY_KINDS:
             by_chunk.setdefault(str(row[1]), []).append(row)
     known = []
     for identifier, history in sorted(by_chunk.items()):
@@ -627,4 +630,5 @@ class DiskCaptureStore:
             connection.execute('INSERT INTO public.mycel_locations VALUES (%s,%s,%s,%s,%s,%s)',
                                (uuid4(), exact, location, 'disk', 'disk', Jsonb(details)))
             persisted.append((chunk_id, exact))
+        publish_entities(connection, repository, identifier, location, captured)
         return FileBinding(identifier, str(version), str(location), primary, aliases), tuple(persisted)

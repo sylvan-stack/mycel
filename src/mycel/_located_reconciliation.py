@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 
 from psycopg.types.json import Jsonb
 
+from ._entities import publish_entities
 from ._activity import AppliedMutation, FileChange, IdentityChange, MutationActivity
 from ._capture import CaptureManifest, FileAlias, LocationId, capture_repository, parse_history_record
 from ._disk_reconciliation import (_ALIASES_SQL, _CHUNKS_SQL, GitFileMove, _absolute,
@@ -547,4 +548,8 @@ class LocatedCaptureStore:
             connection.execute('INSERT INTO public.mycel_locations VALUES (%s,%s,%s,%s,%s,%s)',
                                (uuid4(), exact, located, kind, key, Jsonb(details)))
             persisted.append((str(chunk_id), exact))
+        if kind == 'disk':
+            # The entity rows of the document, keyed by their UUID (MYC-17). Branch
+            # and stash locations follow when every clone becomes a location.
+            publish_entities(connection, repository, identifier, located, captured)
         return FileBinding(identifier, str(version), str(located), primary, aliases), tuple(persisted)
