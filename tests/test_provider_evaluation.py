@@ -4,6 +4,7 @@ Artificial outcome rows exercise counts; they are not an evaluation set,
 label evidence, measured provider report or live/eval requirement acceptance.
 """
 from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 import json
@@ -15,14 +16,16 @@ from unittest.mock import patch
 from mycel._classification_runner import ClassifyDependencies
 from mycel._coverage import proves
 from mycel._credentials import CredentialUnavailable
-from mycel._embedding_live import run_embedding_live_check
+from mycel._embedding_live import FIXED_QUERY, FIXED_TEXT, run_embedding_live_check
 from mycel._errors import MycelError
 from mycel._evaluation import DriftCase, EvaluationSet
 from mycel._evaluation_drift import FixtureStore, _Jev, _Reviewer, run_drift_evaluation
-from mycel._provider_qualification import (CRITICAL_CATEGORIES, classification_diagnostics,
+from mycel._jev import JevResponse
+from mycel._provider_qualification import (CRITICAL_CATEGORIES, QUALIFICATION_REVISION, classification_diagnostics,
     profile_fingerprint, qualify_profile, semantic_fingerprint)
 from mycel._safeguards import InvocationPolicy, model_call_allowed
 from mycel._settings import load_settings
+from mycel._voyage import ProviderFailure
 
 
 AT = '2026-10-15T12:00:00+00:00'
@@ -42,12 +45,26 @@ def suite(cases):
 
 
 def pipeline():
-    return {'protocol': 1, 'model': 'jev-1.13.0', 'questionVersion': 'mycel-dependency-v1',
+    return {'qualificationRevision': QUALIFICATION_REVISION,
+        'protocol': 1, 'model': 'jev-1.13.0', 'questionVersion': 'mycel-dependency-v1',
         'choiceOrder': ['still_supported', 'needs_review', 'insufficient_evidence'],
         'policyRevision': 'fixture-policy', 'confidenceFloor': 0.7,
         'reviewCommandHash': 'a' * 64, 'reviewRevision': 'adapter-v1',
         'reviewInstructionVersion': 'mycel-review-v1', 'reviewEnvironmentVersion': 'mycel-review-env-v1',
         'reviewer': {'provider': 'fixture-provider', 'model': 'fixture-model'}}
+
+
+def retained_jev(jev, usage=None):
+    """Complete projections for controlled arithmetic fixtures only."""
+    probabilities = {key: Decimal(str(value)) for key, value in jev['probabilities'].items()}
+    maximum = max(probabilities.values())
+    response = JevResponse(jev['model'], jev['judgement'], probabilities,
+        (3 * maximum - 1) / 2, usage or {'input_tokens': 0, 'output_tokens': 0},
+        sum(value == maximum for value in probabilities.values()) > 1,
+        reported_confidence=Decimal(str(jev.get('reportedConfidence', jev['confidence']))))
+    source = response.as_dict()
+    return {key: source[key] for key in ('provider', 'model', 'probabilities', 'confidence',
+        'reportedConfidence', 'confidenceComparison', 'exactDecimals')} | {'judgement': source['label']}
 
 
 def artificial_outcomes():
@@ -68,6 +85,13 @@ def artificial_outcomes():
                 'commandHash': identity['reviewCommandHash'], 'adapterRevision': identity['reviewRevision'],
                 'instructionVersion': identity['reviewInstructionVersion'],
                 'environmentVersion': identity['reviewEnvironmentVersion'], 'inputHash': row['inputHash']}
+        label = row['jev']['judgement']
+        row['jev'].update(probabilities={name: (0.6 if name == label else 0.2) if number == 0
+            else float(name == label) for name in identity['choiceOrder']},
+            confidence=0.4 if number == 0 else 1.0)
+        row['jevOnlyOutcome'] = 'unresolved' if number == 0 else label
+        row['stageUsage'] = {'jev': {'input_tokens': 0, 'output_tokens': 0}, 'review': None}
+        row['jev'] = retained_jev(row['jev'])
         cases.append(case); rows.append(row)
     return cases, rows, identity
 
@@ -90,7 +114,7 @@ class ProviderEvaluationTests(unittest.TestCase):
             tokenizer_sha256='b' * 64, counting_rule='submitted-exact; planning-prompt-plus-exact-v1')
         tokenizer = SimpleNamespace(catalog=catalog, library_sha256='c' * 64,
             counts=lambda text, kind: (3, 5) if kind == 'document' else (2, 4))
-        for mismatch in (False, True):
+        for document_usage, query_usage in ((3, 2), (1, 1), (9, 7)):
             sent = []
             class Client:
                 _requests = 0
@@ -101,20 +125,67 @@ class ProviderEvaluationTests(unittest.TestCase):
                     self._requests += 1
                     sent.append((kind, inputs, model, dimensions))
                     return SimpleNamespace(vectors=(tuple(0.0 for _ in range(dimensions)),),
-                        provider_tokens=(9 if mismatch else 3) if kind == 'document' else 2, requests=1)
+                        provider_tokens=document_usage if kind == 'document' else query_usage, requests=1)
             with tempfile.TemporaryDirectory() as temporary:
                 loaded = settings(Path(temporary))
                 report = run_embedding_live_check(loaded, build='fixture', live=True,
                     _client_factory=Client, _tokenizer=tokenizer)
             self.assertEqual(sent[0], ('intent', InvocationPolicy('check', action='embedding', live=True), 1))
-            self.assertEqual((report['results'][0]['submittedTokens'], report['results'][0]['planningTokens']), (3, 5))
+            self.assertEqual(sent[1:], [('document', (FIXED_TEXT,), 'voyage-code-4', 1024),
+                ('query', (FIXED_QUERY,), 'voyage-code-4', 1024)])
+            self.assertEqual((report['reportVersion'], report['checkRevision']), (2, 'mycel-embedding-live-v2'))
             self.assertFalse(report['passed'])  # Internal stand-ins never prove live acceptance.
             self.assertEqual(report['providerExecution'], 'service-stand-ins')
-            self.assertEqual(len(report['results']), 1 if mismatch else 2)
-            if mismatch:
-                self.assertEqual(report['results'][0]['error']['kind'], 'token_count_mismatch')
-            else:
-                self.assertTrue(all(row['passed'] for row in report['results']))
+            self.assertFalse(report['incomplete'])
+            self.assertEqual(len(report['results']), 2)
+            for row, submitted, planning, provider in zip(report['results'], (3, 2), (5, 4),
+                                                         (document_usage, query_usage)):
+                self.assertEqual((row['submittedTokens'], row['planningTokens'], row['providerInputTextTokens']),
+                    (submitted, planning, provider))
+                self.assertEqual(row['usage'], {'inputTextTokens': provider})
+                self.assertEqual(row['tokenCountComparison'], {'matches': provider == submitted,
+                    'providerMinusSubmitted': provider - submitted})
+                self.assertTrue(row['passed'])
+                self.assertNotIn('error', row)
+                self.assertEqual(row['attempts'], 1)
+
+    @proves('MYC-0.10', 'MYC-13.7')
+    def test_embedding_compatibility_failures_stop_before_query(self):
+        catalog = SimpleNamespace(tokenizer_repository='fixture', tokenizer_revision='a' * 40,
+            tokenizer_sha256='b' * 64, counting_rule='submitted-exact; planning-prompt-plus-exact-v1')
+        for failure in ('dimension_mismatch', 'planning_count_mismatch', 'authentication',
+                        'missing_model', 'invalid_response', 'cancelled'):
+            tokenizer = SimpleNamespace(catalog=catalog, library_sha256='c' * 64,
+                counts=lambda text, kind: (3, 2 if failure == 'planning_count_mismatch' else 5))
+            sent = []
+            class Client:
+                _requests = 0
+                def __init__(self, credentials, policy, **options):
+                    pass
+                def _request(self, inputs, model, dimensions, kind):
+                    self._requests += 1
+                    sent.append(kind)
+                    if failure == 'cancelled':
+                        raise KeyboardInterrupt()
+                    if failure not in {'dimension_mismatch', 'planning_count_mismatch'}:
+                        raise ProviderFailure(failure)
+                    size = dimensions - 1 if failure == 'dimension_mismatch' else dimensions
+                    return SimpleNamespace(vectors=(tuple(0.0 for _ in range(size)),),
+                        provider_tokens=1, requests=1)
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                report = run_embedding_live_check(settings(Path(temporary)), build='fixture', live=True,
+                    _client_factory=Client, _tokenizer=tokenizer)
+                self.assertEqual(sent, ['document'])
+                self.assertFalse(report['passed'])
+                self.assertTrue(report['incomplete'])
+                self.assertEqual(len(report['results']), 1)
+                row = report['results'][0]
+                self.assertFalse(row['passed'])
+                self.assertEqual(row['error']['kind'], failure)
+                self.assertEqual(row['attempts'], 1)
+                if failure not in {'dimension_mismatch', 'planning_count_mismatch'}:
+                    self.assertIsNone(row['providerInputTextTokens'])
+                    self.assertIsNone(row['tokenCountComparison'])
 
     @proves('MYC-0.10', 'MYC-14.12')
     def test_missing_reviewer_or_key_stops_before_any_paid_case_and_preserves_settings(self):
@@ -142,7 +213,15 @@ class ProviderEvaluationTests(unittest.TestCase):
         def store(*args, **kwargs):
             value = FixtureStore(*args, **kwargs); stores.append(value); return value
         def jev(selected, policy):
-            policies.append(policy); return _Jev()
+            policies.append(policy)
+            class ReportedConfidenceJev(_Jev):
+                def classify(self, decision, **options):
+                    outcome = super().classify(decision, **options)
+                    if outcome.response.confidence == Decimal('0.4'):
+                        outcome = replace(outcome, response=replace(outcome.response,
+                            reported_confidence=Decimal('0.39')))
+                    return outcome
+            return ReportedConfidenceJev()
         def reviewer(selected, policy, command):
             policies.append(policy); return _Reviewer()
         cases = suite([DriftCase('changed', 'x=1', 'x=1', 'needs_review', current='x=2'),
@@ -178,6 +257,19 @@ class ProviderEvaluationTests(unittest.TestCase):
             self.assertNotIn('inputHash', report['results'][2])
             self.assertEqual(report['providerExecution'], 'service-stand-ins')
             self.assertFalse(report['qualified']); self.assertEqual(report['cost'], None)
+            self.assertEqual((report['reportVersion'], report['qualificationRevision']),
+                (2, 'mycel-drift-qualification-v2'))
+            self.assertEqual(report['results'][0]['jev']['judgement'], 'needs_review')
+            self.assertEqual((report['results'][0]['jev']['confidence'],
+                report['results'][0]['jev']['reportedConfidence']), (0.4, 0.39))
+            self.assertEqual(report['results'][0]['jev']['confidenceComparison'],
+                {'matches': False, 'reportedMinusCanonical': -0.01})
+            self.assertEqual(Decimal(report['results'][0]['jev']['exactDecimals']['confidence']), Decimal('0.4'))
+            self.assertEqual(Decimal(report['results'][0]['jev']['exactDecimals']['reportedConfidence']), Decimal('0.39'))
+            self.assertEqual(report['results'][0]['jevOnlyOutcome'], 'unresolved')
+            self.assertEqual(report['results'][1]['jevOnlyOutcome'], 'needs_review')
+            self.assertEqual((report['jevErrorsOnRouted'], report['reviewerErrorsOnRouted'],
+                report['jevUnresolvedOnRouted'], report['reviewerUnresolvedOnRouted']), (0, 0, 1, 0))
             self.assertEqual(before, loaded.file.read_bytes())
 
     @proves('MYC-13.15')
@@ -215,7 +307,13 @@ class ProviderEvaluationTests(unittest.TestCase):
             selected = json.loads(json.dumps(rows))
             if change == 'critical': selected[1]['actual'] = 'still_supported'
             if change == 'no-routed': selected[0].pop('escalation')
-            if change == 'no-improvement': selected[0]['jev']['judgement'] = 'needs_review'
+            if change == 'no-improvement':
+                selected[0]['jev'].update(judgement='insufficient_evidence',
+                    probabilities={'still_supported': 0.2, 'needs_review': 0.2, 'insufficient_evidence': 0.6})
+                selected[0]['escalation'] = 'insufficient_evidence'
+                selected[0]['review']['judgement'] = 'insufficient_evidence'
+                selected[0]['actual'] = 'insufficient_evidence'
+                selected[0]['jev'] = retained_jev(selected[0]['jev'])
             if change == 'identity': selected[0]['review']['model'] = 'other-model'
             if change == 'environment': selected[0]['review']['environmentVersion'] = 'other-environment'
             with self.subTest(change=change):
@@ -228,6 +326,59 @@ class ProviderEvaluationTests(unittest.TestCase):
                     self.assertEqual(selected[0]['review']['model'], rows[0]['review']['model'])
                     self.assertEqual(report['qualificationFailures'],
                         ['The configured or returned provider identity is missing or changed.'])
+
+    @proves('MYC-13.15', 'MYC-14.17')
+    def test_correct_tentative_labels_can_leave_jev_only_policy_unresolved(self):
+        cases, rows, identity = artificial_outcomes()
+        for label, probabilities, confidence, reason in (
+                ('needs_review', {'still_supported': 0.2, 'needs_review': 0.6, 'insufficient_evidence': 0.2},
+                 0.4, 'jev_low_confidence'),
+                ('needs_review', {'still_supported': 0.5, 'needs_review': 0.5, 'insufficient_evidence': 0.0},
+                 0.25, 'jev_tied'),
+                ('insufficient_evidence', {'still_supported': 0.0, 'needs_review': 0.0, 'insufficient_evidence': 1.0},
+                 1.0, 'insufficient_evidence')):
+            selected = json.loads(json.dumps(rows))
+            selected[0]['jev'].update(judgement=label, probabilities=probabilities, confidence=confidence)
+            selected[0]['jev'] = retained_jev(selected[0]['jev'])
+            selected[0]['escalation'] = reason
+            with self.subTest(reason=reason):
+                report = qualify_profile(cases, selected, identity, real_provider_execution=True)
+                self.assertTrue(report['qualified'], report['qualificationFailures'])
+                self.assertEqual(report['jevErrorsOnRouted'], int(label != cases[0].expect))
+                self.assertEqual((report['jevCriticalMissesOnRouted'], report['reviewerErrorsOnRouted'],
+                    report['jevUnresolvedOnRouted'], report['reviewerUnresolvedOnRouted']), (0, 0, 1, 0))
+                self.assertEqual(selected[0]['jev']['judgement'], label)
+        # Policy resolution does not allow a reviewer to add a wrong label.
+        selected = json.loads(json.dumps(rows))
+        selected[0].pop('escalation'); review = selected[0].pop('review')
+        selected[0]['jev'].update(judgement='needs_review',
+            probabilities={'still_supported': 0.0, 'needs_review': 1.0, 'insufficient_evidence': 0.0}, confidence=1.0)
+        selected[0]['jevOnlyOutcome'] = 'needs_review'
+        selected[0]['jev'] = retained_jev(selected[0]['jev'])
+        selected[50]['escalation'] = 'jev_low_confidence'
+        selected[50]['jev'].update(probabilities={'still_supported': 0.6, 'needs_review': 0.2,
+            'insufficient_evidence': 0.2}, confidence=0.4)
+        selected[50]['jevOnlyOutcome'] = 'unresolved'
+        selected[50]['jev'] = retained_jev(selected[50]['jev'])
+        selected[50]['review'] = {**review, 'inputHash': selected[50]['inputHash'], 'judgement': 'needs_review'}
+        selected[50]['actual'] = 'needs_review'
+        report = qualify_profile(cases, selected, identity, real_provider_execution=True)
+        self.assertFalse(report['qualified'])
+        self.assertEqual((report['jevErrorsOnRouted'], report['reviewerErrorsOnRouted'],
+            report['jevUnresolvedOnRouted'], report['reviewerUnresolvedOnRouted']), (0, 1, 1, 0))
+
+    @proves('MYC-13.15', 'MYC-14.17')
+    def test_missing_or_inconsistent_jev_only_baselines_cannot_qualify(self):
+        cases, rows, identity = artificial_outcomes()
+        for change in ('missing', 'false-complete', 'false-abstention', 'old-identity'):
+            selected = json.loads(json.dumps(rows)); chosen = dict(identity)
+            if change == 'missing': selected[0].pop('jevOnlyOutcome')
+            if change == 'false-complete': selected[0]['jevOnlyOutcome'] = 'still_supported'
+            if change == 'false-abstention': selected[1]['jevOnlyOutcome'] = 'unresolved'
+            if change == 'old-identity': chosen.pop('qualificationRevision')
+            with self.subTest(change=change):
+                report = qualify_profile(cases, selected, chosen, real_provider_execution=True)
+                self.assertFalse(report['qualified'])
 
     @proves('MYC-13.15', 'MYC-0.10')
     def test_unavailable_evidence_requires_unresolved_and_zero_calls_even_with_other_good_metrics(self):

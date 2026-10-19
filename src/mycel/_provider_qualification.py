@@ -5,14 +5,16 @@ review, but cannot become a same-Build OnDemandProofs object by deserialization.
 """
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 import json
 
 from ._classification_payload import LABELS
 from ._evidence import canonical_json
+from ._jev import MAX_RESPONSE_BYTES, JevFailure, JevResponse, _fraction
 
 
-QUALIFICATION_REVISION = 'mycel-drift-qualification-v1'
+QUALIFICATION_REVISION = 'mycel-drift-qualification-v2'
 CRITICAL_CATEGORIES = frozenset({'negation', 'operator', 'permission', 'deletion'})
 
 
@@ -24,12 +26,53 @@ def semantic_fingerprint(case):
 
 def profile_fingerprint(pipeline):
     """Stable exact configured component identity, independent of Build/date."""
-    identity = {key: pipeline.get(key) for key in ('protocol', 'model', 'questionVersion',
+    identity = {key: pipeline.get(key) for key in ('qualificationRevision', 'protocol', 'model', 'questionVersion',
         'choiceOrder', 'policyRevision', 'confidenceFloor', 'reviewCommandHash',
         'reviewRevision', 'reviewInstructionVersion', 'reviewEnvironmentVersion', 'reviewer')}
     identity['confidenceFloor'] = str(identity['confidenceFloor'])
     return sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False,
         allow_nan=False, separators=(',', ':')).encode('utf-8')).hexdigest()
+
+
+def _jev_response_from_report(jev, usage):
+    """Rehydrate exact retained values and verify every display projection."""
+    exact = jev['exactDecimals']
+    if (type(exact) is not dict
+            or set(exact) != {'probabilities', 'confidence', 'reportedConfidence', 'reportedMinusCanonical'}
+            or type(exact['probabilities']) is not dict or set(exact['probabilities']) != set(LABELS)):
+        raise ValueError('Invalid exact Jev decimal evidence.')
+    values = [*exact['probabilities'].values(), exact['confidence'],
+        exact['reportedConfidence'], exact['reportedMinusCanonical']]
+    if any(type(value) is not str or not value or len(value) > MAX_RESPONSE_BYTES for value in values):
+        raise ValueError('Invalid exact Jev decimal evidence.')
+    probabilities = {key: Decimal(value) for key, value in exact['probabilities'].items()}
+    maximum = max(probabilities.values())
+    response = JevResponse(jev['model'], jev['judgement'], probabilities,
+        Decimal(exact['confidence']), usage,
+        sum(value == maximum for value in probabilities.values()) > 1,
+        reported_confidence=Decimal(exact['reportedConfidence']))
+    projection = response.as_dict()
+    keys = ('probabilities', 'confidence', 'reportedConfidence', 'confidenceComparison', 'exactDecimals')
+    encode = lambda value: json.dumps(value, sort_keys=True, ensure_ascii=False,
+        allow_nan=False, separators=(',', ':'))
+    if encode({key: jev[key] for key in keys}) != encode({key: projection[key] for key in keys}):
+        raise ValueError('The retained Jev projections differ from exact evidence.')
+    return response
+
+
+def _jev_only_outcome(jev, pipeline, usage):
+    """Verify the retained pre-review outcome against the accepted routing.
+
+    The tentative label remains the basis of label-error and critical-miss
+    comparisons. A routed result cannot complete without a reviewer.
+    """
+    try:
+        response = _jev_response_from_report(jev, usage)
+        floor = _fraction(Decimal(str(pipeline['confidenceFloor'])))
+        return ('unresolved' if response.tied or response.label == 'insufficient_evidence'
+            or response.confidence < floor else response.label)
+    except (KeyError, TypeError, ValueError, InvalidOperation, JevFailure):
+        return None
 
 
 def qualify_profile(cases, results, pipeline, *, real_provider_execution, incomplete=False):
@@ -75,12 +118,18 @@ def qualify_profile(cases, results, pipeline, *, real_provider_execution, incomp
     if any(not case.unavailable and result.get('error') for case, result in zip(cases, results)):
         failures.append('A complete-evidence fixture failed or could not complete its pipeline.')
     expected_reviewer = pipeline.get('reviewer') or {}
-    identities_ok = bool(pipeline.get('reviewCommandHash') and pipeline.get('reviewRevision')
+    identities_ok = bool(pipeline.get('qualificationRevision') == QUALIFICATION_REVISION
+        and pipeline.get('reviewCommandHash') and pipeline.get('reviewRevision')
         and expected_reviewer.get('provider') and expected_reviewer.get('model'))
+    baseline_ok = True
     for result in results:
         jev, review = result.get('jev'), result.get('review')
         if jev is not None:
             identities_ok &= jev.get('model') == pipeline.get('model')
+            expected_outcome = _jev_only_outcome(jev, pipeline, result.get('stageUsage', {}).get('jev'))
+            baseline_ok &= (expected_outcome is not None
+                and result.get('jevOnlyOutcome') == expected_outcome
+                and (expected_outcome == 'unresolved') == bool(result.get('escalation')))
         if review is not None:
             identities_ok &= (review.get('provider') == expected_reviewer.get('provider')
                 and review.get('model') == expected_reviewer.get('model')
@@ -92,6 +141,8 @@ def qualify_profile(cases, results, pipeline, *, real_provider_execution, incomp
         identities_ok &= result.get('profileFingerprint') == profile_fingerprint(pipeline)
     if not identities_ok:
         failures.append('The configured or returned provider identity is missing or changed.')
+    if not baseline_ok:
+        failures.append('The Jev-only baseline is missing or differs from the recorded confidence routing.')
     common = [(case, row) for case, row in zip(cases, results)
               if not case.unavailable and row.get('escalation')
               and row.get('jev', {}).get('judgement') in LABELS
@@ -102,7 +153,7 @@ def qualify_profile(cases, results, pipeline, *, real_provider_execution, incomp
                      for case, row in common)
     review_misses = sum(bool(case.critical) and row['review']['judgement'] == 'still_supported'
                         for case, row in common)
-    jev_unresolved = sum(row['jev']['judgement'] in {'insufficient_evidence', 'unresolved'}
+    jev_unresolved = sum(row.get('jevOnlyOutcome') == 'unresolved'
                          for _, row in common)
     review_unresolved = sum(row['review']['judgement'] in {'insufficient_evidence', 'unresolved'}
                             for _, row in common)
@@ -120,6 +171,8 @@ def qualify_profile(cases, results, pipeline, *, real_provider_execution, incomp
         'reviewerErrorsOnRouted': review_errors, 'jevCriticalMissesOnRouted': jev_misses,
         'reviewerCriticalMissesOnRouted': review_misses,
         'jevUnresolvedOnRouted': jev_unresolved, 'reviewerUnresolvedOnRouted': review_unresolved,
+        'reviewerComparisonBasis': {'wrongLabels': 'jev-tentative-label',
+            'criticalMisses': 'jev-tentative-label', 'unresolved': 'jev-only-confidence-routing'},
         'profileFingerprint': profile_fingerprint(pipeline),
         'profileQualificationIsSameBuildProof': False}
 

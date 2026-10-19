@@ -87,8 +87,9 @@ and no added place line.
 Counts distinguish the exact submitted string from the provider prompt plus
 that string. Both must fit. The provider's document/query prompt is counted for
 planning and is not inserted into the submitted text. Submitted counts remain
-available for later comparison with provider usage; a live usage comparison
-has not been run.
+available for comparison with provider usage. The live report retains agreement
+and signed provider-minus-submitted difference as diagnostics; provider usage
+never replaces the pinned counts used for planning limits (MYC-D42).
 
 Planner version 1 first tries all remaining text. Otherwise it uses the last
 original character covered by the first input-cap tokens as a tentative end,
@@ -139,15 +140,21 @@ ingest integration and explicit live qualification remain with their later tasks
 The internal on-demand `run_embedding_live_check` helper requires explicit live
 selection and uses one fixed short document text and one fixed query through
 the normal configured Voyage client. Each request has one attempt. It checks
-configured model/dimensions and compares reported input-text token usage with
-the packaged tokenizer's exact submitted-string count; the larger conservative
-planning count is recorded separately. The report names Build, model, date,
-tokenizer provenance and observed timings. Unknown cost remains null.
+configured model/dimensions and retains reported input-text token usage, the
+packaged tokenizer's exact submitted-string count and the larger conservative
+planning count separately. Version 2 (`mycel-embedding-live-v2`) adds
+`tokenCountComparison` with `matches` and signed `providerMinusSubmitted`.
+Disagreement is diagnostic and does not fail compatibility under MYC-D42;
+invalid provider responses, credentials, model, dimensions and local planning
+failures still stop the check. The pinned tokenizer continues to enforce every
+input/batch cap. The report names Build, model, date, tokenizer provenance and
+observed timings. Unknown cost remains null.
 
 This helper opens no store and writes no vectors/settings. Automatic tests use
 internal service stand-ins, which are always labelled and cannot pass real
-live acceptance. No real compatibility operation has been run by this private
-preparation; the helper adds no public endpoint override or automatic call.
+live acceptance. Historical version 1 reports retain their strict-equality
+contract; a passing version 2 check requires its own genuine operation. The
+helper adds no public endpoint override or automatic call.
 
 <!-- sources:
 mycel:@code/src/mycel/_embedding_live.py#run_embedding_live_check

@@ -14,7 +14,7 @@ from ._voyage import ProviderFailure, VoyageClient
 
 FIXED_TEXT = 'Mycel preserves exact source evidence for dependency review.'
 FIXED_QUERY = 'How is exact source evidence preserved?'
-LIVE_CHECK_REVISION = 'mycel-embedding-live-v1'
+LIVE_CHECK_REVISION = 'mycel-embedding-live-v2'
 
 
 def run_embedding_live_check(settings, *, build, live=False, _client_factory=None,
@@ -41,7 +41,8 @@ def run_embedding_live_check(settings, *, build, live=False, _client_factory=Non
             submitted, planning = tokenizer.counts(text, kind)
             row = {'inputType': kind, 'textSha256': sha256(text.encode('utf-8')).hexdigest(),
                 'submittedTokens': submitted, 'planningTokens': planning,
-                'providerInputTextTokens': None, 'dimensions': None, 'passed': False,
+                'providerInputTextTokens': None, 'tokenCountComparison': None,
+                'dimensions': None, 'passed': False,
                 'usage': None, 'cost': None, 'attempts': 0}
             tick = _monotonic()
             before_requests = client._requests
@@ -49,15 +50,19 @@ def run_embedding_live_check(settings, *, build, live=False, _client_factory=Non
                 # The same complete body builder/validation/fixed HTTPS adapter
                 # as ordinary embedding; no document prefixes or stored rows.
                 response = client._request((text,), options['model'], options['dimensions'], kind)
+                # Provider usage and local counts are separate observations;
+                # their comparison diagnoses differences without rejecting vectors.
                 row.update(providerInputTextTokens=response.provider_tokens,
+                    tokenCountComparison={'matches': response.provider_tokens == submitted,
+                        'providerMinusSubmitted': response.provider_tokens - submitted},
                     dimensions=len(response.vectors[0]), usage={'inputTextTokens': response.provider_tokens},
                     attempts=response.requests,
                     passed=(len(response.vectors) == 1 and len(response.vectors[0]) == options['dimensions']
-                            and response.provider_tokens == submitted and planning >= submitted))
+                            and planning >= submitted))
                 if not row['passed']:
                     row['error'] = ({'kind': 'dimension_mismatch', 'message': 'The returned vector dimensions differ from configured dimensions.'}
                         if len(response.vectors) != 1 or len(response.vectors[0]) != options['dimensions'] else
-                        {'kind': 'token_count_mismatch', 'message': 'Provider input-text usage differs from the exact submitted-string tokenizer count.'})
+                        {'kind': 'planning_count_mismatch', 'message': 'The conservative planning count is smaller than the exact submitted-string tokenizer count.'})
             except ProviderFailure as error:
                 row['error'] = error.to_dict()
                 row['attempts'] = max(0, client._requests - before_requests)
@@ -74,7 +79,7 @@ def run_embedding_live_check(settings, *, build, live=False, _client_factory=Non
     except KeyboardInterrupt:
         stopped = True
     settings.require_current()
-    return {'kind': 'embedding-live', 'reportVersion': 1, 'checkRevision': LIVE_CHECK_REVISION,
+    return {'kind': 'embedding-live', 'reportVersion': 2, 'checkRevision': LIVE_CHECK_REVISION,
         'build': build, 'model': options['model'], 'dimensions': options['dimensions'],
         'recordedAt': datetime.now(timezone.utc).isoformat(), 'live': True,
         'providerExecution': 'production-defaults' if real else 'service-stand-ins',

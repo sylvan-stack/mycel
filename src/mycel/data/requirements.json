@@ -14,7 +14,7 @@
       "specification_status": "accepted"
     },
     "03-embedding.md": {
-      "sha256": "1f9804bfd79a6cfbe7ae6499b1763f8fb4d5deceafe8ff387ea2d5afce12d1ef",
+      "sha256": "e4b84fc7f9b8fdb01daaea2dd2c74262557807c39243e81cfe413d72022a9e5c",
       "specification_status": "accepted"
     },
     "04-retrieval.md": {
@@ -54,11 +54,11 @@
       "specification_status": "accepted"
     },
     "13-checks-and-evaluation.md": {
-      "sha256": "eaf59fba6e808f537c849c5d6edfb191f751f4deeb0d46aed512ae9a0a0cc45d",
+      "sha256": "4faa71aba48e0b957b73989d247da5e23be2c63b8760aab4db84e1ad82a36175",
       "specification_status": "accepted"
     },
     "14-drift-detection.md": {
-      "sha256": "7be251c822a6e6076a28798c6a9f43e3e53e262c291cf6b525f1bd2369e67b1b",
+      "sha256": "185a1df4ef911b1c1713ccc92d9024909dbbf03bb8bb9f2bdfd3a56abdb35526",
       "specification_status": "accepted"
     },
     "15-distribution-and-replacement.md": {
@@ -2209,7 +2209,7 @@
     },
     {
       "id": "MYC-13.9",
-      "text": "check on request, with the owner's key, that the key is accepted, that the model exists, that a vector has the dimensions the settings name, and that the pinned tokenizer's exact submitted-string count matches provider-reported input-text usage, recording the larger conservative planning count separately",
+      "text": "check on request, with the owner's key, that the key is accepted, that the model exists and that a vector has the dimensions the settings name; retain the pinned tokenizer's exact submitted-string count, conservative planning count and provider-reported input-text usage separately, report their agreement and signed difference without requiring equality for compatibility, and keep pinned tokenizer counts for input/batch limits",
       "origin": "New",
       "kind": "live",
       "specification": "MYC-13",
@@ -2297,7 +2297,7 @@
     },
     {
       "id": "MYC-13.20",
-      "text": "qualify a provider profile only against the stated critical-case and relative-reviewer gates, require new reports for retuning, and never let evaluation change pins, freshness or settings",
+      "text": "qualify a provider profile only against the stated critical-case and relative-reviewer gates, retain raw tentative-label no-more gates separately from the production Jev-only unresolved baseline, require strict improvement and new versioned reports for policy changes, and never let evaluation change pins, freshness or settings",
       "origin": "New",
       "kind": "eval",
       "specification": "MYC-13",
@@ -2441,7 +2441,7 @@
     },
     {
       "id": "MYC-14.17",
-      "text": "validate exact known Jev labels/probabilities/confidence/model and route low confidence, ties or insufficient evidence to review",
+      "text": "validate exact known Jev labels/probabilities/model and finite reported confidence, compute canonical confidence without renormalization or clamping, retain provider agreement/difference as diagnostics, and route low canonical confidence, ties or insufficient evidence to review",
       "origin": "New",
       "kind": "unit",
       "specification": "MYC-14",

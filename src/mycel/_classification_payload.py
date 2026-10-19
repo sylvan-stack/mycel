@@ -31,7 +31,7 @@ PROTOCOL = 1
 QUESTION_VERSION = "mycel-dependency-v1"
 INSTRUCTION_VERSION = "mycel-review-v1"
 ENVIRONMENT_VERSION = "mycel-review-env-v1"
-ROUTING_REVISION = "mycel-drift-routing-v1"
+ROUTING_REVISION = "mycel-drift-routing-v2"
 LABELS = ("needs_review", "insufficient_evidence", "still_supported")
 _PROMPTS = json.loads(files("mycel").joinpath("data/classification-prompts.json").read_text(encoding="utf-8"))
 if (_PROMPTS.get("schema") != 1 or _PROMPTS.get("questionVersion") != QUESTION_VERSION

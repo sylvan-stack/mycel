@@ -88,7 +88,7 @@ class ClassificationPayloadTests(unittest.TestCase):
     @proves('MYC-0.10')
     def test_canonical_payload_fixed_vector_and_utf8_are_not_normalized(self):
         _, _, decision = fixture()
-        self.assertEqual(decision.input_hash, 'b32ddb86d5f2a372397d5cabc18ca7f9e230b4ab3a0e0ba33f6b8b0d8b14ca5b')
+        self.assertEqual(decision.input_hash, 'f45c21bd582b4f06be949fe61dd532a3b28bc105d2bce093ba621975c5c69ea2')
         self.assertEqual(decision.input_hash, sha256(decision.canonical_bytes).hexdigest())
         self.assertNotIn('inputHash', decision.payload)
         self.assertEqual(payload.DecisionPayload.from_bytes(decision.canonical_bytes, decision.input_hash), decision)
@@ -327,13 +327,26 @@ class ClassificationPayloadTests(unittest.TestCase):
             changed = decision.as_dict()
             changed['models']['review'][key] = value
             self.assertNotEqual(payload.DecisionPayload(changed).input_hash, decision.input_hash)
-        for key, value in (('revision', 'mycel-drift-routing-v2'), ('confidenceFloor', '0.8')):
+        for key, value in (('revision', 'mycel-drift-routing-test-v3'), ('confidenceFloor', '0.8')):
             changed = decision.as_dict()
             changed['routing'][key] = value
             self.assertNotEqual(payload.DecisionPayload(changed).input_hash, decision.input_hash)
         changed = reviewer_identity().as_dict()
         changed['argv'].append('$TOKEN; *.md $(exit 1)')
         self.assertNotEqual(payload.ReviewCommandIdentity(changed).command_hash, reviewer_identity().command_hash)
+
+    @proves('MYC-0.10')
+    def test_default_routing_revision_is_shared_with_store_and_explicit_legacy_identity_is_preserved(self):
+        from mycel import _classification_store as store
+        _, _, decision = fixture()
+        self.assertEqual(payload.ROUTING_REVISION, 'mycel-drift-routing-v2')
+        self.assertEqual(store.ROUTING_REVISION, payload.ROUTING_REVISION)
+        self.assertEqual(decision.payload['routing']['revision'], payload.ROUTING_REVISION)
+        legacy = decision.as_dict()
+        legacy['routing']['revision'] = 'mycel-drift-routing-v1'
+        retained = payload.DecisionPayload(legacy)
+        self.assertEqual(retained.payload['routing']['revision'], 'mycel-drift-routing-v1')
+        self.assertNotEqual(retained.input_hash, decision.input_hash)
 
     @proves('MYC-0.10')
     def test_reviewer_request_derives_identities_locators_and_exact_lf_count(self):

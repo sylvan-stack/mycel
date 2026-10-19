@@ -16,7 +16,8 @@ from ._classification_runner import ClassifyDependencies, _jev, run_classificati
 from ._credentials import Credentials, CredentialUnavailable
 from ._errors import MycelError
 from ._evidence import EvidenceError
-from ._provider_qualification import classification_diagnostics, profile_fingerprint, qualify_profile
+from ._provider_qualification import (QUALIFICATION_REVISION, classification_diagnostics,
+    profile_fingerprint, qualify_profile)
 from ._safeguards import InvocationPolicy
 
 
@@ -24,7 +25,8 @@ def _pipeline(settings, command):
     options = settings.values['drifts']
     reviewer = ({'provider': options['review_provider'], 'model': options['review_model']}
                 if options.get('review_provider') and options.get('review_model') else None)
-    return {'protocol': PROTOCOL, 'model': options['model'], 'questionVersion': QUESTION_VERSION,
+    return {'qualificationRevision': QUALIFICATION_REVISION,
+        'protocol': PROTOCOL, 'model': options['model'], 'questionVersion': QUESTION_VERSION,
         'choiceOrder': list(LABELS), 'policyRevision': ROUTING_REVISION,
         'confidenceFloor': options['confidence_floor'],
         'reviewCommandHash': None if command is None else command.command_hash,
@@ -47,7 +49,11 @@ def _live_result(case, entry, record, *, finished, profile, stopped=False):
         source = outcome['jev']
         row['jev'] = {'provider': 'typesafe', 'model': source['model'],
             'judgement': source['label'], 'probabilities': source['probabilities'],
-            'confidence': source['confidence']}
+            'confidence': source['confidence'], 'reportedConfidence': source['reportedConfidence'],
+            'confidenceComparison': source['confidenceComparison'], 'exactDecimals': source['exactDecimals']}
+        # Preserve the actual routing result before reviewer execution. A
+        # tentative label is not a completed Jev-only policy judgement.
+        row['jevOnlyOutcome'] = outcome.get('judgement', 'unresolved')
         stages['jev'] = source.get('usage')
     if 'review' in evidence:
         source = evidence['review']
@@ -172,7 +178,7 @@ def run_live_drift_evaluation(suite, settings, *, repository, build,
     diagnostics = classification_diagnostics(suite.drifts, results)
     count = len(results)
     supported = [row for row in results if row['expect'] == 'still_supported']
-    report = {'kind': 'drift', 'evaluationSchema': suite.schema_version, 'reportVersion': 1,
+    report = {'kind': 'drift', 'evaluationSchema': suite.schema_version, 'reportVersion': 2,
         'repository': repository, 'file': str(suite.file), 'fileHash': suite.file_hash,
         'build': build, 'live': True, 'recordedAt': dependencies.utc_now(), 'pipeline': pipeline,
         'providerExecution': 'production-defaults' if real else 'service-stand-ins',

@@ -179,15 +179,52 @@ availability combinations, excluding IDs and labels: at least 200 distinct
 pairs, 50 critical covering negation/operator/permission/deletion and 50
 unchanged/cosmetic. Conflicting duplicate ground truth
 cannot qualify. No critical work may finish incorrectly as `still_supported`.
-On at least one common routed adjudicated case the reviewer must have no more
-critical misses or wrong labels than Jev and must strictly improve wrong-label
-or unresolved count. A failed/unprocessed case or changed returned identity
-prevents qualification. The report separately retains meaningful misses, unnecessary work, support
+On at least one common routed adjudicated case with valid replies from both
+providers, the reviewer must have no more raw tentative-label errors and no
+more raw-label critical misses than Jev. Those existing no-more gates remain
+strict. Separately retain the actual production Jev-only policy baseline:
+low canonical confidence, a tied maximum or `insufficient_evidence` leaves the
+case unresolved without review, even if the raw tentative label is correct.
+Retain `jevOnlyOutcome` separately from the raw `jev.judgement`, with the routing
+reason in `escalation`. It is present only for valid live Jev replies; absent
+replies, provider errors and bypasses do not invent a baseline. The reviewer must strictly improve
+raw wrong-label count or production-baseline unresolved count on that exact
+common subset; equality on both cannot qualify. Provider faults and malformed
+replies do not become successful unresolved-baseline cases. A failed/unprocessed
+case or changed returned identity prevents qualification. The report separately retains meaningful misses, unnecessary work, support
 precision and escalation rate, overall and by critical category, unchanged/
 cosmetic and other cases. Every share names its population and denominator; a
 zero denominator is null. Critical tags may overlap, and repeated observations
 remain diagnostics while qualification coverage counts distinct semantics.
 No threshold, pin, source or settings value is retuned.
+
+The revised Drift report uses `reportVersion=2` and
+`qualificationRevision="mycel-drift-qualification-v2"`;
+`pipeline.qualificationRevision` also binds it into the profile fingerprint
+alongside `mycel-drift-routing-v2`. `reviewerComparisonBasis` explicitly records
+`wrongLabels` and `criticalMisses` as `jev-tentative-label`, and `unresolved` as
+`jev-only-confidence-routing`. These version 2 baseline/report fields belong to
+the live qualification path; deterministic non-live evaluation remains simulated
+and unqualified. Jev results retain canonical routing confidence,
+finite reported provider confidence and exact agreement/signed reported-minus-
+canonical difference separately; the distribution is neither renormalized nor
+clamped. A confidence difference alone is diagnostic. The 0.7 floor, malformed
+model/distribution/schema failures, tie/insufficient-evidence routing, coverage
+floors and zero-critical-suppression gate remain. The changed confidence or
+comparison policy needs a fresh qualification; old reports retain their original
+identity and failed status and cannot be retroactively requalified.
+
+Each retained valid Jev result carries mandatory `exactDecimals` with
+`probabilities` for exactly the three known labels, canonical `confidence`,
+`reportedConfidence` and signed `reportedMinusCanonical`, all as decimal strings.
+They preserve validated decimal values and exact derived arithmetic, without
+claiming original wire-number lexemes. Numeric probabilities/confidence/delta
+fields remain display projections. Jev-only baseline reconstruction,
+qualification and deployment validation use exact decimal evidence for
+distribution/formula/range checks and routing, and validate its display
+projections; they never rebuild exact decisions from rounded floats. Missing or
+inconsistent companion evidence prevents qualification. This representation
+implements the accepted exact policy without a new decision or changed gate.
 
 `profileFingerprint` describes the exact configured provider components;
 `reportFingerprint` describes this versioned measured report. Neither is a
@@ -285,4 +322,86 @@ mycel:@code/src/mycel/_provider_checks.py#run_provider_checks
 mycel:@code/src/mycel/_coverage.py#run_on_demand_checks
 mycel:@code/src/mycel/_coverage.py#run_checks
 mycel:@code/tests/test_provider_deployment.py#SameRunProviderDeploymentCallerTests
+-->
+
+## Inspecting and executing one provider group
+
+The development operator script `scripts/qualify_providers.py` prepares an exact
+operation before any credential or model access. Its default invocation reads
+local source, registry, settings, labelled suite and reviewer executable bytes:
+
+```sh
+<source>/.venv/bin/python -B <source>/scripts/qualify_providers.py \
+  --settings /absolute/config.toml --suite /absolute/reviewed-cases.toml \
+  --repo <configured-repository>
+```
+
+The report gives semantic coverage floors, the exact complete Jev HTTP and
+reviewer stdin byte counts (including its final LF), configured limits,
+bounded maximum calls and the identities those inputs bind. These byte caps
+describe local wire fit; actual provider tokenizer/context fit remains
+unverified. The fixed embedding compatibility check allows one attempt for
+each of its two inputs. Preflight launches no
+reviewer, reads no credential, downloads no tokenizer and sends no provider
+request. Missing reviewer configuration leaves request sizes unknown. Required
+unavailable evidence stays a local no-call case. The plan omits fixture text,
+store addresses and credential-command arguments. Usage and cost remain null.
+
+Oversized Jev input may use complete direct review. Qualification still needs
+at least one common adjudicated Jev/reviewer case; a corpus whose every complete
+input bypasses Jev cannot establish that comparison. Preflight refuses such a
+plan before spending quota. It also refuses incomplete semantic coverage and
+reviewer requests that exceed their configured cap. A possible comparison is
+not a measured routed case or a guarantee of reviewer improvement.
+
+Development preflight reports `liveReady=false`. To bind an actual staged
+Build, use that Build's bundled interpreter under `-I -B`, and select its
+registry and hexadecimal number:
+
+```sh
+<registry>/<N>/program/runtime/bin/python3 -I -B \
+  <source>/scripts/qualify_providers.py \
+  --settings /absolute/config.toml --suite /absolute/reviewed-cases.toml \
+  --repo <configured-repository> --build-registry <registry> --build <N>
+```
+
+This verifies actual installed product imports, interpreter, immutable program
+manifest, exact source and complete check-input manifest, requirement registry,
+suite, settings and command identity. A freeform Build label cannot stand in
+for staged execution. A complete unpublished stage may be inspected; the
+operation never marks it working, installs a launcher or changes a selection.
+Missing, changed, failed or withdrawn stage evidence refuses live execution.
+
+Only after explicit operator selection of that concrete live operation, repeat
+the same staged invocation with `--live --expect-plan-sha256 <planSha256>` and
+`--output-dir /absolute/new-private-directory`. The directory must be new and
+outside the source repository. A shared Build run guard prevents pruning.
+All bindings are recomputed before the first credential boundary; changed
+source, fixture, settings, registry, program or executable bytes refuse the
+reviewed plan. Existing per-call settings guards additionally check the exact
+external settings/suite/source/registry/command bytes and staged program's
+unchanged file set, inodes and metadata before another request. The complete
+program manifest is rehashed at group boundaries. No limit is raised and no
+fixture or profile is substituted.
+
+The live branch calls `run_provider_checks` once, then passes its original
+proof and reports objects directly to `run_provider_deployment_checks` once.
+Failure never retries the group. Original proof objects remain available to
+an importing same-process caller through `run_operation`'s return value.
+Private `preflight.json`, `reports.json` and `receipt.json` retain the exact
+plan, measured reports and diagnostic check records. Saved records cannot be
+loaded as `OnDemandProofs`; exiting the script ends that same-process proof
+lifetime. Public `evaluate --live` alone does not perform this grouped proof
+handoff, so do not run it first to prepare acceptance evidence for this script.
+
+This operator preparation is separate from automatic Build qualification and
+does not carry earlier automatic acceptance onto changed source. Its unit
+fixtures are explicitly synthetic; they supply neither the original reviewed
+release corpus nor real provider qualification. MYC-4.25 retrieval evaluation
+remains a separate on-demand operation.
+
+<!-- sources:
+mycel:@code/scripts/qualify_providers.py#prepare_operation
+mycel:@code/scripts/qualify_providers.py#run_operation
+mycel:@code/tests/test_provider_operation.py
 -->

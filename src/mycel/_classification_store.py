@@ -18,7 +18,7 @@ from psycopg.types.json import Jsonb
 
 from ._classification_eligibility import observe_input, classification_eligibility
 from ._classification_payload import (DecisionPayload, DecisionText, CurrentSelection,
-    EvidenceBundle, ReviewCommandIdentity, semantic_baseline)
+    EvidenceBundle, ReviewCommandIdentity, semantic_baseline, ROUTING_REVISION)
 from ._drift_store import DriftStore, JUDGEMENTS, _copy, _time, _uuid
 from ._errors import MycelError
 from ._evidence import (EvidenceError, EvidenceStore, SnapshotEvidence, CaptureLocation,
@@ -33,7 +33,6 @@ from ._staleness import _eligible, _links, _resolve, _raw
 from ._store import checked_store
 
 
-ROUTING_REVISION = 'mycel-drift-routing-v1'
 REQUEST_SCHEMA = 'mycel-classification-request-v1'
 
 

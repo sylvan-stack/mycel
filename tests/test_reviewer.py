@@ -204,7 +204,7 @@ class ReviewerProtocolTests(unittest.TestCase):
         self.assertEqual(governor['freshness'], 'stale')
         self.assertEqual(documented['evidenceLocators'], list(decision.evidence_locators))
         self.assertEqual(len(request.transmitted_bytes), 11055)
-        self.assertEqual(decision.input_hash, '541fe745b5b14c23b9be3ea91b9f54a4bbd4d1ba98a35fa21617af6dbe5c63cb')
+        self.assertEqual(decision.input_hash, 'e997d8d538baba0fdf63a3e2cb6422d14fb68f4391b7d2ab5c9498984db6bcc9')
         self.assertIn('11055', documentation)
         self.assertEqual(request.transmitted_bytes, request.canonical_bytes + b'\n')
         result = reviewer.validate_response(completed(block('Success')), request)
