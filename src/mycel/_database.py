@@ -289,7 +289,7 @@ def discussion_connection(credentials: Credentials, *, timeout_seconds: float = 
                           cancel_event: threading.Event | None = None,
                           _connector: Callable[..., Any] | None = None,
                           _resolver: Callable[[str, int], Sequence[str]] | None = None) -> Iterator[psycopg.Connection]:
-    """Connect to the Arbol database the `[discussions]` settings name (MYC-17).
+    """Connect to the discussion database the `[discussions]` settings name (MYC-17).
 
     The same password-free-first connection as the store's, with the
     `discussions-password` Keychain item when the server asks for one. The

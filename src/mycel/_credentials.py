@@ -172,7 +172,7 @@ class Credentials:
     def discussion_target(self, *, password_requested: bool = False,
                           timeout_seconds: float | None = None,
                           cancelled: Callable[[], bool] | None = None) -> StoreTarget | None:
-        """The Arbol database named by `[discussions]`, read as data (MYC-17, MYC-D48).
+        """The discussion database named by `[discussions]`, read as data (MYC-17, MYC-D48).
 
         None when the settings name no address. The password comes from the
         Keychain item `mycel` / `discussions-password` only when the server

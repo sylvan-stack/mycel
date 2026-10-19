@@ -25,6 +25,7 @@ from mycel._coverage import proves
 from mycel_build import _launcher_runtime as launcher
 from mycel_build._core import atomic_json, digest, file_manifest, json_bytes, seal_program
 from mycel_build._registry import allocate
+from mycel._store import STORE_FORMAT
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -145,8 +146,8 @@ class LauncherFixture:
             thaw(package)
             store = package / '_store.py'
             raw = store.read_text()
-            assert raw.count('STORE_FORMAT = 2') == 1
-            store.write_text(raw.replace('STORE_FORMAT = 2', f'STORE_FORMAT = {store_format}'))
+            assert raw.count(f'STORE_FORMAT = {STORE_FORMAT}') == 1
+            store.write_text(raw.replace(f'STORE_FORMAT = {STORE_FORMAT}', f'STORE_FORMAT = {store_format}'))
         else:
             (package / 'data').mkdir(parents=True)
             (package / '__init__.py').write_text('')

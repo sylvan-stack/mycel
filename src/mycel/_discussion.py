@@ -1,4 +1,4 @@
-"""The discussion of a decision: its chats, read as data from the Arbol database (MYC-17).
+"""The discussion of a decision: its chats, read as data from the discussion database (MYC-17).
 
 A Discussion cell holds chat Entity URIs. `mycel read` of the decision shows
 each chat's title and messages, read from the database the `[discussions]`
