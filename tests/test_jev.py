@@ -323,6 +323,55 @@ class JevTests(unittest.TestCase):
             validate_response(http(value), model='jev-1.13.0')
         self.assertEqual(caught.exception.code, 'provider_result_invalid')
 
+    @proves("MYC-14.17")
+    def test_json_evidence_retains_exact_confidence_when_its_numeric_projection_rounds(self):
+        body = (b'{"model":"jev-1.13.0","answers":{"dependency":{"type":"choice",'
+            b'"choice":"needs_review","probabilities":{"needs_review":0.6666666666666667,'
+            b'"still_supported":0.16666666666666665,"insufficient_evidence":0.16666666666666665},'
+            b'"confidence":0.5}},"usage":{"input_tokens":1,"output_tokens":1}}')
+        outcome = self.classify(self.client(transport=lambda *a, **k: http(body=body)))
+        retained = json.loads(json.dumps(outcome.as_dict()))['jev']
+        self.assertEqual((outcome.status, outcome.reason), ('needs_llm_review', 'jev_low_confidence'))
+        self.assertEqual(outcome.response.confidence, Decimal('0.50000000000000005'))
+        self.assertEqual(retained['confidence'], 0.5)
+        self.assertEqual(retained['exactDecimals'], {
+            'probabilities': {'needs_review': '0.6666666666666667',
+                'still_supported': '0.16666666666666665', 'insufficient_evidence': '0.16666666666666665'},
+            'confidence': '0.50000000000000005', 'reportedConfidence': '0.5',
+            'reportedMinusCanonical': '-5E-17'})
+        self.assertEqual(retained['confidenceComparison'], {'matches': False, 'reportedMinusCanonical': -5e-17})
+
+    @proves("MYC-14.17")
+    def test_exact_routing_floor_survives_identical_numeric_display_projections(self):
+        body = json.dumps(response()).encode()
+        for top, other, confidence, status, reason in (
+                (b'0.799999999999999999', b'0.100000000000000001', '0.6999999999999999985',
+                    'needs_llm_review', 'jev_low_confidence'),
+                (b'0.800000000000000001', b'0.099999999999999999', '0.7000000000000000015',
+                    'complete', None)):
+            candidate = body.replace(b'"still_supported": 0.8', b'"still_supported": ' + top)
+            candidate = candidate.replace(b'"needs_review": 0.1', b'"needs_review": ' + other)
+            outcome = self.classify(self.client(transport=lambda *a, **k: http(body=candidate)))
+            retained = json.loads(json.dumps(outcome.as_dict()))['jev']
+            with self.subTest(top=top):
+                self.assertEqual((outcome.status, outcome.reason), (status, reason))
+                self.assertEqual(outcome.response.confidence, Decimal(confidence))
+                self.assertEqual(retained['confidence'], 0.7)
+                self.assertEqual(retained['probabilities']['still_supported'], 0.8)
+                self.assertEqual(retained['exactDecimals']['confidence'], confidence)
+                self.assertEqual(retained['exactDecimals']['probabilities']['still_supported'], top.decode())
+
+    @proves("MYC-14.17")
+    def test_exact_reported_statistic_survives_rounding_to_equal_canonical_projection(self):
+        body = json.dumps(response()).encode().replace(b'"confidence": 0.7', b'"confidence": 0.70000000000000001')
+        outcome = self.classify(self.client(transport=lambda *a, **k: http(body=body)))
+        retained = json.loads(json.dumps(outcome.as_dict()))['jev']
+        self.assertEqual((outcome.status, outcome.judgement), ('complete', 'still_supported'))
+        self.assertEqual((retained['confidence'], retained['reportedConfidence']), (0.7, 0.7))
+        self.assertEqual(retained['confidenceComparison'], {'matches': False, 'reportedMinusCanonical': 1e-17})
+        self.assertEqual(retained['exactDecimals']['reportedConfidence'], '0.70000000000000001')
+        self.assertEqual(retained['exactDecimals']['reportedMinusCanonical'], '1E-17')
+
     @proves("MYC-14.12", "MYC-14.20")
     def test_complete_http_body_cap_bypasses_before_credential_and_never_truncates(self):
         body = JevRequest(self.decision).body

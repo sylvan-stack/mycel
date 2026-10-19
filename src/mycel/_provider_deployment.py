@@ -16,9 +16,9 @@ import stat
 from ._classification_payload import LABELS, ReviewCommandIdentity
 from ._errors import MycelError
 from ._evidence import EvidenceError
-from ._jev import JevFailure, JevResponse
+from ._jev import JevFailure
 from ._provider_qualification import (QUALIFICATION_REVISION, classification_diagnostics, profile_fingerprint,
-    qualify_profile, semantic_fingerprint)
+    _jev_response_from_report, qualify_profile, semantic_fingerprint)
 
 
 def _bytes(value):
@@ -71,15 +71,8 @@ def require_qualification(report, suite, expected_pipeline):
                 and sum(row['providerCalls'].values()) == row['attempts'])
             jev = row.get('jev')
             if jev is not None:
-                probabilities = {key: Decimal(str(value)) for key, value in jev['probabilities'].items()}
-                maximum = max(probabilities.values())
-                response = JevResponse(jev['model'], jev['judgement'], probabilities,
-                    Decimal(str(jev['confidence'])), row['stageUsage']['jev'],
-                    sum(value == maximum for value in probabilities.values()) > 1,
-                    reported_confidence=Decimal(str(jev['reportedConfidence'])))
-                _require(response.model == expected_pipeline['model'] and jev['provider'] == 'typesafe'
-                    and response.confidence == Decimal(str(jev['confidence']))
-                    and response.as_dict()['confidenceComparison'] == jev['confidenceComparison'])
+                response = _jev_response_from_report(jev, row['stageUsage']['jev'])
+                _require(response.model == expected_pipeline['model'] and jev['provider'] == 'typesafe')
             review = row.get('review')
             if review is not None:
                 _require(type(review['protocol']) is int and review['protocol'] == 1

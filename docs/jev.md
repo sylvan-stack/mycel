@@ -61,6 +61,19 @@ probability-total boundary and exact routing comparison. The [vendor confidence 
 explains the distribution statistic; it is not an independently verified
 probability of a correct Mycel judgement.
 
+Every valid retained `JevResponse.as_dict()` includes mandatory `exactDecimals`:
+`probabilities` maps exactly the three known labels to decimal strings, while
+`confidence`, `reportedConfidence` and `reportedMinusCanonical` retain the exact
+validated or derived decimal values as strings. This is decimal-value evidence;
+it does not preserve or claim the original JSON numeric lexemes or wire bytes.
+Existing numeric fields remain display projections and may round a value such as
+`0.50000000000000005` to `0.5`. `confidenceComparison.matches` still uses exact
+Decimal equality. Routing, ties and the floor use exact values; retained-report
+qualification, Jev-only baseline reconstruction and deployment validation must
+use the companion strings and validate their formula/range/distribution and
+display-projection consistency. Missing or inconsistent evidence cannot qualify;
+no constructor or confidence-floor tolerance is relaxed.
+
 `JevOutcome` retains the exact input hash, returned model/distribution/usage,
 canonical `confidence`, separately reported confidence and its comparison, the
 configured canonical confidence floor and `mycel-drift-routing-v2` identity.

@@ -54,11 +54,11 @@
       "specification_status": "accepted"
     },
     "13-checks-and-evaluation.md": {
-      "sha256": "12d3a5be98c1f4b69bb155a5b7f9059767dede34b4c0b8fb3ce347aebd717101",
+      "sha256": "4faa71aba48e0b957b73989d247da5e23be2c63b8760aab4db84e1ad82a36175",
       "specification_status": "accepted"
     },
     "14-drift-detection.md": {
-      "sha256": "bad8181ba8657459120d3f13daf98bcd5670d01edd0a3c7f910a9a0458e9f56c",
+      "sha256": "185a1df4ef911b1c1713ccc92d9024909dbbf03bb8bb9f2bdfd3a56abdb35526",
       "specification_status": "accepted"
     },
     "15-distribution-and-replacement.md": {

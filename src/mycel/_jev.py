@@ -184,7 +184,7 @@ def _canonical_confidence(probabilities, reported):
     return _fraction(confidence)
 
 
-def _confidence_comparison(reported, canonical):
+def _confidence_difference(reported, canonical):
     precision = max(32, 2 - min(number.as_tuple().exponent for number in (reported, canonical)))
     if precision > MAX_RESPONSE_BYTES:
         _invalid()
@@ -192,8 +192,7 @@ def _confidence_comparison(reported, canonical):
         context.prec = precision
         context.Emin = -MAX_RESPONSE_BYTES
         context.Emax = MAX_RESPONSE_BYTES
-        difference = reported - canonical
-    return {"matches": reported == canonical, "reportedMinusCanonical": float(difference)}
+        return reported - canonical
 
 
 @dataclass(frozen=True)
@@ -228,10 +227,15 @@ class JevResponse:
         object.__setattr__(self, "usage", MappingProxyType(dict(self.usage)))
 
     def as_dict(self) -> dict:
+        difference = _confidence_difference(self.reported_confidence, self.confidence)
         return {"provider": "typesafe", "model": self.model, "label": self.label,
             "probabilities": {label: float(self.probabilities[label]) for label in LABELS},
             "confidence": float(self.confidence), "reportedConfidence": float(self.reported_confidence),
-            "confidenceComparison": _confidence_comparison(self.reported_confidence, self.confidence),
+            "confidenceComparison": {"matches": self.reported_confidence == self.confidence,
+                "reportedMinusCanonical": float(difference)},
+            "exactDecimals": {"probabilities": {label: str(self.probabilities[label]) for label in LABELS},
+                "confidence": str(self.confidence), "reportedConfidence": str(self.reported_confidence),
+                "reportedMinusCanonical": str(difference)},
             "tied": self.tied, "usage": dict(self.usage)}
 
 

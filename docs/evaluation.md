@@ -214,6 +214,18 @@ floors and zero-critical-suppression gate remain. The changed confidence or
 comparison policy needs a fresh qualification; old reports retain their original
 identity and failed status and cannot be retroactively requalified.
 
+Each retained valid Jev result carries mandatory `exactDecimals` with
+`probabilities` for exactly the three known labels, canonical `confidence`,
+`reportedConfidence` and signed `reportedMinusCanonical`, all as decimal strings.
+They preserve validated decimal values and exact derived arithmetic, without
+claiming original wire-number lexemes. Numeric probabilities/confidence/delta
+fields remain display projections. Jev-only baseline reconstruction,
+qualification and deployment validation use exact decimal evidence for
+distribution/formula/range checks and routing, and validate its display
+projections; they never rebuild exact decisions from rounded floats. Missing or
+inconsistent companion evidence prevents qualification. This representation
+implements the accepted exact policy without a new decision or changed gate.
+
 `profileFingerprint` describes the exact configured provider components;
 `reportFingerprint` describes this versioned measured report. Neither is a
 same-Build acceptance proof. Explicit acceptance must execute named live/eval

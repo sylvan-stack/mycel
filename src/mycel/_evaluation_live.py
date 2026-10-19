@@ -50,7 +50,7 @@ def _live_result(case, entry, record, *, finished, profile, stopped=False):
         row['jev'] = {'provider': 'typesafe', 'model': source['model'],
             'judgement': source['label'], 'probabilities': source['probabilities'],
             'confidence': source['confidence'], 'reportedConfidence': source['reportedConfidence'],
-            'confidenceComparison': source['confidenceComparison']}
+            'confidenceComparison': source['confidenceComparison'], 'exactDecimals': source['exactDecimals']}
         # Preserve the actual routing result before reviewer execution. A
         # tentative label is not a completed Jev-only policy judgement.
         row['jevOnlyOutcome'] = outcome.get('judgement', 'unresolved')

@@ -20,6 +20,7 @@ from mycel._embedding_live import FIXED_QUERY, FIXED_TEXT, run_embedding_live_ch
 from mycel._errors import MycelError
 from mycel._evaluation import DriftCase, EvaluationSet
 from mycel._evaluation_drift import FixtureStore, _Jev, _Reviewer, run_drift_evaluation
+from mycel._jev import JevResponse
 from mycel._provider_qualification import (CRITICAL_CATEGORIES, QUALIFICATION_REVISION, classification_diagnostics,
     profile_fingerprint, qualify_profile, semantic_fingerprint)
 from mycel._safeguards import InvocationPolicy, model_call_allowed
@@ -53,6 +54,19 @@ def pipeline():
         'reviewer': {'provider': 'fixture-provider', 'model': 'fixture-model'}}
 
 
+def retained_jev(jev, usage=None):
+    """Complete projections for controlled arithmetic fixtures only."""
+    probabilities = {key: Decimal(str(value)) for key, value in jev['probabilities'].items()}
+    maximum = max(probabilities.values())
+    response = JevResponse(jev['model'], jev['judgement'], probabilities,
+        (3 * maximum - 1) / 2, usage or {'input_tokens': 0, 'output_tokens': 0},
+        sum(value == maximum for value in probabilities.values()) > 1,
+        reported_confidence=Decimal(str(jev.get('reportedConfidence', jev['confidence']))))
+    source = response.as_dict()
+    return {key: source[key] for key in ('provider', 'model', 'probabilities', 'confidence',
+        'reportedConfidence', 'confidenceComparison', 'exactDecimals')} | {'judgement': source['label']}
+
+
 def artificial_outcomes():
     """Arithmetic vectors, never executed semantic fixtures or authored labels."""
     identity = pipeline(); cases, rows = [], []
@@ -76,6 +90,8 @@ def artificial_outcomes():
             else float(name == label) for name in identity['choiceOrder']},
             confidence=0.4 if number == 0 else 1.0)
         row['jevOnlyOutcome'] = 'unresolved' if number == 0 else label
+        row['stageUsage'] = {'jev': {'input_tokens': 0, 'output_tokens': 0}, 'review': None}
+        row['jev'] = retained_jev(row['jev'])
         cases.append(case); rows.append(row)
     return cases, rows, identity
 
@@ -248,6 +264,8 @@ class ProviderEvaluationTests(unittest.TestCase):
                 report['results'][0]['jev']['reportedConfidence']), (0.4, 0.39))
             self.assertEqual(report['results'][0]['jev']['confidenceComparison'],
                 {'matches': False, 'reportedMinusCanonical': -0.01})
+            self.assertEqual(Decimal(report['results'][0]['jev']['exactDecimals']['confidence']), Decimal('0.4'))
+            self.assertEqual(Decimal(report['results'][0]['jev']['exactDecimals']['reportedConfidence']), Decimal('0.39'))
             self.assertEqual(report['results'][0]['jevOnlyOutcome'], 'unresolved')
             self.assertEqual(report['results'][1]['jevOnlyOutcome'], 'needs_review')
             self.assertEqual((report['jevErrorsOnRouted'], report['reviewerErrorsOnRouted'],
@@ -295,6 +313,7 @@ class ProviderEvaluationTests(unittest.TestCase):
                 selected[0]['escalation'] = 'insufficient_evidence'
                 selected[0]['review']['judgement'] = 'insufficient_evidence'
                 selected[0]['actual'] = 'insufficient_evidence'
+                selected[0]['jev'] = retained_jev(selected[0]['jev'])
             if change == 'identity': selected[0]['review']['model'] = 'other-model'
             if change == 'environment': selected[0]['review']['environmentVersion'] = 'other-environment'
             with self.subTest(change=change):
@@ -320,6 +339,7 @@ class ProviderEvaluationTests(unittest.TestCase):
                  1.0, 'insufficient_evidence')):
             selected = json.loads(json.dumps(rows))
             selected[0]['jev'].update(judgement=label, probabilities=probabilities, confidence=confidence)
+            selected[0]['jev'] = retained_jev(selected[0]['jev'])
             selected[0]['escalation'] = reason
             with self.subTest(reason=reason):
                 report = qualify_profile(cases, selected, identity, real_provider_execution=True)
@@ -334,10 +354,12 @@ class ProviderEvaluationTests(unittest.TestCase):
         selected[0]['jev'].update(judgement='needs_review',
             probabilities={'still_supported': 0.0, 'needs_review': 1.0, 'insufficient_evidence': 0.0}, confidence=1.0)
         selected[0]['jevOnlyOutcome'] = 'needs_review'
+        selected[0]['jev'] = retained_jev(selected[0]['jev'])
         selected[50]['escalation'] = 'jev_low_confidence'
         selected[50]['jev'].update(probabilities={'still_supported': 0.6, 'needs_review': 0.2,
             'insufficient_evidence': 0.2}, confidence=0.4)
         selected[50]['jevOnlyOutcome'] = 'unresolved'
+        selected[50]['jev'] = retained_jev(selected[50]['jev'])
         selected[50]['review'] = {**review, 'inputHash': selected[50]['inputHash'], 'judgement': 'needs_review'}
         selected[50]['actual'] = 'needs_review'
         report = qualify_profile(cases, selected, identity, real_provider_execution=True)
