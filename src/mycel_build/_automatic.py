@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 from ._core import BuildError, TARGETS, digest, file_manifest, json_bytes
 from ._process import run_group
 from ._qualification import automatic_contract, requirement_results
+from mycel._coverage import ACTIVE_REQUIREMENTS, REQUIREMENT_ID
 
 
 _RUNNER = r'''
@@ -138,7 +139,7 @@ def _sanitize_report(raw: bytes, number: int, *, contract: dict) -> dict:
                     or check["status"] not in {"passed", "failed", "skipped"}
                     or check["passed"] is not (check["status"] == "passed")
                     or not isinstance(check["requirements"], list) or not check["requirements"]
-                    or any(not isinstance(value, str) or not re.fullmatch(r"MYC-(?:[0-9]|1[0-6])\.[1-9][0-9]*", value)
+                    or any(not isinstance(value, str) or not REQUIREMENT_ID.fullmatch(value)
                            for value in check["requirements"])
                     or len(set(check["requirements"])) != len(check["requirements"])):
                 raise ValueError("check result")
@@ -147,7 +148,7 @@ def _sanitize_report(raw: bytes, number: int, *, contract: dict) -> dict:
         for key in ("active", "implemented", "pending"):
             if type(report["coverage"][key]) is not int or report["coverage"][key] < 0:
                 raise ValueError("coverage counts")
-        if (report["coverage"]["active"] != 333
+        if (report["coverage"]["active"] != ACTIVE_REQUIREMENTS
                 or report["coverage"]["active"] != report["coverage"]["implemented"] + report["coverage"]["pending"]):
             raise ValueError("coverage total")
         expected_passed = not report["gateErrorCount"] and all(check["passed"] for check in report["checks"])
@@ -162,7 +163,8 @@ def _sanitize_report(raw: bytes, number: int, *, contract: dict) -> dict:
         implemented = sum(row['status'] == 'implemented' for row in requirements.values())
         if (report['requirements'] != requirements
                 or {key: report['coverage'][key] for key in ('active', 'implemented', 'pending')}
-                    != {'active': 333, 'implemented': implemented, 'pending': 333 - implemented}):
+                    != {'active': ACTIVE_REQUIREMENTS, 'implemented': implemented,
+                        'pending': ACTIVE_REQUIREMENTS - implemented}):
             raise ValueError('requirement proof results')
         return {"passed": report["passed"], "executed": True, "checks": report["checks"],
                 "coverage": {key: report["coverage"][key] for key in ("active", "implemented", "pending")},

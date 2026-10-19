@@ -2,11 +2,11 @@
   "schema_version": 1,
   "specifications": {
     "00-overview-and-legacy-map.md": {
-      "sha256": "52a72767440ffeabf4674de6fae9e89fcb804a6b6c4862e3530038603141a0a5",
+      "sha256": "f184b646e47a9983b91a7964996166cbdfa2c0df1515efc7b41331b78c05e12d",
       "specification_status": "accepted"
     },
     "01-corpora-and-ingest.md": {
-      "sha256": "aa24f7e16b0bdde359dba597f802dae373ae56d2edfd2421705c17ebe97d0121",
+      "sha256": "e3568fb2506e7bd224bf490f66698190533675c3b590a690e993ef092239a07c",
       "specification_status": "accepted"
     },
     "02-provenance-and-freshness.md": {
@@ -22,15 +22,15 @@
       "specification_status": "accepted"
     },
     "05-settings.md": {
-      "sha256": "7a5e58b29a813e53d6434af9b4113c9b6e0c2cc26b5176ff540077be38fb9d2b",
+      "sha256": "1c737701e3a366fcb593cc929a0a5b0d7c6cef0fcff9bae706cedd8cd8cad039",
       "specification_status": "accepted"
     },
     "06-index-store.md": {
-      "sha256": "dc0c7422a47c89c1018b33fef24e1626f6df9fe53f1e7ea62a4cceca8f41622d",
+      "sha256": "ad825731b69e2c442c3dd84da0ccf7c878456fa2dc42a91f2305564f81f8f22e",
       "specification_status": "accepted"
     },
     "07-drifts-and-verification.md": {
-      "sha256": "c7f6b182038fff12021d1527fc3ae48f11264c1ed6d965be7f823b3363b89867",
+      "sha256": "72ecc926a4565b1b5df3e318da6dc0d57ff929ba6ce2bff8f6c1a4c8c898fc93",
       "specification_status": "accepted"
     },
     "08-summaries.md": {
@@ -46,7 +46,7 @@
       "specification_status": "accepted"
     },
     "11-reading-a-chunk.md": {
-      "sha256": "4b13615df15029d942146af4b7509455264663585c5c53ad72ac258a723ae0e7",
+      "sha256": "497b30e8161467fa07abd101e03aad0a4014713e1c7d641f1228e197eac5283a",
       "specification_status": "accepted"
     },
     "12-record-of-work.md": {
@@ -66,8 +66,12 @@
       "specification_status": "accepted"
     },
     "16-source-addresses-and-evidence.md": {
-      "sha256": "be650f741898e2c27aa072b5af71126d04ffd7145c30dc0c13981c28c3326e63",
+      "sha256": "9c40858e896943eec225de34f1a4e26af20fce0d350aafc95b08374edb4f97e9",
       "specification_status": "accepted"
+    },
+    "17-justification.md": {
+      "sha256": "f1835809a9f387f2e7ce35803d99aa7d50b580ae0093fe6e45c0e40693ed6fcb",
+      "specification_status": "draft"
     }
   },
   "requirements": [
@@ -434,6 +438,22 @@
     {
       "id": "MYC-1.34",
       "text": "retain exact text versions separately from normalized comparison hashes under MYC-16; keep identity through recognized renames/moves, reuse a version only for identical stored text, preserve inherited pins for normalized-equivalent/renamed text and retain deleted-source evidence solely in surviving dependant-owned blobs",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-1",
+      "source": "01-corpora-and-ingest.md"
+    },
+    {
+      "id": "MYC-1.35",
+      "text": "split a recognised requirement or decision row out as a chunk of kind `req` or `dec` beside its section, named by its human id and keyed by the UUID of the HTML comment in its first cell, and keep the section's own chunk with its complete text and hashes",
+      "origin": "New",
+      "kind": "unit",
+      "specification": "MYC-1",
+      "source": "01-corpora-and-ingest.md"
+    },
+    {
+      "id": "MYC-1.36",
+      "text": "report a recognised row without a UUID, and two rows with one UUID, as faults of the file, make no entity of them, and give a `req` or `dec` chunk its UUID as identifier in every location without the two matching rounds",
       "origin": "New",
       "kind": "store",
       "specification": "MYC-1",
@@ -1184,6 +1204,14 @@
       "source": "05-settings.md"
     },
     {
+      "id": "MYC-5.17",
+      "text": "know the table `[discussions]` with its key `address`, a password-free PostgreSQL address of the Arbol database, refuse one that carries a password with `settings`, take its password from the Keychain item `mycel` / `discussions-password` when the database asks for one, and leave every command but the read of a decision's discussion untouched by its absence",
+      "origin": "New",
+      "kind": "unit",
+      "specification": "MYC-5",
+      "source": "05-settings.md"
+    },
+    {
       "id": "MYC-6.1",
       "text": "keep mutable knowledge and invocation state between runs in one index store, with distribution/build files owned separately by MYC-15, and keep in it no copy of the settings, no secret and nothing of another product",
       "origin": "Changed",
@@ -1344,6 +1372,14 @@
       "source": "06-index-store.md"
     },
     {
+      "id": "MYC-6.21",
+      "text": "hold requirement and decision entities as chunks of kind `req` and `dec` in store format 3, bring a format 2 store forward in one step, report the format in `mycel info`, and never delete an entity row in collection",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-6",
+      "source": "06-index-store.md"
+    },
+    {
       "id": "MYC-7.14",
       "text": "read the relations of a section from a `related` comment in its text, one ref per line, with the forms, the rules and the fault reports of Source Refs",
       "origin": "New",
@@ -1474,6 +1510,14 @@
     {
       "id": "MYC-7.30",
       "text": "return the relation assertion/removal result and complete verification evidence; make verification listing read-only, deterministically ordered and successful when empty",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-7",
+      "source": "07-drifts-and-verification.md"
+    },
+    {
+      "id": "MYC-7.31",
+      "text": "retain the chat Entity URIs of a decision's Discussion column with the decision, make no edge, pin and stale mark from a chat, and mark what rests on a decision stale when its row is edited",
       "origin": "New",
       "kind": "store",
       "specification": "MYC-7",
@@ -2024,6 +2068,14 @@
       "source": "11-reading-a-chunk.md"
     },
     {
+      "id": "MYC-11.13",
+      "text": "read a requirement or decision chunk by its Entity URI, its full address or its human id within its file, carry its entity fields in the reply, and for a decision show the chats of its Discussion cell from the configured Arbol database or `available: false` with the reason, succeeding either way and writing nothing there",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-11",
+      "source": "11-reading-a-chunk.md"
+    },
+    {
       "id": "MYC-12.1",
       "text": "leave one entry of a kind in the table above for each repository whose store state an invocation changed, including downstream dependency records or stale marks changed by a search, read or ingest even when no file changed there",
       "origin": "Changed",
@@ -2313,7 +2365,7 @@
     },
     {
       "id": "MYC-14.1",
-      "text": "consider every changed source\u2013dependant/related pair without a change-size gate, using exact Jev classification and the confidence/review policy above",
+      "text": "consider every changed source–dependant/related pair without a change-size gate, using exact Jev classification and the confidence/review policy above",
       "origin": "New",
       "kind": "unit",
       "specification": "MYC-14",
@@ -2734,6 +2786,78 @@
       "kind": "store",
       "specification": "MYC-16",
       "source": "16-source-addresses-and-evidence.md"
+    },
+    {
+      "id": "MYC-16.15",
+      "text": "accept an Entity URI, with or without the repo code, wherever an address is accepted, resolve it by its UUID alone with the kind tag as a check, return the typed selections `req` and `dec` as one chunk, and write an Origin as an Entity URI when it has a UUID and as a qualified address otherwise",
+      "origin": "New",
+      "kind": "unit",
+      "specification": "MYC-16",
+      "source": "16-source-addresses-and-evidence.md"
+    },
+    {
+      "id": "MYC-17.1",
+      "text": "keep every recognised requirement and decision row of a document as a chunk of its own in the Index Store, of kind `req` or `dec`, whose identifier is the UUID of the HTML comment in the row's first cell, beside the section chunk that holds the row, with versions and locations like any chunk",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.2",
+      "text": "read from a recognised row its human id as its name and display name, its title, its exact text and hashes, its status, and its metadata: who decided and when, the discussion chats, the Verified by kind and the From v1 value",
+      "origin": "New",
+      "kind": "unit",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.3",
+      "text": "report a recognised row without a UUID, and two rows with one UUID, as faults of their file, make no entity of them, and split the section as before",
+      "origin": "New",
+      "kind": "unit",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.4",
+      "text": "keep an entity's identity through an edit to a neighbouring row, through an edit to its own text and through a move of its row to another section, file or chapter; collect its versions like any chunk's but never delete the entity row, so a withdrawn id stays reserved",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.5",
+      "text": "accept the glossary's Entity URI, with or without the repo code, wherever an address is accepted; resolve it by the UUID alone, refuse a kind tag that does not match the entity with `invalid_input`, and write an Origin as an Entity URI when it has a UUID and as a Mycel address otherwise",
+      "origin": "New",
+      "kind": "unit",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.6",
+      "text": "retain the chat Entity URIs of a decision's Discussion column with the decision, derive no edge and no stale mark from a chat, and mark what rests on a decision stale when its row is edited",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.7",
+      "text": "show with the read of a decision the content of the chats its Discussion column names, read as data from the Arbol database that the `[discussions]` settings name, writing nothing there; and succeed with `available: false` and the reason when the settings name none or it cannot be reached",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.8",
+      "text": "keep Origin Links in the Index Store and never in a file, each with its method, its confidence score and band, who made it and when, and its review, referencing the Origin's UUID when it has one",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
     }
   ]
 }
