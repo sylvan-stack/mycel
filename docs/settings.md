@@ -119,3 +119,14 @@ review_revision = "example-adapter-v1"
 ```
 
 The path in the third argv member remains exactly `~/literal-config.toml`; its interpretation belongs to that independent adapter.
+
+## The discussion database (MYC-17)
+
+| Table | Keys and defaults |
+| -- | -- |
+| `discussions` | optional `address`: a password-free PostgreSQL URI of the Arbol database, validated as `store.address` is. Without it, `mycel read` of a decision reports every chat of its Discussion cell as `available: false`. |
+
+When the server asks for a password, the private reader takes it from the
+Keychain item `mycel` / `discussions-password`, as the store's password comes
+from `store-password`; no setting holds it. Mycel reads that database as data
+in a read-only transaction and never writes there.

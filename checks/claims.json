@@ -2831,6 +2831,51 @@
       "test_credentials.ApiKeyTests.test_real_pipe_child_never_receives_key_in_argv_environment_or_files",
       "test_credentials.ApiKeyTests.test_real_cli_without_controlling_terminal_refuses_before_keychain",
       "test_credentials.ApiKeyTests.test_help_and_info_name_api_key_and_invalid_settings_prevent_prompt"
+    ],
+    "MYC-17.1": [
+      "test_entities.EntityStoreTests.test_pass_publishes_entity_rows_keyed_by_uuid_and_keeps_them_through_edits_and_moves"
+    ],
+    "MYC-17.2": [
+      "test_entities.EntityRowTests.test_rows_with_a_uuid_become_entities_with_their_metadata_beside_unchanged_sections",
+      "test_entities.EntityRowTests.test_an_edit_to_a_neighbouring_row_leaves_the_entity_its_text_and_hashes"
+    ],
+    "MYC-17.3": [
+      "test_entities.EntityRowTests.test_missing_and_repeated_uuids_are_faults_and_no_entity",
+      "test_entities.EntityRowTests.test_prose_cells_fenced_rows_and_headerless_lines_are_not_entities"
+    ],
+    "MYC-17.4": [
+      "test_entities.EntityStoreTests.test_pass_publishes_entity_rows_keyed_by_uuid_and_keeps_them_through_edits_and_moves"
+    ],
+    "MYC-17.5": [
+      "test_entities.EntityUriTests.test_entity_uris_parse_format_and_resolve_by_uuid_with_the_kind_tag_as_a_check"
+    ],
+    "MYC-17.6": [
+      "test_entities.EntityStoreTests.test_a_decision_shows_its_chats_from_a_stand_in_database_and_an_edit_marks_dependants_stale"
+    ],
+    "MYC-17.7": [
+      "test_entities.EntityStoreTests.test_a_decision_shows_its_chats_from_a_stand_in_database_and_an_edit_marks_dependants_stale"
+    ],
+    "MYC-1.35": [
+      "test_entities.EntityRowTests.test_rows_with_a_uuid_become_entities_with_their_metadata_beside_unchanged_sections"
+    ],
+    "MYC-1.36": [
+      "test_entities.EntityStoreTests.test_pass_publishes_entity_rows_keyed_by_uuid_and_keeps_them_through_edits_and_moves"
+    ],
+    "MYC-5.17": [
+      "test_entities.DiscussionSettingsTests.test_discussions_table_knows_only_a_password_free_address_and_its_keychain_item"
+    ],
+    "MYC-6.21": [
+      "test_entities.EntityStoreTests.test_pass_publishes_entity_rows_keyed_by_uuid_and_keeps_them_through_edits_and_moves",
+      "test_entities.EntityStoreTests.test_init_brings_a_format_2_store_forward_in_one_step_and_info_reports_the_format"
+    ],
+    "MYC-7.31": [
+      "test_entities.EntityStoreTests.test_a_decision_shows_its_chats_from_a_stand_in_database_and_an_edit_marks_dependants_stale"
+    ],
+    "MYC-11.13": [
+      "test_entities.EntityStoreTests.test_read_by_entity_uri_address_and_human_id_with_the_kind_tag_as_a_check"
+    ],
+    "MYC-16.15": [
+      "test_entities.EntityUriTests.test_entity_uris_parse_format_and_resolve_by_uuid_with_the_kind_tag_as_a_check"
     ]
   }
 }

@@ -79,3 +79,26 @@ proofs now cover location-owned declaration retention and retries, physical
 root alias/move bindings and guarded typed pins; see [stored Source Refs](source-refs.md).
 Complete ingest/dependency application, arbitrary file identity reconciliation
 and public read/ref command replies remain separate integration work.
+
+## Requirement and decision rows (MYC-17)
+
+A row of a pipe table whose first cell is exactly a human id, `MYC-2.13` or
+`MYC-D45`, followed by an HTML comment with the row's UUID, is an entity row.
+`split_markdown` returns them in `document.entities`, one `EntityRow` per row:
+its kind `req` or `dec`, the UUID, the human id as its name, the title (the
+second cell of a requirement, the Question cell of a decision), the exact
+physical row with its line ending and byte span, its line, its position among
+the table's body rows, the section that holds it, and the metadata read under
+the table's header: the chapter's frontmatter status or `withdrawn`, `decided`
+or `open` with `decidedAt`/`decidedBy` from an Outcome that begins `Decided
+<date> by <who>`, `verifiedBy`, `fromV1` (the `From v1` or former `Origin`
+column) and the chat Entity URIs of a Discussion cell. Section chunks are
+unchanged: they keep their complete text, byte coverage and hashes, so an edit
+to a row changes the section's hashes as before and gives the row its own new
+exact version.
+
+Rows inside code fences, rows without a header and delimiter line, and first
+cells with more than the id (`MYC-D1 · What language…`) are prose. A recognised
+row without a UUID is the diagnostic `entity_missing_uuid` and two rows with
+one UUID are `entity_repeated_uuid`, each with its line; neither becomes an
+entity. The parse cache serializes `EntityRow` like the other parser values.

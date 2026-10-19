@@ -127,3 +127,13 @@ keeps old manifests and snapshots after live pins are replaced or sources are
 deleted. There is no age limit and retained history is not searchable old text.
 Only explicit `init` migrates format 1; malformed or unverifiable legacy record
 evidence refuses migration atomically, preserving the old schema and generation.
+
+## The discussion of a decision (MYC-17)
+
+The Discussion column of a Decisions table holds chat Entity URIs,
+`[cht:<uuid>:<title>]`, and nothing else. They are retained in the decision
+chunk's metadata and shown by `mycel read`; they are neither sources nor
+relations: no edge, pin or stale reason comes from a chat, and a changed chat
+leaves every mark as it was. A decision row is a chunk of its own, so a section
+whose sources comment names it by address goes stale when the row is edited,
+as it does for a requirement.
