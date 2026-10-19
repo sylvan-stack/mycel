@@ -33,7 +33,8 @@ from ._read import (ReadSelectionError, dependency_faults, read_address, read_ch
                     select_chunk, validate_read)
 from ._refs import _PUBLIC_FAULTS, _place
 from ._resolver import ResolvedFile, SourceResolver, _chunk
-from ._source_refs import SourceAddress, SourceAddressError, parse_source_address, read_document_declarations
+from ._source_refs import (SourceAddress, SourceAddressError, parse_entity_uri, parse_source_address,
+                           read_document_declarations)
 from ._store import checked_store
 
 
@@ -346,7 +347,7 @@ def _run_read_freshness(connection, settings, scope, place, identifier, reposito
 
 
 def read_from_store(connection, settings, place=None, *, identifier=None, repository=None,
-                    context=None, deadline, no_fresh=False, build=None) -> dict:
+                    context=None, deadline, no_fresh=False, build=None, credentials=None) -> dict:
     """Read one current disk/index chunk after one bounded recursive check.
 
     Initially missing places can be published by the repository pass. IDs
@@ -360,6 +361,14 @@ def read_from_store(connection, settings, place=None, *, identifier=None, reposi
     settings.require_valid()
     if repository is not None:
         require_repository(settings, repository)
+    expected_kind = None
+    uri = parse_entity_uri(place) if place is not None else None
+    if uri is not None:
+        # MYC-17: an Entity URI is the entity's UUID; the kind tag is checked
+        # on the selected chunk, and a chat is no chunk of the Index Store.
+        if uri.kind not in {'req', 'dec'}:
+            raise ReadSelectionError('An Entity URI of this kind names no chunk of the Index Store.')
+        place, identifier, expected_kind = None, uri.uuid, uri.kind
     try:
         if place is not None:
             address = read_address(place, repository=repository)
@@ -367,10 +376,12 @@ def read_from_store(connection, settings, place=None, *, identifier=None, reposi
             require_repository(settings, owner)
         with checked_store(connection), snapshot_transaction(connection):
             if identifier is not None:
-                row = connection.execute('SELECT repository FROM public.mycel_chunks WHERE id::text=%s',
+                row = connection.execute('SELECT repository,kind FROM public.mycel_chunks WHERE id::text=%s',
                                          (identifier,)).fetchone()
                 if row is None or (repository is not None and row[0] != repository):
                     raise ReadSelectionError('No current indexed chunk has that identifier.')
+                if expected_kind is not None and row[1] != expected_kind:
+                    raise ReadSelectionError('The kind tag of the Entity URI does not match the entity.')
                 owner = row[0]
                 require_repository(settings, owner)
             resolver = SourceResolver.from_read_transaction(connection, settings)
@@ -387,6 +398,8 @@ def read_from_store(connection, settings, place=None, *, identifier=None, reposi
         with checked_store(connection), snapshot_transaction(connection):
             resolver = SourceResolver.from_read_transaction(connection, settings)
             selected = select_chunk(resolver, place, identifier=identifier, repository=repository)
+            if expected_kind is not None and selected.chunk.kind != expected_kind:
+                raise ReadSelectionError('The kind tag of the Entity URI does not match the entity.')
             reasons = [row[0] for row in connection.execute('SELECT reason FROM public.mycel_stale_reasons '
                 'WHERE repository=%s AND chunk_version=%s ORDER BY id',
                 (owner, selected.chunk.version)).fetchall()]
@@ -403,8 +416,16 @@ def read_from_store(connection, settings, place=None, *, identifier=None, reposi
                     record['candidates'] = [_place(parse_source_address(candidate)) for candidate in candidates]
                 if record not in faults:
                     faults.append(record)
+            metadata = {'staleReasons': reasons, 'faults': faults}
+            if selected.chunk.kind == 'dec' and selected.chunk.entity is not None:
+                from ._credentials import Credentials
+                from ._discussion import read_discussions
+                from ._safeguards import InvocationPolicy
+                reader = credentials if credentials is not None else Credentials(settings, InvocationPolicy('read'))
+                metadata['discussion'] = read_discussions(settings, selected.chunk.entity.get('discussion', ()),
+                                                          credentials=reader, deadline=deadline)
             reply = read_chunk(resolver, place, identifier=identifier, repository=repository, context=context,
-                freshness=freshness, metadata={'staleReasons': reasons, 'faults': faults,
+                freshness=freshness, metadata={**metadata,
                     'documents': document_links(connection, resolver).get(
                         (selected.chunk.identifier, selected.chunk.version), ()),
                     'checked': not no_fresh, 'ingested': _ingested(adapter)})

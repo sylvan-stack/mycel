@@ -11,7 +11,8 @@ from ._markdown import split_markdown
 from ._refs import _PUBLIC_FAULTS, _place
 from ._resolver import ResolvedChunk, ResolvedFile, SourceResolver
 from ._scope import RepositoryLocations
-from ._source_refs import SourceAddress, SourceAddressError, parse_source_address, read_document_declarations
+from ._source_refs import (SourceAddress, SourceAddressError, format_entity_uri, parse_entity_uri,
+                           parse_source_address, read_document_declarations)
 from ._store import exact_text
 
 
@@ -51,6 +52,8 @@ def validate_read(place=None, *, identifier=None, context=None, repository=None)
 
 def read_address(place: str, *, repository: str | None = None) -> SourceAddress:
     """A repository selector may supply the prefix of a short address."""
+    if parse_entity_uri(place) is not None:
+        raise ReadSelectionError('An Entity URI is resolved by its UUID, not by an address.')
     try:
         value = parse_source_address(place if ':' in place or repository is None else f'{repository}:{place}')
     except SourceAddressError:
@@ -86,6 +89,21 @@ def select_chunk(resolver: SourceResolver, place=None, *, identifier=None, repos
             raise ReadSelectionError('The identifier does not select one current chunk.',
                                      tuple(value.place.address for value in matches))
         return matches[0]
+    uri = parse_entity_uri(place)
+    if uri is not None:
+        # MYC-17: the UUID alone selects the entity; the kind tag is a check.
+        if uri.kind == 'cht' or uri.kind not in {'req', 'dec'}:
+            raise ReadSelectionError('An Entity URI of this kind names no chunk of the Index Store.')
+        result = resolver.resolve(place, purpose='read')
+        if result.fault == 'entity_kind_mismatch':
+            raise ReadSelectionError('The kind tag of the Entity URI does not match the entity.')
+        if result.state != 'resolved' or result.selection is None or len(result.selection.members) != 1:
+            raise ReadSelectionError('No current indexed entity has that UUID.', result.candidates)
+        member = result.selection.members[0]
+        if repository is not None and member.place.repository != repository:
+            raise ReadSelectionError('The entity does not belong to the selected repository.')
+        require_repository(resolver.settings, member.place.repository)
+        return ReadSelection(member.place, member.chunk, result.selection.file)
     address = read_address(place, repository=repository)
     require_repository(resolver.settings, address.repository)
     result = resolver.resolve(address.address, purpose='read')
@@ -174,7 +192,7 @@ def read_chunk(resolver: SourceResolver, place=None, *, identifier=None, context
     metadata = {} if metadata is None else metadata
     chunk, address = selected.chunk, selected.place
     origin = metadata.get('origin', chunk.kind if address.root == 'index' else
-                          'document' if chunk.kind == 'document' else 'code')
+                          'document' if chunk.kind in {'document', 'req', 'dec'} else 'code')
     if origin == 'documents':
         origin = 'document'
     if origin not in {'code', 'document', 'summary', 'overview'}:
@@ -209,6 +227,13 @@ def read_chunk(resolver: SourceResolver, place=None, *, identifier=None, context
         'dependencyCheck': {'complete': bool(complete and not faults), 'faults': faults},
         'freshness': {'checked': checked, 'finished': bool(freshness and freshness.finished),
                       'ingested': sum(ingested.values()), 'repositories': checks}}
+    if chunk.entity is not None and chunk.kind in {'req', 'dec'}:
+        entity = _copy(chunk.entity)
+        entity['uri'] = format_entity_uri(chunk.kind, chunk.identifier, str(entity.get('title', '')),
+                                          address.repository)
+        if 'discussion' in metadata:
+            entity['discussion'] = _copy(metadata['discussion'])
+        reply['entity'] = entity
     lines = _lines(selected)
     if lines is not None:
         reply['lines'] = lines
