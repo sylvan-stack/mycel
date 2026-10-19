@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from mycel._coverage import ACTIVE_REQUIREMENTS
 from mycel._coverage import proves
 from mycel_build._automatic import _sanitize_report, run_automatic, store_address
 from mycel_build._core import BuildError, digest, json_bytes
@@ -53,7 +54,8 @@ def report(*, passed=True, errors=0):
             "checks": [{"name": "test_fixture.AutomaticTests.test_one", "kind": "unit",
                         "requirements": ["MYC-13.15"], "status": "passed" if passed else "failed",
                         "passed": passed, "detail": "private-password-provider-body"}],
-            "coverage": {"active": 333, "implemented": int(passed), "pending": 333 - int(passed)},
+            "coverage": {"active": ACTIVE_REQUIREMENTS, "implemented": int(passed),
+                         "pending": ACTIVE_REQUIREMENTS - int(passed)},
             "gateErrorCount": errors, "gateErrors": ["private-password-provider-body"] * errors}
     contract = contract_fixture()
     result.update(requirements=requirement_results(contract, result['checks']), inventorySha256=contract['inventorySha256'])

@@ -21,6 +21,7 @@ from ._credential_contract import credential_probe_passed
 from ._qualification import automatic_contract, qualification_certificate, requirement_results, required_packaged_cases
 from ._registry import _folder, _ledger, build_number, maintenance, read_record, registry_path
 from ._staging import check_input_manifest, input_manifest
+from mycel._coverage import ACTIVE_REQUIREMENTS
 
 
 KEYCHAIN_CHECK = 'private_dummy_keychain_installed_credentials_probe'
@@ -90,7 +91,8 @@ def _automatic(result, frozen, number):
     requirements = requirement_results(contract, checks)
     implemented = sum(row['status'] == 'implemented' for row in requirements.values())
     _require(result['requirements'] == requirements
-             and result['coverage'] == {'active': 333, 'implemented': implemented, 'pending': 333 - implemented})
+             and result['coverage'] == {'active': ACTIVE_REQUIREMENTS, 'implemented': implemented,
+                                        'pending': ACTIVE_REQUIREMENTS - implemented})
     _require(result['build'] == build_number(number) and result['python'] == '3.14.7'
              and result['target'] == 'macos-arm64' and result['gateErrorCount'] == 0
              and result['required'] == result['passedCount'] == len(expected) and result['failedCount'] == 0)

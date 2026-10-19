@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
+from ._markdown import MarkdownDocument
 from ._capture import CaptureManifest, capture_repository
 from ._disk_reconciliation import _inputs, _metadata, _parse_history, _same_capture
 from ._errors import MycelError
@@ -20,6 +21,7 @@ from ._scope import RepositoryLocations
 from ._settings import SettingsSnapshot
 from ._source_bindings import _observe
 from ._source_refs import SourceAddress
+from ._store import ENTITY_KINDS
 
 
 def _invalid(message):
@@ -218,6 +220,21 @@ class CollectionStore:
                     FROM public.mycel_locations l JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version
                     WHERE l.file_location=%s FOR SHARE OF v,l NOWAIT""", (row[0],)).fetchall()
                 inputs = _inputs(captured)
+                # Entity rows (MYC-17) are located beside the section chunks on disk;
+                # each must be published once with its exact bytes.
+                entities = [chunk for chunk in chunks if chunk[2].get('kind') in ENTITY_KINDS]
+                chunks = [chunk for chunk in chunks if chunk[2].get('kind') not in ENTITY_KINDS]
+                rows_expected = (captured.parsed.entities if location.id.kind == 'disk'
+                                 and isinstance(captured.parsed, MarkdownDocument) else ())
+                if len(entities) != len(rows_expected):
+                    _invalid('Collection requires every captured entity row to be published.')
+                for row_expected in rows_expected:
+                    raw = row_expected.text.encode('utf-8')
+                    located = [chunk for chunk in entities if chunk[0] == row_expected.snapshot_hash
+                               and bytes(chunk[1]) == raw and chunk[3].get('name') == row_expected.id]
+                    if len(located) != 1:
+                        _invalid('Collection requires the exact published entity row.')
+                    entities.remove(located[0])
                 if len(chunks) != len(inputs):
                     _invalid('Collection requires every captured chunk location to be published.')
                 for number, item in enumerate(inputs):
@@ -319,7 +336,10 @@ class CollectionStore:
             expected = next(row for row in history if row[5] == owner)
             if locked != (repository, 'verification', str(expected[0])):
                 _invalid('The removed logical chunk has inconsistent verification ownership.')
-        chunks = self.connection.execute('DELETE FROM public.mycel_chunks WHERE id=ANY(%s)', (dead,)).rowcount
+        # A requirement or decision entity row stays, so its withdrawn id remains
+        # reserved and every edge that references the UUID keeps its end (MYC-17).
+        chunks = self.connection.execute("DELETE FROM public.mycel_chunks WHERE id=ANY(%s) AND kind<>ALL(%s)",
+                                         (dead, sorted(ENTITY_KINDS))).rowcount
         released += sum(self.connection.execute(_RELEASE_OWNER_SQL, (owner, repository)).rowcount
                         for repository, owner in history_owners)
         keep = self._required_files(manifest.repository)

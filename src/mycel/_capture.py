@@ -28,7 +28,7 @@ from pathspec.patterns.gitignore.spec import GitIgnoreSpecPattern
 from . import _code, _markdown, _source_refs
 from ._code import CodeChunk, chunk_code
 from ._errors import MycelError
-from ._markdown import (MarkdownChunk, MarkdownDecodeError, MarkdownDiagnostic,
+from ._markdown import (EntityRow, MarkdownChunk, MarkdownDecodeError, MarkdownDiagnostic,
                         MarkdownDocument, SourceSpan, split_markdown)
 from ._safeguards import CompletedChild, STDOUT_LIMIT, run_git
 from ._deadline import check_deadline
@@ -221,7 +221,7 @@ class CaptureManifest:
 
 
 _PARSE_TYPES = {kind.__name__: kind for kind in
-                (MarkdownDocument, MarkdownChunk, MarkdownDiagnostic, SourceSpan, CodeChunk)}
+                (MarkdownDocument, MarkdownChunk, MarkdownDiagnostic, SourceSpan, EntityRow, CodeChunk)}
 
 
 def _parse_value(value: Any) -> Any:

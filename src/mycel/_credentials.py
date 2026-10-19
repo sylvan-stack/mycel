@@ -28,6 +28,7 @@ _ACCOUNTS = {
     "embedding": "voyage-api-key",
     "store": "store-password",
     "jev": "jev-api-key",
+    "discussions": "discussions-password",
 }
 CREDENTIAL_TIMEOUT_SECONDS = 10.0
 CREDENTIAL_WRITE_TIMEOUT_SECONDS = 60.0
@@ -165,6 +166,26 @@ class Credentials:
         # A missing item means no password is sent. The connection layer alone
         # translates a refused/rejected connection to store_unavailable.
         password = self._keychain("store", timeout_seconds=timeout_seconds,
+                                  cancelled=cancelled) if password_requested else None
+        return StoreTarget(address, password)
+
+    def discussion_target(self, *, password_requested: bool = False,
+                          timeout_seconds: float | None = None,
+                          cancelled: Callable[[], bool] | None = None) -> StoreTarget | None:
+        """The discussion database named by `[discussions]`, read as data (MYC-17, MYC-D48).
+
+        None when the settings name no address. The password comes from the
+        Keychain item `mycel` / `discussions-password` only when the server
+        asks for one, as for the store.
+        """
+        self._settings.require_valid(require_store=False)
+        address = self._settings.values.get("discussions", {}).get("address")
+        if not isinstance(address, str):
+            return None
+        fault = _store_address_fault(address)
+        if fault is not None:
+            raise MycelError("settings", fault)
+        password = self._keychain("discussions", timeout_seconds=timeout_seconds,
                                   cancelled=cancelled) if password_requested else None
         return StoreTarget(address, password)
 

@@ -89,3 +89,30 @@ was checked and complete, its pending stages and reused applications. Busy,
 expired or unchecked sources remain explicit; `--no-fresh` performs none of this
 work. Stored stale reasons keep their current classification evidence without
 turning an incomplete dependency check into a current verification.
+
+## Requirements and decisions (MYC-17)
+
+A requirement or decision row is a chunk of kind `req` or `dec` whose
+identifier is the row's UUID. `mycel read` accepts its Entity URI,
+`[req:<uuid>:<title-base64>]` or `[<repo>:dec:<uuid>:<title>]`, and resolves
+it by the UUID alone; a kind tag that does not match the entity is refused
+with `invalid_input`, as is a `cht` URI, which names no chunk. The same row is
+read by its full address with the human id as the name,
+`mycel:@artifact/specs/02-provenance-and-freshness.md#MYC-2.13`, by the human
+id within its file, or by `--id <uuid>`.
+
+```sh
+mycel read '[req:9b6984cc-db34-4a84-b948-0eaefbea916a:bWFyayBhIGNodW5rIHN0YWxl]'
+mycel read 'mycel:specs/02-provenance-and-freshness.md#MYC-2.13' --no-fresh
+```
+
+The reply has `origin: "document"`, `kind: "req"` or `"dec"`, the row's exact
+text and lines, and an `entity` object with `kind`, `uuid`, `id`, `uri` (with
+the repository's name as the repo code), `title`, `status` and the row's
+metadata. For a decision it also carries `discussion`: one entry per chat Entity
+URI of the Discussion cell, read as data from the Arbol database that the
+`[discussions]` settings name in one read-only transaction, with the chat's
+`title` and its `messages` in order, replaced Exchanges left out; or
+`available: false` with the reason when the settings name no address, the
+database cannot be reached or the chat does not exist. The read succeeds either
+way and writes nothing there.

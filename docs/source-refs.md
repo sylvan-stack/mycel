@@ -267,3 +267,19 @@ in [reconciliation.md](reconciliation.md). The guarded
 `derive` command now has exact assertion-only ownership, complete fresh source
 and dependant guards and named configured checks in `tests/test_derive.py`.
 Later integration work does not block the accepted declaration/resolver API scope.
+
+## Entity URIs (MYC-17)
+
+`parse_entity_uri` and `format_entity_uri` read and write the glossary's
+Entity URI, `[<tag>:<uuid>:<title-base64>]` or `[<repo>:<tag>:<uuid>:<title>]`;
+`any` as the repo code means none, the UUID is lowercased, and the title is a
+display snapshot that takes no part in identity. The shared resolver accepts a
+URI wherever it accepts an address: it looks the UUID up among the current
+located chunks, uses the kind tag only as a check (`entity_kind_mismatch`),
+refuses a `cht` URI as `ineligible_entity`, reports a UUID it does not hold as
+`missing_entity`, and returns the typed selection `req` or `dec` with one
+member whose place is the file's address with the human id as the name. A
+`req` or `dec` chunk keeps its comparison as exact text (`code_text`), so pins
+and evidence treat the row like a code chunk. In this Beat a sources comment
+names an entity by that address; the URI form in declarations, `derive`,
+`relate` and `confirm` belongs to the justification commands of SYL-260.

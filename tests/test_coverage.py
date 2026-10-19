@@ -18,6 +18,7 @@ from unittest.mock import patch
 from types import SimpleNamespace
 import psycopg
 
+from mycel._coverage import ACTIVE_REQUIREMENTS, SPECIFICATION_COUNT
 from mycel._coverage import (AUTOMATIC_KINDS, CoverageError, PostgresBackend,
                              disposable_store, discover_checks, iter_checks, select_checks, load_claims, load_registry,
                              proves, require_check_database, run_checks, run_on_demand_checks,
@@ -157,9 +158,10 @@ class WorkerCrash(unittest.TestCase):
     @proves("MYC-13.15")
     def test_complete_registry_keeps_negative_requirement_active(self):
         registry = load_registry()
-        self.assertEqual(len(registry), 333)
-        counts = [sum(row.specification == f"MYC-{number}" for row in registry.values()) for number in range(17)]
-        self.assertEqual(counts, [12, 34, 27, 21, 29, 16, 20, 17, 29, 13, 14, 12, 15, 21, 27, 12, 14])
+        self.assertEqual(len(registry), ACTIVE_REQUIREMENTS)
+        counts = [sum(row.specification == f"MYC-{number}" for row in registry.values())
+                  for number in range(SPECIFICATION_COUNT)]
+        self.assertEqual(counts, [12, 36, 27, 21, 29, 17, 21, 18, 29, 13, 14, 13, 15, 21, 27, 12, 15, 8])
         self.assertEqual(registry["MYC-9.10"].origin, "Dropped")
         self.assertEqual(registry["MYC-9.10"].kind, "store")
         self.assertIn("not show", registry["MYC-9.10"].text)
@@ -173,7 +175,7 @@ class WorkerCrash(unittest.TestCase):
                              lambda data: data["requirements"].append(data["requirements"][0]),
                              lambda data: data["requirements"][0].update(kind="reviewed"),
                              lambda data: data.update(schema_version=True),
-                             lambda data: next(iter(data["specifications"].values())).update(specification_status="draft")):
+                             lambda data: next(iter(data["specifications"].values())).update(specification_status="review")):
                 data = json.loads(json.dumps(original))
                 mutation(data)
                 path.write_text(json.dumps(data))
@@ -200,7 +202,7 @@ class WorkerCrash(unittest.TestCase):
     @proves("MYC-13.3", "MYC-13.15")
     def test_check_declarations_require_distinct_requirement_identifiers(self):
         for requirements, kind in (((), "unit"), (("MYC-13.3", "MYC-13.3"), "unit"),
-                                   (("MYC-17.1",), "unit"), (("MYC-13.3",), "review")):
+                                   (("MYC-18.1",), "unit"), (("MYC-13.3",), "review")):
             with self.assertRaises(CoverageError):
                 proves(*requirements, kind=kind)
         decorated = proves("MYC-13.3")(lambda: None)
@@ -241,7 +243,7 @@ class WorkerCrash(unittest.TestCase):
         check = example_check()
         report = run_checks(unittest.TestSuite([check]), claims={"MYC-13.3": [check.id()]})
         self.assertTrue(report.passed)
-        self.assertEqual(report.to_dict()["summary"], {"active": 333, "implemented": 1, "pending": 332})
+        self.assertEqual(report.to_dict()["summary"], {"active": ACTIVE_REQUIREMENTS, "implemented": 1, "pending": ACTIVE_REQUIREMENTS - 1})
         self.assertEqual(report.requirements["MYC-13.3"]["verified_by"], [check.id()])
         self.assertEqual(report.requirements["MYC-13.3"]["specification_status"], "accepted")
         report = run_checks(unittest.TestSuite([example_check()]), claims={"MYC-13.3": ["imaginary.Check.test"]})
@@ -259,7 +261,7 @@ class WorkerCrash(unittest.TestCase):
     def test_full_release_gate_rejects_all_pending_requirements(self):
         report = run_checks(unittest.TestSuite([example_check()]), release=True)
         self.assertFalse(report.passed)
-        self.assertEqual(report.to_dict()["summary"]["pending"], 333)
+        self.assertEqual(report.to_dict()["summary"]["pending"], ACTIVE_REQUIREMENTS)
         self.assertIn("MYC-9.10", report.errors[-1])
         self.assertIn("MYC-16.14", report.errors[-1])
         registry = load_registry()

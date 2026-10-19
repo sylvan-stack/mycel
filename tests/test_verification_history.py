@@ -407,7 +407,8 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             def failed(current):
                 migration.apply(current)
                 raise RuntimeError('deliberate migration validation failure')
-            with patch.object(store, 'MIGRATIONS', {1: store.Migration(failed, migration.validate)}):
+            with patch.object(store, 'MIGRATIONS', {1: store.Migration(failed, migration.validate),
+                                                    **{number: step for number, step in store.MIGRATIONS.items() if number > 1}}):
                 with self.assertRaises(RuntimeError):
                     store.initialize_store(connection, dimensions=1024)
             self.assertEqual(self.state(connection), before)

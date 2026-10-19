@@ -3,6 +3,10 @@
 Inspection starts with PostgreSQL catalogues. Unrelated legacy-product tables
 are never read, repaired, migrated or removed. Format 2 explicitly migrates the
 known format-1 verification ownership only after validating all retained data.
+Format 3 (19 October 2026, MYC-17) admits the chunk kinds ``req`` and ``dec``,
+the requirement and decision entities keyed by their row's UUID; its step
+changes no table and validates the format-2 structure before the number rises,
+so that an older Build, which would read those chunks as code, refuses the store.
 
 Feature modules own ingest, embedding, evidence retention and activity behavior.
 These tables provide their shared persistence boundary without claiming those
@@ -26,7 +30,7 @@ from ._errors import ErrorCode, MycelError
 from ._locks import structure_guard
 
 
-STORE_FORMAT = 2
+STORE_FORMAT = 3
 REQUIRED_EXTENSIONS = frozenset({"pg_search", "vector"})
 _ALLOWED_EXTENSIONS = REQUIRED_EXTENSIONS | {"plpgsql"}
 _DIMENSIONS = frozenset({256, 512, 1024, 2048})
@@ -515,8 +519,34 @@ def _validate_verification_lifetime(connection) -> None:
             raise MycelError("store_format", "A migrated verification has unavailable or corrupt evidence.") from None
 
 
+ENTITY_KINDS = frozenset({"req", "dec"})
+
+
+def _migrate_entity_kinds(connection) -> None:
+    """Format 2 to 3: the structure is unchanged; only the reading rules are new."""
+    metadata = connection.execute("SELECT singleton, format FROM public.mycel_store").fetchall()
+    if len(metadata) != 1 or metadata[0][0] is not True or metadata[0][1] != 2:
+        raise MycelError("store_format", "The entity migration requires store format 2.")
+    dimensions = connection.execute("SELECT dimensions FROM public.mycel_store").fetchone()[0]
+    fault = _shape_fault(connection, dimensions)
+    if fault is not None:
+        raise MycelError("store_format", "The entity migration found an incompatible predecessor catalogue.")
+    kinds = connection.execute("SELECT count(*) FROM public.mycel_chunks WHERE kind = ANY(%s)",
+                               (sorted(ENTITY_KINDS),)).fetchone()[0]
+    if kinds:
+        raise MycelError("store_format", "A format 2 store cannot already hold entity chunks.")
+
+
+def _validate_entity_kinds(connection) -> None:
+    dimensions = connection.execute("SELECT dimensions FROM public.mycel_store").fetchone()[0]
+    fault = _shape_fault(connection, dimensions)
+    if fault is not None:
+        raise MycelError("store_format", fault)
+
+
 MIGRATIONS: Mapping[int, Migration] = MappingProxyType({
     1: Migration(_migrate_verification_lifetime, _validate_verification_lifetime),
+    2: Migration(_migrate_entity_kinds, _validate_entity_kinds),
 })
 
 

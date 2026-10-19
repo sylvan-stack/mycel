@@ -34,7 +34,12 @@ from uuid import uuid4
 
 KINDS = frozenset({"unit", "store", "eval", "live"})
 AUTOMATIC_KINDS = frozenset({"unit", "store"})
-REQUIREMENT_ID = re.compile(r"MYC-(?:[0-9]|1[0-6])\.[1-9][0-9]*\Z")
+REQUIREMENT_ID = re.compile(r"MYC-(?:[0-9]|1[0-7])\.[1-9][0-9]*\Z")
+# The eighteen chapters MYC-0 to MYC-17 and their active requirement rows, as
+# the registry was extracted on 19 October 2026 (SYL-259). MYC-17 is a draft.
+SPECIFICATION_COUNT = 18
+ACTIVE_REQUIREMENTS = 348
+SPECIFICATION_STATUSES = frozenset({"accepted", "draft"})
 CHECK_DATABASE = re.compile(r"mycel_check_[a-z0-9_]+\Z")
 _WORKER_CANCEL_GRACE = 30
 _WORKER_TERMINATE_GRACE = 5
@@ -62,11 +67,11 @@ def load_registry(path: Path | str | None = None) -> dict[str, Requirement]:
     if type(data) is not dict or type(data.get("schema_version")) is not int or data["schema_version"] != 1:
         raise CoverageError("unsupported requirement registry schema")
     sources = data.get("specifications")
-    if not isinstance(sources, dict) or len(sources) != 17:
-        raise CoverageError("registry must record the 17 authoritative specification snapshots")
+    if not isinstance(sources, dict) or len(sources) != SPECIFICATION_COUNT:
+        raise CoverageError(f"registry must record the {SPECIFICATION_COUNT} authoritative specification snapshots")
     for filename, source in sources.items():
-        if (not isinstance(filename, str) or not re.fullmatch(r"(?:0[0-9]|1[0-6])-[a-z-]+\.md", filename)
-                or not isinstance(source, dict) or source.get("specification_status") != "accepted"
+        if (not isinstance(filename, str) or not re.fullmatch(r"(?:0[0-9]|1[0-7])-[a-z-]+\.md", filename)
+                or not isinstance(source, dict) or source.get("specification_status") not in SPECIFICATION_STATUSES
                 or not isinstance(source.get("sha256"), str) or not re.fullmatch(r"[a-f0-9]{64}", source["sha256"])):
             raise CoverageError("invalid accepted specification snapshot")
     rows = data.get("requirements")
@@ -91,10 +96,11 @@ def load_registry(path: Path | str | None = None) -> dict[str, Requirement]:
         if requirement.id in registry:
             raise CoverageError(f"duplicate requirement: {requirement.id}")
         registry[requirement.id] = requirement
-    if len(registry) != 333 or {row.specification for row in registry.values()} != {
-        f"MYC-{number}" for number in range(17)
+    if len(registry) != ACTIVE_REQUIREMENTS or {row.specification for row in registry.values()} != {
+        f"MYC-{number}" for number in range(SPECIFICATION_COUNT)
     }:
-        raise CoverageError("registry must contain all 333 active MYC-0 through MYC-16 requirements")
+        raise CoverageError(f"registry must contain all {ACTIVE_REQUIREMENTS} active MYC-0 through "
+                            f"MYC-{SPECIFICATION_COUNT - 1} requirements")
     if "MYC-9.10" not in registry:
         raise CoverageError("the negative requirement MYC-9.10 remains active")
     return registry

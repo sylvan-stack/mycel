@@ -12,6 +12,7 @@ import re
 
 from ._core import BuildError, digest, json_bytes
 from ._credential_contract import credential_probe_passed
+from mycel._coverage import ACTIVE_REQUIREMENTS, REQUIREMENT_ID, SPECIFICATION_COUNT, SPECIFICATION_STATUSES
 
 
 def automatic_contract(frozen: dict[str, bytes]) -> dict:
@@ -20,11 +21,12 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
         data = json.loads(frozen['src/mycel/data/requirements.json'])
         registry = {row['id']: row for row in data['requirements']}
         if (type(data['schema_version']) is not int or data['schema_version'] != 1
-                or len(data['requirements']) != len(registry) or len(registry) != 333
-                or len(data['specifications']) != 17
-                or any(row['specification_status'] != 'accepted' for row in data['specifications'].values())
-                or {row['specification'] for row in registry.values()} != {f'MYC-{n}' for n in range(17)}
-                or any(not re.fullmatch(r'MYC-(?:[0-9]|1[0-6])\.[1-9][0-9]*', key)
+                or len(data['requirements']) != len(registry) or len(registry) != ACTIVE_REQUIREMENTS
+                or len(data['specifications']) != SPECIFICATION_COUNT
+                or any(row['specification_status'] not in SPECIFICATION_STATUSES
+                       for row in data['specifications'].values())
+                or {row['specification'] for row in registry.values()} != {f'MYC-{n}' for n in range(SPECIFICATION_COUNT)}
+                or any(not REQUIREMENT_ID.fullmatch(key)
                        or row['kind'] not in {'unit', 'store', 'eval', 'live'}
                        or row['specification'] != key.split('.')[0] for key, row in registry.items())):
             raise ValueError('registry')
@@ -166,7 +168,7 @@ def qualification_certificate(*, number: str, source: dict, check_inputs: list[d
         return None
     automatic = next(row for row in results if row['name'] == 'installed_automatic_unit_store_gate')
     if (automatic.get('completeFrozenInventory') is not True or not isinstance(automatic.get('requirements'), dict)
-            or len(automatic['requirements']) != 333 or automatic.get('gateErrorCount') != 0
+            or len(automatic['requirements']) != ACTIVE_REQUIREMENTS or automatic.get('gateErrorCount') != 0
             or type(automatic.get('build')) is not int or automatic['build'] != int(number, 16)
             or automatic.get('sourceInputsSha256') != source['inputsSha256']):
         return None

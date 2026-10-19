@@ -145,3 +145,17 @@ verification ownership remain unchanged. Generated dependency rows use
 separate from declared/asserted rows and invocation-owned private leases.
 The [generated provenance guide](generated.md) specifies transaction composition,
 final guards and remaining summary lifecycle obligations.
+
+## Format 3: requirement and decision entities (MYC-17)
+
+Format 3 admits the chunk kinds `req` and `dec`: one chunk per recognised
+requirement or decision row, whose identifier is the UUID written in the row's
+HTML comment, with its exact versions and its disk locations like any chunk.
+The pass publishes them beside the section chunks in the same file
+transaction; a row that moves to another file keeps its chunk row and gains the
+new file's location. Collection removes their unlocated versions like any
+other, but never the chunk row itself, so a withdrawn id stays reserved. The
+format step from 2 to 3 changes no table: it validates the format-2 structure
+and that no entity chunk exists yet, then raises the number, so that an older
+Build, which would read those chunks as code, refuses the store. `mycel init`
+runs it in one transaction and `mycel info` reports `format: 3`.
