@@ -23,7 +23,8 @@ from psycopg import pq
 from ._errors import MycelError
 from ._locks import read_snapshot, require_transaction_guards
 from ._settings import SettingsSnapshot, _freeze
-from ._source_refs import SourceAddress, SourceAddressError, parse_source_address
+from ._source_refs import (ENTITY_KIND_TAGS, SourceAddress, SourceAddressError, parse_entity_uri,
+                           parse_source_address)
 from ._store import checked_store, exact_bytes, exact_text
 
 
@@ -44,10 +45,13 @@ class ResolvedChunk:
     comparison: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     body: bytes | None = field(default=None, repr=False)
     body_span: tuple[int, int] | None = None
+    entity: Mapping[str, Any] | None = None
 
     def __post_init__(self):
         if isinstance(self.comparison, Mapping):
             object.__setattr__(self, "comparison", _freeze(dict(self.comparison)))
+        if isinstance(self.entity, Mapping):
+            object.__setattr__(self, "entity", _freeze(dict(self.entity)))
 
 
 @dataclass(frozen=True)
@@ -70,7 +74,7 @@ class SelectionMember:
 
 @dataclass(frozen=True)
 class SourceSelection:
-    kind: Literal["file", "chunk", "family", "index"]
+    kind: Literal["file", "chunk", "family", "index", "req", "dec"]
     place: SourceAddress
     file: ResolvedFile | None
     members: tuple[SelectionMember, ...]
@@ -197,6 +201,9 @@ class SourceResolver:
     def resolve(self, declaration: str, *, purpose: Literal["source", "read", "endpoint"] = "source") -> Resolution:
         if purpose not in {"source", "read", "endpoint"}:
             raise MycelError("invalid_input", "The source selection purpose is unsupported.")
+        uri = parse_entity_uri(declaration)
+        if uri is not None:
+            return self._resolve_entity(declaration, uri)
         try:
             address = parse_source_address(declaration)
         except SourceAddressError:
@@ -276,6 +283,21 @@ class SourceResolver:
                                or member.family.startswith(chunk.name + "."))))
         return Resolution(declaration, "resolved", SourceSelection(kind, self._place(file, chunk), file,
                                                                     self._members(file, chosen)))
+
+    def _resolve_entity(self, declaration: str, uri) -> Resolution:
+        """Resolve an Entity URI by its UUID alone; the kind tag is a check (MYC-17)."""
+        if uri.kind not in ENTITY_KIND_TAGS or uri.kind == "cht":
+            return Resolution(declaration, "invalid", fault="ineligible_entity")
+        matches = [(file, chunk) for file in self.files for chunk in file.chunks if chunk.identifier == uri.uuid]
+        if not matches:
+            return Resolution(declaration, "unresolved", fault="missing_entity")
+        if len(matches) != 1:
+            return _ambiguous(declaration, "ambiguous_name", (self._place(file, chunk).address for file, chunk in matches))
+        file, chunk = matches[0]
+        if chunk.kind != uri.kind:
+            return Resolution(declaration, "invalid", fault="entity_kind_mismatch")
+        place = self._place(file, chunk)
+        return Resolution(declaration, "resolved", SourceSelection(chunk.kind, place, file, (SelectionMember(place, chunk),)))
 
     def resolve_retained(self, declaration: str, anchor: str | None = None) -> Resolution:
         """Follow an explicitly recognized file move for an existing binding.
@@ -435,9 +457,12 @@ def _chunk(identifier, version, digest, source, metadata, comparison) -> Resolve
         except UnicodeError:
             raise _bad_catalog() from None
         body_span = (start, end)
+    entity = metadata.get("entity")
+    if entity is not None and not isinstance(entity, dict):
+        raise _bad_catalog()
     return ResolvedChunk(str(identifier), version, metadata["name"], metadata["kind"],
                          source, digest, span, metadata.get("title"), metadata.get("family"),
-                         _freeze(comparison), body, body_span)
+                         _freeze(comparison), body, body_span, entity)
 
 
 def _located(metadata, located):
@@ -446,7 +471,7 @@ def _located(metadata, located):
     # Paths, names and extraction spans can change while exact text retains its
     # version. Located metadata therefore owns its current address/extraction.
     return {**metadata, **{key: value for key, value in located.items()
-                          if key in {"name", "kind", "title", "family", "span", "bodySpan"}}}
+                          if key in {"name", "kind", "title", "family", "span", "bodySpan", "entity"}}}
 
 
 def replace_resolution(result: Resolution, declaration: str) -> Resolution:

@@ -7,6 +7,7 @@ establish whether its literal path names one physical file.
 
 from __future__ import annotations
 
+import base64
 from bisect import bisect_right
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -39,6 +40,63 @@ _AUTOLINK = re.compile(
     r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9]"
     r"(?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
     r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>")
+
+
+_ENTITY_URI = re.compile(r"\[(?:(?P<repository>[^:\[\]\s]+):)?(?P<kind>[a-z0-9]{1,3}):(?P<uuid>[0-9A-Fa-f]{8}-"
+                         r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}):(?P<title>[A-Za-z0-9+/=_-]*)\]\Z")
+ENTITY_KIND_TAGS = MappingProxyType({"req": "req", "dec": "dec", "cht": "cht"})
+
+
+@dataclass(frozen=True)
+class EntityUri:
+    """The glossary's Entity URI: [<repo>:<tag>:<uuid>:<title-base64>] or without the repo.
+
+    Identity is the UUID alone; the kind tag is a check and the title a display
+    snapshot. ``repository`` is None for the three-part form and for ``any``.
+    """
+
+    kind: str
+    uuid: str
+    title_base64: str = ""
+    repository: str | None = None
+
+    @property
+    def title(self) -> str:
+        if not self.title_base64:
+            return ""
+        try:
+            padded = self.title_base64 + "=" * (-len(self.title_base64) % 4)
+            return base64.b64decode(padded.replace("-", "+").replace("_", "/"), validate=False).decode("utf-8")
+        except (ValueError, UnicodeError):
+            return ""
+
+    @property
+    def text(self) -> str:
+        parts = [self.kind, self.uuid, self.title_base64]
+        if self.repository is not None:
+            parts.insert(0, self.repository)
+        return "[" + ":".join(parts) + "]"
+
+
+def parse_entity_uri(value: str) -> EntityUri | None:
+    """Parse an Entity URI; None when the text is not one. Never raises."""
+    if not isinstance(value, str):
+        return None
+    match = _ENTITY_URI.fullmatch(value.strip())
+    if match is None:
+        return None
+    repository = match.group("repository")
+    if repository == "any":
+        repository = None
+    return EntityUri(match.group("kind").lower(), match.group("uuid").lower(), match.group("title"), repository)
+
+
+def format_entity_uri(kind: str, uuid: str, title: str, repository: str | None = None) -> str:
+    """Write an Entity URI with the title Base64-encoded as the glossary says."""
+    if kind not in ENTITY_KIND_TAGS or not isinstance(uuid, str) or not isinstance(title, str):
+        raise ValueError("An Entity URI needs a known kind tag, a UUID and a title.")
+    encoded = base64.b64encode(title.encode("utf-8")).decode("ascii")
+    return EntityUri(kind, uuid.lower(), encoded, repository).text
 
 
 class SourceAddressError(ValueError):
