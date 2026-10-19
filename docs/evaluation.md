@@ -179,15 +179,40 @@ availability combinations, excluding IDs and labels: at least 200 distinct
 pairs, 50 critical covering negation/operator/permission/deletion and 50
 unchanged/cosmetic. Conflicting duplicate ground truth
 cannot qualify. No critical work may finish incorrectly as `still_supported`.
-On at least one common routed adjudicated case the reviewer must have no more
-critical misses or wrong labels than Jev and must strictly improve wrong-label
-or unresolved count. A failed/unprocessed case or changed returned identity
-prevents qualification. The report separately retains meaningful misses, unnecessary work, support
+On at least one common routed adjudicated case with valid replies from both
+providers, the reviewer must have no more raw tentative-label errors and no
+more raw-label critical misses than Jev. Those existing no-more gates remain
+strict. Separately retain the actual production Jev-only policy baseline:
+low canonical confidence, a tied maximum or `insufficient_evidence` leaves the
+case unresolved without review, even if the raw tentative label is correct.
+Retain `jevOnlyOutcome` separately from the raw `jev.judgement`, with the routing
+reason in `escalation`. It is present only for valid live Jev replies; absent
+replies, provider errors and bypasses do not invent a baseline. The reviewer must strictly improve
+raw wrong-label count or production-baseline unresolved count on that exact
+common subset; equality on both cannot qualify. Provider faults and malformed
+replies do not become successful unresolved-baseline cases. A failed/unprocessed
+case or changed returned identity prevents qualification. The report separately retains meaningful misses, unnecessary work, support
 precision and escalation rate, overall and by critical category, unchanged/
 cosmetic and other cases. Every share names its population and denominator; a
 zero denominator is null. Critical tags may overlap, and repeated observations
 remain diagnostics while qualification coverage counts distinct semantics.
 No threshold, pin, source or settings value is retuned.
+
+The revised Drift report uses `reportVersion=2` and
+`qualificationRevision="mycel-drift-qualification-v2"`;
+`pipeline.qualificationRevision` also binds it into the profile fingerprint
+alongside `mycel-drift-routing-v2`. `reviewerComparisonBasis` explicitly records
+`wrongLabels` and `criticalMisses` as `jev-tentative-label`, and `unresolved` as
+`jev-only-confidence-routing`. These version 2 baseline/report fields belong to
+the live qualification path; deterministic non-live evaluation remains simulated
+and unqualified. Jev results retain canonical routing confidence,
+finite reported provider confidence and exact agreement/signed reported-minus-
+canonical difference separately; the distribution is neither renormalized nor
+clamped. A confidence difference alone is diagnostic. The 0.7 floor, malformed
+model/distribution/schema failures, tie/insufficient-evidence routing, coverage
+floors and zero-critical-suppression gate remain. The changed confidence or
+comparison policy needs a fresh qualification; old reports retain their original
+identity and failed status and cannot be retroactively requalified.
 
 `profileFingerprint` describes the exact configured provider components;
 `reportFingerprint` describes this versioned measured report. Neither is a

@@ -168,6 +168,34 @@ def _distribution(probabilities, confidence, label):
     return sum(member == top for member in probabilities.values()) > 1
 
 
+def _canonical_confidence(probabilities, reported):
+    """Derive the exact Choice statistic without changing any probability."""
+    precision = max(32, 2 - min(number.as_tuple().exponent
+                    for number in (*probabilities.values(), reported)))
+    if precision > MAX_RESPONSE_BYTES:
+        _invalid()
+    with localcontext() as context:
+        context.prec = precision
+        context.Emin = -MAX_RESPONSE_BYTES
+        context.Emax = MAX_RESPONSE_BYTES
+        confidence = (3 * max(probabilities.values()) - 1) / 2
+    # Keep the response's existing finite fraction invariant. Do not clamp a
+    # negative result or renormalize a rounded, nearly uniform distribution.
+    return _fraction(confidence)
+
+
+def _confidence_comparison(reported, canonical):
+    precision = max(32, 2 - min(number.as_tuple().exponent for number in (reported, canonical)))
+    if precision > MAX_RESPONSE_BYTES:
+        _invalid()
+    with localcontext() as context:
+        context.prec = precision
+        context.Emin = -MAX_RESPONSE_BYTES
+        context.Emax = MAX_RESPONSE_BYTES
+        difference = reported - canonical
+    return {"matches": reported == canonical, "reportedMinusCanonical": float(difference)}
+
+
 @dataclass(frozen=True)
 class JevResponse:
     model: str
@@ -176,6 +204,7 @@ class JevResponse:
     confidence: Decimal
     usage: Mapping[str, int]
     tied: bool
+    reported_confidence: Decimal | None = None
 
     def __post_init__(self):
         if (not isinstance(self.model, str) or not re.fullmatch(r"jev-[0-9]+\.[0-9]+\.[0-9]+", self.model)
@@ -189,14 +218,21 @@ class JevResponse:
         confidence = _fraction(self.confidence)
         if self.tied != _distribution(probabilities, confidence, self.label):
             _invalid()
+        reported = _fraction(confidence if self.reported_confidence is None else self.reported_confidence)
+        canonical = _canonical_confidence(probabilities, reported)
+        if confidence != canonical:
+            _invalid()
         object.__setattr__(self, "probabilities", MappingProxyType(probabilities))
-        object.__setattr__(self, "confidence", confidence)
+        object.__setattr__(self, "confidence", canonical)
+        object.__setattr__(self, "reported_confidence", reported)
         object.__setattr__(self, "usage", MappingProxyType(dict(self.usage)))
 
     def as_dict(self) -> dict:
         return {"provider": "typesafe", "model": self.model, "label": self.label,
             "probabilities": {label: float(self.probabilities[label]) for label in LABELS},
-            "confidence": float(self.confidence), "tied": self.tied, "usage": dict(self.usage)}
+            "confidence": float(self.confidence), "reportedConfidence": float(self.reported_confidence),
+            "confidenceComparison": _confidence_comparison(self.reported_confidence, self.confidence),
+            "tied": self.tied, "usage": dict(self.usage)}
 
 
 def validate_response(result: HTTPResult, *, model: str) -> JevResponse:
@@ -215,14 +251,15 @@ def validate_response(result: HTTPResult, *, model: str) -> JevResponse:
             or set(answer["probabilities"]) != set(LABELS)):
         _invalid()
     probabilities = {label: _fraction(answer["probabilities"][label]) for label in LABELS}
-    confidence = _fraction(answer["confidence"])
+    reported = _fraction(answer["confidence"])
+    confidence = _canonical_confidence(probabilities, reported)
     tied = _distribution(probabilities, confidence, answer["choice"])
     usage = value["usage"]
     if (not isinstance(usage, dict) or set(usage) != {"input_tokens", "output_tokens"}
             or any(type(member) is not int or member < 0 for member in usage.values())):
         _invalid()
     return JevResponse(model, answer["choice"], MappingProxyType(probabilities), confidence,
-                       MappingProxyType(dict(usage)), tied)
+                       MappingProxyType(dict(usage)), tied, reported_confidence=reported)
 
 
 @dataclass(frozen=True)

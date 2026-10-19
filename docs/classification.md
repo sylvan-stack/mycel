@@ -19,9 +19,14 @@ index text remains ineligible as a declared/asserted source or relation target.
 The protocol-1 decision includes the packaged `mycel-dependency-v1` instruction
 and fixed label order, complete exact UTF-8 evidence, semantic selection
 locators, Jev version, reviewer provider/model/revision/command hash and the
-`mycel-drift-routing-v1` policy with canonical decimal confidence floor. Its
+`mycel-drift-routing-v2` policy with canonical decimal confidence floor. Its
 `input_hash` is SHA-256 of canonical UTF-8 JSON without an `inputHash` field.
 `evidence_locators` is derived from supplied text and current selections.
+The routing revision binds exact confidence computation from validated returned
+probabilities; reported provider confidence is separately retained as diagnostic.
+The unchanged 0.7 floor uses the canonical statistic without renormalization or
+clamping. Changed routing identity invalidates earlier classification reuse.
+Fresh qualification is required before deployment of the changed pipeline.
 
 The semantic projection omits capture time/location, full-file hashes and
 extraction offsets. Full immutable manifests, snapshots, the exact decision

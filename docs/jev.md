@@ -4,9 +4,10 @@ The internal Jev adapter handles one already prepared eligible dependency pair
 per attempt. It sends the complete canonical decision to the pinned TypeSafe
 model and returns a categorical result or complete input for independent review.
 The [reviewer adapter](reviewer.md) now executes the independent handoff.
-Public `classify` and finite candidate/retry orchestration retain their separate
-task owner. No live paid provider call or release
-qualification has been performed for this adapter.
+The finite `classify` runner owns candidate selection, retries and guarded
+application. The historical v5 live qualification failed; its reports remain
+failed. The revised routing contract requires fresh qualification before
+deployment.
 
 `JevRequest(decision).body` contains one `state`, the exact decision model and
 one `dependency` Choice question. The packaged instruction and Choice criteria
@@ -46,20 +47,32 @@ required places with a 1 MiB precision ceiling; an encoding requiring more
 precision is terminal `provider_result_invalid`, never a rounded support result.
 
 Validation requires exactly the dependency Choice answer, the three known
-probability keys, finite numbers in [0,1], a sum within 0.000001 of 1 and a
-chosen maximum label. Returned finite confidence in [0,1] must match
-`(3 * p_top - 1) / 2` within 0.000001. Duplicate JSON keys, another answer type,
-wrong model, missing fields and invalid usage counts fail. Decimal arithmetic
-preserves both tolerance boundaries. The [vendor confidence definition](https://docs.typesafe.ai/confidence)
+probability keys, finite numbers in [0,1], a sum within 0.000001 of 1, a
+chosen maximum label and reported provider confidence finite in [0,1]. Compute
+canonical routing confidence exactly as `(3 * p_top - 1) / 2` from those unchanged
+probabilities. Do not renormalize the distribution, clamp or round the result.
+An out-of-range canonical confidence is `provider_result_invalid`. Preserve
+`reportedConfidence` separately and retain exact agreement plus the signed
+`reported - canonical` difference; disagreement alone is diagnostic. No provider
+rounding rule or confidence-difference tolerance is inferred. Duplicate JSON
+keys, another answer type, wrong model, missing fields, malformed distributions
+and invalid usage counts remain failures. Decimal arithmetic preserves the
+probability-total boundary and exact routing comparison. The [vendor confidence definition](https://docs.typesafe.ai/confidence)
 explains the distribution statistic; it is not an independently verified
 probability of a correct Mycel judgement.
 
 `JevOutcome` retains the exact input hash, returned model/distribution/usage,
-configured canonical confidence floor and routing revision. Equality with the
-accepted 0.7 floor is sufficient. Lower confidence, any tied maximum or
-`insufficient_evidence` returns `needs_llm_review`. A complete high-confidence
-`needs_review` or `still_supported` supplies only that exact pair's categorical
-judgement to the guarded sink. Mechanical staleness is preserved by that sink.
+canonical `confidence`, separately reported confidence and its comparison, the
+configured canonical confidence floor and `mycel-drift-routing-v2` identity.
+Compare the exact canonical statistic with the unchanged 0.7 floor; equality
+is sufficient. Lower canonical confidence, any tied maximum or
+`insufficient_evidence` returns `needs_llm_review`. Because reported confidence
+is diagnostic, a reported value below 0.7 may take the Jev path when canonical
+confidence reaches 0.7 and the other routing conditions permit it. A complete
+high-confidence `needs_review` or `still_supported` supplies only that exact
+pair's categorical judgement to the guarded sink. Mechanical staleness is
+preserved by that sink. Changed routing identity invalidates old cached results
+and requires fresh versioned qualification; it does not repair failed history.
 
 When the complete serialized body exceeds its cap, Jev is bypassed before
 credential acquisition with `jev_input_too_large`. Recognized explicit context
@@ -86,8 +99,11 @@ The adapter does not retry or sleep. The finite classifier must honor delays
 only when they fit its remaining stage/invocation allowances. Raw provider,
 Keychain and OS diagnostics are never included in results.
 
-The unit proofs use public fictional credentials and service/socket stand-ins.
-They cover fixed request/order/identity, tiny changes and rewrites, categorical
-floor equality, low-confidence/tie/insufficient routing, exact tolerance edges,
-terminal malformed replies, complete body/reviewer caps, context refusals,
-call guards, policy/deadline/cancellation and detached-response cleanup.
+Automatic proofs use public fictional credentials and service/socket stand-ins.
+They must cover fixed request/order/identity, tiny changes and rewrites, exact
+canonical floor equality, disagreement diagnostics including reported below-floor
+values, low-confidence/tie/insufficient routing, probability-total tolerance
+edges, canonical out-of-range rejection, terminal malformed replies, complete
+body/reviewer caps, context refusals, call guards, changed-policy cache identity,
+deadline/cancellation and detached-response cleanup. These controlled proofs
+do not establish real provider qualification.

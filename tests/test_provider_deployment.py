@@ -39,6 +39,8 @@ def report_shape(expected=None):
             probabilities={name: (0.6 if name == label else 0.2) if 'review' in row else float(name == label)
                            for name in ('still_supported', 'needs_review', 'insufficient_evidence')},
             confidence=0.4 if 'review' in row else 1.0)
+        row['jev'].update(reportedConfidence=row['jev']['confidence'],
+            confidenceComparison={'matches': True, 'reportedMinusCanonical': 0.0})
         row['stageUsage'] = {'jev': {'input_tokens': 2, 'output_tokens': 0},
             'review': {'input_tokens': 3, 'output_tokens': 1} if 'review' in row else None}
         if 'review' in row:
@@ -51,7 +53,7 @@ def report_shape(expected=None):
     suite = controlled.suite(cases)
     qualification = qualify_profile(cases, rows, pipeline, real_provider_execution=True)
     diagnostics = classification_diagnostics(cases, rows)
-    report = {'kind': 'drift', 'evaluationSchema': 1, 'reportVersion': 1,
+    report = {'kind': 'drift', 'evaluationSchema': 1, 'reportVersion': 2,
         'repository': 'fixture', 'file': str(suite.file), 'fileHash': suite.file_hash,
         'build': 'fictional-controlled-shape', 'recordedAt': '2026-10-15T12:00:00+00:00',
         'live': True, 'pipeline': pipeline, 'providerExecution': 'production-defaults',
@@ -87,10 +89,15 @@ class ProviderDeploymentTests(unittest.TestCase):
     @proves('MYC-13.15', 'MYC-14.12')
     def test_missing_changed_incomplete_empty_routed_or_failing_reports_refuse_deployment(self):
         original, suite, pipeline = report_shape()
-        for change in ('missing', 'identity', 'environment', 'request-source', 'incomplete', 'empty-routed',
+        for change in ('missing', 'old-report', 'old-qualification', 'missing-baseline', 'confidence-diagnostic',
+                       'identity', 'environment', 'request-source', 'incomplete', 'empty-routed',
                        'critical', 'metric', 'file', 'tamper'):
             report = deepcopy(original)
             if change == 'missing': report.pop('reportVersion')
+            if change == 'old-report': report['reportVersion'] = 1
+            if change == 'old-qualification': report['qualificationRevision'] = 'mycel-drift-qualification-v1'
+            if change == 'missing-baseline': report['results'][0].pop('jevOnlyOutcome')
+            if change == 'confidence-diagnostic': report['results'][0]['jev']['confidenceComparison']['matches'] = False
             if change == 'identity': report['pipeline']['reviewRevision'] = 'other-revision'
             if change == 'environment': report['results'][0]['review']['environmentVersion'] = 'changed-environment'
             if change == 'request-source': report['results'][0]['review']['identitySources']['instructionVersion'] = 'adapter-echo'

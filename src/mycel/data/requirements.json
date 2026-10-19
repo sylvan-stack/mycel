@@ -54,11 +54,11 @@
       "specification_status": "accepted"
     },
     "13-checks-and-evaluation.md": {
-      "sha256": "2a7e3715a8810a1ed57bf6520d2191cfa86f717966dac35a8894299b7fa5e43c",
+      "sha256": "12d3a5be98c1f4b69bb155a5b7f9059767dede34b4c0b8fb3ce347aebd717101",
       "specification_status": "accepted"
     },
     "14-drift-detection.md": {
-      "sha256": "7be251c822a6e6076a28798c6a9f43e3e53e262c291cf6b525f1bd2369e67b1b",
+      "sha256": "bad8181ba8657459120d3f13daf98bcd5670d01edd0a3c7f910a9a0458e9f56c",
       "specification_status": "accepted"
     },
     "15-distribution-and-replacement.md": {
@@ -2297,7 +2297,7 @@
     },
     {
       "id": "MYC-13.20",
-      "text": "qualify a provider profile only against the stated critical-case and relative-reviewer gates, require new reports for retuning, and never let evaluation change pins, freshness or settings",
+      "text": "qualify a provider profile only against the stated critical-case and relative-reviewer gates, retain raw tentative-label no-more gates separately from the production Jev-only unresolved baseline, require strict improvement and new versioned reports for policy changes, and never let evaluation change pins, freshness or settings",
       "origin": "New",
       "kind": "eval",
       "specification": "MYC-13",
@@ -2441,7 +2441,7 @@
     },
     {
       "id": "MYC-14.17",
-      "text": "validate exact known Jev labels/probabilities/confidence/model and route low confidence, ties or insufficient evidence to review",
+      "text": "validate exact known Jev labels/probabilities/model and finite reported confidence, compute canonical confidence without renormalization or clamping, retain provider agreement/difference as diagnostics, and route low canonical confidence, ties or insufficient evidence to review",
       "origin": "New",
       "kind": "unit",
       "specification": "MYC-14",

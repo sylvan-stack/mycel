@@ -17,7 +17,7 @@ from ._classification_payload import LABELS, ReviewCommandIdentity
 from ._errors import MycelError
 from ._evidence import EvidenceError
 from ._jev import JevFailure, JevResponse
-from ._provider_qualification import (classification_diagnostics, profile_fingerprint,
+from ._provider_qualification import (QUALIFICATION_REVISION, classification_diagnostics, profile_fingerprint,
     qualify_profile, semantic_fingerprint)
 
 
@@ -40,7 +40,8 @@ def require_qualification(report, suite, expected_pipeline):
     """
     try:
         _require(type(report) is dict and type(expected_pipeline) is dict)
-        _require(report['kind'] == 'drift' and report['reportVersion'] == 1
+        _require(report['kind'] == 'drift' and report['reportVersion'] == 2
+            and report['qualificationRevision'] == QUALIFICATION_REVISION
             and report['evaluationSchema'] == suite.schema_version and report['live'] is True
             and report['providerExecution'] == 'production-defaults'
             and report['pipeline']['mode'] == 'configured-live-providers'
@@ -74,8 +75,11 @@ def require_qualification(report, suite, expected_pipeline):
                 maximum = max(probabilities.values())
                 response = JevResponse(jev['model'], jev['judgement'], probabilities,
                     Decimal(str(jev['confidence'])), row['stageUsage']['jev'],
-                    sum(value == maximum for value in probabilities.values()) > 1)
-                _require(response.model == expected_pipeline['model'] and jev['provider'] == 'typesafe')
+                    sum(value == maximum for value in probabilities.values()) > 1,
+                    reported_confidence=Decimal(str(jev['reportedConfidence'])))
+                _require(response.model == expected_pipeline['model'] and jev['provider'] == 'typesafe'
+                    and response.confidence == Decimal(str(jev['confidence']))
+                    and response.as_dict()['confidenceComparison'] == jev['confidenceComparison'])
             review = row.get('review')
             if review is not None:
                 _require(type(review['protocol']) is int and review['protocol'] == 1
