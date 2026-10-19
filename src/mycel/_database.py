@@ -279,9 +279,36 @@ def store_connection(credentials: Credentials, *, timeout_seconds: float = CONNE
     Test seams inject memory-only connectors/resolvers. Runtime uses native
     libpq in this process. The successful connection closes on every exit.
     """
+    with _target_connection(credentials.store_target, timeout_seconds=timeout_seconds, cancel_event=cancel_event,
+                            _connector=_connector, _resolver=_resolver) as connection:
+        yield connection
+
+
+@contextmanager
+def discussion_connection(credentials: Credentials, *, timeout_seconds: float = CONNECTION_TIMEOUT_SECONDS,
+                          cancel_event: threading.Event | None = None,
+                          _connector: Callable[..., Any] | None = None,
+                          _resolver: Callable[[str, int], Sequence[str]] | None = None) -> Iterator[psycopg.Connection]:
+    """Connect to the Arbol database the `[discussions]` settings name (MYC-17).
+
+    The same password-free-first connection as the store's, with the
+    `discussions-password` Keychain item when the server asks for one. The
+    caller reads it as data in a read-only transaction and writes nothing.
+    """
+    target = credentials.discussion_target()
+    if target is None:
+        raise MycelError(ErrorCode.SETTINGS, "The settings name no discussions.address.")
+    with _target_connection(credentials.discussion_target, timeout_seconds=timeout_seconds,
+                            cancel_event=cancel_event, _connector=_connector, _resolver=_resolver) as connection:
+        yield connection
+
+
+@contextmanager
+def _target_connection(select_target: Callable[..., Any], *, timeout_seconds: float,
+                       cancel_event: threading.Event | None, _connector, _resolver) -> Iterator[psycopg.Connection]:
     timeout_seconds = _timeout(timeout_seconds)
     _check(time.monotonic() + timeout_seconds, cancel_event)
-    target = credentials.store_target()
+    target = select_target()
     parameters, requested = _parameters(target.address)
     deadline = time.monotonic() + min(timeout_seconds, requested)
     addresses = _host_addresses(parameters["host"], int(parameters["port"]), deadline,
@@ -292,8 +319,8 @@ def store_connection(credentials: Credentials, *, timeout_seconds: float = CONNE
     if connection is None and password_requested:
         remaining = _check(deadline, cancel_event)
         try:
-            selected = credentials.store_target(password_requested=True, timeout_seconds=remaining,
-                                                cancelled=cancel_event.is_set if cancel_event is not None else None)
+            selected = select_target(password_requested=True, timeout_seconds=remaining,
+                                     cancelled=cancel_event.is_set if cancel_event is not None else None)
         except MycelError:
             raise
         except Exception:
