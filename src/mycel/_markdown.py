@@ -36,6 +36,14 @@ _HTML_BLOCK_TAGS = ("address article aside base basefont blockquote body caption
                     "th thead title tr track ul")
 _BLOCK_HTML_OPEN = re.compile(r"^ {0,3}</?(?:" + "|".join(_HTML_BLOCK_TAGS.split())
                               + r")(?=[ \t/>]|$)", re.IGNORECASE)
+_TABLE_ROW = re.compile(r"^ {0,3}\|.*\|[ \t]*$")
+_DELIMITER_ROW = re.compile(r"^ {0,3}\|(?:[ \t]*:?-+:?[ \t]*\|)+[ \t]*$")
+_ENTITY_CELL = re.compile(r"^(?P<id>[A-Z][A-Z0-9]*-(?:D[1-9][0-9]*|[0-9]+\.[1-9][0-9]*))"
+                          r"(?:[ \t]+<!--[ \t]*(?P<uuid>[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}"
+                          r"-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})[ \t]*-->)?$")
+_CHAT_URI = re.compile(r"\[(?:[A-Za-z0-9_-]+:)?cht:[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}"
+                       r"-[0-9A-Fa-f]{12}:[A-Za-z0-9+/=_-]*\]")
+_DECIDED = re.compile(r"^Decided (?P<when>[0-9]{1,2} [A-Za-z]+ [0-9]{4})(?: by (?P<who>[^:;.]+?))?(?=[:;.]|$)")
 _COMPLETE_HTML_TAG = re.compile(
     r"^ {0,3}(?:</[A-Za-z][A-Za-z0-9-]*+[ \t]*+>|"
     r"<[A-Za-z][A-Za-z0-9-]*+(?:[ \t]++[A-Za-z_:][A-Za-z0-9_.:-]*+"
@@ -79,6 +87,51 @@ class MarkdownChunk:
 
 
 @dataclass(frozen=True)
+class EntityRow:
+    """One requirement or decision row of a table, an entity keyed by its UUID (MYC-17).
+
+    ``text`` is the exact physical row with its line ending; ``title`` and the
+    metadata are read from the cells under the table's header. ``section`` is
+    the name of the chunk that holds the row, ``position`` the row's place
+    among the body rows of its table, counted from 1.
+    """
+
+    kind: str                      # "req" or "dec"
+    uuid: str
+    id: str                        # the human id, the display name
+    title: str
+    text: str = field(repr=False)
+    line: int
+    position: int
+    section: str
+    byte_start: int
+    byte_end: int
+    columns: tuple[str, ...]
+    cells: tuple[str, ...]
+    status: str | None
+    decided_by: str | None
+    decided_at: str | None
+    verified_by: str | None
+    from_v1: str | None
+    discussion: tuple[str, ...]
+    content_hash: str
+    snapshot_hash: str
+
+    def metadata(self) -> dict[str, Any]:
+        """The JSON-ready entity fields of a stored chunk version."""
+        result: dict[str, Any] = {"kind": self.kind, "uuid": self.uuid, "id": self.id, "title": self.title}
+        if self.status is not None:
+            result["status"] = self.status
+        for key, value in (("decidedBy", self.decided_by), ("decidedAt", self.decided_at),
+                           ("verifiedBy", self.verified_by), ("fromV1", self.from_v1)):
+            if value is not None:
+                result[key] = value
+        if self.kind == "dec":
+            result["discussion"] = list(self.discussion)
+        return result
+
+
+@dataclass(frozen=True)
 class MarkdownDocument:
     source: bytes = field(repr=False)
     text: str = field(repr=False)
@@ -90,6 +143,7 @@ class MarkdownDocument:
     frontmatter_text: str | None = field(repr=False)
     chunks: tuple[MarkdownChunk, ...]
     diagnostics: tuple[MarkdownDiagnostic, ...] = ()
+    entities: tuple[EntityRow, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -522,6 +576,145 @@ def _names(bases: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(result)
 
 
+def _cells(content: str) -> tuple[str, ...]:
+    """Split a pipe-table row into its cells; a backslash keeps a literal pipe."""
+    inner = content.strip(" \t")
+    if inner.startswith("|"):
+        inner = inner[1:]
+    if inner.endswith("|") and not inner.endswith("\\|"):
+        inner = inner[:-1]
+    cells, current, escaped = [], [], False
+    for character in inner:
+        if escaped:
+            current.append(character if character == "|" else "\\" + character)
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif character == "|":
+            cells.append("".join(current).strip(" \t"))
+            current = []
+        else:
+            current.append(character)
+    if escaped:
+        current.append("\\")
+    cells.append("".join(current).strip(" \t"))
+    return tuple(cells)
+
+
+def _column(columns: tuple[str, ...], cells: tuple[str, ...], *names: str) -> str | None:
+    lowered = [column.strip().lower() for column in columns]
+    for name in names:
+        if name in lowered:
+            index = lowered.index(name)
+            return cells[index] if index < len(cells) else None
+    return None
+
+
+def _entity_row(content: str, line: int, position: int, section: str, columns: tuple[str, ...],
+                text: str, original: bytes, byte_start: int, byte_end: int,
+                document_status: str | None) -> EntityRow | tuple[str, int, str] | None:
+    cells = _cells(content)
+    if not cells:
+        return None
+    match = _ENTITY_CELL.fullmatch(cells[0])
+    if match is None:
+        return None
+    identifier, uuid = match.group("id"), match.group("uuid")
+    if uuid is None:
+        return ("entity_missing_uuid", line, f"The row {identifier} has no UUID comment in its first cell.")
+    kind = "dec" if "-D" in identifier else "req"
+    second = cells[1] if len(cells) > 1 else ""
+    if kind == "req":
+        title = second
+        verified = _column(columns, cells, "verified by")
+        from_v1 = _column(columns, cells, "from v1", "origin")
+        status = "withdrawn" if "withdrawn" in second.lower() else document_status
+        decided_by = decided_at = None
+        discussion: tuple[str, ...] = ()
+    else:
+        title = _column(columns, cells, "question") or second
+        outcome = _column(columns, cells, "outcome") or ""
+        decided = _DECIDED.match(outcome.strip())
+        status = "decided" if decided is not None else "open"
+        decided_at = decided.group("when") if decided is not None else None
+        decided_by = (decided.group("who") or "").strip() or None if decided is not None else None
+        verified = from_v1 = None
+        discussion = tuple(_CHAT_URI.findall(_column(columns, cells, "discussion") or ""))
+    return EntityRow(kind, uuid.lower(), identifier, title, text, line, position, section, byte_start, byte_end,
+                     columns, cells,
+                     status, decided_by, decided_at, verified, from_v1, discussion,
+                     comparison_hash(text), snapshot_hash(original[byte_start:byte_end]))
+
+
+def _entities(lines: tuple[_Line, ...], original: bytes, chunks: tuple[MarkdownChunk, ...],
+              frontmatter: Mapping[str, Any]) -> tuple[tuple[EntityRow, ...], tuple[MarkdownDiagnostic, ...]]:
+    """Recognise requirement and decision rows of pipe tables outside fences.
+
+    A table is a header row followed by a delimiter row; its body rows follow
+    until a line that is not a row. Rows inside a code fence are text.
+    """
+    status = frontmatter.get("status") if isinstance(frontmatter, Mapping) else None
+    status = status if isinstance(status, str) else None
+    section_of = {}
+    for chunk in chunks:
+        for number in range(chunk.span.line_start, chunk.span.line_end + 1):
+            section_of[number] = chunk.name
+    rows: list[EntityRow] = []
+    faults: list[MarkdownDiagnostic] = []
+    fence: str | None = None
+    columns: tuple[str, ...] | None = None
+    position = 0
+    index = 0
+    while index < len(lines):
+        content = lines[index].content
+        if index == 0:
+            content = content.removeprefix("\ufeff")
+        stripped = content.lstrip(" ")
+        if fence is not None:
+            if stripped.startswith(fence):
+                fence = None
+            columns = None
+            index += 1
+            continue
+        opener = _FENCE.fullmatch(content)
+        if opener is not None:
+            fence = opener.group(1)[0] * len(opener.group(1))
+            columns = None
+            index += 1
+            continue
+        if _TABLE_ROW.fullmatch(content):
+            if columns is None:
+                if index + 1 < len(lines) and _DELIMITER_ROW.fullmatch(lines[index + 1].content):
+                    columns = _cells(content)
+                    position = 0
+                    index += 2
+                    continue
+                index += 1
+                continue
+            position += 1
+            line = lines[index]
+            result = _entity_row(content, index + 1, position, section_of.get(index + 1, "<preamble>"), columns,
+                                 line.text, original, line.byte_start, line.byte_end, status)
+            if isinstance(result, EntityRow):
+                rows.append(result)
+            elif result is not None:
+                faults.append(MarkdownDiagnostic(result[0], result[2], result[1]))
+        else:
+            columns = None
+        index += 1
+    seen: dict[str, list[EntityRow]] = {}
+    for row in rows:
+        seen.setdefault(row.uuid, []).append(row)
+    kept = []
+    for row in rows:
+        if len(seen[row.uuid]) > 1:
+            faults.append(MarkdownDiagnostic("entity_repeated_uuid",
+                                             f"The row {row.id} repeats the UUID {row.uuid} of another row.", row.line))
+        else:
+            kept.append(row)
+    return tuple(kept), tuple(sorted(faults, key=lambda item: (item.line or 0, item.code)))
+
+
 def split_markdown(source: bytes | str) -> MarkdownDocument:
     """Split exact UTF-8 source into independent logical heading sections.
 
@@ -563,5 +756,6 @@ def split_markdown(source: bytes | str) -> MarkdownDocument:
                                     exact, body, span, heading.end if heading is not None else None,
                                     comparison_hash(body), comparison_hash(title or ""),
                                     snapshot_hash(original[span.byte_start:span.byte_end])))
+    entities, faults = _entities(lines, original, tuple(chunks), settings)
     return MarkdownDocument(original, text, snapshot_hash(original), settings, present, valid,
-                            frontmatter_span, frontmatter_text, tuple(chunks), diagnostics)
+                            frontmatter_span, frontmatter_text, tuple(chunks), diagnostics + faults, entities)
