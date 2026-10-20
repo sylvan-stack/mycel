@@ -92,7 +92,12 @@ def _transaction(connection, *, readonly: bool) -> Iterator[None]:
             # universal NOWAIT clause; use its minimum positive timeout. Zero
             # would disable the timeout and allow an unbounded wait.
             connection.execute("SET LOCAL lock_timeout = '1ms'")
-            connection.execute("SET LOCAL statement_timeout = '5000ms'")
+            # One statement of a real repository's pass or status can take
+            # longer than five seconds on a loaded server: on 20 October 2026
+            # three passes and the suite together cancelled `status` and the
+            # pass's own counts (QueryCanceled, SQLSTATE 57014). A minute keeps
+            # a runaway statement finite without cutting ordinary work (SYL-232).
+            connection.execute("SET LOCAL statement_timeout = '60000ms'")
             yield
             check_deadline()
     except (psycopg.errors.LockNotAvailable, psycopg.errors.DeadlockDetected,
