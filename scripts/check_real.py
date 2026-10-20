@@ -197,7 +197,10 @@ def main(argv: list[str] | None = None) -> int:
                     entry["helper"] = {"changed": helper.changed_at is not None, "file": str(changed_path),
                                        "waitedSeconds": None if helper.waited is None else round(helper.waited, 1)}
                 report["repositories"].setdefault(name, []).append(entry)
-                result = (reply or {}).get("repositories", {}).get(name, {}) if isinstance(reply, dict) else {}
+                repositories_reply = (reply or {}).get("repositories", {}) if isinstance(reply, dict) else {}
+                if isinstance(repositories_reply, list):  # a refused pass: entries of {repository, error}
+                    repositories_reply = {item.get("repository"): item for item in repositories_reply if isinstance(item, dict)}
+                result = repositories_reply.get(name, {}) if isinstance(repositories_reply, dict) else {}
                 print(f"pass {number} {name}: status {status} in {elapsed / 60:.1f} min; "
                       f"files {result.get('files')}; chunks {result.get('chunks')}; "
                       f"changedDuringPass {result.get('changedDuringPass')}", file=sys.stderr)
