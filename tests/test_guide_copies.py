@@ -26,12 +26,12 @@ class GuideCopyTests(unittest.TestCase):
     @proves("MYC-0.12")
     def test_projection_keeps_prose_exact_and_rewrites_only_local_guide_links(self):
         original = ("# Guide\n\n[read](reading.md#exact) [cmd](command-line.md) "
-                    "[check](./checks.md) [other](other.md) "
+                    "[check](./checks.md) [other](./other.md) "
                     "[remote](https://example.test/reading.md)\n"
                     "`pending` remains a real reply state.\n")
         expected = ("---\nrole: authored\n---\n# Guide\n\n"
                     "[read](mycel-2-reading.md#exact) [cmd](mycel-2.md) "
-                    "[check](mycel-2-checks.md) [other](other.md) "
+                    "[check](mycel-2-checks.md) [other](./other.md) "
                     "[remote](https://example.test/reading.md)\n"
                     "`pending` remains a real reply state.\n")
         self.assertEqual(SYNC["render_corpus_guide"](original), expected)

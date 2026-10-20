@@ -27,7 +27,8 @@ def render_corpus_guide(original: str) -> str:
     """Keep authored text exact except for the documented local-link projection."""
     body = original.removeprefix(FRONTMATTER)
     body = LOCAL_GUIDE_LINK.sub(
-        lambda match: match[1] + LINK_NAMES.get(match[2], match[2]), body)
+        lambda match: (match[1] + LINK_NAMES[match[2]]
+                       if match[2] in LINK_NAMES else match[0]), body)
     return FRONTMATTER + body
 
 
