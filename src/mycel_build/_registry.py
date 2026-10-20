@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import tempfile
 
 from ._core import BuildError, TARGETS, atomic_json, json_bytes, read_json, utc_now
 
@@ -126,6 +127,33 @@ def _folder(root: Path, number: str) -> Path:
     return path
 
 
+def _private_retained_file(path: Path, *, missing_ok: bool = False) -> bool:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return missing_ok
+    return stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+
+
+def _write_allocation_log(path: Path, text: str) -> None:
+    # Never open the retained log for writing: a link can appear after the
+    # recovery preflight. Only the newly created private inode receives bytes.
+    fd, temporary = tempfile.mkstemp(prefix=".allocation-log-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 def _materialize(root: Path, number: str, initial: dict, *, recovered: bool = False) -> None:
     folder = _folder(root, number)
     folder.mkdir(exist_ok=True)
@@ -136,9 +164,12 @@ def _materialize(root: Path, number: str, initial: dict, *, recovered: bool = Fa
     atomic_json(folder / "build.json", record)
     atomic_json(folder / "checks.json", {"schemaVersion": 1, "results": [],
                                         "pending": ["all_unit", "all_store", "packaged_release", "publication"]})
-    (folder / "build.log").write_text("Interrupted allocation recovered.\n" if recovered else "Build number allocated.\n")
-    fd = os.open(folder / "run.lock", os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW, 0o444)
-    os.close(fd)
+    _write_allocation_log(folder / "build.log", "Interrupted allocation recovered.\n" if recovered else "Build number allocated.\n")
+    fd = os.open(folder / "run.lock", os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o444)
+    try:
+        _regular_lock(fd)
+    finally:
+        os.close(fd)
 
 
 def _recover_initial_allocation(root: Path, number: str, initial: dict) -> None:
@@ -150,12 +181,12 @@ def _recover_initial_allocation(root: Path, number: str, initial: dict) -> None:
             return
         if folder.exists():
             paths = [folder / member for member in members]
-            if all(path.is_file() and not path.is_symlink() for path in paths):
+            if all(_private_retained_file(path) for path in paths):
                 return
             # Staged files or unsafe retained members cannot establish that this
             # was only the initial allocation write. Never replace their bytes.
             if any(path.name not in members for path in folder.iterdir()) or any(
-                    path.is_symlink() or (path.exists() and not path.is_file()) for path in paths):
+                    not _private_retained_file(path, missing_ok=True) for path in paths):
                 return
             record = folder / "build.json"
             if record.exists() and json_bytes(read_json(record)) != json_bytes(initial):
@@ -207,7 +238,7 @@ def allocate(root: Path, *, target: str, version: str, source: dict) -> dict:
 
 def read_record(root: Path, number: str, *, _retained: bool = False) -> dict:
     folder = _folder(registry_path(root), number)
-    if not all((folder / member).is_file() and not (folder / member).is_symlink()
+    if not all(_private_retained_file(folder / member)
                for member in ("build.json", "checks.json", "build.log", "run.lock")):
         raise BuildError("refused", "This Build has missing or unsafe retained metadata.")
     record = read_json(folder / "build.json")

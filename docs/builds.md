@@ -117,7 +117,12 @@ partial initial allocation whose retained files still match the initial
 record, empty checks, allocation log and empty lock. Damaged, unsafe, staged,
 terminal and pruned records retain their existing bytes and reserved numbers;
 they are never rewritten as interrupted initial allocations. Failed/pruned
-identities remain accounted for.
+identities remain accounted for. Existing retained members must be regular
+files with one link; hard-linked metadata makes its Build unavailable and is
+left untouched. Recovery writes JSON and logs through private temporary files
+and atomic replacement, and opens the run lock read-only with a nonblocking
+safety check. A link introduced after validation cannot redirect recovery
+writes into another file.
 
 Each staged record retains source commit/dirty identity, exact source-input
 digests including test/gate scripts and guides, runtime/archive and dependency
