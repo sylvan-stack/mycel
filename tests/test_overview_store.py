@@ -227,14 +227,21 @@ class OverviewStoreTests(unittest.TestCase):
             return changed
         with patch.object(OverviewStore, 'reconcile_in_transaction', change_physical):
             status, reply = self.fixture.invoke('--repo', 'fixture')
-        self.assertEqual(status, 1, reply)
-        self.assertEqual([row['repository'] for row in reply['repositories']], ['fixture'])
-        self.assertEqual(reply['repositories'][0]['error']['code'], 'invalid_input')
+        # Since 20 October 2026 the pass publishes the capture it read (MYC-1.37):
+        # the file that changed after the projection is named, and the next
+        # pass takes it up; the overview follows the published capture.
+        self.assertEqual(status, 0, reply)
+        self.assertEqual(reply['repositories']['fixture']['changedDuringPass'], ['fixture:@code/src/work.py'])
+        self.assertIn('after', self.report()['sections'][0]['text'])
+        self.assertNotIn('projection', self.report()['sections'][0]['text'])
         with self.base.connect() as connection:
-            self.assertEqual(self.fixture.state(connection), before)
-            self.assertEqual(self.overview_rows(connection), overview_before)
-            self.assertEqual(connection.execute('SELECT to_jsonb(a),a.xmin::text FROM public.mycel_activity a ORDER BY id').fetchall(),
-                             activity_before)
+            self.assertNotEqual(self.fixture.state(connection), before)
+            self.assertGreater(len(connection.execute('SELECT id FROM public.mycel_activity').fetchall()),
+                               len(activity_before))
+        status, reply = self.fixture.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        self.assertNotIn('changedDuringPass', reply['repositories']['fixture'])
+        self.assertIn('projection', self.report()['sections'][0]['text'])
         file.write_text('def after():\n    pass\n')
         self.fixture.add_repository('later', b'# Later\nBody\n')
         from mycel._located_reconciliation import LocatedCaptureStore
