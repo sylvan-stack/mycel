@@ -287,11 +287,15 @@ def detection_guards(connection, settings, repository):
 
 
 class MechanicalStalenessStore:
-    def __init__(self, connection):
+    def __init__(self, connection, snapshot=None):
         self.connection = connection
         self._signature = None
         self._physical = None
         self._scope = None
+        # A complete pass publishes the capture it read (MYC-1.37): its own
+        # repository is observed through that capture, every other one once.
+        self._snapshot = snapshot
+        self._captures = None if snapshot is None else {snapshot.repository: snapshot}
 
     def _read(self, settings, guards):
         eligible = _eligible(settings)
@@ -379,6 +383,12 @@ class MechanicalStalenessStore:
     def _physical_inputs(self, settings, files, declarations, captures=None):
         from ._located_reconciliation import _catalog
         from ._disk_reconciliation import _parse_history
+        if self._captures is not None:
+            # A pass takes another repository's sources from the index (MYC-1.37):
+            # only its own repository's disk is compared, through its capture.
+            captures = self._captures
+            files = [file for file in files if file.repository == self._snapshot.repository]
+            declarations = [address for address in declarations if address.repository == self._snapshot.repository]
         captures = {} if captures is None else captures
         for owner in sorted({file.repository for file in files} | {address.repository for address in declarations}):
             if owner not in captures:
@@ -499,11 +509,12 @@ class MechanicalStalenessStore:
             physical_declarations.extend(addresses)
             physical_bad = any(len(value) == 5 and (value[3] != (value[2],) or not value[4])
                                or len(value) == 4 and not value[3] for value in checked_physical[key])
-            if addresses:
+            observed_declarations = [value for value in checked_physical[key] if len(value) == 4]
+            if addresses and observed_declarations:
                 expected_candidates = tuple(sorted((tuple(sorted((alias.root, alias.path) for alias in file.aliases)), file.source)
                     for file in catalog.files if file.repository == address.repository and any(
                         alias.path == address.path and address.root in {None, alias.root} for alias in file.aliases)))
-                physical_bad = physical_bad or checked_physical[key][-1][2] != expected_candidates
+                physical_bad = physical_bad or observed_declarations[-1][2] != expected_candidates
             if baseline_owner is None and not state.get('everResolved') and kind != 'generated':
                 continue  # A never-resolved declaration is a ref fault, not removed evidence.
             try:

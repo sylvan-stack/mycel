@@ -357,3 +357,85 @@ class IngestStoreTests(unittest.TestCase):
         self.assertEqual(reply['repositories']['fixture']['pending'], 0)
         with self.base.connect() as connection:
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_files WHERE repository='unrelated'").fetchone()[0], 0)
+
+
+class IngestPublishesItsCaptureStoreTests(IngestStoreTests):
+    """A pass publishes the capture it read (MYC-1.37, MYC-D64)."""
+
+    def disk_sources(self, connection):
+        rows = connection.execute("""SELECT v.source_bytes FROM public.mycel_file_versions v
+            JOIN public.mycel_file_locations l ON l.file_version=v.id WHERE l.kind='disk'""").fetchall()
+        return sorted(bytes(row[0]) for row in rows)
+
+    @proves('MYC-1.37', 'MYC-1.7', kind='store')
+    def test_file_changed_during_pass_is_saved_as_captured_named_and_taken_by_the_next_pass(self):
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        guide = self.base.artifact / 'guide.md'
+        guide.write_bytes(b'# Guide\nFirst edit.\n')
+        from mycel import _located_reconciliation
+        calls = 0
+
+        def racing(settings, repository, **kwargs):
+            # The first call is the pass's capture; the second is its one
+            # further read before it saves. Another agent edits meanwhile.
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                guide.write_bytes(b'# Guide\nSecond edit, during the pass.\n')
+                self.base.git('branch', 'added-during-pass')
+            return capture_repository(settings, repository, **kwargs)
+
+        with patch.object(_located_reconciliation, 'capture_repository', side_effect=racing):
+            status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(calls, 2)
+        self.assertEqual(status, 0, reply)
+        fixture = reply['repositories']['fixture']
+        self.assertEqual(fixture['changedDuringPass'], ['branch refs/heads/added-during-pass', 'fixture:@artifact/guide.md'])
+        self.assertEqual(fixture['chunks']['edited'], 1)
+        self.assertNotIn('error', fixture)
+        with self.base.connect() as connection:
+            self.assertEqual(self.disk_sources(connection), [b'# Guide\nFirst edit.\n'])
+            self.assertFalse(connection.execute("SELECT 1 FROM public.mycel_file_locations WHERE kind='branch' "
+                "AND location LIKE '%added-during-pass%'").fetchone())
+        status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        fixture = reply['repositories']['fixture']
+        self.assertNotIn('changedDuringPass', fixture)
+        # The disk edit and the new branch, which holds the committed text,
+        # are both taken up now; the disk version is the second edit.
+        self.assertTrue(fixture['changed'])
+        self.assertGreaterEqual(fixture['chunks']['edited'], 1)
+        with self.base.connect() as connection:
+            self.assertEqual(self.disk_sources(connection), [b'# Guide\nSecond edit, during the pass.\n'])
+            self.assertTrue(connection.execute("SELECT 1 FROM public.mycel_file_locations WHERE kind='branch' "
+                "AND location LIKE '%added-during-pass%'").fetchone())
+        status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        self.assertFalse(reply['repositories']['fixture']['changed'])
+
+    @proves('MYC-1.37', kind='store')
+    def test_pass_takes_a_foreign_source_from_the_index_and_its_own_pass_marks_the_dependant_stale(self):
+        foreign = self.add_repository('foreign', b'# Source\nForeign source.\n')
+        guide = self.base.artifact / 'guide.md'
+        guide.write_bytes(b'---\nsources: ["foreign:@artifact/answer.md#Source"]\n---\n# Guide\nRests on the foreign source.\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'foreign')[0], 0)
+        status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        self.assertEqual(reply['repositories']['fixture']['stale'], 0)
+        # The foreign source is edited on disk and not ingested; the dependant
+        # is edited too, so its pass has to pin the source again. It pins the
+        # indexed source and completes: the foreign disk is its own pass's.
+        (foreign / 'answer.md').write_bytes(b'# Source\nEdited on disk, not ingested.\n')
+        guide.write_bytes(guide.read_bytes().replace(b'Rests on', b'Still rests on'))
+        status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        fixture = reply['repositories']['fixture']
+        self.assertNotIn('error', fixture)
+        self.assertEqual(fixture['chunks']['edited'], 1)
+        self.assertEqual(fixture['stale'], 0)
+        self.assertNotIn('changedDuringPass', fixture)
+        status, reply = self.invoke('--repo', 'foreign')
+        self.assertEqual(status, 0, reply)
+        self.assertEqual(reply['repositories']['foreign']['chunks']['edited'], 1)
+        self.assertEqual(reply['repositories']['foreign']['dependencyRepositories']['fixture']['stale'], 1)

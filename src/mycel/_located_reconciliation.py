@@ -84,6 +84,35 @@ def location_key(identifier: LocationId) -> str:
     return canonical_json(identifier.record()).decode('utf-8')
 
 
+def capture_differences(repository: str, expected: CaptureManifest, actual: CaptureManifest) -> list[str]:
+    """Name every file and location of `actual` that differs from `expected`.
+
+    A file is named by its address, `repo:@root/path`; a location that appeared,
+    disappeared, moved to another commit or could not be read completely by its
+    kind and identity, such as `branch refs/heads/feature`. The list is what a pass reports
+    under `changedDuringPass` (MYC-1.37): the next pass picks these up.
+    """
+    names = set()
+    before = {location.id: location for location in expected.locations}
+    after = {location.id: location for location in actual.locations}
+    for identifier in set(before) | set(after):
+        label = f'{identifier.kind} {identifier.identity}'
+        if identifier not in before or identifier not in after:
+            names.add(label)
+            continue
+        left, right = before[identifier], after[identifier]
+        if left.commit != right.commit or not right.complete:
+            names.add(label)
+        files_before = {file.primary: file for file in left.files}
+        files_after = {file.primary: file for file in right.files}
+        for primary in set(files_before) | set(files_after):
+            one, other = files_before.get(primary), files_after.get(primary)
+            if (one is None or other is None or one.source != other.source or other.failure is not None
+                    or set(one.aliases) != set(other.aliases)):
+                names.add(primary.address(repository))
+    return sorted(names)
+
+
 def _scopes(repository):
     scopes = {}
     try:
@@ -207,7 +236,16 @@ class LocatedCaptureStore:
               recognized_moves: tuple[GitFileMove, ...] = (), confirm_empty: bool = False,
               file_handoff: Callable | None = None, batch_handoff: Callable | None = None,
               activity: MutationActivity | None = None, reply_counts: Callable | None = None,
-              targeted_detection: bool = False) -> LocatedCaptureResult:
+              targeted_detection: bool = False, publish_capture: bool = False) -> LocatedCaptureResult:
+        """Publish one complete capture.
+
+        With `publish_capture` the pass publishes the capture it read (MYC-1.37,
+        MYC-D64): a disk or Git change after the capture is named in the counts
+        under `changedDuringPass` instead of refusing the publication, and the
+        producers observe the pass's own repository through the capture. Without
+        it every reread must match the capture exactly, as internal callers and
+        the mutations of MYC-16 require.
+        """
         settings.require_valid(require_store=False)
         if not isinstance(manifest, (CaptureManifest, str)):
             _invalid('Located publication requires a complete captured manifest.')
@@ -219,7 +257,7 @@ class LocatedCaptureStore:
                 or any(not isinstance(move, GitFileMove) for move in recognized_moves)
                 or len({move.identifier for move in recognized_moves}) != len(recognized_moves)
                 or len({move.destination for move in recognized_moves}) != len(recognized_moves)
-                or type(targeted_detection) is not bool
+                or type(targeted_detection) is not bool or type(publish_capture) is not bool
                 or any(callback is not None and not callable(callback)
                        for callback in (file_handoff, batch_handoff, reply_counts))
                 or (activity is not None and activity.connection is not self.connection)):
@@ -237,9 +275,11 @@ class LocatedCaptureStore:
             if not manifest.deletion_safe:
                 _invalid('Located publication requires a complete supported parse.')
             _guard_disk_corpora([row for row in rows if row[8] == 'disk'], manifest, confirm_empty)
-            fresh = capture_repository(settings, repository.name, previous=history)
-            if not fresh.deletion_safe or not _same_capture(manifest, fresh):
-                _invalid('The complete capture changed before located reconciliation.')
+            fresh = manifest
+            if not publish_capture:
+                fresh = capture_repository(settings, repository.name, previous=history)
+                if not fresh.deletion_safe or not _same_capture(manifest, fresh):
+                    _invalid('The complete capture changed before located reconciliation.')
             scopes = _scopes(repository)
             correspondences = build_correspondences(_git_snapshots(manifest, rows, scopes))
             observed = {}
@@ -259,15 +299,19 @@ class LocatedCaptureStore:
                 settings.require_current()
                 if _catalog(connection, repository.name) != original:
                     _invalid('The stored located identity catalog changed before publication.')
-                final = capture_repository(settings, repository.name, previous=fresh)
-                if not final.deletion_safe or not _same_capture(manifest, final) or _scopes(repository) != scopes:
-                    _invalid('The complete capture or physical root scope changed before publication.')
+                if _scopes(repository) != scopes:
+                    _invalid('The physical root scope changed before publication.')
+                if not publish_capture:
+                    final = capture_repository(settings, repository.name, previous=fresh)
+                    if not final.deletion_safe or not _same_capture(manifest, final):
+                        _invalid('The complete capture changed before publication.')
                 if build_correspondences(_git_snapshots(manifest, rows, scopes)) != correspondences:
                     _invalid('The checked local Git rename correspondence changed before publication.')
-                for captured in manifest.disk.files:
-                    addresses, physical, _ = observed[captured.primary]
-                    if _observe(repository, addresses, captured.source) != physical:
-                        _invalid('The complete physical file changed before publication.')
+                if not publish_capture:
+                    for captured in manifest.disk.files:
+                        addresses, physical, _ = observed[captured.primary]
+                        if _observe(repository, addresses, captured.source) != physical:
+                            _invalid('The complete physical file changed before publication.')
                 applied, file_changes, decisions, kept, used_moves = [], [], [], set(), set()
                 # Include each newly published location in later files' identity
                 # catalog. Their real version IDs make exact pin decisions usable.
@@ -478,6 +522,13 @@ class LocatedCaptureStore:
                     if type(projection_changed) is not bool:
                         _invalid('The complete producer final projection must return a typed mutation decision.')
                     changed = changed or projection_changed
+                if publish_capture:
+                    # The pass publishes the capture it read. One more read of
+                    # the disk names what moved meanwhile for the next pass.
+                    complete = capture_repository(settings, repository.name, previous=manifest)
+                    differences = capture_differences(repository.name, manifest, complete)
+                    if differences:
+                        counts['changedDuringPass'] = differences
                 cumulative = counts if reply_counts is None else reply_counts(repository.name, counts)
                 def verify_complete(result=output):
                     settings.require_current()
@@ -488,10 +539,13 @@ class LocatedCaptureStore:
                                 _invalid('The complete producer final input check must be callable.')
                             verify(connection, result)
                     detector.verify_in_transaction(settings, stale_guards)
+                    if _scopes(repository) != scopes or build_correspondences(
+                            _git_snapshots(manifest, rows, scopes)) != correspondences:
+                        _invalid('The complete capture changed during located publication.')
+                    if publish_capture:
+                        return
                     complete = capture_repository(settings, repository.name, previous=fresh)
-                    if (not complete.deletion_safe or not _same_capture(manifest, complete)
-                            or _scopes(repository) != scopes
-                            or build_correspondences(_git_snapshots(manifest, rows, scopes)) != correspondences):
+                    if not complete.deletion_safe or not _same_capture(manifest, complete):
                         _invalid('The complete capture changed during located publication.')
                     for captured in manifest.disk.files:
                         addresses, physical, _ = observed[captured.primary]
@@ -503,7 +557,7 @@ class LocatedCaptureStore:
                 return AppliedMutation(changed, cumulative, tuple(file_changes), tuple(decisions))
 
             with detection_guards(self.connection, settings, repository.name) as stale_guards:
-                detector = MechanicalStalenessStore(self.connection)
+                detector = MechanicalStalenessStore(self.connection, snapshot=manifest if publish_capture else None)
                 if activity is None:
                     with atomic_transaction(self.connection):
                         write(self.connection)

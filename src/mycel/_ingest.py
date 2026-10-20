@@ -142,20 +142,31 @@ def _publication_guards(connection, settings, manifest):
         yield tuple(sorted(writable)), tuple(sorted(pending))
 
 
+def _changed_since_ingest(error) -> MycelError:
+    """An evidence fault leaving a pass is a closed input fault, never `internal`."""
+    affected = ''.join(f' {address}' for address in getattr(error, 'addresses', ()))
+    return MycelError('invalid_input', 'Complete ingest inputs changed before publication '
+                      f'({getattr(error, "status", "changed_since_ingest")}):{affected or " the capture"}.')
+
+
 class _CompleteProducer(LocatedDependencyProducer):
     def verify_in_transaction(self, connection, result):
         from ._evidence import EvidenceError
         try:
             super().verify_in_transaction(connection, result)
-        except EvidenceError:
-            raise MycelError('invalid_input', 'Complete ingest inputs changed before publication.') from None
+        except EvidenceError as error:
+            raise _changed_since_ingest(error) from None
 
     def finalize_in_transaction(self, connection, result):
         from ._overview_store import OverviewStore
         return OverviewStore(connection).reconcile_in_transaction(result.repository)
 
     def __call__(self, connection, result):
-        changed = super().__call__(connection, result)
+        from ._evidence import EvidenceError
+        try:
+            changed = super().__call__(connection, result)
+        except EvidenceError as error:
+            raise _changed_since_ingest(error) from None
         if not self.pending_repositories:
             # Successful observation time is operational metadata; a timestamp
             # alone creates no identity decision or activity entry.
@@ -264,13 +275,17 @@ def _ingest(invocation, state):
                     if not manifest.deletion_safe:
                         raise MycelError('refused', 'The complete repository capture failed; no ingest change was applied.')
                     with _publication_guards(connection, settings, manifest) as (guards, pending):
+                        # The pass publishes the capture it read (MYC-1.37):
+                        # a file that changes meanwhile is named in the reply
+                        # under changedDuringPass and left to the next pass.
                         producer = _CompleteProducer(settings,
                             captured_at=datetime.now(timezone.utc).isoformat(),
                             collection_manifest=manifest, activity=activity,
-                            guarded_repositories=guards, pending_repositories=pending)
+                            guarded_repositories=guards, pending_repositories=pending,
+                            snapshot=manifest)
                         applied = store.apply(settings, manifest, batch_handoff=producer,
                             confirm_empty='--confirm-empty' in invocation.arguments, activity=activity,
-                            targeted_detection=True,
+                            targeted_detection=True, publish_capture=True,
                             reply_counts=lambda owner, portion: _cumulative(
                                 final_counts.get((owner, 'ingest'), {}), portion))
                         reply = _cumulative(final_counts.get((name, 'ingest'), {}),

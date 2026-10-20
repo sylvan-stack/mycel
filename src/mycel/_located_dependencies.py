@@ -28,9 +28,13 @@ class LocatedDependencyProducer:
                  activity: MutationActivity | None = None,
                  guarded_repositories: tuple[str, ...] | None = None,
                  pending_repositories: tuple[str, ...] = (),
-                 defer_changed_dependants: bool = False):
+                 defer_changed_dependants: bool = False,
+                 snapshot: CaptureManifest | None = None):
         if type(defer_changed_dependants) is not bool:
             raise MycelError('invalid_input', 'Foreign dependant deferral requires an explicit boolean.')
+        if snapshot is not None and not isinstance(snapshot, CaptureManifest):
+            raise MycelError('invalid_input', 'A publication snapshot must be the complete capture manifest.')
+        self.snapshot = snapshot
         self.settings = settings
         self.captured_at = captured_at
         self.settings_home = settings_home
@@ -46,7 +50,7 @@ class LocatedDependencyProducer:
         from ._dependency_inputs import DependencyCaptureInputs
         from ._relations import RelationApplicationStore, _relation_raw
         inputs = DependencyCaptureInputs(connection, self.settings, settings_home=self.settings_home,
-                                         guarded_repositories=self.guarded_repositories)
+                                         guarded_repositories=self.guarded_repositories, snapshot=self.snapshot)
         totals = {}
 
         store = DependencyApplicationStore(connection)
