@@ -133,7 +133,10 @@ version and pin decisions still follow the whole-file matcher independently of
 the move evidence: an edited rename never borrows another version's bytes or
 vectors, and a substantive edit still requires an authorized baseline capture.
 
-The entire fresh capture/catalog/root scope is checked again before publication.
+The default direct API checks the entire fresh capture/catalog/root scope
+again before publication. Public ingest uses its captured input under
+`publish_capture=True` and reports later changes for the next pass; its settings
+and stored catalog still guard publication.
 Absent locations retire after all captured locations publish, while unlocated
 versions/chunks and their pins are retained unless the guarded collection
 producer explicitly applies their accepted removal policy.
@@ -159,8 +162,8 @@ update current faults, expanded edges and located roles. A guarded complete
 batch replaces pending declarations' authority before cycle checks, then checks
 the full persisted graph before leaving the caller transaction. A valid
 declaration reversal cannot depend on file processing order. The public
-`ingest` command orchestrates these boundaries; real-repository ingest
-acceptance is owned by the open Beat SYL-232.
+`ingest` command orchestrates these boundaries. `scripts/check_real.py` checks
+real-repository ingest on disposable copied inputs and a throwaway store.
 
 Restore a known version's own dependencies, inherit from the plan's selected
 `pin_version`, and capture a new baseline only under an explicit accepted trigger.
@@ -178,14 +181,17 @@ has been applied. It opens no transaction, savepoint or guard. The active caller
 must hold its connection's checked structure and repository pass/removal guards,
 including any downstream repository whose resolved source edges disappear.
 
-The collector rereads the complete disk, local branch and stash capture and
-checks its published inventory, exact full files, parsed chunk locations,
-physical root scopes and disk file identities before deleting. An incomplete,
-changed or unpublished capture refuses the transaction. Every located version
-survives, with its own pins, plans, parts and vectors. Only unlocated file-backed
+By default, the collector rereads the complete disk, local branch and stash
+capture and checks its published inventory, exact full files, parsed chunk
+locations, physical root scopes and disk file identities before deleting.
+An incomplete, changed or unpublished capture refuses that direct API.
+The public pass instead supplies `published=True` with its captured input;
+collection validates the complete published inventory and captured bytes without
+rereading later disk changes. Every located version survives, with its own
+pins, plans, parts and vectors. Only unlocated file-backed
 versions are deleted; their empty ordinary chunk identities and unused file rows
 then disappear. Requirement and decision identities are retained permanently so
-their withdrawn UUIDs stay reserved. Synthetic index-only text remains its generator's responsibility.
+their withdrawn UUIDs stay reserved, as do any file rows they still reference. Synthetic index-only text remains its generator's responsibility.
 
 Deleting a source version removes current resolved edges while surviving
 dependants retain their existing records and owner-scoped exact evidence. A dead

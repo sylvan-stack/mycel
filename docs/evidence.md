@@ -167,9 +167,12 @@ real manifest and complete selected bytes; a disk change before pinning or a
 producer/audit exception rolls back the complete publication. The separate
 dependency executor now supplies identity-selected inheritance, current
 declaration/binding updates, authorized repin and withdrawal application.
-`LocatedDependencyProducer` rereads actual source/dependant captures and settings,
-including enabled foreign repositories and physically recreated missing paths;
-the publication checks its whole capture again after the last producer.
+By default, `LocatedDependencyProducer` rereads actual source/dependant captures
+and settings, including enabled foreign repositories and physically recreated
+missing paths; publication checks its whole capture after the last producer.
+The public pass instead supplies its captured input and resolves foreign sources
+from the index under `publish_capture`; see the
+[reconciliation guide](reconciliation.md#complete-public-ingest).
 Public consumers retain exact evidence through confirmation, classification
 and summary publication/regeneration. Installed working-Build qualification is owned by SYL-148.
 
