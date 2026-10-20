@@ -217,7 +217,10 @@ class CollectionStore:
                     addresses = tuple(sorted((SourceAddress(manifest.repository, item.root, item.path)
                                               for item in captured.aliases), key=lambda item: item.address))
                     observed = _observe(repository, addresses, None if published else captured.source)
-                    if any(list(item['fileIdentity'][:2]) != row[6].get('physicalIdentity') for item in observed):
+                    # A pass that publishes its capture leaves a file replaced
+                    # meanwhile, a `git pull` for one, to the next pass (MYC-1.37).
+                    if not published and any(list(item['fileIdentity'][:2]) != row[6].get('physicalIdentity')
+                                             for item in observed):
                         _invalid('The published physical file identity changed before collection.')
                 chunks = self.connection.execute("""SELECT v.snapshot_hash,v.source_bytes,v.metadata,l.metadata
                     FROM public.mycel_locations l JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version

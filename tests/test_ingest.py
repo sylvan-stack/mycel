@@ -372,23 +372,27 @@ class IngestPublishesItsCaptureStoreTests(IngestStoreTests):
         self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
         guide = self.base.artifact / 'guide.md'
         guide.write_bytes(b'# Guide\nFirst edit.\n')
-        from mycel._located_reconciliation import LocatedCaptureStore
-        original = LocatedCaptureStore.capture
+        from mycel import _located_reconciliation
+        original = _located_reconciliation._observe
         calls = 0
 
-        def racing(store, settings, repository):
-            # Another agent edits right after the pass has read its capture, so
-            # every later step of the pass, collection included, sees the change.
+        def racing(repository, addresses, source):
+            # Right after the pass has observed the file it read, another agent
+            # replaces it, as a `git pull` does, with new bytes and a new inode,
+            # and adds a branch: every later step of the pass sees the change.
             nonlocal calls
             calls += 1
-            manifest = original(store, settings, repository)
-            guide.write_bytes(b'# Guide\nSecond edit, during the pass.\n')
-            self.base.git('branch', 'added-during-pass')
-            return manifest
+            physical = original(repository, addresses, source)
+            if calls == 1:
+                replacement = guide.with_name('guide.md.new')
+                replacement.write_bytes(b'# Guide\nSecond edit, during the pass.\n')
+                os.replace(replacement, guide)
+                self.base.git('branch', 'added-during-pass')
+            return physical
 
-        with patch.object(LocatedCaptureStore, 'capture', racing):
+        with patch.object(_located_reconciliation, '_observe', racing):
             status, reply = self.invoke('--repo', 'fixture')
-        self.assertEqual(calls, 1)
+        self.assertGreaterEqual(calls, 1)
         self.assertEqual(status, 0, reply)
         fixture = reply['repositories']['fixture']
         self.assertEqual(fixture['changedDuringPass'], ['branch refs/heads/added-during-pass', 'fixture:@artifact/guide.md'])

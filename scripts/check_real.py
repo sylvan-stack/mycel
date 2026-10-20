@@ -1,7 +1,7 @@
 """Ingest real repositories into a throwaway store, twice, while a file changes.
 
-The check any Beat can run (SYL-232). It reads the `readonly` clones of the
-repositories it names and copies of their corpora, writes only to a database
+The check any Beat can run (SYL-232). It works on copies of the `readonly`
+clones of the repositories it names and of their corpora, writes only to a database
 of its own named `mycel_check_real_<id>` on the configured check server, and
 drops it at the end. During the first pass of the last repository a helper
 changes one Markdown file of the corpus copy: the pass must still complete and
@@ -168,9 +168,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         repositories = {}
         for name in arguments.repos:
-            code = arguments.clones.expanduser() / name
+            # Copies of the clone and the corpus: another agent's `git pull` of a
+            # `readonly` clone during the run cannot change this check's inputs.
+            code = work / "code" / name
             artifact = work / "artifacts" / name
+            code.parent.mkdir(exist_ok=True)
             artifact.parent.mkdir(exist_ok=True)
+            _copy(arguments.clones.expanduser() / name, code)
             _copy(arguments.artifacts.expanduser() / name, artifact)
             repositories[name] = (code, artifact)
         backend.create_database(database)
