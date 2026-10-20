@@ -271,3 +271,9 @@ read-only inventory/plan/report commands add no cleanup executor, legacy DB
 connection or owner cutover. They preserve exact uncertainty and partial work;
 source corpora and unrelated objects remain outside removal scope. This source
 preparation supplies no actual owner replacement or native qualification.
+
+## Sylvan Stack 2
+
+| Repository | Package | Version | Artifact corpus | Artifact repository |
+|---|---|---|---|---|
+| `arbol-pi-driver` | `@sylvan-stack/arbol-pi-driver` | 1.0.0 | `~/Artifacts/arbol-pi-driver` | `sylvan-stack/arbol-pi-driver-artifacts` |
