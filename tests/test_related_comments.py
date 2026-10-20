@@ -177,7 +177,7 @@ class RelatedCaptureTests(capture_fixtures._CaptureFixture, unittest.TestCase):
                 patch('mycel._locks.require_transaction_guards') as guard:
             fresh = inputs.rereader(manifest.disk.id, 'fixture', None)(expected)
         reader.assert_called_once_with(connection, settings, kind='disk', location='disk',
-                                       guarded_repositories=('fixture',))
+                                       guarded_repositories=('fixture',), catalogs=None)
         guard.assert_called_once_with(connection, ('fixture',))
         self.assertEqual(fresh.catalog.endpoint_refs, frozenset((raw,)))
         self.assertEqual(fresh.selection.kind, 'chunk')

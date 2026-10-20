@@ -2861,6 +2861,11 @@
     "MYC-1.36": [
       "test_entities.EntityStoreTests.test_pass_publishes_entity_rows_keyed_by_uuid_and_keeps_them_through_edits_and_moves"
     ],
+    "MYC-1.37": [
+      "test_ingest.IngestPublishesItsCaptureStoreTests.test_file_changed_during_pass_is_saved_as_captured_named_and_taken_by_the_next_pass",
+      "test_ingest.IngestPublishesItsCaptureStoreTests.test_pass_takes_a_foreign_source_from_the_index_and_its_own_pass_marks_the_dependant_stale",
+      "test_ingest.IngestPublishesItsCaptureStoreTests.test_pass_reads_each_location_catalog_once_for_its_dependency_run"
+    ],
     "MYC-5.17": [
       "test_entities.DiscussionSettingsTests.test_discussions_table_knows_only_a_password_free_address_and_its_keychain_item"
     ],
