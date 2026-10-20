@@ -439,3 +439,28 @@ class IngestPublishesItsCaptureStoreTests(IngestStoreTests):
         self.assertEqual(status, 0, reply)
         self.assertEqual(reply['repositories']['foreign']['chunks']['edited'], 1)
         self.assertEqual(reply['repositories']['foreign']['dependencyRepositories']['fixture']['stale'], 1)
+
+    @proves('MYC-1.37', kind='store')
+    def test_pass_reads_each_location_catalog_once_for_its_dependency_run(self):
+        for number in range(6):
+            (self.base.artifact / f'note{number}.md').write_bytes(
+                b'# Note\nFirst.\n# Detail\nSecond.\n# More\nThird.\n')
+        self.base.commit()
+        from mycel._resolver import SourceResolver
+        original = SourceResolver.from_store.__func__
+        reads = []
+
+        def counting(cls, connection, settings, **kwargs):
+            if kwargs.get('_in_transaction') and not kwargs.get('_read_transaction'):
+                reads.append((kwargs.get('kind'), kwargs.get('location')))
+            return original(cls, connection, settings, **kwargs)
+
+        with patch.object(SourceResolver, 'from_store', classmethod(counting)):
+            status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        chunks = sum(reply['repositories']['fixture']['chunks'].values())
+        self.assertGreaterEqual(chunks, 18)
+        # One catalog per location for the run, plus the few the batch and the
+        # detector read; never one per chunk.
+        self.assertLess(len(reads), chunks)
+        self.assertLessEqual(len(reads), 2 * len({location for location in reads}) + 4)

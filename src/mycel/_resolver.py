@@ -403,15 +403,30 @@ class SourceResolver:
     @classmethod
     def from_transaction(cls, connection, settings: SettingsSnapshot, *,
                          kind: Literal["disk", "branch", "stash"] = "disk", location: str | None = None,
-                         guarded_repositories: tuple[str, ...] | None = None) -> SourceResolver:
+                         guarded_repositories: tuple[str, ...] | None = None,
+                         catalogs: dict | None = None) -> SourceResolver:
         """Read prospective rows in the caller's checked, guarded transaction.
 
         This reader acquires no locks, opens no savepoint and never commits.
         The writing producer must hold checked_store and the complete involved
         repositories' pass/removal guards before opening its transaction.
+
+        `catalogs` is a cache a complete pass keeps for one dependency run: the
+        files, chunks, versions and locations the catalog reads do not change
+        while that run writes dependencies, pins and relations, so one catalog
+        per kind, location and guard set serves every chunk of the run instead
+        of one read per chunk (SYL-232, 20 October 2026). Mutations and the
+        exact rechecks of MYC-16 pass no cache and read afresh.
         """
-        return cls.from_store(connection, settings, kind=kind, location=location, _in_transaction=True,
-                              _observation_guards=guarded_repositories)
+        if catalogs is None:
+            return cls.from_store(connection, settings, kind=kind, location=location, _in_transaction=True,
+                                  _observation_guards=guarded_repositories)
+        key = (kind, location, guarded_repositories)
+        catalog = catalogs.get(key)
+        if catalog is None:
+            catalog = catalogs[key] = cls.from_store(connection, settings, kind=kind, location=location,
+                                                     _in_transaction=True, _observation_guards=guarded_repositories)
+        return catalog
 
     @classmethod
     def from_read_transaction(cls, connection, settings: SettingsSnapshot) -> SourceResolver:

@@ -49,8 +49,13 @@ class LocatedDependencyProducer:
         from ._dependency_application import DependencyApplicationStore
         from ._dependency_inputs import DependencyCaptureInputs
         from ._relations import RelationApplicationStore, _relation_raw
+        # A pass that publishes its capture reads each location's catalog once
+        # for the whole run; files, chunks and locations do not change while
+        # dependencies, pins and relations are written (SYL-232).
+        catalogs = {} if self.snapshot is not None else None
         inputs = DependencyCaptureInputs(connection, self.settings, settings_home=self.settings_home,
-                                         guarded_repositories=self.guarded_repositories, snapshot=self.snapshot)
+                                         guarded_repositories=self.guarded_repositories, snapshot=self.snapshot,
+                                         catalogs=catalogs)
         totals = {}
 
         store = DependencyApplicationStore(connection)
@@ -177,7 +182,7 @@ class LocatedDependencyProducer:
                         pin_version=pin_version, reference_location=located.binding.location,
                         captured_at=self.captured_at, reread=reread,
                         inheritance_authorization=authorization, batch=batch,
-                        guarded_repositories=self.guarded_repositories)
+                        guarded_repositories=self.guarded_repositories, catalogs=catalogs)
                     primary_changed = primary_changed or applied.mutated
                     for name, value in applied.counts.items():
                         totals[name] = totals.get(name, 0) + value
@@ -186,7 +191,7 @@ class LocatedDependencyProducer:
                             pin_version=pin_version if mode != 'edit' else prior.get(identifier),
                             reference_location=located.binding.location,
                             inheritance_authorization=authorization,
-                            guarded_repositories=self.guarded_repositories),):
+                            guarded_repositories=self.guarded_repositories, catalogs=catalogs),):
                         primary_changed = primary_changed or observed.mutated
                         for name, value in observed.counts.items():
                             totals[name] = totals.get(name, 0) + value
@@ -197,7 +202,7 @@ class LocatedDependencyProducer:
                     applied = store.apply_in_transaction(self.settings, file_id, version,
                         captured_at=self.captured_at, reread=inputs.rereader(identifier, owner, commit),
                         mode='observe', batch=batch, guarded_repositories=self.guarded_repositories,
-                        observation_dependencies=tuple(sorted(item['dependencies'])))
+                        observation_dependencies=tuple(sorted(item['dependencies'])), catalogs=catalogs)
                     for name, value in applied.counts.items():
                         counts[name] = counts.get(name, 0) + value
                     if applied.mutated:
@@ -206,7 +211,7 @@ class LocatedDependencyProducer:
                         captured_at=self.captured_at, mode='observe',
                         reread=inputs.rereader(identifier, owner, commit),
                         guarded_repositories=self.guarded_repositories,
-                        observation_relations=tuple(sorted(item['relations']))),)):
+                        observation_relations=tuple(sorted(item['relations'])), catalogs=catalogs),)):
                     for name, value in observed.counts.items():
                         counts[name] = counts.get(name, 0) + value
                     if observed.mutated:

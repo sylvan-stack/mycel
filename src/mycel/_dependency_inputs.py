@@ -31,7 +31,7 @@ class DependencyCaptureInputs:
     """
     def __init__(self, connection, settings: SettingsSnapshot, *, settings_home: Path | None = None,
                  guarded_repositories: tuple[str, ...] | None = None,
-                 snapshot: CaptureManifest | None = None):
+                 snapshot: CaptureManifest | None = None, catalogs: dict | None = None):
         if snapshot is not None and not isinstance(snapshot, CaptureManifest):
             raise MycelError('invalid_input', 'A capture snapshot must be a complete capture manifest.')
         self.connection = connection
@@ -40,6 +40,7 @@ class DependencyCaptureInputs:
         self.captures = {} if snapshot is None else {snapshot.repository: snapshot}
         self.guarded_repositories = guarded_repositories
         self.snapshot = snapshot
+        self.catalogs = catalogs  # one catalog per location for a complete pass's run
 
     def observe(self, repository):
         if self.snapshot is not None and repository in self.captures:
@@ -68,7 +69,8 @@ class DependencyCaptureInputs:
             if settings.values != self.settings.values:
                 raise EvidenceError('changed_since_ingest')
             catalog = SourceResolver.from_transaction(connection, settings,
-                kind=identifier.kind, location=key, guarded_repositories=self.guarded_repositories)
+                kind=identifier.kind, location=key, guarded_repositories=self.guarded_repositories,
+                catalogs=self.catalogs)
             catalog = RetainedDependencyResolver(catalog, expected.catalog.anchors,
                                                  expected.catalog.syntax_faults,
                                                  endpoint_refs=expected.catalog.endpoint_refs)
