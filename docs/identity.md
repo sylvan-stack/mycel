@@ -96,9 +96,9 @@ surviving dependant-owned evidence after source removal. Public ingest consumes 
 
 ## Transactional ingest boundary
 
-A later ingest loader must read all retained exact versions and located name
-projections in one snapshot. The current source resolver supplies one selected
-location, rather than the complete history needed by this matcher. Preserve
+The complete located ingest loader reads all retained exact versions and
+located name projections in one snapshot. The current source resolver supplies
+one selected location, rather than the complete history needed by this matcher. Preserve
 `LocationId.record()` including checkout anchor; a bare branch name cannot
 distinguish independent configured roots. Process the capture's disk, branch and
 stash ordering, and bind physical aliases before deciding file moves.
@@ -109,7 +109,7 @@ continuity, and publishes a full disk capture atomically. Its transaction-scoped
 `file_handoff` receives each persisted UUID/version and explicit plan after the
 identity rows exist. Existing branch/stash rows are preserved. It neither writes
 new Git locations nor captures/inherits evidence, and leaves unlocated rows for
-the later collection boundary. See [source-refs.md](source-refs.md) for the exact
+the separate guarded collection boundary. See [source-refs.md](source-refs.md) for the exact
 guards and checked Git-move contract.
 
 `LocatedCaptureStore` supplies the subsequent complete located publication seam.
@@ -133,14 +133,18 @@ version and pin decisions still follow the whole-file matcher independently of
 the move evidence: an edited rename never borrows another version's bytes or
 vectors, and a substantive edit still requires an authorized baseline capture.
 
-The entire fresh capture/catalog/root scope is checked again before publication.
+The default direct API checks the entire fresh capture/catalog/root scope
+again before publication. Public ingest uses its captured input under
+`publish_capture=True` and reports later changes for the next pass; its settings
+and stored catalog still guard publication.
 Absent locations retire after all captured locations publish, while unlocated
 versions/chunks and their pins are retained unless the guarded collection
 producer explicitly applies their accepted removal policy.
 Changed captures can hand the complete persisted prospective catalog to a
 transaction-scoped batch callback, and any callback/audit failure rolls back the
 whole publication. No-op captures rewrite no catalog row and invoke no callback.
-This has configured store proofs but remains a partial ingest implementation.
+The public ingest producer composes this checked identity publication with
+dependency reconciliation, collection, detection and activity.
 
 Build a finite prospective catalog before writes. For a dependency-connected
 component, insert its exact file/chunk/version rows first, then bind sources and
@@ -157,8 +161,9 @@ own exact-version pins, apply inherited or authorized captured baselines and
 update current faults, expanded edges and located roles. A guarded complete
 batch replaces pending declarations' authority before cycle checks, then checks
 the full persisted graph before leaving the caller transaction. A valid
-declaration reversal cannot depend on file processing order. Public command
-orchestration and full acceptance remain unfinished.
+declaration reversal cannot depend on file processing order. The public
+`ingest` command orchestrates these boundaries. `scripts/check_real.py` checks
+real-repository ingest on disposable copied inputs and a throwaway store.
 
 Restore a known version's own dependencies, inherit from the plan's selected
 `pin_version`, and capture a new baseline only under an explicit accepted trigger.
@@ -176,13 +181,17 @@ has been applied. It opens no transaction, savepoint or guard. The active caller
 must hold its connection's checked structure and repository pass/removal guards,
 including any downstream repository whose resolved source edges disappear.
 
-The collector rereads the complete disk, local branch and stash capture and
-checks its published inventory, exact full files, parsed chunk locations,
-physical root scopes and disk file identities before deleting. An incomplete,
-changed or unpublished capture refuses the transaction. Every located version
-survives, with its own pins, plans, parts and vectors. Only unlocated file-backed
-versions are deleted; their empty stable chunk identities and unused file rows
-then disappear. Synthetic index-only text remains its generator's responsibility.
+By default, the collector rereads the complete disk, local branch and stash
+capture and checks its published inventory, exact full files, parsed chunk
+locations, physical root scopes and disk file identities before deleting.
+An incomplete, changed or unpublished capture refuses that direct API.
+The public pass instead supplies `published=True` with its captured input;
+collection validates the complete published inventory and captured bytes without
+rereading later disk changes. Every located version survives, with its own
+pins, plans, parts and vectors. Only unlocated file-backed
+versions are deleted; their empty ordinary chunk identities and unused file rows
+then disappear. Requirement and decision identities are retained permanently so
+their withdrawn UUIDs stay reserved, as do any file rows they still reference. Synthetic index-only text remains its generator's responsibility.
 
 Deleting a source version removes current resolved edges while surviving
 dependants retain their existing records and owner-scoped exact evidence. A dead

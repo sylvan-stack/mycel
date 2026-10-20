@@ -77,9 +77,10 @@ stored chunk text or identity.
 
 `mycel info` lists this Build's command names in `commands` and advertises
 `readReply: 1`. Help identifies currently implemented handlers and read options.
-There is no separate capabilities command. Complete installed distribution,
-summary creation and Drift execution keep their own
-task requirements.
+There is no separate capabilities command. Summary creation uses `summaries`,
+and explicit Drift execution uses `classify`. Installed working-Build
+qualification and publication are owned by SYL-148; owner installation is
+owned by SYL-236.
 
 Local classification bookkeeping shares the original freshness allowance.
 It makes no Jev or reviewer calls. After successfully checked sources it updates

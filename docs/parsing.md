@@ -77,8 +77,9 @@ read rather than substituting another location's text.
 The authoritative behavior is in MYC-1/MYC-2/MYC-16. The configured real-store
 proofs now cover location-owned declaration retention and retries, physical
 root alias/move bindings and guarded typed pins; see [stored Source Refs](source-refs.md).
-Complete ingest/dependency application, arbitrary file identity reconciliation
-and public read/ref command replies remain separate integration work.
+Complete public ingest applies identity and dependency reconciliation and
+collects unlocated versions. Public `read` and `refs` expose the stored chunks,
+declarations and resolution faults through their command replies.
 
 ## Requirement and decision rows (MYC-17)
 

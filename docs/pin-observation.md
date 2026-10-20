@@ -71,8 +71,8 @@ specifies.
 Only disk adapters are supported. Branch, stash and generated kinds are refused
 before any store read. The shared capture API currently reads local Git locations
 internally as well as disk. This adapter consumes only its disk location and
-conservatively requires the complete capture to succeed; an independent disk-only
-capture entry point remains pending. Existing safe read-only Git boundaries,
+conservatively requires the complete capture to succeed. It has no separate
+disk-only entry point. Existing safe read-only Git boundaries,
 capture scan/ignore rules and finite child cancellation/deadlines still apply.
 
 The current resolver does not expose ingestion-time physical file/root
@@ -80,8 +80,9 @@ observations. Consequently a same-byte physical rebind that predates the initial
 expected observation cannot be compared to the original ingestion inode here.
 Re-observation detects such changes after the expected observation. Persistent
 physical identity checks belong to the complete capture/ingest metadata consumer.
-Complete ingest authorization and public confirmation/generated/relation flows
-remain unfinished. Configured-store checks verify the scoped observation/pin APIs.
+Complete ingest, public confirmation, relation and generated-publication
+consumers establish their own authorization and transaction guards.
+Configured-store checks verify the scoped observation/pin APIs.
 
 The focused checks use real private temporary files and explicit SQL seams,
 including the actual `EvidenceStore.pin` callback path. They declare MYC-13.15

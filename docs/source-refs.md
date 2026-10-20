@@ -4,8 +4,8 @@ The source declaration and central typed resolver APIs complete SYL-107
 over the current core store and exact file/chunk locations. The public `refs` command
 reports those retained observations. Public `derive` assertions and selection-specific withdrawal now use those exact
 location/evidence guards. Complete public ingest composes those guarded producers;
-other mutation commands retain their owners. These source APIs and reports
-perform no provider call.
+`confirm` renews checked direct pins and records separate verification evidence.
+These source APIs and reports perform no provider call.
 
 ## Public reference report
 
@@ -115,9 +115,9 @@ Rechecks preserve `baseline_owner` and never repin after a source edit,
 enablement change, disappearance or restoration. A ref that formerly resolved
 reports `source_removed` when its enabled current source disappears; a ref that
 never resolved remains unresolved. The original immutable baseline and audit
-declaration remain intact. Complete initial pin/reconciliation transactions,
-cycle checks, away/deleted decisions and public command replies belong to the
-later ingest/dependency producer; the reference pass does not qualify them.
+declaration remain intact. The complete ingest/dependency producer supplies
+initial pin/reconciliation transactions, cycle checks, away/deleted decisions
+and public command replies; the reference pass itself only rechecks retained refs.
 
 `bind_disk_file(connection, settings, repository, captured)` rereads all
 physical aliases under the repository guard before persisting complete file
@@ -200,17 +200,16 @@ adds actual file and persisted identity details through that same transaction;
 `reply_counts(repository, local_counts)` supplies cumulative command counts and
 must be pure. The caller finishes the activity with its final reply counts.
 
-This is a disk handoff, not full ingest qualification. The separate
-[located handoff](capture.md#complete-located-publication) now publishes complete
-disk/branch/stash identity locations. Full branch/stash dependency ingest,
-prospective dependency graph checks, baseline capture/inheritance, current edge
-reconciliation, unlocated file/version/chunk/evidence collection and public
-mutation commands remain pending. Retired unlocated rows are excluded from current
-resolution and do not supply a guessed identity, but still require the later
-checked collection boundary. MYC-16.2 now has named configured-store proofs for aliases, stable primaries,
-physical/Git moves, distinct identities, root reconfiguration and the existing
-disk-store handoff. This completes SYL-107's original API scope; public ingest
-integration is owned by SYL-119.
+This disk handoff is one part of complete public ingest. The separate
+[located handoff](capture.md#complete-located-publication) publishes complete
+disk/branch/stash identity locations. Its dependency producer applies
+prospective graph checks, baseline capture/inheritance and current edge
+reconciliation, followed by guarded unlocated file/version/chunk/evidence
+collection. Retired unlocated rows are excluded from current resolution and
+supply no guessed identity. MYC-16.2 has named configured-store proofs for
+aliases, stable primaries, physical/Git moves, distinct identities, root
+reconfiguration and the disk-store handoff. SYL-119 composes these boundaries
+through the public `ingest` command.
 
 Optional `recheck(..., activity=active_audit, reply_counts=callback)` commits
 actual dependency/fault/edge writes and their ingest activity together on the
@@ -266,7 +265,8 @@ Automatic mechanical detection follows complete publication as documented
 in [reconciliation.md](reconciliation.md). The guarded
 `derive` command now has exact assertion-only ownership, complete fresh source
 and dependant guards and named configured checks in `tests/test_derive.py`.
-Later integration work does not block the accepted declaration/resolver API scope.
+These APIs and their public consumers share the guarded declaration/resolver
+boundary.
 
 ## Entity URIs (MYC-17)
 
@@ -280,6 +280,6 @@ refuses a `cht` URI as `ineligible_entity`, reports a UUID it does not hold as
 `missing_entity`, and returns the typed selection `req` or `dec` with one
 member whose place is the file's address with the human id as the name. A
 `req` or `dec` chunk keeps its comparison as exact text (`code_text`), so pins
-and evidence treat the row like a code chunk. In this Beat a sources comment
-names an entity by that address; the URI form in declarations, `derive`,
-`relate` and `confirm` belongs to the justification commands of SYL-260.
+and evidence treat the row like a code chunk. A sources comment names an entity
+by that address; the URI form in declarations, `derive`, `relate` and `confirm`
+is owned by the open justification Beat SYL-260.

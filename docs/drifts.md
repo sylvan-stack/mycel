@@ -42,8 +42,9 @@ retains its exact evidence independently of searchable chunk rows.
 
 These are internal transaction-bound lifecycle APIs. The [classification
 evidence producer](classification.md) supplies canonical complete requests,
-quiet-period state and fresh guards. Jev and reviewer adapters, public
-classification and bounded history retention have their own execution owners.
+quiet-period state and fresh guards. The Jev and reviewer adapters execute
+bounded work through public `classify`; the writer retains closed history under
+the bound described below.
 The public provenance reports below read this retained work without running it.
 
 `DriftStore.sync_in_transaction(settings, repositories, ...)` joins an existing
@@ -51,8 +52,8 @@ guarded writing transaction after mechanical detection or an authorized
 dependency change. It commits nothing and acquires no operation guard. The
 producer supplies its exact affected versions, pending observations and
 authorized closure event. Collection closes disappearing versions before
-deleting their searchable rows. Format 2 uses the existing Drift table and
-independent permanent `drift` evidence owners.
+deleting their searchable rows. Store format 3 retains the existing Drift table
+and independent permanent `drift` evidence owners.
 
 `DriftStore.reconcile(settings, repository)` is a finite internal offline
 projection over already indexed inputs. `record_classification` accepts one

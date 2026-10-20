@@ -5,8 +5,8 @@ bytes. It creates canonical immutable baseline manifests and stores complete
 source/dependant snapshots in their dependant repository. Configured-store
 acceptance verifies the scoped capture and inheritance APIs. Located ingest,
 public confirmation and the generated publication hook now consume those
-retained exact inputs. Complete summary lifecycle and classifier command
-consumers remain with their owning tasks.
+retained exact inputs. Public summary build/regeneration/removal and `classify`
+compose their own guarded request, response and retained-history consumers.
 
 `ComparisonRecord` records the hash kind, algorithm revision and, for document
 body/title comparisons, the Unicode database version. Body and title use the
@@ -62,8 +62,8 @@ body extraction or extra guards returns `changed_since_ingest` with qualified
 affected addresses before any evidence write. The [disk observation adapter](pin-observation.md)
 supplies real disk/catalog rereads; the ingest/mutation consumer must still establish
 MYC-D12 authorization. Complete located publication supplies retained branch/stash
-capture observations through the producer described below; public confirmation
-consumers remain unfinished.
+capture observations through the producer described below. Public `confirm`
+uses the same guarded direct-pin policy and independent verification evidence.
 
 `EvidenceStore.pin` accepts explicit initial-resolution, dependant-edit or
 owner-confirmation authorization and compares the existing baseline owner.
@@ -106,9 +106,9 @@ metadata; it does not require a live source selection. The disk adapter's
 `observe_inheritance`/`reread_inheritance` supplies that real observation. Owned
 retention never grants a caller permission to expose disabled source evidence.
 They never capture today's source as an inherited baseline. Old branch/stash
-version pins retain their own owners. Full ingest decisions, location
-reconciliation, explicit withdrawal, relation/generated binding and all
-classifier/request evidence consumers remain pending.
+version pins retain their own owners. Complete ingest applies location and
+baseline reconciliation, while `derive`, relations, generated publication and
+classification compose separate guarded evidence consumers.
 
 The private `pin_in_transaction` and `inherit_in_transaction` apply boundaries
 accept the active token from `checked_input_guard`. Acquire and reread that
@@ -167,10 +167,14 @@ real manifest and complete selected bytes; a disk change before pinning or a
 producer/audit exception rolls back the complete publication. The separate
 dependency executor now supplies identity-selected inheritance, current
 declaration/binding updates, authorized repin and withdrawal application.
-`LocatedDependencyProducer` rereads actual source/dependant captures and settings,
-including enabled foreign repositories and physically recreated missing paths;
-the publication checks its whole capture again after the last producer.
-Public commands and complete release/history lifecycle remain unfinished.
+By default, `LocatedDependencyProducer` rereads actual source/dependant captures
+and settings, including enabled foreign repositories and physically recreated
+missing paths; publication checks its whole capture after the last producer.
+The public pass instead supplies its captured input and resolves foreign sources
+from the index under `publish_capture`; see the
+[reconciliation guide](reconciliation.md#complete-public-ingest).
+Public consumers retain exact evidence through confirmation, classification
+and summary publication/regeneration. Installed working-Build qualification is owned by SYL-148.
 
 ## Collection application
 
@@ -203,7 +207,7 @@ guards and open writing transaction. Reports and activity-only deletion never
 collect evidence.
 
 `CollectionStore.remove_repository_in_transaction` provides the guarded release
-handoff for the later repository-removal command. It requires the owner's
+handoff for the public repository-removal command. It requires the owner's
 exclusive removal guard and all affected repository pass guards, refuses live
 invocations or evidence leases, and releases only the removed repository's
 ownership. Other repositories retain their dependant-owned copies and natural
@@ -227,6 +231,6 @@ retains it. Declared/asserted baselines and verification history stay independen
 `retain_response_in_transaction` adopt already prepared request/response bytes
 inside the caller's checked guarded transaction, with no command or commit.
 They supplement the existing short-commit `retain`/`retain_response` methods.
-The later summary publisher owns protected hidden staging before external calls
+The public summary publisher owns protected hidden staging before external calls
 and releases temporary invocation leases only after successful publication.
 See [generated.md](generated.md) for the successful publication contract.

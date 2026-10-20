@@ -3,7 +3,8 @@
 The local planner prepares complete chunk and query inputs without contacting a
 provider or changing a database. `mycel embed` now connects that planner to
 retained exact text, guarded persistence and the Voyage client. Public `search`
-uses bounded query embedding; explicit live provider qualification remains pending.
+uses bounded query embedding. Live compatibility is a separate, explicitly
+selected check described below.
 
 Use `mycel embed --repo core` for one configured repository, repeated `--repo`
 flags for several, an organization name for its enabled configured members, or
@@ -133,7 +134,9 @@ Its deterministic integration checks use service fixtures without provider calls
 The persistence and provider APIs satisfy the original SYL-116 and SYL-117 scopes.
 Configured-store acceptance covers atomic guarded publication, deletion races,
 rollback, durable receipt recovery and public scoped command progress. Public
-ingest integration and explicit live qualification remain with their later tasks.
+`ingest --embed` uses the same scoped embedding command after publication.
+Automatic acceptance makes no live compatibility claim for a Build; that claim
+requires its own explicit provider operation.
 
 ## Explicit live compatibility check
 

@@ -3,9 +3,9 @@
 `mycel init` is the only command that creates or changes the product schema.
 `mycel info` reports its state, format, dimensions, generation and password-free
 location, including unavailable, empty, foreign, damaged or newer stores. Plain
-grep remains available independently. Other store-backed feature handlers are
-still being implemented; the shared internal guard validates their store without
-DDL and holds a nonblocking structure lock for their operation.
+grep is available independently. Store-backed commands use the shared internal
+guard to validate the store without DDL and hold a nonblocking structure lock
+for their operation.
 
 `status` reads repository location, stale and complete current-model coverage
 counts in one read-only snapshot. `status --all` includes every indexed name,
@@ -34,7 +34,7 @@ contain sanitized reasons, and the successful connection closes on every exit.
 An empty private database needs server extensions `pg_search` and `vector`.
 Initialization creates the Mycel tables, a BM25 index over the guarded chunk-version
 search projection and a cosine HNSW index over embedding parts. It writes mandatory
-format 2, dimensions and a fresh index-generation UUID, with no repository,
+format 3, dimensions and a fresh index-generation UUID, with no repository,
 settings or feature-default rows. Numbered packages also record the exact
 invocation and a completed global `init` audit in that schema transaction;
 unnumbered development/fixture initialization writes the schema only. The generation stays fixed through normal
@@ -55,8 +55,9 @@ CHECK binds that projection to the authoritative bytes. Resolver, evidence and
 embedding readers use the bytes, including any NUL; the search field never
 supplies displayed text, a baseline or model input. Saved embedding inputs and
 serialized durable receipt payloads also use BYTEA, preserving exact inputs
-through publication and recovery. Exact-byte storage is retained unchanged by format 2; the current work
-initializes and migrates only generated development databases.
+through publication and recovery. Formats 2 and 3 preserve exact-byte storage.
+Automatic initialization and migration checks use only disposable development
+databases.
 
 Compatibility checks read catalogues before any product table and inspect exact
 relations, columns, keys, validated CHECK constraints and search-index definitions.
@@ -112,7 +113,8 @@ waiting without a limit. Different repositories and a pass
 plus an embed can coexist. Classification/summary callers retain their operation
 and liveness guards during model work, taking the short pass lock only for capture
 and publication. The [activity substrate](activity.md) binds injected feature writes and audit details
-to these transactions. Real command producers remain their owning tasks.
+to these transactions. Public command producers use this same transaction
+boundary for actual feature writes and their audit details.
 
 Embedding publication uses durable returned-result receipts.
 Each validated batch is saved before its short publication transaction. A busy
@@ -124,9 +126,9 @@ foreign key to deletable chunk versions or parts.
 
 Genuine product-init and concurrent-store checks execute on the configured
 disposable backend and provide named passing proofs for the scoped store and
-lock requirements. Earlier SQL seams and exploratory schema probes remain
-development evidence. Complete installed working-Build qualification remains
-unfinished; see [checks](checks.md).
+lock requirements. Earlier SQL seams and exploratory schema probes supply
+development evidence only. SYL-148 owns installed working-Build qualification
+and atomic publication; see [checks](checks.md).
 
 The configured local development server is the dedicated `mycel-postgres`
 container at loopback port 55432, using ParadeDB 0.24.1/PostgreSQL 17 and
@@ -138,13 +140,13 @@ checks use separately created/removed databases and never open `mycel`.
 The settings backup is kept beside the settings file. The server's durable
 volume is `mycel-pgdata`; Mycel itself has no resident process.
 
-Generated publication uses the existing format-2 chunk, index-location,
-dependency, evidence and generated-state tables. The SQL catalogue and
-verification ownership remain unchanged. Generated dependency rows use
+Generated publication uses the chunk, index-location, dependency, evidence
+and generated-state tables retained by format 3. Its SQL catalogue and
+verification ownership are unchanged. Generated dependency rows use
 `mycel-generated-pin-v1` state and permanent `generated` evidence owners,
 separate from declared/asserted rows and invocation-owned private leases.
 The [generated provenance guide](generated.md) specifies transaction composition,
-final guards and remaining summary lifecycle obligations.
+final guards and public summary regeneration/removal.
 
 ## Format 3: requirement and decision entities (MYC-17)
 

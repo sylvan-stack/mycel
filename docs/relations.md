@@ -84,7 +84,8 @@ to the same missing source remains a visible fault. Public confirmation composes
 The [source-reference guide](source-refs.md), [evidence guide](evidence.md) and
 [reconciliation guide](reconciliation.md) describe the shared resolver,
 immutable evidence and capture guards. Complete public ingest uses these APIs.
-Stale listing and search retain their implementation tasks.
+Public `stale` lists these reasons, and search reports them with each result.
+Neither command turns a relation into a dependency or a search bridge.
 
 ## Recorded verification
 
@@ -119,7 +120,8 @@ contains only applicable records; `--history` includes all retained records,
 sorted by canonical root/path/name, then newest time and record ID. It performs
 no ingest, freshness pass, evidence write or provider call and succeeds empty.
 
-Verification rows belong to logical chunks in store format 2. Their exact
+Since store format 2, verification rows belong to logical chunks; format 3
+keeps this ownership unchanged. Their exact
 version descriptor and evidence are immutable record data: collecting an old
 unlocated version leaves history intact, while deleting its owning logical chunk
 or repository releases that record's evidence. Independent record ownership

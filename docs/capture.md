@@ -103,8 +103,11 @@ partial proofs do not qualify complete ingest requirements.
 
 ## Complete located publication
 
-`LocatedCaptureStore.apply(settings, manifest, ...)` rechecks the actual complete
-capture and stored catalog under the repository pass guard. It publishes disk
+`LocatedCaptureStore.apply(settings, manifest, ...)` by default rechecks the
+actual complete capture and stored catalog under the repository pass guard.
+Public ingest selects `publish_capture=True`: it publishes the captured input
+and reports later disk/Git changes under `changedDuringPass`, as described in
+the [reconciliation guide](reconciliation.md#complete-public-ingest). It publishes disk
 first, then the capture's sorted local branches and commit-named stashes. Every
 file and its chunks retain exact bytes, one stable file/chunk identity across
 checked locations and one version per identical stored text. Located names,
