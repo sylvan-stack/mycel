@@ -372,22 +372,23 @@ class IngestPublishesItsCaptureStoreTests(IngestStoreTests):
         self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
         guide = self.base.artifact / 'guide.md'
         guide.write_bytes(b'# Guide\nFirst edit.\n')
-        from mycel import _located_reconciliation
+        from mycel._located_reconciliation import LocatedCaptureStore
+        original = LocatedCaptureStore.capture
         calls = 0
 
-        def racing(settings, repository, **kwargs):
-            # The first call is the pass's capture; the second is its one
-            # further read before it saves. Another agent edits meanwhile.
+        def racing(store, settings, repository):
+            # Another agent edits right after the pass has read its capture, so
+            # every later step of the pass, collection included, sees the change.
             nonlocal calls
             calls += 1
-            if calls == 2:
-                guide.write_bytes(b'# Guide\nSecond edit, during the pass.\n')
-                self.base.git('branch', 'added-during-pass')
-            return capture_repository(settings, repository, **kwargs)
+            manifest = original(store, settings, repository)
+            guide.write_bytes(b'# Guide\nSecond edit, during the pass.\n')
+            self.base.git('branch', 'added-during-pass')
+            return manifest
 
-        with patch.object(_located_reconciliation, 'capture_repository', side_effect=racing):
+        with patch.object(LocatedCaptureStore, 'capture', racing):
             status, reply = self.invoke('--repo', 'fixture')
-        self.assertEqual(calls, 2)
+        self.assertEqual(calls, 1)
         self.assertEqual(status, 0, reply)
         fixture = reply['repositories']['fixture']
         self.assertEqual(fixture['changedDuringPass'], ['branch refs/heads/added-during-pass', 'fixture:@artifact/guide.md'])

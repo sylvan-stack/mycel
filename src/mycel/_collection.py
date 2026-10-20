@@ -173,7 +173,7 @@ class CollectionStore:
         return {'repositories': removed, 'owners': released, 'snapshots': snapshots,
                 'manifests': manifests, 'affectedRepositories': affected}
 
-    def _published(self, settings, manifest):
+    def _published(self, settings, manifest, published=False):
         """Check complete inventory, exact files and every parsed placed chunk."""
         expected = [{'location': item.id.record(), 'commit': item.commit,
                      'policyHash': manifest.policy_hash} for item in manifest.locations]
@@ -184,8 +184,11 @@ class CollectionStore:
         # Reuse only this transaction's published, independently validated
         # parse records; the caller's asserted manifest never supplies trust.
         catalog = _catalog(self.connection, manifest.repository)
-        fresh = capture_repository(settings, manifest.repository,
-            previous=_parse_history(manifest.repository, catalog[0], state[0]))
+        if published:
+            fresh = manifest
+        else:
+            fresh = capture_repository(settings, manifest.repository,
+                previous=_parse_history(manifest.repository, catalog[0], state[0]))
         if not fresh.deletion_safe or not all(item.complete for item in fresh.locations) or not _same_capture(manifest, fresh):
             _invalid('The complete capture changed before unlocated collection.')
         repository = RepositoryLocations(settings).named(manifest.repository)[0]
@@ -213,7 +216,7 @@ class CollectionStore:
                 if location.id.kind == 'disk':
                     addresses = tuple(sorted((SourceAddress(manifest.repository, item.root, item.path)
                                               for item in captured.aliases), key=lambda item: item.address))
-                    observed = _observe(repository, addresses, captured.source)
+                    observed = _observe(repository, addresses, None if published else captured.source)
                     if any(list(item['fileIdentity'][:2]) != row[6].get('physicalIdentity') for item in observed):
                         _invalid('The published physical file identity changed before collection.')
                 chunks = self.connection.execute("""SELECT v.snapshot_hash,v.source_bytes,v.metadata,l.metadata
@@ -276,15 +279,20 @@ class CollectionStore:
             keep.add(version[0])
         return keep
 
-    def collect_in_transaction(self, settings: SettingsSnapshot, manifest: CaptureManifest) -> CollectionResult:
+    def collect_in_transaction(self, settings: SettingsSnapshot, manifest: CaptureManifest, *,
+                               published: bool = False) -> CollectionResult:
         """Join the caller's atomic publication; acquire no guard or transaction.
 
         Every location must have been read and published. Downstream owners whose
         resolved source edges disappear must also have their repository guards.
         This method does not implement detection, Drift closure/history pruning,
         repository removal, synthetic generated deletion or a public command.
+        With `published`, the manifest is the capture a complete pass has just
+        published (MYC-1.37): the disk is not read again, since a change after
+        the capture is the next pass's and is named by the pass itself.
         """
-        if not isinstance(settings, SettingsSnapshot) or not isinstance(manifest, CaptureManifest):
+        if (not isinstance(settings, SettingsSnapshot) or not isinstance(manifest, CaptureManifest)
+                or type(published) is not bool):
             _invalid('Collection requires validated settings and a complete capture.')
         settings.require_valid(require_store=False)
         configured = settings.values['repos'].get(manifest.repository)
@@ -292,7 +300,7 @@ class CollectionStore:
                 or not all(item.complete for item in manifest.locations)):
             _invalid('An incomplete or ineligible pass cannot collect unlocated versions.')
         require_transaction_guards(self.connection, (manifest.repository,))
-        self._published(settings, manifest)
+        self._published(settings, manifest, published)
         candidates = [row[0] for row in self.connection.execute("""SELECT v.id FROM public.mycel_chunk_versions v
             JOIN public.mycel_chunks c ON c.id=v.chunk_id WHERE c.repository=%s AND c.file_id IS NOT NULL
             AND NOT EXISTS (SELECT 1 FROM public.mycel_locations l WHERE l.chunk_version=v.id)

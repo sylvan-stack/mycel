@@ -285,7 +285,9 @@ class LocatedCaptureStore:
             observed = {}
             for captured in manifest.disk.files:
                 addresses = tuple(SourceAddress(repository.name, alias.root, alias.path) for alias in captured.aliases)
-                physical = _observe(repository, addresses, captured.source)
+                # A pass that publishes its capture records the physical identity
+                # of each file and does not require its bytes to be the capture's.
+                physical = _observe(repository, addresses, None if publish_capture else captured.source)
                 identities = {tuple(item['fileIdentity'][:2]) for item in physical}
                 if len(identities) != 1:
                     _invalid('Captured disk aliases reach different physical files.')

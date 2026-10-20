@@ -242,7 +242,8 @@ class LocatedDependencyProducer:
                 JOIN public.mycel_chunks c ON c.id=v.chunk_id WHERE c.repository=%s AND c.file_id IS NOT NULL
                 AND NOT EXISTS (SELECT 1 FROM public.mycel_locations l WHERE l.chunk_version=v.id)
                 GROUP BY d.repository""", (self.collection_manifest.repository,)).fetchall()
-            collected = CollectionStore(connection).collect_in_transaction(self.settings, self.collection_manifest)
+            collected = CollectionStore(connection).collect_in_transaction(self.settings, self.collection_manifest,
+                published=self.snapshot is not None)
             totals['collected'] = {name: getattr(collected, name) for name in
                 ('versions', 'chunks', 'file_versions', 'files', 'owners', 'snapshots', 'manifests')}
             primary_changed = primary_changed or any(totals['collected'].values())
