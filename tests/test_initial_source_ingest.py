@@ -78,31 +78,33 @@ class InitialSourceIngestStoreTests(ClassificationStoreFixture):
             self.assertEqual({row[5]['resolution']['state'] for row in rows}, {'resolved'})
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_edges').fetchone()[0], 3)
 
-    @proves('MYC-2.8', 'MYC-16.13', kind='store')
-    def test_changed_initial_unindexed_source_capture_still_rolls_back_dependant_publication(self):
+    @proves('MYC-2.8', 'MYC-1.37', kind='store')
+    def test_changed_initial_unindexed_source_does_not_stop_the_dependant_pass_and_stays_unresolved(self):
+        # Since 20 October 2026 a pass publishes the capture it read and takes
+        # another repository's sources from the index (MYC-1.37): a change to
+        # the unindexed source's disk neither stops nor broadens the pass.
         self.invoke('init')
-        observed = []
         source = self.fixture.fixture.source
-
-        def capture(settings, repository, **kwargs):
-            name = repository if isinstance(repository, str) else repository.name
-            if name == 'fixture':
-                observed.append(name)
-                if len(observed) == 2:
-                    source.write_bytes(source.read_bytes() + b'Changed during the guarded pass.\n')
-            return capture_repository(settings, repository, **kwargs)
-
-        with patch.object(inputs, 'capture_repository', side_effect=capture):
-            self.invoke('ingest', '--repo', 'downstream', successful=False)
-        self.assertGreaterEqual(len(observed), 2)
+        source.write_bytes(source.read_bytes() + b'Changed before the dependant pass.\n')
+        reply = self.invoke('ingest', '--repo', 'downstream')
+        self.assertEqual(set(reply['repositories']), {'downstream'})
+        self.assertNotIn('changedDuringPass', reply['repositories']['downstream'])
         with self.base.connect() as connection:
             self.assertEqual(connection.execute(
-                "SELECT count(*) FROM public.mycel_files WHERE repository='downstream'").fetchone()[0], 0)
-            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_dependencies').fetchone()[0], 0)
-            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_evidence_owners').fetchone()[0], 0)
+                "SELECT count(*) FROM public.mycel_files WHERE repository='downstream'").fetchone()[0], 1)
+            self.assertEqual(connection.execute(
+                "SELECT count(*) FROM public.mycel_files WHERE repository='fixture'").fetchone()[0], 0)
+            rows = self.dependencies(connection)
+            self.assertEqual(len(rows), 3)
+            self.assertTrue(all(row[6] is None and row[7] is None for row in rows))
+            self.assertEqual({row[5]['sourceState'] for row in rows}, {'unresolved'})
+            self.assertEqual({row[5]['resolution']['fault'] for row in rows}, {'missing_file'})
+        self.invoke('ingest', '--repo', 'fixture')
+        with self.base.connect() as connection:
+            self.assertEqual({row[5]['resolution']['state'] for row in self.dependencies(connection)}, {'resolved'})
 
-    @proves('MYC-16.13', kind='store')
-    def test_resolved_uningested_source_change_still_preserves_existing_pins_without_publication(self):
+    @proves('MYC-1.37', kind='store')
+    def test_resolved_uningested_source_change_preserves_existing_pins_and_the_pass_completes(self):
         self.invoke('init')
         self.invoke('ingest', '--repo', 'fixture')
         self.invoke('ingest', '--repo', 'downstream')
@@ -111,10 +113,13 @@ class InitialSourceIngestStoreTests(ClassificationStoreFixture):
             pins = [(row[0], row[6], row[7]) for row in before]
         source = self.fixture.fixture.source
         source.write_bytes(source.read_bytes() + b'Changed before the source ingest.\n')
-        self.invoke('ingest', '--repo', 'downstream', successful=False)
+        # The source's disk is its own pass's business: the dependant's pass
+        # completes against the indexed source and changes no pin.
+        reply = self.invoke('ingest', '--repo', 'downstream')
+        self.assertFalse(reply['repositories']['downstream']['files']['changed'])
+        self.assertNotIn('changedDuringPass', reply['repositories']['downstream'])
         with self.base.connect() as connection:
             self.assertEqual([(row[0], row[6], row[7]) for row in self.dependencies(connection)], pins)
-
 
 if __name__ == '__main__':
     unittest.main()

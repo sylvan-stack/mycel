@@ -195,6 +195,17 @@ class LockProtocolTests(unittest.TestCase):
                 raise KeyboardInterrupt()
         self.assertEqual(sum(connection.held.values()), 0)
 
+    @proves("MYC-0.7")
+    def test_store_failures_name_the_postgres_error_class_and_state_without_native_text(self):
+        error = psycopg.errors.QueryCanceled("canceling statement: public private-looking fixture URI/password")
+        message = locks._database_failure(error).message
+        self.assertIn("QueryCanceled", message)
+        self.assertIn("SQLSTATE 57014", message)
+        self.assertNotIn("URI/password", message)
+        self.assertEqual(locks._database_failure().message,
+                         "The index store could not complete the lock or transaction operation.")
+        self.assertEqual(locks.postgres_detail(RuntimeError("not a database fault")), "")
+
     @proves("MYC-13.3")
     def test_unlock_failure_closes_session_without_masking_primary_failure_or_native_text(self):
         connection = ScriptedConnection()

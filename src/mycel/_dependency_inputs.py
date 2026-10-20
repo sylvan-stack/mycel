@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from ._capture import capture_repository
+from ._capture import CaptureManifest, capture_repository
 from ._dependency_application import RetainedDependencyResolver
 from ._disk_reconciliation import _same_capture
 from ._errors import MycelError
@@ -20,22 +20,42 @@ from ._source_refs import SourceAddressError, parse_source_address
 
 
 class DependencyCaptureInputs:
+    """Reread the inputs of a guarded mutation.
+
+    Without a snapshot every observation is fresh and must match the first one
+    exactly, as `derive`, `relate` and `confirm` require (MYC-16). With a
+    snapshot, the capture a complete pass publishes, the pass's own repository
+    is observed through that capture, another repository is observed once and
+    never compared with its index (its own pass does that), and later disk
+    changes are the next pass's business (MYC-1.37, MYC-D64).
+    """
     def __init__(self, connection, settings: SettingsSnapshot, *, settings_home: Path | None = None,
-                 guarded_repositories: tuple[str, ...] | None = None):
+                 guarded_repositories: tuple[str, ...] | None = None,
+                 snapshot: CaptureManifest | None = None, catalogs: dict | None = None):
+        if snapshot is not None and not isinstance(snapshot, CaptureManifest):
+            raise MycelError('invalid_input', 'A capture snapshot must be a complete capture manifest.')
         self.connection = connection
         self.settings = settings
         self.settings_home = settings._home if settings_home is None else settings_home
-        self.captures = {}
+        self.captures = {} if snapshot is None else {snapshot.repository: snapshot}
         self.guarded_repositories = guarded_repositories
+        self.snapshot = snapshot
+        self.catalogs = catalogs  # one catalog per location for a complete pass's run
 
     def observe(self, repository):
+        if self.snapshot is not None and repository in self.captures:
+            return self.captures[repository]
         observed = capture_repository(self.settings, repository)
         if not observed.deletion_safe:
             raise EvidenceError('changed_since_ingest')
         previous = self.captures.setdefault(repository, observed)
-        if not _same_capture(previous, observed):
+        if self.snapshot is None and not _same_capture(previous, observed):
             raise EvidenceError('changed_since_ingest')
         return observed
+
+    def _physical(self, repository) -> bool:
+        """Whether this repository's disk is compared with the catalog."""
+        return self.snapshot is None or repository == self.snapshot.repository
 
     def rereader(self, identifier, owner, commit):
         connection = self.connection
@@ -49,7 +69,8 @@ class DependencyCaptureInputs:
             if settings.values != self.settings.values:
                 raise EvidenceError('changed_since_ingest')
             catalog = SourceResolver.from_transaction(connection, settings,
-                kind=identifier.kind, location=key, guarded_repositories=self.guarded_repositories)
+                kind=identifier.kind, location=key, guarded_repositories=self.guarded_repositories,
+                catalogs=self.catalogs)
             catalog = RetainedDependencyResolver(catalog, expected.catalog.anchors,
                                                  expected.catalog.syntax_faults,
                                                  endpoint_refs=expected.catalog.endpoint_refs)
@@ -64,7 +85,8 @@ class DependencyCaptureInputs:
                 address = parse_source_address(expected.resolution.declaration)
             except SourceAddressError:
                 address = None
-            if (address is not None and settings.values['repos'].get(address.repository, {}).get('enabled')):
+            if (address is not None and settings.values['repos'].get(address.repository, {}).get('enabled')
+                    and self._physical(address.repository)):
                 from ._locks import require_transaction_guards
                 require_transaction_guards(connection, (address.repository,))
                 manifest = self.observe(address.repository)
@@ -99,6 +121,8 @@ class DependencyCaptureInputs:
                     if not initially_unindexed:
                         self._check_absence_inventory(connection, address, retained, natural, manifest)
             for file in selected:
+                if not self._physical(file.repository):
+                    continue
                 manifest = self.observe(file.repository)
                 places = [place for place in manifest.locations if place.id == identifier]
                 if len(places) != 1:
@@ -124,6 +148,8 @@ class DependencyCaptureInputs:
             self.settings.require_current()
         except MycelError:
             raise EvidenceError('changed_since_ingest') from None
+        if self.snapshot is not None:
+            return  # The pass publishes its capture; later changes are the next pass's.
         for repository, expected in self.captures.items():
             if not _same_capture(expected, capture_repository(self.settings, repository)):
                 raise EvidenceError('changed_since_ingest')

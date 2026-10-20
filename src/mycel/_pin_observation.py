@@ -128,9 +128,14 @@ def _verify_chunks(indexed: ResolvedFile, captured: CapturedFile, *, require_chu
         _changed((address,))
 
 
-def _read_alias(repository: Repository, address: SourceAddress, expected: bytes,
+def _read_alias(repository: Repository, address: SourceAddress, expected: bytes | None,
                 cancelled: Callable[[], bool] | None) -> dict:
-    """Reread every byte through no-follow parent descriptors, then guard it."""
+    """Reread every byte through no-follow parent descriptors, then guard it.
+
+    With ``expected`` None the bytes are not compared: a complete pass that
+    publishes its capture (MYC-1.37) records the file's physical identity and
+    leaves a change since the capture to the next pass.
+    """
     folder = repository.code if address.root == "code" else repository.documents
     if folder is None:
         _changed((address.address,))
@@ -159,7 +164,8 @@ def _read_alias(repository: Repository, address: SourceAddress, expected: bytes,
             pieces.append(piece)
         after = os.fstat(descriptor)
         source = b"".join(pieces)
-        if _signature(before) != _signature(after) or source != expected or len(source) != after.st_size:
+        if (_signature(before) != _signature(after) or (expected is not None and source != expected)
+                or len(source) != after.st_size):
             _changed((address.address,))
         # Also reject a configured root alias that retargeted during this read.
         if folder.path.resolve(strict=True) != root:

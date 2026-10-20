@@ -28,9 +28,13 @@ class LocatedDependencyProducer:
                  activity: MutationActivity | None = None,
                  guarded_repositories: tuple[str, ...] | None = None,
                  pending_repositories: tuple[str, ...] = (),
-                 defer_changed_dependants: bool = False):
+                 defer_changed_dependants: bool = False,
+                 snapshot: CaptureManifest | None = None):
         if type(defer_changed_dependants) is not bool:
             raise MycelError('invalid_input', 'Foreign dependant deferral requires an explicit boolean.')
+        if snapshot is not None and not isinstance(snapshot, CaptureManifest):
+            raise MycelError('invalid_input', 'A publication snapshot must be the complete capture manifest.')
+        self.snapshot = snapshot
         self.settings = settings
         self.captured_at = captured_at
         self.settings_home = settings_home
@@ -45,8 +49,13 @@ class LocatedDependencyProducer:
         from ._dependency_application import DependencyApplicationStore
         from ._dependency_inputs import DependencyCaptureInputs
         from ._relations import RelationApplicationStore, _relation_raw
+        # A pass that publishes its capture reads each location's catalog once
+        # for the whole run; files, chunks and locations do not change while
+        # dependencies, pins and relations are written (SYL-232).
+        catalogs = {} if self.snapshot is not None else None
         inputs = DependencyCaptureInputs(connection, self.settings, settings_home=self.settings_home,
-                                         guarded_repositories=self.guarded_repositories)
+                                         guarded_repositories=self.guarded_repositories, snapshot=self.snapshot,
+                                         catalogs=catalogs)
         totals = {}
 
         store = DependencyApplicationStore(connection)
@@ -173,7 +182,7 @@ class LocatedDependencyProducer:
                         pin_version=pin_version, reference_location=located.binding.location,
                         captured_at=self.captured_at, reread=reread,
                         inheritance_authorization=authorization, batch=batch,
-                        guarded_repositories=self.guarded_repositories)
+                        guarded_repositories=self.guarded_repositories, catalogs=catalogs)
                     primary_changed = primary_changed or applied.mutated
                     for name, value in applied.counts.items():
                         totals[name] = totals.get(name, 0) + value
@@ -182,7 +191,7 @@ class LocatedDependencyProducer:
                             pin_version=pin_version if mode != 'edit' else prior.get(identifier),
                             reference_location=located.binding.location,
                             inheritance_authorization=authorization,
-                            guarded_repositories=self.guarded_repositories),):
+                            guarded_repositories=self.guarded_repositories, catalogs=catalogs),):
                         primary_changed = primary_changed or observed.mutated
                         for name, value in observed.counts.items():
                             totals[name] = totals.get(name, 0) + value
@@ -193,7 +202,7 @@ class LocatedDependencyProducer:
                     applied = store.apply_in_transaction(self.settings, file_id, version,
                         captured_at=self.captured_at, reread=inputs.rereader(identifier, owner, commit),
                         mode='observe', batch=batch, guarded_repositories=self.guarded_repositories,
-                        observation_dependencies=tuple(sorted(item['dependencies'])))
+                        observation_dependencies=tuple(sorted(item['dependencies'])), catalogs=catalogs)
                     for name, value in applied.counts.items():
                         counts[name] = counts.get(name, 0) + value
                     if applied.mutated:
@@ -202,7 +211,7 @@ class LocatedDependencyProducer:
                         captured_at=self.captured_at, mode='observe',
                         reread=inputs.rereader(identifier, owner, commit),
                         guarded_repositories=self.guarded_repositories,
-                        observation_relations=tuple(sorted(item['relations']))),)):
+                        observation_relations=tuple(sorted(item['relations'])), catalogs=catalogs),)):
                     for name, value in observed.counts.items():
                         counts[name] = counts.get(name, 0) + value
                     if observed.mutated:
@@ -233,7 +242,8 @@ class LocatedDependencyProducer:
                 JOIN public.mycel_chunks c ON c.id=v.chunk_id WHERE c.repository=%s AND c.file_id IS NOT NULL
                 AND NOT EXISTS (SELECT 1 FROM public.mycel_locations l WHERE l.chunk_version=v.id)
                 GROUP BY d.repository""", (self.collection_manifest.repository,)).fetchall()
-            collected = CollectionStore(connection).collect_in_transaction(self.settings, self.collection_manifest)
+            collected = CollectionStore(connection).collect_in_transaction(self.settings, self.collection_manifest,
+                published=self.snapshot is not None)
             totals['collected'] = {name: getattr(collected, name) for name in
                 ('versions', 'chunks', 'file_versions', 'files', 'owners', 'snapshots', 'manifests')}
             primary_changed = primary_changed or any(totals['collected'].values())

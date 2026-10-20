@@ -104,7 +104,8 @@ class RelationApplicationStore:
             inheritance_authorization='normalized_equivalent_edit', assertions=(),
             assertions_only=False, selected_assertions=None, remove=False,
             observation_relations: tuple[str, ...] | None = None,
-            guarded_repositories: tuple[str, ...] | None = None):
+            guarded_repositories: tuple[str, ...] | None = None,
+            catalogs: dict | None = None):
         settings.require_valid(require_store=False)
         guards = tuple(settings.values['repos']) if guarded_repositories is None else guarded_repositories
         require_transaction_guards(self.connection, guards)
@@ -132,7 +133,7 @@ class RelationApplicationStore:
         owner, kind, location, metadata, raw, file_id = located
         require_transaction_guards(self.connection, (owner,))
         catalog = SourceResolver.from_transaction(self.connection, settings, kind=kind, location=location,
-                                                  guarded_repositories=guards)
+                                                  guarded_repositories=guards, catalogs=catalogs)
         files = [file for file in catalog.files if file.identifier == str(file_id)]
         if len(files) != 1 or files[0].source != exact_bytes(raw):
             raise EvidenceError('changed_since_ingest')
