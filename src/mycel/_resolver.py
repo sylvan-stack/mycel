@@ -393,8 +393,10 @@ class SourceResolver:
                            _chunk(identifier, version, digest, text, metadata, comparison))
                           for repository, identifier, version, digest, text, comparison, metadata in indices)
             return cls(settings, tuple(files), index=index)
-        except psycopg.Error:
-            raise MycelError("store_unavailable", "The indexed source catalog could not be read.") from None
+        except psycopg.Error as error:
+            from ._locks import postgres_detail
+            raise MycelError("store_unavailable", "The indexed source catalog could not be read"
+                             + postgres_detail(error) + ".") from None
         except (KeyError, TypeError, ValueError, SourceAddressError):
             raise _bad_catalog() from None
 

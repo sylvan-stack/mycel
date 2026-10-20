@@ -41,8 +41,22 @@ _OPERATIONS = {"pass": LockNamespace.PASS, "embed": LockNamespace.EMBED,
                "classify": LockNamespace.CLASSIFY, "summaries": LockNamespace.SUMMARIES}
 
 
-def _database_failure() -> MycelError:
-    return MycelError("store_unavailable", "The index store could not complete the lock or transaction operation.")
+def postgres_detail(error) -> str:
+    """Name the PostgreSQL error class and SQLSTATE; never its native text.
+
+    Native messages can carry a URI or password; the class and state carry the
+    diagnosis, such as QueryCanceled 57014 for a statement timeout.
+    """
+    if not isinstance(error, psycopg.Error):
+        return ""
+    state = getattr(error, "sqlstate", None)
+    name = type(error).__name__
+    return f" (psycopg {name}" + (f", SQLSTATE {state})" if isinstance(state, str) and state else ")")
+
+
+def _database_failure(error=None) -> MycelError:
+    return MycelError("store_unavailable", "The index store could not complete the lock or transaction operation"
+                      + postgres_detail(error) + ".")
 
 
 def _identity(value: str) -> str:
@@ -84,8 +98,8 @@ def _transaction(connection, *, readonly: bool) -> Iterator[None]:
     except (psycopg.errors.LockNotAvailable, psycopg.errors.DeadlockDetected,
             psycopg.errors.SerializationFailure):
         raise MycelError("busy", "Another invocation prevents this transaction; no change was committed.") from None
-    except psycopg.Error:
-        raise _database_failure() from None
+    except psycopg.Error as error:
+        raise _database_failure(error) from None
 
 
 @contextmanager
@@ -133,8 +147,8 @@ def _session_guard(connection, key: int | tuple[int, int], *, shared: bool,
     placeholders = "%s, %s" if isinstance(key, tuple) else "%s::bigint"
     try:
         row = connection.execute(f"SELECT pg_catalog.{acquire}({placeholders})", parameters).fetchone()
-    except psycopg.Error:
-        raise _database_failure() from None
+    except psycopg.Error as error:
+        raise _database_failure(error) from None
     if row is None or row[0] is not True:
         raise MycelError("busy", message)
     failed = False
