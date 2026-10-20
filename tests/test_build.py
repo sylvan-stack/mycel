@@ -897,9 +897,41 @@ class BuildRegistryTests(unittest.TestCase):
                                                "reason": "Build record is missing or damaged."})
                     self.assertEqual(rows[1]["status"], "building")
 
+    def _assert_recovery_preserves_outside_inodes_linked_after_validation(self):
+        from mycel_build._registry import _materialize
+
+        for member in ("build.json", "checks.json", "build.log", "run.lock"):
+            with self.subTest(hardlink="after-validation", member=member), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory)
+                root = base / "registry"
+                allocate(root, target="macos-arm64", version="2.0.0", source=SOURCE)
+                folder = root / "1"
+                (folder / ("build.log" if member == "checks.json" else "checks.json")).unlink()
+                outside = base / "outside"
+                outside.write_bytes(b"Outside bytes must never be overwritten.\n")
+                os.utime(outside, ns=(1_234_567_890_000_000_000, 1_234_567_890_000_000_000))
+                outside_before = (outside.read_bytes(), outside.stat().st_mtime_ns)
+
+                def replace_member(*args, **kwargs):
+                    if kwargs.get("recovered"):
+                        (folder / member).unlink(missing_ok=True)
+                        os.link(outside, folder / member)
+                    return _materialize(*args, **kwargs)
+
+                with patch("mycel_build._registry._materialize", side_effect=replace_member):
+                    self.assertEqual(allocate(root, target="macos-arm64", version="2.0.0", source=SOURCE)["build"], "2")
+                self.assertEqual((outside.read_bytes(), outside.stat().st_mtime_ns), outside_before)
+                if member == "run.lock":
+                    self.assertEqual(list_records(root)[0].get("available"), False)
+                else:
+                    self.assertEqual(read_record(root, "1")["status"], "failed")
+                    self.assertEqual((folder / member).stat().st_nlink, 1)
+                self.assertEqual(list_records(root)[1]["status"], "building")
+
     @proves('MYC-15.4')
     def test_unsafe_partial_metadata_and_folder_stay_local_without_following_links(self):
         self._assert_hard_linked_retained_metadata_stays_damaged()
+        self._assert_recovery_preserves_outside_inodes_linked_after_validation()
         for unsafe in ("build.json", "checks.json", "build.log", "run.lock", "folder-link", "folder-file"):
             with self.subTest(unsafe=unsafe), tempfile.TemporaryDirectory() as directory:
                 base = Path(directory)

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import tempfile
 
 from ._core import BuildError, TARGETS, atomic_json, json_bytes, read_json, utc_now
 
@@ -134,6 +135,25 @@ def _private_retained_file(path: Path, *, missing_ok: bool = False) -> bool:
     return stat.S_ISREG(info.st_mode) and info.st_nlink == 1
 
 
+def _write_allocation_log(path: Path, text: str) -> None:
+    # Never open the retained log for writing: a link can appear after the
+    # recovery preflight. Only the newly created private inode receives bytes.
+    fd, temporary = tempfile.mkstemp(prefix=".allocation-log-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 def _materialize(root: Path, number: str, initial: dict, *, recovered: bool = False) -> None:
     folder = _folder(root, number)
     folder.mkdir(exist_ok=True)
@@ -144,9 +164,12 @@ def _materialize(root: Path, number: str, initial: dict, *, recovered: bool = Fa
     atomic_json(folder / "build.json", record)
     atomic_json(folder / "checks.json", {"schemaVersion": 1, "results": [],
                                         "pending": ["all_unit", "all_store", "packaged_release", "publication"]})
-    (folder / "build.log").write_text("Interrupted allocation recovered.\n" if recovered else "Build number allocated.\n")
-    fd = os.open(folder / "run.lock", os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW, 0o444)
-    os.close(fd)
+    _write_allocation_log(folder / "build.log", "Interrupted allocation recovered.\n" if recovered else "Build number allocated.\n")
+    fd = os.open(folder / "run.lock", os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o444)
+    try:
+        _regular_lock(fd)
+    finally:
+        os.close(fd)
 
 
 def _recover_initial_allocation(root: Path, number: str, initial: dict) -> None:
