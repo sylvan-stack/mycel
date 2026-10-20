@@ -71,6 +71,20 @@ def _copy(source: Path, target: Path) -> None:
         shutil.copytree(source, target, symlinks=True)
 
 
+def _remove(folder: Path) -> None:
+    """Remove the copies, read-only files of a corpus included."""
+    def writable(function, path, _):
+        os.chmod(os.path.dirname(path), 0o700)
+        os.chmod(path, 0o600)
+        function(path)
+    shutil.rmtree(folder, onexc=writable)
+    if folder.exists():
+        for root, folders, files in os.walk(folder):
+            for name in folders + files:
+                os.chmod(os.path.join(root, name), 0o700)
+        shutil.rmtree(folder, ignore_errors=True)
+
+
 def _mycel(settings: Path, *arguments: str) -> tuple[int, dict | None, float]:
     started = time.monotonic()
     completed = subprocess.run([sys.executable, "-m", "mycel", *arguments],
@@ -226,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         if not arguments.keep:
             if backend.creation_owned(database):
                 backend.drop_database(database)
-            shutil.rmtree(work, ignore_errors=True)
+            _remove(work)
         else:
             print(f"kept database {database} and {work}", file=sys.stderr)
     print("check_real:", "ok" if report["ok"] else f"{len(report['problems'])} problems", file=sys.stderr)
