@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import re
 import sys
+import tempfile
 
 
 GUIDES = (
@@ -61,7 +63,15 @@ def write_copies(docs: Path, corpus: Path, names=GUIDES) -> None:
         if copy.is_symlink():
             raise ValueError(f"{copy.name}: corpus copy is a symbolic link")
     for copy, content in copies:
-        copy.write_bytes(content.encode("utf-8"))
+        mode = copy.stat().st_mode & 0o777 if copy.exists() else 0o644
+        descriptor, name = tempfile.mkstemp(dir=corpus, prefix=f".{copy.name}.")
+        try:
+            with os.fdopen(descriptor, "wb") as staged:
+                staged.write(content.encode("utf-8"))
+                os.fchmod(staged.fileno(), mode)
+            os.replace(name, copy)
+        finally:
+            Path(name).unlink(missing_ok=True)
 
 
 def main(argv=None) -> int:
