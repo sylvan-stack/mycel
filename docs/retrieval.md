@@ -60,9 +60,10 @@ This producer supplies candidate lists, complete selected chunk metadata and
 coverage state. `CandidateSnapshot.ranked` composes the SYL-127 ranking core
 with the exact disk-owned citation reader described below. SYL-128 supplies
 the recursive freshness consumer described below; SYL-129 composes public search
-replies, citations and degraded-mode reasons. Nonempty public retrieval evaluation
-retains its separate adapter and measurement task. The ranking uses the accepted initial constants; it changes no
-provider qualification or evaluation requirement.
+replies, citations and degraded-mode reasons. Nonempty public retrieval
+evaluation uses the normal search adapter and produces an explicit on-demand
+MYC-4.25 measurement. The ranking uses the accepted initial constants; it changes
+no provider qualification or evaluation requirement.
 
 ## Ranking routes and weights
 
@@ -232,8 +233,8 @@ absolute path checked within its actual configured root; missing, unavailable
 or escaping files have an `unreadable` reason. The serializer also supports
 index namespaces with stable IDs and no file. Applied overview sections now
 compete as own-repository documents, with normal current-model vectors and no
-code-only/shared inclusion or documentedIn bridge. Summary-tree publication
-remains with its feature owner.
+code-only/shared inclusion or documentedIn bridge. Published summary nodes
+also compete as own-repository documents through their retained index locations.
 
 Each result and every `via`/`documentedIn` citation uses the same exact-version
 `stale`, complete `staleReasons` with original source and intermediate path,

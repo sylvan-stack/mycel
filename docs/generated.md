@@ -23,9 +23,9 @@ One publication writes the exact response version, current index location,
 compatible `PublishedSummaryState` version 1 and one `generated` dependency
 per ordered request member. Generated pins coexist with declared and asserted
 rows between the same ends. Files and ordinary assertion commands cannot
-create generated rows. SQL format remains 2; no table or verification foreign
-key changes. Independent permanent `generated` owners have no invocation
-foreign key and retain both request/completed manifests and all full/sent
+create generated rows. Store format 3 retains these tables and verification
+ownership from format 2 without changing this publication contract. Independent
+permanent `generated` owners have no invocation foreign key and retain both request/completed manifests and all full/sent
 member, prompt, request and response snapshots. Each generated dependency's
 `mycel-generated-pin-v1` state identifies its complete request manifest, original
 request manifest, member ordinal/identity and dependant identity. All siblings,
@@ -77,6 +77,7 @@ transaction. Its final verification follows vector and mutation-audit writes.
 It transfers successful evidence to permanent generated owners and releases
 private leases in that transaction. Failed or interrupted staging preserves the
 old tree and releases its owning leases. Empty replacements keep versioned set
-metadata without searchable summary nodes. Public regeneration/removal and
-generated logical deletion remain with their summary lifecycle task. The hook
+metadata without searchable summary nodes. Public `summaries regenerate`
+repairs stale nodes in level order, while `summaries remove` deletes the set
+and releases only evidence with no surviving owner. The hook
 alone supplies none of the public build's grouping, service calls or vectors.

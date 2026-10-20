@@ -1,8 +1,8 @@
 # Transaction-bound activity
 
 The internal `MutationActivity` substrate records applied mutations over injected
-transaction callers. Complete ingest and embedding connect their public producers; generation and classification
-commands connect their producers in their owning tasks. Public `activity` lists
+transaction callers. Public ingest, embedding, summary generation and
+classification connect their producers and exact committed reply counts. Public `activity` lists
 ordered history and `activity --entry <id>` exposes one pass with its ordered
 file, identity and classification details. Writer transactions retain bounded
 history while preserving exact live invocations and independent evidence.
@@ -118,8 +118,8 @@ Source development manufactures no number and establishes no installed acceptanc
 Seven configured store checks exercise actual command dispatch, empty bootstrap,
 exact counts, no-op suppression, dimension rollback, damaged identity and
 invocation-bootstrap failure. Three unit checks validate exact package identity.
-This is source-bound preparation; future format migration activity and complete
-installed Build acceptance remain unfinished.
+Explicit schema migrations also record completed global `init` activity in
+numbered Builds. SYL-148 owns complete installed working-Build qualification.
 
 The complete located dependency producer now contributes separate reference,
 pin, role and declaration-metadata counts to the same publication result and
@@ -127,8 +127,8 @@ activity entry. Optional guarded collection contributes its concrete deletion
 counts; collection-only and evidence-only changes create activity even when
 current file identities are unchanged. Policy, evidence, collection and audit failures roll back together.
 Source/foreign-capture checks and a final publication recheck guard the complete
-change. These counters are private producer results; public reply accounting
-remains its command producer's responsibility.
+change. Public ingest incorporates these producer counters in its cumulative reply
+and persisted activity counts.
 
 Complete located publication also supplies automatic mechanical detection.
 Its downstream reference and stale counters are merged before cumulative reply
