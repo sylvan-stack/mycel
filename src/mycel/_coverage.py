@@ -36,9 +36,10 @@ KINDS = frozenset({"unit", "store", "eval", "live"})
 AUTOMATIC_KINDS = frozenset({"unit", "store"})
 REQUIREMENT_ID = re.compile(r"MYC-(?:[0-9]|1[0-7])\.[1-9][0-9]*\Z")
 # The eighteen chapters MYC-0 to MYC-17 and their active requirement rows, as
-# the registry was extracted on 19 October 2026 (SYL-259). MYC-17 is a draft.
+# the registry was extracted on 19 October 2026 (SYL-259) and MYC-1.37 was
+# appended on 20 October 2026 (SYL-232). MYC-17 is a draft.
 SPECIFICATION_COUNT = 18
-ACTIVE_REQUIREMENTS = 348
+ACTIVE_REQUIREMENTS = 349
 SPECIFICATION_STATUSES = frozenset({"accepted", "draft"})
 CHECK_DATABASE = re.compile(r"mycel_check_[a-z0-9_]+\Z")
 _WORKER_CANCEL_GRACE = 30
