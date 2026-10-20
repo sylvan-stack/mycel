@@ -6,7 +6,7 @@
       "specification_status": "accepted"
     },
     "01-corpora-and-ingest.md": {
-      "sha256": "e3568fb2506e7bd224bf490f66698190533675c3b590a690e993ef092239a07c",
+      "sha256": "f2e842543189d0d8ca596472283aec8cc93becf58e18bd45df7f5a6cb88e97f8",
       "specification_status": "accepted"
     },
     "02-provenance-and-freshness.md": {
@@ -454,6 +454,14 @@
     {
       "id": "MYC-1.36",
       "text": "report a recognised row without a UUID, and two rows with one UUID, as faults of the file, make no entity of them, and give a `req` or `dec` chunk its UUID as identifier in every location without the two matching rounds",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-1",
+      "source": "01-corpora-and-ingest.md"
+    },
+    {
+      "id": "MYC-1.37",
+      "text": "save the capture a pass read even when a file of the repository changes before the pass is saved, bind what the pass writes to that capture, name in the reply every file and location that differs from it, retry nothing within the pass, and take the sources of other repositories from the index without comparing their disk",
       "origin": "New",
       "kind": "store",
       "specification": "MYC-1",

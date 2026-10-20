@@ -23,7 +23,9 @@ except ImportError:
     import test_drift_lifecycle as fixtures
 
 
-NOW = datetime(2026, 10, 20, 10, tzinfo=timezone.utc)
+# A day ahead of the real clock: the passes of these checks observe at the real
+# time, which must not follow the fixture's time; files a day older are trusted.
+NOW = (datetime.now(timezone.utc) + timedelta(days=1)).replace(microsecond=0)
 AT = NOW.isoformat()
 
 

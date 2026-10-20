@@ -357,3 +357,115 @@ class IngestStoreTests(unittest.TestCase):
         self.assertEqual(reply['repositories']['fixture']['pending'], 0)
         with self.base.connect() as connection:
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_files WHERE repository='unrelated'").fetchone()[0], 0)
+
+
+class IngestPublishesItsCaptureStoreTests(IngestStoreTests):
+    """A pass publishes the capture it read (MYC-1.37, MYC-D64)."""
+
+    def disk_sources(self, connection):
+        rows = connection.execute("""SELECT v.source_bytes FROM public.mycel_file_versions v
+            JOIN public.mycel_file_locations l ON l.file_version=v.id WHERE l.kind='disk'""").fetchall()
+        return sorted(bytes(row[0]) for row in rows)
+
+    @proves('MYC-1.37', 'MYC-1.7', kind='store')
+    def test_file_changed_during_pass_is_saved_as_captured_named_and_taken_by_the_next_pass(self):
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        guide = self.base.artifact / 'guide.md'
+        guide.write_bytes(b'# Guide\nFirst edit.\n')
+        from mycel import _located_reconciliation
+        original = _located_reconciliation._observe
+        calls = 0
+
+        def racing(repository, addresses, source):
+            # Right after the pass has observed the file it read, another agent
+            # replaces it, as a `git pull` does, with new bytes and a new inode,
+            # and adds a branch: every later step of the pass sees the change.
+            nonlocal calls
+            calls += 1
+            physical = original(repository, addresses, source)
+            if calls == 1:
+                replacement = guide.with_name('guide.md.new')
+                replacement.write_bytes(b'# Guide\nSecond edit, during the pass.\n')
+                os.replace(replacement, guide)
+                self.base.git('branch', 'added-during-pass')
+            return physical
+
+        with patch.object(_located_reconciliation, '_observe', racing):
+            status, reply = self.invoke('--repo', 'fixture')
+        self.assertGreaterEqual(calls, 1)
+        self.assertEqual(status, 0, reply)
+        fixture = reply['repositories']['fixture']
+        self.assertEqual(fixture['changedDuringPass'], ['branch refs/heads/added-during-pass', 'fixture:@artifact/guide.md'])
+        self.assertEqual(fixture['chunks']['edited'], 1)
+        self.assertNotIn('error', fixture)
+        with self.base.connect() as connection:
+            self.assertEqual(self.disk_sources(connection), [b'# Guide\nFirst edit.\n'])
+            self.assertFalse(connection.execute("SELECT 1 FROM public.mycel_file_locations WHERE kind='branch' "
+                "AND location LIKE '%added-during-pass%'").fetchone())
+        status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        fixture = reply['repositories']['fixture']
+        self.assertNotIn('changedDuringPass', fixture)
+        # The disk edit and the new branch, which holds the committed text,
+        # are both taken up now; the disk version is the second edit.
+        self.assertTrue(fixture['changed'])
+        self.assertGreaterEqual(fixture['chunks']['edited'], 1)
+        with self.base.connect() as connection:
+            self.assertEqual(self.disk_sources(connection), [b'# Guide\nSecond edit, during the pass.\n'])
+            self.assertTrue(connection.execute("SELECT 1 FROM public.mycel_file_locations WHERE kind='branch' "
+                "AND location LIKE '%added-during-pass%'").fetchone())
+        status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        self.assertFalse(reply['repositories']['fixture']['changed'])
+
+    @proves('MYC-1.37', kind='store')
+    def test_pass_takes_a_foreign_source_from_the_index_and_its_own_pass_marks_the_dependant_stale(self):
+        foreign = self.add_repository('foreign', b'# Source\nForeign source.\n')
+        guide = self.base.artifact / 'guide.md'
+        guide.write_bytes(b'---\nsources: ["foreign:@artifact/answer.md#Source"]\n---\n# Guide\nRests on the foreign source.\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'foreign')[0], 0)
+        status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        self.assertEqual(reply['repositories']['fixture']['stale'], 0)
+        # The foreign source is edited on disk and not ingested; the dependant
+        # is edited too, so its pass has to pin the source again. It pins the
+        # indexed source and completes: the foreign disk is its own pass's.
+        (foreign / 'answer.md').write_bytes(b'# Source\nEdited on disk, not ingested.\n')
+        guide.write_bytes(guide.read_bytes().replace(b'Rests on', b'Still rests on'))
+        status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        fixture = reply['repositories']['fixture']
+        self.assertNotIn('error', fixture)
+        self.assertEqual(fixture['chunks']['edited'], 1)
+        self.assertEqual(fixture['stale'], 0)
+        self.assertNotIn('changedDuringPass', fixture)
+        status, reply = self.invoke('--repo', 'foreign')
+        self.assertEqual(status, 0, reply)
+        self.assertEqual(reply['repositories']['foreign']['chunks']['edited'], 1)
+        self.assertEqual(reply['repositories']['foreign']['dependencyRepositories']['fixture']['stale'], 1)
+
+    @proves('MYC-1.37', kind='store')
+    def test_pass_reads_each_location_catalog_once_for_its_dependency_run(self):
+        for number in range(6):
+            (self.base.artifact / f'note{number}.md').write_bytes(
+                b'# Note\nFirst.\n# Detail\nSecond.\n# More\nThird.\n')
+        self.base.commit()
+        from mycel._resolver import SourceResolver
+        original = SourceResolver.from_store.__func__
+        reads = []
+
+        def counting(cls, connection, settings, **kwargs):
+            if kwargs.get('_in_transaction') and not kwargs.get('_read_transaction'):
+                reads.append((kwargs.get('kind'), kwargs.get('location')))
+            return original(cls, connection, settings, **kwargs)
+
+        with patch.object(SourceResolver, 'from_store', classmethod(counting)):
+            status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        chunks = sum(reply['repositories']['fixture']['chunks'].values())
+        self.assertGreaterEqual(chunks, 18)
+        # One catalog per location for the run, plus the few the batch and the
+        # detector read; never one per chunk.
+        self.assertLess(len(reads), chunks)
+        self.assertLessEqual(len(reads), 2 * len({location for location in reads}) + 4)
