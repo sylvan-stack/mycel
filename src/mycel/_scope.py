@@ -125,7 +125,10 @@ class Repository:
 
 
 def _resolved(path: Path) -> Path:
-    return path.resolve()
+    try:
+        return path.resolve(strict=True)
+    except FileNotFoundError:
+        return path.resolve()
 
 
 def _direct_name(name: str) -> bool:
