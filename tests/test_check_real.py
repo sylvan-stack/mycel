@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from pathlib import Path
+import pstats
 import runpy
 import unittest
 
@@ -55,6 +56,34 @@ class RealActivityCheckStoreTests(unittest.TestCase):
         unchanged = {'entries': fixture.history()}
         self.assertEqual(verify('fixture', quiet, after, unchanged, None), [])
         self.assertTrue(verify('fixture', quiet, before, after, detail))
+
+
+    @proves('MYC-1.7', 'MYC-12.1', 'MYC-12.2', kind='store')
+    def test_profile_measures_the_real_numbered_subprocess_without_changing_its_reply(self):
+        fixture = fixtures.PublicIngestActivityStoreTests()
+        fixture.store_fixture = self.store_fixture
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        script = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'scripts/check_real.py'))
+        package = script['_numbered_package'](fixture.base.base)
+        fixture.package_root = package
+        for number in (1, 2):
+            profile = fixture.base.base / f'ingest-{number}.prof'
+            status, reply, seconds = script['_mycel'](fixture.base.config, 'ingest', '--repo',
+                'fixture', package=package, profile=profile)
+            self.assertEqual(status, 0, reply)
+            result = reply['repositories']['fixture']
+            self.assertEqual(result['changed'], number == 1)
+            self.assertGreater(seconds, 0)
+            stats = pstats.Stats(str(profile))
+            self.assertTrue(any(path.endswith('/mycel/_ingest.py') and name == 'ingest'
+                                for path, line, name in stats.stats))
+            self.assertEqual(len(fixture.history()), 1)
+        # The ordinary command keeps the same quiet reply without a profiler.
+        status, quiet, _ = script['_mycel'](fixture.base.config, 'ingest', '--repo',
+                                           'fixture', package=package)
+        self.assertEqual(status, 0, quiet)
+        self.assertEqual(quiet['repositories']['fixture'], result)
 
 
 if __name__ == '__main__':

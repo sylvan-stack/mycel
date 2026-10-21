@@ -24,6 +24,9 @@ Options: `--store-settings` (default `~/.mycel/config.toml`, only its
 order they are ingested), `--passes` (default 2), `--no-change` to skip the
 helper, `--keep` to keep the database and the copies, and `--report` for the
 JSON record, which belongs outside every corpus and repository.
+`--profile-dir` creates a new directory for cProfile data from each ingest
+subprocess. Profiles include the complete public command; their timings carry
+profiler overhead. Leave the option off when measuring agreed wall-time targets.
 """
 from __future__ import annotations
 
@@ -104,9 +107,12 @@ def _numbered_package(work: Path) -> Path:
     return root
 
 
-def _mycel(settings: Path, *arguments: str, package: Path) -> tuple[int, dict | None, float]:
+def _mycel(settings: Path, *arguments: str, package: Path,
+           profile: Path | None = None) -> tuple[int, dict | None, float]:
     started = time.monotonic()
-    completed = subprocess.run([sys.executable, "-B", "-P", "-m", "mycel", *arguments],
+    runner = (["-m", "mycel"] if profile is None else
+              ["-m", "cProfile", "-o", str(profile), "-m", "mycel"])
+    completed = subprocess.run([sys.executable, "-B", "-P", *runner, *arguments],
                                env={**os.environ, "MYCEL_CONFIG": str(settings),
                                     "PYTHONPATH": str(package)},
                                cwd=settings.parent, capture_output=True, text=True)
@@ -216,9 +222,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-change", action="store_true")
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--profile-dir", type=Path)
     arguments = parser.parse_args(argv)
     if arguments.passes < 1 or not arguments.repos:
         parser.error("at least one pass and one repository")
+
+    profile_dir = arguments.profile_dir
+    if profile_dir is not None:
+        profile_dir = profile_dir.expanduser().resolve()
+        try:
+            profile_dir.mkdir(parents=True, exist_ok=False, mode=0o700)
+        except FileExistsError:
+            parser.error("--profile-dir must name a new directory")
 
     owner = tomllib.loads(arguments.store_settings.expanduser().read_text(encoding="utf-8"))["store"]["address"]
     work = Path(tempfile.mkdtemp(prefix="mycel_check_real_"))
@@ -241,8 +256,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         package = _numbered_package(work)
 
-        def command(*words: str):
-            return _mycel(settings, *words, package=package)
+        def command(*words: str, profile: Path | None = None):
+            return _mycel(settings, *words, package=package, profile=profile)
 
         def history(name: str):
             status, reply, _ = command("activity", "--repo", name, "--kind", "ingest", "--k", "500")
@@ -271,17 +286,21 @@ def main(argv: list[str] | None = None) -> int:
 
         changed_path = repositories[last][1] / CHANGED_FILE
         for number in range(1, arguments.passes + 1):
-            for name in arguments.repos:
+            for repository_number, name in enumerate(arguments.repos, 1):
                 before = history(name)
                 helper = None
                 if number == 1 and name == last and not arguments.no_change:
                     helper = Helper(backend, database, changed_path)
                     helper.start()
-                status, reply, elapsed = command("ingest", "--repo", name)
+                profile = (None if profile_dir is None else
+                           profile_dir / f"pass-{number}-repo-{repository_number}.prof")
+                status, reply, elapsed = command("ingest", "--repo", name, profile=profile)
                 if helper is not None:
                     helper.stop.set()
                     helper.join(timeout=5)
                 entry = {"pass": number, "status": status, "seconds": round(elapsed, 1), "reply": reply}
+                if profile is not None:
+                    entry["profile"] = str(profile)
                 if helper is not None:
                     entry["helper"] = {"changed": helper.changed_at is not None, "file": str(changed_path),
                                        "waitedSeconds": None if helper.waited is None else round(helper.waited, 1)}
