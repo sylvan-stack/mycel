@@ -25,7 +25,7 @@ def entity_details(row) -> dict:
             "section": row.section, "position": row.position, "entity": row.metadata()}
 
 
-def publish_entities(connection, repository: str, file_id, location, captured) -> tuple[tuple[str, int], ...]:
+def publish_entities(connection, repository: str, file_id, location, captured, *, kind='disk', key='disk') -> tuple[tuple[str, int], ...]:
     """Write the entity rows of one captured document for its disk location.
 
     Runs inside the file's transaction after its section chunks. A row that
@@ -52,6 +52,6 @@ def publish_entities(connection, repository: str, file_id, location, captured) -
             (row.uuid, row.snapshot_hash, raw, search_text(raw),
              Jsonb(json.loads(canonical_json(comparison))), Jsonb(details))).fetchone()[0]
         connection.execute("INSERT INTO public.mycel_locations VALUES (%s,%s,%s,%s,%s,%s)",
-                           (uuid4(), exact, location, "disk", "disk", Jsonb(details)))
+                           (uuid4(), exact, location, kind, key, Jsonb(details)))
         persisted.append((row.uuid, exact))
     return tuple(persisted)

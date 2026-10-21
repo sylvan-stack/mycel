@@ -70,6 +70,7 @@ class SettingsSnapshot:
     readable: bool
     _faults: tuple[_Fault, ...] = field(default=(), repr=False)
     _home: Path | None = field(default=None, compare=False, repr=False)
+    _cwd: Path | None = field(default=None, compare=False, repr=False)
 
     @property
     def valid(self) -> bool:
@@ -152,7 +153,8 @@ _SCHEMA = {
 }
 _ORGANIZATION_SCHEMA = {"root": "folder", "artifact_root": "folder"}
 _REPO_SCHEMA = {"enabled": "boolean", "code_root": "folder", "artifact_root": "folder",
-                "code_subdirs": "relative_paths", "test_patterns": "texts",
+                "code_subdirs": "relative_paths", "code_clones": "folders",
+                "readonly_root": "folder", "test_patterns": "texts",
                 "generated_patterns": "texts", "evaluation": "relative_path"}
 _REVIEW_FIELDS = ("review_command", "review_provider", "review_model", "review_revision")
 _JEV_MODEL = re.compile(r"jev-[0-9]+\.[0-9]+\.[0-9]+\Z", re.ASCII)
@@ -461,6 +463,15 @@ class _Validator:
                 okay = finite and (value > 0 if kind == "positive_number" else 0 <= value <= 1)
             message = ("Expected a finite number above 0." if kind == "positive_number"
                        else "Expected a finite number from 0 to 1 inclusive.")
+        elif kind == "folders":
+            okay = isinstance(value, list)
+            message = "Expected a list of absolute or ~/ checkout folders."
+            if okay:
+                result = []
+                for index, member in enumerate(value):
+                    valid, folder = self.check(path + (index,), member, "folder")
+                    if valid:
+                        result.append(folder)
         elif kind == "texts":
             okay = isinstance(value, list) and all(isinstance(member, str) for member in value)
             message = "Expected a list of texts."

@@ -24,7 +24,7 @@ _DEPENDENCIES_SQL = """SELECT d.dependant_version,d.kind,d.state,f.id,fv.snapsho
     JOIN public.mycel_files f ON f.id=fv.file_id AND f.repository=d.repository
     JOIN public.mycel_chunk_versions cv ON cv.id=d.dependant_version
     JOIN public.mycel_chunks c ON c.id=cv.chunk_id
-      AND c.file_id=f.id AND c.repository=f.repository
+      AND c.repository=f.repository
     JOIN public.mycel_locations l ON l.chunk_version=d.dependant_version
       AND l.file_location=fl.id AND l.location=fl.location
     WHERE d.kind IN ('declared','asserted') AND fl.kind='disk' AND l.kind='disk'
@@ -62,7 +62,8 @@ def document_links(connection, resolver: SourceResolver) -> dict[tuple[str, int]
         if dependant is None:
             continue
         file, chunk, origin = dependant
-        if file.identifier != str(identifier) or file.snapshot_hash != digest:
+        if (file.identifier != str(identifier) or file.snapshot_hash != digest
+                or not resolver.owns_policy(file.repository, state)):
             continue
         try:
             raw = _text(state['rawRef'])

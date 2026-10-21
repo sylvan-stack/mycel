@@ -324,6 +324,18 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "confirm":
         parser.add_argument("--by")
         parser.add_argument("--how", choices=("read", "check"))
+    if name == "justify":
+        parser.add_argument("--by")
+        parser.add_argument("--file")
+    if name == "origins":
+        parser.add_argument("--missing", action="store_true")
+        parser.add_argument("--changes", action="store_true")
+        parser.add_argument("--unresting", action="store_true")
+        parser.add_argument("--no-fresh", action="store_true")
+        parser.add_argument("--path", action="append", default=[])
+        parser.add_argument("--needs-nothing")
+        parser.add_argument("--clear-needs-nothing")
+        parser.add_argument("--reason")
     if name == "verifications":
         parser.add_argument("--history", action="store_true")
     if name == "overview":
@@ -381,6 +393,18 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "confirm" and (len(parsed.arguments) != 1 or
             (parsed.by is not None and not parsed.by.strip())):
         raise MycelError(ErrorCode.INVALID_INPUT, "Confirm takes one chunk address and optional --by and --how read|check.")
+    if name == "justify" and ((parsed.file is None and len(parsed.arguments) != 2) or
+            (parsed.file is not None and (parsed.arguments or not parsed.file.strip())) or
+            (parsed.by is not None and not parsed.by.strip())):
+        raise MycelError(ErrorCode.INVALID_INPUT, "Justify takes one chunk and Origin or --file, and optional --by.")
+    if name == "origins":
+        marking = parsed.needs_nothing is not None or parsed.clear_needs_nothing is not None
+        if (len(repos)>1 or len(parsed.arguments)>1 or
+                (marking and (repos or parsed.arguments or parsed.path or parsed.missing or parsed.changes or
+                    parsed.unresting or parsed.no_fresh)) or
+                (parsed.needs_nothing is not None and (parsed.clear_needs_nothing is not None or not parsed.reason or not parsed.reason.strip())) or
+                (parsed.reason is not None and parsed.needs_nothing is None)):
+            raise MycelError(ErrorCode.INVALID_INPUT, "Origins takes one repository and report options, or one requirement mark with its reason.")
     if name == "verifications" and (parsed.arguments or len(repos) > 1):
         raise MycelError(ErrorCode.INVALID_INPUT, "Verifications takes one repository and optional --history.")
     if name == "overview" and (parsed.arguments or len(repos) > 1):
@@ -417,6 +441,18 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "confirm":
         arguments = (("--by", parsed.by) if parsed.by is not None else ()) + \
                     (("--how", parsed.how) if parsed.how is not None else ()) + tuple(parsed.arguments)
+    if name == "justify":
+        arguments = (("--by", parsed.by) if parsed.by is not None else ()) + \
+                    (("--file", parsed.file) if parsed.file is not None else tuple(parsed.arguments))
+    if name == "origins":
+        from ._undocumented import normalize_paths
+        arguments = tuple(parsed.arguments) + tuple(flag for flag,value in
+            (("--missing",parsed.missing),("--changes",parsed.changes),("--unresting",parsed.unresting),
+             ("--no-fresh",parsed.no_fresh)) if value) + \
+            tuple(value for path in normalize_paths(parsed.path) for value in ("--path",path)) + \
+            tuple(value for flag,argument in (("--needs-nothing",parsed.needs_nothing),
+                ("--clear-needs-nothing",parsed.clear_needs_nothing),("--reason",parsed.reason))
+                if argument is not None for value in (flag,argument))
     if name == "verifications":
         arguments = ("--history",) if parsed.history else ()
     if name == "overview":
@@ -512,6 +548,10 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
             selected_handlers["relate"] = relate
             from ._verification import handle_confirm
             selected_handlers["confirm"] = handle_confirm
+            from ._justify import handle_justify
+            selected_handlers["justify"] = handle_justify
+            from ._origins import handle_origins
+            selected_handlers["origins"] = handle_origins
             from ._verification_reader import handle_verifications
             selected_handlers["verifications"] = handle_verifications
             from ._embed import embed

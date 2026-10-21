@@ -8,7 +8,9 @@ changes one Markdown file of the corpus copy: the pass must still complete and
 name the file under `changedDuringPass`, and the second pass must take it up
 (MYC-1.37). Then it runs `search`, `read`, `refs`, `stale`, `status` and
 `embed --dry-run` on the result. Every command must end with status 0, and no
-reply may carry the error code `internal`.
+reply may carry the error code `internal`. Disposable settings override embedding
+key acquisition with `/usr/bin/false`, so search cannot use the owner's Keychain
+API key or make a provider request.
 
 Commands run from a private copy of the current package with fictional Build
 1a. This exercises the numbered public activity path without registering,
@@ -24,6 +26,8 @@ Options: `--store-settings` (default `~/.mycel/config.toml`, only its
 order they are ingested), `--passes` (default 2), `--no-change` to skip the
 helper, `--keep` to keep the database and the copies, and `--report` for the
 JSON record, which belongs outside every corpus and repository.
+`--second-clone NAME=PATH` copies another listed checkout of that repository,
+indexes both locations on each pass and checks their shared exact identities.
 `--profile-dir` creates a new directory for cProfile data from each ingest
 subprocess. Profiles include the complete public command; their timings carry
 profiler overhead. Leave the option off when measuring agreed wall-time targets.
@@ -65,11 +69,16 @@ def _toml_string(value: str) -> str:
     return json.dumps(value)
 
 
-def _settings(address: str, repositories: dict[str, tuple[Path, Path]]) -> str:
-    lines = ["[store]", f"address = {_toml_string(address)}", ""]
+def _settings(address: str, repositories: dict[str, tuple[Path, Path]], clones=None) -> str:
+    lines = ["[store]", f"address = {_toml_string(address)}", "", "[embedding]",
+             'key_command = ["/usr/bin/false"]', ""]
+    clones = {} if clones is None else clones
     for name, (code, artifact) in repositories.items():
         lines += [f"[repos.{json.dumps(name)}]", "enabled = true", "code_subdirs = []",
                   f"code_root = {_toml_string(str(code))}", f"artifact_root = {_toml_string(str(artifact))}", ""]
+        if name in clones:
+            lines += [f"code_clones = [{_toml_string(str(clones[name]))}]",
+                      f"readonly_root = {_toml_string(str(code))}", ""]
     return "\n".join(lines)
 
 
@@ -108,14 +117,14 @@ def _numbered_package(work: Path) -> Path:
 
 
 def _mycel(settings: Path, *arguments: str, package: Path,
-           profile: Path | None = None) -> tuple[int, dict | None, float]:
+           profile: Path | None = None, cwd: Path | None = None) -> tuple[int, dict | None, float]:
     started = time.monotonic()
     runner = (["-m", "mycel"] if profile is None else
               ["-m", "cProfile", "-o", str(profile), "-m", "mycel"])
     completed = subprocess.run([sys.executable, "-B", "-P", *runner, *arguments],
                                env={**os.environ, "MYCEL_CONFIG": str(settings),
                                     "PYTHONPATH": str(package)},
-                               cwd=settings.parent, capture_output=True, text=True)
+                               cwd=cwd or settings.parent, capture_output=True, text=True)
     elapsed = time.monotonic() - started
     try:
         reply = json.loads(completed.stdout) if completed.stdout.strip() else None
@@ -216,6 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--store-settings", type=Path, default=Path("~/.mycel/config.toml"))
     parser.add_argument("--clones", type=Path, default=Path("~/repos/sylvan-stack/readonly"))
+    parser.add_argument("--second-clone", action="append", default=[], metavar="NAME=PATH")
     parser.add_argument("--artifacts", type=Path, default=Path("~/Artifacts"))
     parser.add_argument("--repos", nargs="+", default=["arbol", "mycel"])
     parser.add_argument("--passes", type=int, default=2)
@@ -226,6 +236,14 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     if arguments.passes < 1 or not arguments.repos:
         parser.error("at least one pass and one repository")
+
+    second_sources = {}
+    for value in arguments.second_clone:
+        name, separator, raw = value.partition('=')
+        source = Path(raw).expanduser().resolve()
+        if not separator or name not in arguments.repos or name in second_sources or not source.is_dir():
+            parser.error("--second-clone requires one existing NAME=PATH for a selected repository")
+        second_sources[name] = source
 
     profile_dir = arguments.profile_dir
     if profile_dir is not None:
@@ -256,8 +274,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         package = _numbered_package(work)
 
-        def command(*words: str, profile: Path | None = None):
-            return _mycel(settings, *words, package=package, profile=profile)
+        def command(*words: str, profile: Path | None = None, cwd: Path | None = None):
+            return _mycel(settings, *words, package=package, profile=profile, cwd=cwd)
 
         def history(name: str):
             status, reply, _ = command("activity", "--repo", name, "--kind", "ingest", "--k", "500")
@@ -276,9 +294,17 @@ def main(argv: list[str] | None = None) -> int:
             _copy(arguments.clones.expanduser() / name, code)
             _copy(arguments.artifacts.expanduser() / name, artifact)
             repositories[name] = (code, artifact)
+        second_clones = {}
+        for name,source in second_sources.items():
+            target = work / 'second-clone' / name
+            target.parent.mkdir(exist_ok=True)
+            _copy(source,target)
+            second_clones[name] = target
+        report['cloneSources'] = {name:{'readonly':str(arguments.clones.expanduser()/name),
+                                       'second':str(source)} for name,source in second_sources.items()}
         backend.create_database(database)
         settings = work / "settings.toml"
-        settings.write_text(_settings(backend.address(database), repositories), encoding="utf-8")
+        settings.write_text(_settings(backend.address(database), repositories, second_clones), encoding="utf-8")
         settings.chmod(0o600)
         os.environ["MYCEL_CONFIG"] = str(settings)  # the native initializer wants it selected
         backend.initialize(settings)
@@ -287,64 +313,89 @@ def main(argv: list[str] | None = None) -> int:
         changed_path = repositories[last][1] / CHANGED_FILE
         for number in range(1, arguments.passes + 1):
             for repository_number, name in enumerate(arguments.repos, 1):
-                before = history(name)
-                helper = None
-                if number == 1 and name == last and not arguments.no_change:
-                    helper = Helper(backend, database, changed_path)
-                    helper.start()
-                profile = (None if profile_dir is None else
-                           profile_dir / f"pass-{number}-repo-{repository_number}.prof")
-                status, reply, elapsed = command("ingest", "--repo", name, profile=profile)
-                if helper is not None:
-                    helper.stop.set()
-                    helper.join(timeout=5)
-                entry = {"pass": number, "status": status, "seconds": round(elapsed, 1), "reply": reply}
-                if profile is not None:
-                    entry["profile"] = str(profile)
-                if helper is not None:
-                    entry["helper"] = {"changed": helper.changed_at is not None, "file": str(changed_path),
-                                       "waitedSeconds": None if helper.waited is None else round(helper.waited, 1)}
-                report["repositories"].setdefault(name, []).append(entry)
-                repositories_reply = (reply or {}).get("repositories", {}) if isinstance(reply, dict) else {}
-                if isinstance(repositories_reply, list):  # a refused pass: entries of {repository, error}
-                    repositories_reply = {item.get("repository"): item for item in repositories_reply if isinstance(item, dict)}
-                result = repositories_reply.get(name, {}) if isinstance(repositories_reply, dict) else {}
-                after = history(name)
-                old_ids = {item["id"] for item in (_entries(before) or [])}
-                added = [item for item in (_entries(after) or []) if item["id"] not in old_ids]
-                detail = None
-                if len(added) == 1:
-                    detail_status, detail, _ = command("activity", "--entry", added[0]["id"])
-                    if detail_status != 0 or _internal(detail):
-                        problem(f"activity detail for {name} failed with status {detail_status}")
-                activity_problems = _activity_problems(name, result, before, after, detail)
-                entry["activity"] = {"before": before, "after": after, "detail": detail,
-                                     "ok": not activity_problems}
-                for issue in activity_problems:
-                    problem(f"pass {number} of {name}: {issue}")
-                print(f"pass {number} {name}: status {status} in {elapsed / 60:.1f} min; "
-                      f"files {result.get('files')}; chunks {result.get('chunks')}; "
-                      f"changedDuringPass {result.get('changedDuringPass')}", file=sys.stderr)
-                if status != 0:
-                    problem(f"pass {number} of {name} ended with status {status}: {json.dumps(reply)[:600]}")
-                if _internal(reply):
-                    problem(f"pass {number} of {name} reported an internal fault")
-                if helper is not None:
-                    if helper.changed_at is None:
-                        problem(f"the helper could not change {CHANGED_FILE} during the first pass of {name}")
-                    expected = f"{name}:@artifact/{CHANGED_FILE}"
-                    if expected not in (result.get("changedDuringPass") or []):
-                        problem(f"the first pass of {name} did not name {expected} under changedDuringPass: "
-                                f"{result.get('changedDuringPass')}")
-                if number >= 2:
-                    if number == 2 and name == last and not arguments.no_change:
-                        if not result.get("changed") or result.get("changedDuringPass"):
-                            problem(f"the second pass of {name} did not take the changed file up alone: "
-                                    f"changed {result.get('changed')}, changedDuringPass {result.get('changedDuringPass')}")
-                    elif result.get("changed"):
-                        problem(f"pass {number} of {name} found changes in an unchanged repository")
-                if number >= 2 and result.get("changedDuringPass"):
-                    problem(f"pass {number} of {name} saw changes in an unchanged repository: {result.get('changedDuringPass')}")
+                locations = [('readonly',repositories[name][0])]
+                if name in second_clones:
+                    locations.append(('second',second_clones[name]))
+                for location,checkout in locations:
+                    before = history(name)
+                    helper = None
+                    if number == 1 and name == last and location == "readonly" and not arguments.no_change:
+                        helper = Helper(backend, database, changed_path)
+                        helper.start()
+                    profile = (None if profile_dir is None else
+                               profile_dir / f"pass-{number}-repo-{repository_number}-{location}.prof")
+                    status, reply, elapsed = command("ingest", "--repo", name, profile=profile, cwd=checkout)
+                    if helper is not None:
+                        helper.stop.set()
+                        helper.join(timeout=5)
+                    entry = {"pass": number, "location": location, "status": status, "seconds": round(elapsed, 1), "reply": reply}
+                    if profile is not None:
+                        entry["profile"] = str(profile)
+                    if helper is not None:
+                        entry["helper"] = {"changed": helper.changed_at is not None, "file": str(changed_path),
+                                           "waitedSeconds": None if helper.waited is None else round(helper.waited, 1)}
+                    report["repositories"].setdefault(name, []).append(entry)
+                    repositories_reply = (reply or {}).get("repositories", {}) if isinstance(reply, dict) else {}
+                    if isinstance(repositories_reply, list):  # a refused pass: entries of {repository, error}
+                        repositories_reply = {item.get("repository"): item for item in repositories_reply if isinstance(item, dict)}
+                    result = repositories_reply.get(name, {}) if isinstance(repositories_reply, dict) else {}
+                    after = history(name)
+                    old_ids = {item["id"] for item in (_entries(before) or [])}
+                    added = [item for item in (_entries(after) or []) if item["id"] not in old_ids]
+                    detail = None
+                    if len(added) == 1:
+                        detail_status, detail, _ = command("activity", "--entry", added[0]["id"])
+                        if detail_status != 0 or _internal(detail):
+                            problem(f"activity detail for {name} failed with status {detail_status}")
+                    activity_problems = _activity_problems(name, result, before, after, detail)
+                    entry["activity"] = {"before": before, "after": after, "detail": detail,
+                                         "ok": not activity_problems}
+                    for issue in activity_problems:
+                        problem(f"pass {number} of {name}: {issue}")
+                    print(f"pass {number} {name} {location}: status {status} in {elapsed / 60:.1f} min; "
+                          f"files {result.get('files')}; chunks {result.get('chunks')}; "
+                          f"changedDuringPass {result.get('changedDuringPass')}", file=sys.stderr)
+                    if status != 0:
+                        problem(f"pass {number} of {name} ended with status {status}: {json.dumps(reply)[:600]}")
+                    if _internal(reply):
+                        problem(f"pass {number} of {name} reported an internal fault")
+                    if helper is not None:
+                        if helper.changed_at is None:
+                            problem(f"the helper could not change {CHANGED_FILE} during the first pass of {name}")
+                        expected = f"{name}:@artifact/{CHANGED_FILE}"
+                        if expected not in (result.get("changedDuringPass") or []):
+                            problem(f"the first pass of {name} did not name {expected} under changedDuringPass: "
+                                    f"{result.get('changedDuringPass')}")
+                    if number >= 2:
+                        if number == 2 and name == last and location == "readonly" and not arguments.no_change:
+                            if not result.get("changed") or result.get("changedDuringPass"):
+                                problem(f"the second pass of {name} did not take the changed file up alone: "
+                                        f"changed {result.get('changed')}, changedDuringPass {result.get('changedDuringPass')}")
+                        elif result.get("changed"):
+                            problem(f"pass {number} of {name} found changes in an unchanged repository")
+                    if number >= 2 and result.get("changedDuringPass"):
+                        problem(f"pass {number} of {name} saw changes in an unchanged repository: {result.get('changedDuringPass')}")
+        for name,checkout in second_clones.items():
+            from mycel._settings import load_settings
+            from mycel._scope import RepositoryLocations
+            from dataclasses import replace
+            snapshot = replace(load_settings(path=settings),_cwd=checkout)
+            key = RepositoryLocations(snapshot).named(name)[0].disk_location
+            with backend.connection(database) as connection:
+                shared,total = connection.execute("""SELECT count(*) FILTER (WHERE locations>1),count(*) FROM (
+                    SELECT v.id,count(DISTINCT l.location) locations FROM public.mycel_chunk_versions v
+                    JOIN public.mycel_chunks c ON c.id=v.chunk_id
+                    JOIN public.mycel_locations l ON l.chunk_version=v.id
+                    WHERE c.repository=%s AND l.kind='disk' AND l.location=ANY(%s) GROUP BY v.id) current""",
+                    (name,['disk',key])).fetchone()
+            report.setdefault('cloneIdentity',{})[name] = {'sharedExactVersions':shared,'totalExactVersions':total}
+            if not shared:
+                problem(f'the two clones of {name} did not share any exact chunk version')
+            status,reply,elapsed = command('origins','--repo',name,'--no-fresh','--changes',cwd=checkout)
+            report['commands'].append({'command':['origins','--repo',name,'--no-fresh','--changes'],
+                'location':'second','status':status,'seconds':round(elapsed,1),'reply':reply})
+            if status != 0 or _internal(reply):
+                problem(f'the stored clone changes report for {name} failed with status {status}')
         for template in COMMANDS:
             words = [word.format(last=last) for word in template]
             if words[0] == "read" and "mycel" not in arguments.repos:

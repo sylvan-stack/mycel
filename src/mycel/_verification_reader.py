@@ -102,8 +102,17 @@ def verification_record(row) -> dict:
     """Validate identity/shape without requiring presently readable blobs."""
     try:
         identifier, repository, chunk_id, recorded_at, record, owner = row
-        if not isinstance(record, dict) or set(record) != set(_PUBLIC) | {'schema', 'dependant', 'selections'}:
+        required = set(_PUBLIC) | {'schema', 'dependant', 'selections'}
+        if not isinstance(record, dict) or set(record) not in (required, required | {'diskLocation'}):
             raise ValueError()
+        if 'diskLocation' in record:
+            from pathlib import Path
+            value = json.loads(record['diskLocation'])
+            if (not isinstance(value, dict) or set(value) != {'kind','checkout','identity','clone'}
+                    or value['kind'] != 'disk' or value['checkout'] is not None or value['identity'] != 'disk'
+                    or not isinstance(value['clone'], str) or not Path(value['clone']).is_absolute()
+                    or json.dumps(value,sort_keys=True,ensure_ascii=False,separators=(',',':')) != record['diskLocation']):
+                raise ValueError()
         if (record['schema'] != SCHEMA or _uuid(record['id']) != str(identifier)
                 or _uuid(record['chunkId']) != str(chunk_id)
                 or _read_place(record['chunk']).repository != repository
@@ -250,8 +259,13 @@ class VerificationReader:
             file, chunk = dependants[0]
             if (not self._disk_file(file) or chunk_comparison(chunk).hash != record['dependant']['comparisonHash']):
                 return False
-            locations = self.connection.execute('SELECT DISTINCT file_location FROM public.mycel_locations '
-                "WHERE chunk_version=%s AND kind='disk' AND file_location IS NOT NULL", (chunk.version,)).fetchall()
+            from ._derive import _disk_key
+            if record.get('diskLocation', 'disk') != _disk_key(self.settings, file.repository):
+                return False
+            locations = self.connection.execute('SELECT DISTINCT l.file_location FROM public.mycel_locations l '
+                'JOIN public.mycel_file_locations f ON f.id=l.file_location '
+                "WHERE l.chunk_version=%s AND l.kind='disk' AND f.kind='disk' AND f.location=%s",
+                (chunk.version, _disk_key(self.settings, file.repository))).fetchall()
             if len(locations) != 1:
                 return False
             if has_verification_fault(self.connection, file.repository, chunk.version, locations[0][0]):
@@ -329,7 +343,7 @@ class VerificationReader:
         newest = set()
         seen = set()
         for record in sorted(records, key=lambda value: (_time(value['at']), value['id']), reverse=True):
-            exact = (record['chunkId'], record['textHash'])
+            exact = (record['chunkId'], record['textHash'], record.get('diskLocation', 'disk'))
             if exact not in seen:
                 seen.add(exact)
                 newest.add(record['id'])

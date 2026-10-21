@@ -51,5 +51,6 @@ def handle_overview(invocation):
     repository = overview_repository(invocation.settings, invocation.repositories)
     with invocation_store(invocation) as (connection, _):
         with snapshot_transaction(connection):
-            sections = OverviewStore(connection).sections(repository, directory)
+            location = RepositoryLocations(invocation.settings).named(repository)[0].disk_location
+            sections = OverviewStore(connection, location=location).sections(repository, directory)
     return Result({"repository": repository, "sections": sections})

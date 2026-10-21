@@ -21,6 +21,7 @@ _PUBLIC_FAULTS = {
     "unregistered_repository": "unknown_repository",
     "disabled_repository": "disabled_repository",
     "missing_file": "not_found", "missing_name": "not_found",
+    "missing_entity": "not_found", "entity_kind_mismatch": "not_a_ref", "ambiguous_entity": "ambiguous_title",
     "not_checked": "not_found", "owner_location_missing": "not_found",
     "ambiguous_path": "ambiguous_path", "ambiguous_name": "ambiguous_title",
     "ineligible_index": "not_a_ref", "one_chunk_required": "not_a_ref",
@@ -115,6 +116,18 @@ def _reports(row) -> list[dict]:
         raise MycelError("store_format", "A retained reference has incompatible occurrence metadata.") from None
 
 
+def _justified_report(row):
+    from ._justify import checked_link
+    state = row[3]
+    link = checked_link(state['originLink'])
+    # Statements have no declaration line; retain the ordinary resolution and
+    # location projection while reporting their actual source of authority.
+    normalized = {**state, 'rawDeclared': state['rawRef'], 'rawLine': state['rawRef'],
+                  'origin': 'stated', 'line': None}
+    return {**_report((*row[:3], normalized, *row[4:])), 'occurrence': 0,
+            'kind': 'asserted', 'originLink': link}
+
+
 def _related_reports(row) -> list[dict]:
     """Project declared relation occurrences through the shared ref reporter.
 
@@ -201,6 +214,11 @@ def refs(invocation: Invocation) -> Result:
             retained = [ref for row in rows for ref in _reports(row)]
             related = connection.execute(_RELATED_REFS_SQL, (repository.name,)).fetchall()
             retained.extend(ref for row in related for ref in _related_reports(row))
+            justified = connection.execute(_JUSTIFIED_REFS_SQL, (repository.name,)).fetchall()
+            retained.extend(_justified_report(row) for row in justified)
+            if invocation.settings.values['repos'][repository.name].get('code_clones'):
+                retained = [ref for ref in retained if ref['location']['kind'] == 'disk'
+                            and ref['location']['name'] == repository.disk_location]
             if not generated_context_loaded and any(_needs_generated_context(ref) for ref in retained):
                 catalog = SourceResolver.from_read_transaction(connection, invocation.settings)
                 namespaces = frozenset((place.repository, place.path) for place, chunk in catalog.index
@@ -224,7 +242,7 @@ JOIN public.mycel_chunk_versions v ON v.id=d.dependant_version
 JOIN public.mycel_chunks c ON c.id=v.chunk_id
 LEFT JOIN public.mycel_file_locations fl
   ON fl.id::text=d.state->'declarationLocation'->>'file'
-LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version AND fv.file_id=c.file_id
+LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version
 LEFT JOIN public.mycel_files f ON f.id=fv.file_id AND c.repository=d.repository
 LEFT JOIN LATERAL (
   SELECT jsonb_agg(l.metadata ORDER BY l.id) AS metadata
@@ -235,6 +253,9 @@ LEFT JOIN LATERAL (
 WHERE d.kind='declared' AND d.repository=%s AND d.state ? 'declarationLocation'
 ORDER BY d.id"""
 
+_JUSTIFIED_REFS_SQL = _REFS_SQL.replace("d.kind='declared'",
+    "d.kind='asserted' AND d.state ? 'originLink'")
+
 
 _RELATED_REFS_SQL = """SELECT r.id,r.repository,r.left_version,r.state,r.baseline_owner,
        c.id,v.metadata,f.repository,f.root,f.path,fl.metadata,fl.kind,fl.location,
@@ -244,7 +265,7 @@ JOIN public.mycel_chunk_versions v ON v.id=r.left_version
 JOIN public.mycel_chunks c ON c.id=v.chunk_id
 LEFT JOIN public.mycel_file_locations fl
   ON fl.id::text=r.state->'declarationLocation'->>'file'
-LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version AND fv.file_id=c.file_id
+LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version
 LEFT JOIN public.mycel_files f ON f.id=fv.file_id AND c.repository=r.repository
 LEFT JOIN LATERAL (
   SELECT jsonb_agg(l.metadata ORDER BY l.id) AS metadata

@@ -8,13 +8,13 @@ from ._activity import AppliedMutation, MutationActivity
 from ._capture import LocationId
 from ._dependency_application import RetainedDependencyResolver, _anchor, _same_natural
 from ._dependency_inputs import DependencyCaptureInputs
-from ._derive import _fault, _place
+from ._derive import _fault, _place, _canonical_refs, _validate_ref_syntax, _disk_key
 from ._errors import MycelError
 from ._evidence import CaptureLocation, EvidenceError, InheritanceInputs, checked_transaction_input_guard
 from ._locks import atomic_transaction, operation_guard, require_transaction_guards
 from ._relations import RELATION_ROWS_SQL, RelationApplicationStore, _relation_raw, relation_baseline
 from ._resolver import SourceResolver
-from ._source_refs import SourceAddress, SourceAddressError, parse_source_address
+from ._source_refs import SourceAddress, SourceAddressError, parse_source_address, parse_entity_uri
 from ._store import checked_store
 
 
@@ -35,7 +35,8 @@ class RelateStore:
     def apply(self, settings, dependant, source, *, remove=False, captured_at=None,
               build=None, settings_home=None):
         settings.require_valid(require_store=False)
-        places = _addresses(dependant, source)
+        places = _addresses(*_canonical_refs(self.connection, settings, (dependant, source),
+            ("endpoint", "endpoint")))
         if type(remove) is not bool:
             raise MycelError('invalid_input', 'Relation removal must be an explicit boolean.')
         for place in places:
@@ -63,11 +64,17 @@ class RelateStore:
     def apply_in_transaction(self, settings, dependant, source, *, remove=False, captured_at,
                              settings_home=None, activity=None):
         settings.require_valid(require_store=False)
-        _addresses(dependant, source)
+        _validate_ref_syntax((dependant, source))
         if type(remove) is not bool:
             raise MycelError('invalid_input', 'Relation removal must be an explicit boolean.')
         require_transaction_guards(self.connection, tuple(settings.values['repos']))
         catalog = SourceResolver.from_transaction(self.connection, settings, kind='disk', location='disk')
+        raw_source = source
+        dependant, source = _canonical_refs(self.connection, settings, (dependant, source),
+            ('endpoint', 'endpoint'), catalog=catalog)
+        _addresses(dependant, source)
+        if parse_entity_uri(raw_source) is not None:
+            source = raw_source
         endpoint = catalog.resolve(dependant, purpose='endpoint')
         if endpoint.state != 'resolved':
             _fault(endpoint, endpoint=True)
@@ -76,8 +83,8 @@ class RelateStore:
         locations = self.connection.execute("""SELECT l.id FROM public.mycel_file_locations l
             JOIN public.mycel_file_versions v ON v.id=l.file_version
             JOIN public.mycel_locations c ON c.file_location=l.id
-            WHERE v.file_id=%s AND l.kind='disk' AND l.location='disk' AND c.chunk_version=%s
-            ORDER BY l.id FOR SHARE OF l,v,c NOWAIT""", (selected.file.identifier, member.chunk.version)).fetchall()
+            WHERE v.file_id=%s AND l.kind='disk' AND l.location=%s AND c.chunk_version=%s
+            ORDER BY l.id FOR SHARE OF l,v,c NOWAIT""", (selected.file.identifier, _disk_key(settings, owner), member.chunk.version)).fetchall()
         if len(locations) != 1:
             raise MycelError('invalid_input', 'The relation dependant requires one exact owning disk location.')
         location = str(locations[0][0])
@@ -181,6 +188,9 @@ def relate(invocation):
     refs = arguments[1:] if remove else arguments
     if len(refs) != 2:
         raise MycelError('invalid_input', 'Use mycel relate [--remove] <dependant> <source>.')
-    _addresses(*refs)
+    if any(parse_entity_uri(ref) is not None for ref in refs):
+        _validate_ref_syntax(refs)
+    else:
+        _addresses(*refs)
     with invocation_store(invocation, operation='write') as (connection, _):
         return Result(RelateStore(connection).apply(invocation.settings, *refs, remove=remove, build=current_build()))

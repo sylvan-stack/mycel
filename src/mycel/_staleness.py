@@ -174,6 +174,29 @@ def _links(connection, eligible):
             tuple(connection.execute(_RELATIONS, (eligible,)).fetchall()) + tuple(generated))
 
 
+def inactive_policy_links(connection, settings):
+    """Retained link IDs owned by other configured disk locations."""
+    if not any(value.get('code_clones') for value in settings.values['repos'].values()):
+        return frozenset()
+    from ._scope import RepositoryLocations
+    locations = {repo.name: repo.disk_location for repo in RepositoryLocations(settings).repositories}
+    rows = connection.execute("""SELECT id,repository,state FROM public.mycel_dependencies
+        WHERE kind IN ('declared','asserted') AND repository=ANY(%s)
+        UNION ALL SELECT id,repository,state FROM public.mycel_relations WHERE repository=ANY(%s)""",
+        (_eligible(settings),_eligible(settings))).fetchall()
+    return frozenset(str(identifier) for identifier,owner,state in rows
+        if state.get('declarationLocation', {}).get('location', 'disk') != locations[owner])
+
+
+def current_stale_reasons(connection, settings, versions):
+    """Read marks owned by the calling locations of shared exact versions."""
+    inactive = inactive_policy_links(connection, settings)
+    rows = connection.execute("""SELECT repository,chunk_version,dependency,reason
+        FROM public.mycel_stale_reasons WHERE chunk_version=ANY(%s) ORDER BY id""", (list(versions),)).fetchall()
+    return tuple((owner,version,reason) for owner,version,dependency,reason in rows
+                 if _stored_link(dependency,reason) not in inactive)
+
+
 def _relation_evidence(connection, rows):
     """Observe exact related pin ownership without locking a busy owner."""
     owners = list({row[7] for row in rows if row[5] in {'related', 'generated'} and row[7] is not None})
@@ -303,6 +326,16 @@ class MechanicalStalenessStore:
             guarded_repositories=guards.writable)
         rows = _links(self.connection, eligible)
         located = tuple(self.connection.execute(_NODES, (eligible, eligible)).fetchall())
+        if any(value.get('code_clones') for value in settings.values['repos'].values()):
+            from ._scope import RepositoryLocations
+            locations = {repository.name: repository for repository in RepositoryLocations(settings).repositories}
+            rows = tuple(row for row in rows if row[5] == 'generated' or
+                row[6].get('declarationLocation', {}).get('location', 'disk') == locations[row[1]].disk_location)
+            index_ids = {chunk.identifier for _, chunk in catalog.index}
+            selected_versions = {chunk.version for file in catalog.files for chunk in file.chunks}
+            selected_versions.update(chunk.version for _, chunk in catalog.index)
+            located = tuple(row for row in located if row[2] in selected_versions and
+                (str(row[0]) in index_ids or row[5].get('captureLocation', {}).get('clone') == locations[row[1]].location))
         # These observations can include a busy owner. Keep all exact row and
         # evidence inputs in the final CAS; no unheld peer can change a pin,
         # exemption, version or source selection unnoticed before publication.
@@ -449,6 +482,8 @@ class MechanicalStalenessStore:
         by_version = {node.version: node.identifier for node in nodes}
         stored = tuple(self.connection.execute("""SELECT id,chunk_version,dependency,reason FROM public.mycel_stale_reasons
             WHERE repository=ANY(%s) ORDER BY id""", (_eligible(settings),)).fetchall())
+        inactive = inactive_policy_links(self.connection, settings)
+        stored = tuple(row for row in stored if _stored_link(row[2], row[3]) not in inactive)
         direct, edges, unchecked = defaultdict(list), [], {}
         resolutions = {}
         for row in rows:

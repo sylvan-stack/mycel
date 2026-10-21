@@ -17,7 +17,7 @@ from ._errors import MycelError
 from ._deadline import check_deadline
 from ._located_dependencies import LocatedDependencyProducer
 from ._located_reconciliation import LocatedCaptureStore
-from ._locks import operation_guard, read_snapshot
+from ._locks import operation_guard, location_guard, read_snapshot
 from ._scope import RepositoryLocations
 from ._source_refs import SourceAddressError, parse_source_address, read_document_declarations
 
@@ -29,8 +29,19 @@ def _target(value):
         return None
 
 
-def _manifest_targets(manifest: CaptureManifest):
+def _manifest_targets(manifest: CaptureManifest, resolver_factory=None):
     targets = set()
+    resolver = None
+    def target(raw):
+        nonlocal resolver
+        from ._source_refs import parse_entity_uri
+        if parse_entity_uri(raw) is None or resolver_factory is None:
+            return _target(raw)
+        if resolver is None:
+            from ._dependency_application import RetainedDependencyResolver
+            resolver = RetainedDependencyResolver(resolver_factory(), {})
+        result = resolver.resolve(raw)
+        return None if result.selection is None else result.selection.place.repository
     for location in manifest.locations:
         for captured in location.files:
             if captured.corpus != 'documents':
@@ -38,9 +49,9 @@ def _manifest_targets(manifest: CaptureManifest):
             declarations = read_document_declarations(captured.parsed,
                 file=f'{manifest.repository}:@{captured.primary.root}/{captured.primary.path}')
             for chunk in declarations.chunk_sources:
-                targets.update(_target(ref.ref) for ref in chunk.sources)
+                targets.update(target(ref.ref) for ref in chunk.sources)
             for chunk in declarations.chunk_relations:
-                targets.update(_target(ref.ref) for ref in chunk.relations)
+                targets.update(target(ref.ref) for ref in chunk.relations)
     return targets - {None}
 
 
@@ -96,7 +107,9 @@ def _publication_guards(connection, settings, manifest):
             'JOIN public.mycel_chunk_versions v ON v.id=e.source_version '
             'JOIN public.mycel_chunks c ON c.id=v.chunk_id WHERE c.repository=%s',
             (manifest.repository,)).fetchall()}
-    links[manifest.repository].update(_manifest_targets(manifest).intersection(links))
+    from ._resolver import SourceResolver
+    links[manifest.repository].update(_manifest_targets(manifest,
+        lambda: SourceResolver.from_store(connection, settings)).intersection(links))
     required = _upstream({manifest.repository}, links)
     affected = {manifest.repository}
     while True:
@@ -159,7 +172,8 @@ class _CompleteProducer(LocatedDependencyProducer):
 
     def finalize_in_transaction(self, connection, result):
         from ._overview_store import OverviewStore
-        return OverviewStore(connection).reconcile_in_transaction(result.repository)
+        return OverviewStore(connection, location=RepositoryLocations(self.settings).named(
+            result.repository)[0].disk_location).reconcile_in_transaction(result.repository)
 
     def __call__(self, connection, result):
         from ._evidence import EvidenceError
@@ -269,7 +283,8 @@ def _ingest(invocation, state):
             stack.enter_context(activity.session())
         for name in selected:
             try:
-                with operation_guard(connection, name, 'pass'):
+                selected_location = RepositoryLocations(settings).named(name)[0].disk_location
+                with location_guard(connection, name, selected_location):
                     store = LocatedCaptureStore(connection)
                     manifest = store.capture(settings, name)
                     if not manifest.deletion_safe:

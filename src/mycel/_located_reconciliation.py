@@ -87,9 +87,27 @@ def _catalog(connection, repository):
 
 def location_key(identifier: LocationId) -> str:
     """Unambiguous persisted selector, including the configured checkout anchor."""
-    if identifier.kind == 'disk':
+    if identifier.kind == 'disk' and identifier.clone is None:
         return 'disk'
     return canonical_json(identifier.record()).decode('utf-8')
+
+
+
+def _row_clone(row):
+    return row[7].get('captureLocation', {}).get('clone')
+
+
+def _clone_history(repository, rows, inventory):
+    return _parse_history(repository.name,
+        [row for row in rows if _row_clone(row) == repository.location],
+        [item for item in inventory or () if item['location'].get('clone') == repository.location],
+        clone=repository.location)
+
+
+def _inventory_order(item):
+    place = item['location']
+    return (place.get('clone', ''), {'disk': 0, 'branch': 1, 'stash': 2}[place['kind']],
+            place.get('checkout') != 'code', place['identity'])
 
 
 def capture_differences(repository: str, expected: CaptureManifest, actual: CaptureManifest) -> list[str]:
@@ -237,7 +255,8 @@ class LocatedCaptureStore:
         settings.require_current()
         with checked_store(self.connection), read_snapshot(self.connection):
             rows, _, _, state, _ = _catalog(self.connection, repository)
-        history = _parse_history(repository, rows, () if state is None else state[0])
+        selected = RepositoryLocations(settings).named(repository)[0]
+        history = _clone_history(selected, rows, () if state is None else state[0])
         return capture_repository(settings, repository, previous=history)
 
     def apply(self, settings: SettingsSnapshot, manifest: CaptureManifest | str, *,
@@ -277,12 +296,15 @@ class LocatedCaptureStore:
             with read_snapshot(self.connection):
                 original = _catalog(self.connection, repository.name)
             rows, aliases, chunks, state, _ = original
-            history = _parse_history(repository.name, rows, () if state is None else state[0])
+            history = _clone_history(repository, rows, () if state is None else state[0])
             if isinstance(manifest, str):
                 manifest = capture_repository(settings, repository.name, previous=history)
             if not manifest.deletion_safe:
                 _invalid('Located publication requires a complete supported parse.')
-            _guard_disk_corpora([row for row in rows if row[8] == 'disk'], manifest, confirm_empty)
+            if any(location.id.clone != repository.location for location in manifest.locations):
+                _invalid('The capture belongs to another configured clone location.')
+            _guard_disk_corpora([row for row in rows if row[8] == 'disk'
+                and _row_clone(row) == repository.location], manifest, confirm_empty)
             fresh = manifest
             if not publish_capture:
                 fresh = capture_repository(settings, repository.name, previous=history)
@@ -322,7 +344,8 @@ class LocatedCaptureStore:
                         addresses, physical, _ = observed[captured.primary]
                         if _observe(repository, addresses, captured.source) != physical:
                             _invalid('The complete physical file changed before publication.')
-                applied, file_changes, decisions, kept, used_moves = [], [], [], set(), set()
+                applied, file_changes, decisions, used_moves = [], [], [], set()
+                kept = {str(row[4]) for row in rows if _row_clone(row) != repository.location}
                 # Include each newly published location in later files' identity
                 # catalog. Their real version IDs make exact pin decisions usable.
                 candidates = list(rows)
@@ -340,11 +363,22 @@ class LocatedCaptureStore:
                         if location.id.kind == 'disk':
                             addresses, physical, identity = observed[captured.primary]
                             stable = {(_absolute(item), tuple(item['rootIdentity'])) for item in logical}
-                            matching = [row for row in candidates if row[8] == 'disk' and (
+                            matching = [row for row in candidates if row[8] == 'disk'
+                                and _row_clone(row) == repository.location and (
                                 tuple(row[7].get('physicalIdentity', ())) == identity
                                 or (tuple(row[7].get('physicalIdentity', ())) not in present_identities
                                     and stable.intersection((_absolute(item), tuple(item['rootIdentity']))
                                                            for item in row[7].get('physicalBindings', ()))))]
+                            if not matching and repository.clones:
+                                # Configured clones are explicit identity peers. A
+                                # portable disk binding shares file/chunk identity;
+                                # its physical inode and complete bytes stay local.
+                                peers = {None, *(str(folder.path) for folder in repository.clones)}
+                                portable = {(alias.root, alias.path) for alias in captured.aliases}
+                                matching = [row for row in candidates if row[8] == 'disk'
+                                    and _row_clone(row) in peers - {repository.location}
+                                    and row[3] == captured.corpus and portable.intersection(
+                                        (item['root'], item['path']) for item in row[7].get('aliases', ()))]
                             if not matching:
                                 matching = [row for row in candidates if str(row[0]) not in disk_file_ids
                                             and _logical(logical).intersection(_prior_logical(row, scopes))]
@@ -492,6 +526,8 @@ class LocatedCaptureStore:
                             UUID(chunk_id), 'removed', item[10].get('name', item[5]['name'])))
                 inventory = [{'location': location.id.record(), 'commit': location.commit,
                               'policyHash': manifest.policy_hash} for location in manifest.locations]
+                inventory = sorted([*(item for item in (() if state is None else state[0])
+                    if item['location'].get('clone') != repository.location), *inventory], key=_inventory_order)
                 inventory_changed = state is None or state[0] != inventory
                 if inventory_changed:
                     connection.execute('INSERT INTO public.mycel_repository_state VALUES (%s,NULL,%s) '
@@ -618,8 +654,5 @@ class LocatedCaptureStore:
             connection.execute('INSERT INTO public.mycel_locations VALUES (%s,%s,%s,%s,%s,%s)',
                                (uuid4(), exact, located, kind, key, Jsonb(details)))
             persisted.append((str(chunk_id), exact))
-        if kind == 'disk':
-            # The entity rows of the document, keyed by their UUID (MYC-17). Branch
-            # and stash locations follow when every clone becomes a location.
-            publish_entities(connection, repository, identifier, located, captured)
+        publish_entities(connection, repository, identifier, located, captured, kind=kind, key=key)
         return FileBinding(identifier, str(version), str(located), primary, aliases), tuple(persisted)

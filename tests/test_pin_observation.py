@@ -41,7 +41,7 @@ class DiskCatalogConnection(EvidenceConnection):
                        resolver._CHUNKS_SQL, resolver._INDEX_SQL}:
             return super().execute(sql, params)
         self.sql.append((sql, params))
-        eligible = params[-1]
+        eligible = params[2]
         files = tuple(file for file in self.catalog_files.values() if file.repository in eligible)
         if sql == resolver._CATALOG_SQL:
             rows = []

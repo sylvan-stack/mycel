@@ -42,6 +42,8 @@ class _ReadOnlyRows:
             values = self.dependencies
         elif sql == _refs._RELATED_REFS_SQL:
             values = self.related
+        elif sql == _refs._JUSTIFIED_REFS_SQL:
+            values = []
         else:
             raise AssertionError('Reporting may only select retained rows')
         class Cursor:
@@ -161,7 +163,7 @@ class RelatedRefTests(unittest.TestCase):
         self.assertNotIn('kind', reports[1])
         self.assertEqual([report['id'] for report in filtered.value['repositories'][0]['result']['refs']],
                          ['a-related', 'b-dependency'])
-        self.assertEqual(len(connection.queries), 4)
+        self.assertEqual(len(connection.queries), 6)
         self.assertFalse(connection.in_snapshot)
 
 

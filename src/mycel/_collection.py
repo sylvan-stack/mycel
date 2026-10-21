@@ -14,7 +14,7 @@ from ._capture import CaptureManifest, capture_repository
 from ._disk_reconciliation import _inputs, _metadata, _parse_history, _same_capture
 from ._errors import MycelError
 from ._evidence import BaselineManifest, EvidenceError
-from ._located_reconciliation import _bindings, _catalog, _scopes, location_key
+from ._located_reconciliation import _bindings, _catalog, _scopes, _clone_history, location_key
 from ._locks import LockNamespace, invocation_is_live, require_transaction_guards
 from ._location_corpus import location_corpus
 from ._scope import RepositoryLocations
@@ -179,7 +179,9 @@ class CollectionStore:
                      'policyHash': manifest.policy_hash} for item in manifest.locations]
         state = self.connection.execute('SELECT read_locations FROM public.mycel_repository_state '
             'WHERE repository=%s FOR SHARE NOWAIT', (manifest.repository,)).fetchone()
-        if state != (expected,):
+        repository = RepositoryLocations(settings).named(manifest.repository)[0]
+        if state is None or [item for item in state[0]
+                if item['location'].get('clone') == repository.location] != expected:
             _invalid('Collection requires the complete published location inventory.')
         # Reuse only this transaction's published, independently validated
         # parse records; the caller's asserted manifest never supplies trust.
@@ -188,7 +190,7 @@ class CollectionStore:
             fresh = manifest
         else:
             fresh = capture_repository(settings, manifest.repository,
-                previous=_parse_history(manifest.repository, catalog[0], state[0]))
+                previous=_clone_history(repository, catalog[0], state[0]))
         if not fresh.deletion_safe or not all(item.complete for item in fresh.locations) or not _same_capture(manifest, fresh):
             _invalid('The complete capture changed before unlocated collection.')
         repository = RepositoryLocations(settings).named(manifest.repository)[0]
@@ -197,7 +199,8 @@ class CollectionStore:
             FROM public.mycel_files f JOIN public.mycel_file_versions v ON v.file_id=f.id
             JOIN public.mycel_file_locations l ON l.file_version=v.id WHERE f.repository=%s
             FOR SHARE OF f,v,l NOWAIT""", (manifest.repository,)).fetchall()
-        remaining = list(rows)
+        remaining = [row for row in rows
+            if row[6].get("captureLocation", {}).get("clone") == repository.location]
         for row in rows:
             location_corpus(row[6])
         for location in manifest.locations:
@@ -230,8 +233,8 @@ class CollectionStore:
                 # each must be published once with its exact bytes.
                 entities = [chunk for chunk in chunks if chunk[2].get('kind') in ENTITY_KINDS]
                 chunks = [chunk for chunk in chunks if chunk[2].get('kind') not in ENTITY_KINDS]
-                rows_expected = (captured.parsed.entities if location.id.kind == 'disk'
-                                 and isinstance(captured.parsed, MarkdownDocument) else ())
+                rows_expected = (captured.parsed.entities
+                                 if isinstance(captured.parsed, MarkdownDocument) else ())
                 if len(entities) != len(rows_expected):
                     _invalid('Collection requires every captured entity row to be published.')
                 for row_expected in rows_expected:
@@ -270,9 +273,12 @@ class CollectionStore:
             descriptor = baseline.payload['dependant']
             if descriptor['comparison']['kind'] != 'code_text':
                 continue
-            row = self.connection.execute('SELECT file_id FROM public.mycel_chunks WHERE id=%s AND repository=%s',
+            row = self.connection.execute('SELECT file_id,kind FROM public.mycel_chunks WHERE id=%s AND repository=%s',
                 (baseline.payload['dependantId'], repository)).fetchone()
-            if row is None or row[0] is None:
+            # Entity identity is its UUID and needs no original full-file
+            # parser context. Its current file pointer can also belong to a
+            # row moved in another clone; the immutable row evidence suffices.
+            if row is None or row[0] is None or row[1] in ENTITY_KINDS:
                 continue
             file_hash = descriptor.get('fileHash')
             version = self.connection.execute('SELECT id FROM public.mycel_file_versions '

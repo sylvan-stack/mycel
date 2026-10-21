@@ -86,5 +86,30 @@ class RealActivityCheckStoreTests(unittest.TestCase):
         self.assertEqual(quiet['repositories']['fixture'], result)
 
 
+class RealProviderIsolationTests(unittest.TestCase):
+    @proves('MYC-4.16')
+    def test_disposable_check_cannot_read_owner_provider_key_or_send_a_query(self):
+        import tempfile
+        from unittest.mock import patch
+        from mycel._settings import load_settings
+        from mycel._credentials import Credentials
+        from mycel._search import prepare_query
+        from mycel._voyage import VoyageClient
+        script=runpy.run_path(str(Path(__file__).resolve().parents[1]/'scripts/check_real.py'))
+        def transport(*args,**kwargs):
+            raise AssertionError('The real-repository check must never send a provider request')
+        def factory(credentials,policy,**options):
+            return VoyageClient(credentials,policy,**options,_transport=transport)
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);config=root/'settings.toml'
+            config.write_text(script['_settings']('postgresql://fixture@unreachable.invalid/store',
+                {'fixture':(root/'code',root/'docs')}))
+            settings=load_settings(path=config,home=root)
+            with patch.object(Credentials,'_keychain',side_effect=AssertionError('Owner key was accessed')):
+                result=prepare_query(settings,'the pass publishes its capture',_client_factory=factory)
+            self.assertIsNone(result.vector)
+            self.assertTrue(result.reason)
+
+
 if __name__ == '__main__':
     unittest.main()

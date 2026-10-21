@@ -16,6 +16,7 @@ from ._evidence import EvidenceError, PinInputs
 from ._located_reconciliation import location_key
 from ._resolver import SourceResolver
 from ._settings import SettingsSnapshot, load_settings
+from ._scope import RepositoryLocations
 from ._source_refs import SourceAddressError, parse_source_address
 
 
@@ -60,8 +61,12 @@ class DependencyCaptureInputs:
     def rereader(self, identifier, owner, commit):
         connection = self.connection
         key = location_key(identifier)
+        def local_identifier(repository):
+            clone = RepositoryLocations(self.settings).named(repository)[0].location
+            return replace(identifier, clone=clone) if repository != owner or identifier.clone is None else identifier
         def reread(expected):
-            settings = load_settings(path=self.settings.file, home=self.settings_home)
+            settings = replace(load_settings(path=self.settings.file, home=self.settings_home),
+                               _cwd=self.settings._cwd)
             try:
                 settings.require_valid(require_store=False)
             except MycelError:
@@ -90,7 +95,7 @@ class DependencyCaptureInputs:
                 from ._locks import require_transaction_guards
                 require_transaction_guards(connection, (address.repository,))
                 manifest = self.observe(address.repository)
-                places = [place for place in manifest.locations if place.id == identifier]
+                places = [place for place in manifest.locations if place.id == local_identifier(address.repository)]
                 current_files = tuple(file for file in catalog.files if file.repository == address.repository
                     and any(alias.path == address.path and address.root in {None, alias.root} for alias in file.aliases))
                 selected += current_files
@@ -124,7 +129,7 @@ class DependencyCaptureInputs:
                 if not self._physical(file.repository):
                     continue
                 manifest = self.observe(file.repository)
-                places = [place for place in manifest.locations if place.id == identifier]
+                places = [place for place in manifest.locations if place.id == local_identifier(file.repository)]
                 if len(places) != 1:
                     raise EvidenceError('changed_since_ingest')
                 place = places[0]
@@ -165,8 +170,11 @@ class DependencyCaptureInputs:
                 (address.repository, anchor, address.repository, anchor)).fetchall()}
         rows = connection.execute("""SELECT f.id,l.kind,l.location,l.metadata,v.source_bytes
             FROM public.mycel_files f JOIN public.mycel_file_versions v ON v.file_id=f.id
-            JOIN public.mycel_file_locations l ON l.file_version=v.id WHERE f.repository=%s""",
-            (address.repository,)).fetchall()
+            JOIN public.mycel_file_locations l ON l.file_version=v.id WHERE f.repository=%s
+              AND l.metadata->'captureLocation'->>'clone' IS NOT DISTINCT FROM %s::text""",
+            (address.repository, manifest.disk.id.clone)).fetchall()
+        # A capture establishes absence in its own checkout. Other clones'
+        # retained branch/disk witnesses are not physical inputs of this pass.
         retained_paths = {(item['root'], item['path']) for identifier, _, _, metadata, _ in rows
                           if identifier in anchors for item in metadata.get('aliases', ())}
         if natural is not None:

@@ -297,7 +297,7 @@ class EntityStoreTests(unittest.TestCase):
         return connection.execute("""SELECT c.id::text, c.kind, f.path, v.id, l.id IS NOT NULL
             FROM public.mycel_chunks c JOIN public.mycel_files f ON f.id = c.file_id
             JOIN public.mycel_chunk_versions v ON v.chunk_id = c.id
-            LEFT JOIN public.mycel_locations l ON l.chunk_version = v.id
+            JOIN public.mycel_locations l ON l.chunk_version = v.id AND l.kind='disk'
             WHERE c.kind IN ('req', 'dec') ORDER BY c.id, v.id""").fetchall()
 
     @proves("MYC-17.1", "MYC-17.4", "MYC-1.36", "MYC-6.21", kind="store")
@@ -316,10 +316,12 @@ class EntityStoreTests(unittest.TestCase):
         self.ingest()
         with self.base.connect() as connection:
             rows = self.entity_rows(connection)
-            # The edited row has a new exact version; its unlocated old version is collected.
+            # The disk row has a new exact version; main still retains its old version.
             self.assertEqual([(row[0], row[4]) for row in rows], [(DEC_A, True), (REQ_A, True), (REQ_B, True)])
             self.assertEqual([row for row in rows if row[0] == REQ_B][0][3], versions[REQ_B])
             self.assertNotEqual([row for row in rows if row[0] == REQ_A][0][3], versions[REQ_A])
+            self.assertGreater(connection.execute("SELECT count(*) FROM public.mycel_locations "
+                "WHERE chunk_version=%s AND kind='branch'", (versions[REQ_A],)).fetchone()[0], 0)
         # A move of the row to another file changes a location, not the entity.
         moved = SPEC.replace(f"| FIX-1.2 <!-- {REQ_B} --> | log every bottle | New | store |\n", "")
         spec.write_text(moved.replace("keep the cellar cool", "keep the cellar cold"), encoding="utf-8")
@@ -335,6 +337,7 @@ class EntityStoreTests(unittest.TestCase):
             self.assertEqual((reply["path"], reply["name"], reply["origin"], reply["kind"]), ("more.md", "FIX-1.2", "document", "req"))
         # A row that leaves every location keeps its entity row.
         (self.base.artifact / "more.md").unlink()
+        self.base.commit()  # advance the only local branch past the removed row too
         self.ingest()
         with self.base.connect() as connection:
             self.assertEqual(connection.execute("SELECT kind FROM public.mycel_chunks WHERE id::text=%s", (REQ_B,)).fetchone(), ("req",))

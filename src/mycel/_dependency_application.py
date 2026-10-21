@@ -23,7 +23,7 @@ from ._evidence import (CaptureLocation, EvidenceError, EvidenceStore,
 from ._locks import require_transaction_guards
 from ._reconciliation import (AssertedRemoval, DependencyRecord, DependencyRequest,
     DependencyDecision, DependencyPlan, GraphEdge, ReconciliationError, _cycle, plan_dependencies)
-from ._resolver import (Resolution, SelectionMember, SourceResolver, replace_resolution)
+from ._resolver import (Resolution, SelectionMember, SourceResolver, replace_resolution, _location_selectors)
 from ._settings import SettingsSnapshot
 from ._source_refs import SourceAddress, SourceAddressError, parse_source_address
 from ._store import exact_bytes
@@ -56,6 +56,13 @@ class RetainedDependencyResolver(SourceResolver):
             return Resolution(declaration, 'invalid', fault=self.syntax_faults[declaration])
         selected_purpose = 'endpoint' if purpose == 'source' and declaration in self.endpoint_refs else purpose
         result = self.base.resolve(declaration, purpose=selected_purpose)
+        from ._source_refs import parse_entity_uri
+        if parse_entity_uri(declaration) is not None:
+            if result.selection is not None and result.selection.kind in {'req', 'dec'}:
+                result = replace(result, selection=replace(result.selection, kind='chunk'))
+            if result.fault == 'missing_entity':
+                result = replace(result, fault='missing_name')
+            return result  # the UUID is already the exact anchor, even after a move
         anchor = self.anchors.get(declaration)
         if purpose != 'source' or anchor is None:
             return result
@@ -224,12 +231,14 @@ class DependencyApplicationStore:
         current_ids = set(current.values())
         eligible = [name for name, value in settings.values['repos'].items() if value['enabled']]
         rows = self.connection.execute(_GRAPH_SQL, (eligible,)).fetchall()
+        selected_location, selectors = _location_selectors(settings, kind, location)
         graph, complete = [], []
         for dependency, owner, version, state, source, dependant, source_version in rows:
             if version not in current or str(source) not in current_ids:
                 continue
             owned = state.get('declarationLocation')
-            if owned is not None and (owned.get('kind'), owned.get('location')) != (kind, location):
+            expected_location = selected_location if selectors is None else selectors.get(owner)
+            if owned is not None and (owned.get('kind'), owned.get('location')) != (kind, expected_location):
                 continue
             # Generated/asserted consumers without a declaration location use
             # their current exact dependant version in the selected catalog.
