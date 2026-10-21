@@ -2906,12 +2906,14 @@
     ],
     "MYC-17.8": [
       "test_justify.JustifySelectionStoreTests.test_complete_class_family_and_existing_review_are_retained",
+      "test_justify.JustifySharedChunkStoreTests.test_several_origins_for_one_chunk_share_its_complete_final_verification",
       "test_justify.JustifyStoreTests.test_all_pairs_resolve_before_mutation_and_changed_or_generated_inputs_refuse",
       "test_justify.JustifyStoreTests.test_atomic_stated_link_and_verification_persist_only_in_index_store",
       "test_justify.JustifyStoreTests.test_bulk_rolls_back_every_pair_when_late_capture_changes_then_succeeds_atomically"
     ],
     "MYC-17.9": [
       "test_justify.JustifySelectionStoreTests.test_complete_class_family_and_existing_review_are_retained",
+      "test_justify.JustifySharedChunkStoreTests.test_several_origins_for_one_chunk_share_its_complete_final_verification",
       "test_justify.JustifyStoreTests.test_atomic_stated_link_and_verification_persist_only_in_index_store",
       "test_justify.JustifyStoreTests.test_bulk_rolls_back_every_pair_when_late_capture_changes_then_succeeds_atomically"
     ],
@@ -2922,6 +2924,7 @@
       "test_justify.CloneEntityMoveStoreTests.test_refs_keep_each_entitys_actual_file_when_its_row_moves_in_only_one_clone",
       "test_justify.CloneGraphStoreTests.test_cycles_use_the_selected_location_of_every_repository",
       "test_justify.ClonePolicyStoreTests.test_equal_clone_versions_keep_independent_policies_staleness_and_verification_readback",
+      "test_justify.JustifySharedChunkStoreTests.test_several_origins_for_one_chunk_share_its_complete_final_verification",
       "test_justify.JustifyStoreTests.test_all_pairs_resolve_before_mutation_and_changed_or_generated_inputs_refuse",
       "test_justify.JustifyStoreTests.test_bulk_rolls_back_every_pair_when_late_capture_changes_then_succeeds_atomically",
       "test_origins.OriginsStoreTests.test_links_missing_paths_single_chunk_and_readonly_cli_use_the_calling_clone"

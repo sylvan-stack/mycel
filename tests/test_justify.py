@@ -441,3 +441,26 @@ class CloneGraphStoreTests(unittest.TestCase):
             # Opposite policies in two clones are individually acyclic.
             DeriveStore(connection).apply(self.primary,self.ref,other)
             DeriveStore(connection).apply(self.secondary,other,self.ref)
+
+
+class JustifySharedChunkStoreTests(unittest.TestCase):
+    setUp=UriMutationStoreTests.setUp
+    ingest=UriMutationStoreTests.ingest
+
+    @proves('MYC-17.8','MYC-17.9','MYC-17.10',kind='store')
+    def test_several_origins_for_one_chunk_share_its_complete_final_verification(self):
+        from mycel._justify import JustifyStore
+        from mycel._locks import snapshot_transaction
+        from mycel._store import checked_store
+        from mycel._verification_reader import VerificationReader
+        with self.base.connect() as connection:
+            replies=JustifyStore(connection).apply_pairs(self.secondary,
+                ((self.ref,self.uri),(self.ref,self.other)),by='owner',build=1)
+            self.assertEqual(len(replies),2)
+            self.assertEqual(replies[0]['verification'],replies[1]['verification'])
+            self.assertEqual(len(replies[0]['verification']['sources']),2)
+            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone()[0],1)
+            self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_dependencies WHERE state ? 'originLink'").fetchone()[0],2)
+            with checked_store(connection),snapshot_transaction(connection):
+                report=VerificationReader(connection,self.secondary).list_in_transaction('fixture')
+            self.assertEqual([row['id'] for row in report['verifications']],[replies[0]['verification']['id']])

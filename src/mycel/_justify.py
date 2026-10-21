@@ -196,15 +196,24 @@ class JustifyStore:
                                      and len(origin.members) == 1 and origin.members[0].chunk.kind in {'req', 'dec'} else None}
                         self.connection.execute('UPDATE public.mycel_dependencies SET state=%s WHERE id=%s',
                                                 (Jsonb(state), identifier))
-                        verification = ConfirmationStore(self.connection).apply_in_transaction(settings, raw_chunk,
-                            by=by, how='read', captured_at=captured_at, settings_home=settings_home,
-                            guarded_repositories=guarded, expected_identifier=member.chunk.identifier)
-                        reply = {'chunk': public_reference(selection), 'chunkVersion': member.chunk.version,
-                            'origin': public_reference(origin), 'link': link, 'verification': verification}
-                        replies.append(reply)
-                        current = [value for value, planned_pair in zip(replies, planned)
-                                   if planned_pair[2].place.repository == owner]
-                        counts[(owner, 'justify')] = reply if len(pairs) == 1 else {'justifications': current}
+                        replies.append({'chunk': public_reference(selection), 'chunkVersion': member.chunk.version,
+                            'origin': public_reference(origin), 'link': link})
+                    # State the entire batch before verifying a chunk. Several
+                    # Origins for one dependant share its complete final policy,
+                    # avoiding competing same-time partial verification records.
+                    verified = {}
+                    for reply, (raw_chunk, _, selection, _, location) in zip(replies, planned):
+                        member = selection.members[0]
+                        key = (member.chunk.identifier,member.chunk.version,location)
+                        if key not in verified:
+                            verified[key] = ConfirmationStore(self.connection).apply_in_transaction(settings, raw_chunk,
+                                by=by, how='read', captured_at=captured_at, settings_home=settings_home,
+                                guarded_repositories=guarded, expected_identifier=member.chunk.identifier)
+                        reply['verification'] = verified[key]
+                    for owner in sorted({pair[2].place.repository for pair in planned}):
+                        current = [reply for reply, pair in zip(replies, planned)
+                                   if pair[2].place.repository == owner]
+                        counts[(owner, 'justify')] = current[0] if len(pairs) == 1 else {'justifications': current}
                         if audit is not None:
                             audit.record_in_transaction(owner, 'justify', AppliedMutation(True, counts[owner, 'justify']))
                     inputs.verify()

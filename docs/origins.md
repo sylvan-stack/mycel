@@ -19,7 +19,7 @@ The bulk file is UTF-8 JSON lines, with one object per nonempty line:
 
 Each object has exactly these two string fields. Duplicate fields, unknown fields and duplicate exact pairs are refused. Every pair resolves before any assertion, and all assertions, metadata, pins, verification evidence and applied activity share one transaction. A late failure rolls the entire batch back.
 
-The single reply contains `chunk`, `chunkVersion`, `origin`, `link` and the ordinary `verification`. The batch reply is `{ justifications: [...] }` in input order. A direct statement uses `method: stated`, `confidenceScore: 1` and `confidence: asserted`; its author defaults to the operating-system user. A retained review survives a repeated statement, and no review is invented. `refs` includes these assertions with `originLink`; `stale` and `verifications` show the ordinary result.
+The single reply contains `chunk`, `chunkVersion`, `origin`, `link` and the ordinary `verification`. The batch reply is `{ justifications: [...] }` in input order. Pairs for one chunk share one final verification covering all of that chunk's links. A direct statement uses `method: stated`, `confidenceScore: 1` and `confidence: asserted`; its author defaults to the operating-system user. A retained review survives a repeated statement, and no review is invented. `refs` includes these assertions with `originLink`; `stale` and `verifications` show the ordinary result.
 
 ## Find work
 
