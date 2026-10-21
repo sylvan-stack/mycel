@@ -174,6 +174,17 @@ def _links(connection, eligible):
             tuple(connection.execute(_RELATIONS, (eligible,)).fetchall()) + tuple(generated))
 
 
+def inactive_policy_links(connection, settings):
+    """Retained link IDs owned by other configured disk locations."""
+    if not any(value.get('code_clones') for value in settings.values['repos'].values()):
+        return frozenset()
+    from ._scope import RepositoryLocations
+    locations = {repo.name: repo.disk_location for repo in RepositoryLocations(settings).repositories}
+    return frozenset(str(row[0]) for row in _links(connection, _eligible(settings))
+        if row[5] != 'generated' and
+        row[6].get('declarationLocation', {}).get('location', 'disk') != locations[row[1]])
+
+
 def _relation_evidence(connection, rows):
     """Observe exact related pin ownership without locking a busy owner."""
     owners = list({row[7] for row in rows if row[5] in {'related', 'generated'} and row[7] is not None})
@@ -459,6 +470,8 @@ class MechanicalStalenessStore:
         by_version = {node.version: node.identifier for node in nodes}
         stored = tuple(self.connection.execute("""SELECT id,chunk_version,dependency,reason FROM public.mycel_stale_reasons
             WHERE repository=ANY(%s) ORDER BY id""", (_eligible(settings),)).fetchall())
+        inactive = inactive_policy_links(self.connection, settings)
+        stored = tuple(row for row in stored if _stored_link(row[2], row[3]) not in inactive)
         direct, edges, unchecked = defaultdict(list), [], {}
         resolutions = {}
         for row in rows:

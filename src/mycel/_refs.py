@@ -116,6 +116,18 @@ def _reports(row) -> list[dict]:
         raise MycelError("store_format", "A retained reference has incompatible occurrence metadata.") from None
 
 
+def _justified_report(row):
+    from ._justify import checked_link
+    state = row[3]
+    link = checked_link(state['originLink'])
+    # Statements have no declaration line; retain the ordinary resolution and
+    # location projection while reporting their actual source of authority.
+    normalized = {**state, 'rawDeclared': state['rawRef'], 'rawLine': state['rawRef'],
+                  'origin': 'stated', 'line': None}
+    return {**_report((*row[:3], normalized, *row[4:])), 'occurrence': 0,
+            'kind': 'asserted', 'originLink': link}
+
+
 def _related_reports(row) -> list[dict]:
     """Project declared relation occurrences through the shared ref reporter.
 
@@ -202,6 +214,11 @@ def refs(invocation: Invocation) -> Result:
             retained = [ref for row in rows for ref in _reports(row)]
             related = connection.execute(_RELATED_REFS_SQL, (repository.name,)).fetchall()
             retained.extend(ref for row in related for ref in _related_reports(row))
+            justified = connection.execute(_JUSTIFIED_REFS_SQL, (repository.name,)).fetchall()
+            retained.extend(_justified_report(row) for row in justified)
+            if invocation.settings.values['repos'][repository.name].get('code_clones'):
+                retained = [ref for ref in retained if ref['location']['kind'] == 'disk'
+                            and ref['location']['name'] == repository.disk_location]
             if not generated_context_loaded and any(_needs_generated_context(ref) for ref in retained):
                 catalog = SourceResolver.from_read_transaction(connection, invocation.settings)
                 namespaces = frozenset((place.repository, place.path) for place, chunk in catalog.index
@@ -235,6 +252,9 @@ LEFT JOIN LATERAL (
 ) locations ON true
 WHERE d.kind='declared' AND d.repository=%s AND d.state ? 'declarationLocation'
 ORDER BY d.id"""
+
+_JUSTIFIED_REFS_SQL = _REFS_SQL.replace("d.kind='declared'",
+    "d.kind='asserted' AND d.state ? 'originLink'")
 
 
 _RELATED_REFS_SQL = """SELECT r.id,r.repository,r.left_version,r.state,r.baseline_owner,

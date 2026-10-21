@@ -348,6 +348,37 @@ atomic pass reconciliation and stable vectors on body-only edits.
         ]
       },
       {
+        "name": "justify",
+        "description": "State an Origin Link and record verification",
+        "available": true,
+        "rawArguments": false,
+        "options": [
+          "-h",
+          "--help",
+          "--by <name>",
+          "--file <pairs.jsonl>"
+        ]
+      },
+      {
+        "name": "origins",
+        "description": "Report Origin Links and coverage",
+        "available": true,
+        "rawArguments": false,
+        "options": [
+          "-h",
+          "--help",
+          "--repo <name>",
+          "--missing",
+          "--path <path>",
+          "--changes",
+          "--unresting",
+          "--no-fresh",
+          "--needs-nothing <requirement>",
+          "--reason <text>",
+          "--clear-needs-nothing <requirement>"
+        ]
+      },
+      {
         "name": "drifts",
         "description": "Report dependency review work",
         "available": true,

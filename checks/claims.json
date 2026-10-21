@@ -37,6 +37,8 @@
       "test_embed.EmbedCliTests.test_all_initial_capture_or_prepare_failures_have_one_closed_error",
       "test_embed.EmbedCliTests.test_completed_empty_or_failed_planning_preserves_started_and_mixed_replies",
       "test_embed.EmbedCliTests.test_initial_capture_or_prepare_interruption_has_common_closed_reply_without_later_work",
+      "test_justify.JustifyInputTests.test_bulk_format_and_cli_reject_ambiguous_input_before_store_access",
+      "test_origins.OriginsInputTests.test_report_and_requirement_mark_syntax_is_finite",
       "test_refs.RefsCliTests.test_invalid_args_help_and_unknown_scope_stop_before_store_or_provider_access",
       "test_refs.RefsCliTests.test_preflight_failures_have_one_closed_error_and_stops_have_status_two",
       "test_scope_cli.ScopeCliTests.test_selector_and_folder_faults_leave_unrelated_operations_visible",
@@ -1456,6 +1458,7 @@
       "test_derive.DeriveStoreTests.test_retained_away_and_deleted_assertions_remove_exact_owner_without_empty_baseline"
     ],
     "MYC-7.26": [
+      "test_justify.UriMutationStoreTests.test_entity_uris_work_in_declarations_and_existing_mutations",
       "test_relate.RelateStoreTests.test_complete_file_family_declarations_atomic_snapshots_and_separate_header_assertion",
       "test_relate.RelateStoreTests.test_declared_asserted_independence_alias_noops_and_exact_removed_selection",
       "test_relate.RelateStoreTests.test_exact_disk_source_and_dependant_guards_and_late_audit_rollback",
@@ -2857,7 +2860,8 @@
       "test_entities.EntityStoreTests.test_pass_publishes_entity_rows_keyed_by_uuid_and_keeps_them_through_edits_and_moves"
     ],
     "MYC-17.5": [
-      "test_entities.EntityUriTests.test_entity_uris_parse_format_and_resolve_by_uuid_with_the_kind_tag_as_a_check"
+      "test_entities.EntityUriTests.test_entity_uris_parse_format_and_resolve_by_uuid_with_the_kind_tag_as_a_check",
+      "test_justify.UriSyntaxTests.test_mutation_preflight_accepts_uuid_spelling_and_rejects_malformed_inputs"
     ],
     "MYC-17.6": [
       "test_entities.EntityStoreTests.test_a_decision_shows_its_chats_from_a_stand_in_database_and_an_edit_marks_dependants_stale"
@@ -2891,6 +2895,41 @@
     ],
     "MYC-16.15": [
       "test_entities.EntityUriTests.test_entity_uris_parse_format_and_resolve_by_uuid_with_the_kind_tag_as_a_check"
+    ],
+    "MYC-17.8": [
+      "test_justify.JustifyStoreTests.test_all_pairs_resolve_before_mutation_and_changed_or_generated_inputs_refuse",
+      "test_justify.JustifyStoreTests.test_atomic_stated_link_and_verification_persist_only_in_index_store",
+      "test_justify.JustifyStoreTests.test_bulk_rolls_back_every_pair_when_late_capture_changes_then_succeeds_atomically"
+    ],
+    "MYC-17.9": [
+      "test_justify.JustifyStoreTests.test_atomic_stated_link_and_verification_persist_only_in_index_store",
+      "test_justify.JustifyStoreTests.test_bulk_rolls_back_every_pair_when_late_capture_changes_then_succeeds_atomically"
+    ],
+    "MYC-6.23": [
+      "test_justify.JustifyStoreTests.test_atomic_stated_link_and_verification_persist_only_in_index_store"
+    ],
+    "MYC-17.10": [
+      "test_justify.ClonePolicyStoreTests.test_equal_clone_versions_keep_independent_policies_staleness_and_verification_readback",
+      "test_justify.JustifyStoreTests.test_all_pairs_resolve_before_mutation_and_changed_or_generated_inputs_refuse",
+      "test_justify.JustifyStoreTests.test_bulk_rolls_back_every_pair_when_late_capture_changes_then_succeeds_atomically",
+      "test_origins.OriginsStoreTests.test_links_missing_paths_single_chunk_and_readonly_cli_use_the_calling_clone"
+    ],
+    "MYC-6.22": [
+      "test_justify.ClonePolicyStoreTests.test_equal_clone_versions_keep_independent_policies_staleness_and_verification_readback"
+    ],
+    "MYC-1.38": [
+      "test_justify.ClonePolicyStoreTests.test_equal_clone_versions_keep_independent_policies_staleness_and_verification_readback"
+    ],
+    "MYC-17.11": [
+      "test_origins.OriginsStoreTests.test_changes_compare_retained_main_versions_without_git_and_keep_other_clone_unchanged",
+      "test_origins.OriginsStoreTests.test_default_runs_one_scoped_ingest_then_one_report_and_empty_list_still_succeeds",
+      "test_origins.OriginsStoreTests.test_links_missing_paths_single_chunk_and_readonly_cli_use_the_calling_clone"
+    ],
+    "MYC-1.39": [
+      "test_origins.OriginsStoreTests.test_changes_compare_retained_main_versions_without_git_and_keep_other_clone_unchanged"
+    ],
+    "MYC-17.12": [
+      "test_origins.OriginsStoreTests.test_unresting_and_reasoned_requirement_marks_never_invent_edges_or_proofs"
     ]
   }
 }

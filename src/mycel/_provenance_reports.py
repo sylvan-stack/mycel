@@ -156,8 +156,8 @@ def reference_counts(references):
 
 
 class ProvenanceReports:
-    def __init__(self, connection):
-        self.connection = connection
+    def __init__(self, connection, settings=None):
+        self.connection, self.settings = connection, settings
 
     def _drifts(self, repository):
         require_read_transaction(self.connection)
@@ -186,7 +186,15 @@ class ProvenanceReports:
 
     def stale_in_snapshot(self, repository):
         require_read_transaction(self.connection)
-        chunks = stale_chunks(self.connection.execute(_STALE_SQL, (repository,)).fetchall())
+        rows = self.connection.execute(_STALE_SQL, (repository,)).fetchall()
+        if self.settings is not None and self.settings.values['repos'][repository].get('code_clones'):
+            from ._scope import RepositoryLocations
+            from ._staleness import inactive_policy_links, _stored_link
+            selected = RepositoryLocations(self.settings).named(repository)[0]
+            inactive = inactive_policy_links(self.connection, self.settings)
+            rows = [row for row in rows if _stored_link(row[11], row[12]) not in inactive
+                and (row[4] == 'index' or row[10].get('captureLocation', {}).get('clone') == selected.location)]
+        chunks = stale_chunks(rows)
         return {'repository': repository, 'stale': chunks, 'count': len(chunks)}
 
     def status_in_snapshot(self, repository):
@@ -222,7 +230,7 @@ def _handle(invocation, report, **options):
             nonlocal reports
             connection, _ = stack.enter_context(invocation_store(invocation))
             stack.enter_context(snapshot_transaction(connection))
-            reports = ProvenanceReports(connection)
+            reports = ProvenanceReports(connection, invocation.settings)
 
         return for_repositories(invocation,
             lambda repository: getattr(reports, report)(repository.name, **options),

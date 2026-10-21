@@ -28,8 +28,16 @@ from ._reconciliation import ReconciliationError
 from ._relations import RELATION_ROWS_SQL, RelationApplicationStore, _relation_raw, relation_baseline
 from ._resolver import SelectionMember, SourceResolver
 from ._source_refs import SourceAddressError, parse_source_address, read_document_declarations, parse_entity_uri
-from ._staleness import StaleEdge, StaleNode, StaleReason, _closure, _stored_link, plan_staleness
+from ._staleness import (StaleEdge, StaleNode, StaleReason, _closure, _stored_link,
+    plan_staleness, inactive_policy_links)
 from ._store import checked_store
+
+
+def _identity(by):
+    by = getpass.getuser() if by is None else by
+    if not isinstance(by, str) or not by.strip() or any(ord(char) < 32 for char in by):
+        raise MycelError('invalid_input', 'Verification requires a nonempty --by identity.')
+    return by
 
 
 def _arguments(dependant, by, how):
@@ -41,10 +49,7 @@ def _arguments(dependant, by, how):
         raise MycelError('refused', 'Generated text must be regenerated; it cannot be confirmed.')
     if place.name is None:
         raise MycelError('invalid_input', 'Confirmation requires one current on-disk chunk.')
-    if by is None:
-        by = getpass.getuser()
-    if not isinstance(by, str) or not by.strip() or any(ord(char) < 32 for char in by):
-        raise MycelError('invalid_input', 'Confirmation requires a nonempty --by identity.')
+    by = _identity(by)
     if not isinstance(how, str) or how not in {'read', 'check'}:
         raise MycelError('invalid_input', 'Confirmation --how must be read or check.')
     return place, by
@@ -71,6 +76,14 @@ def _located(connection, selection, *, settings=None, lock=True):
     if len(rows) != 1:
         raise MycelError('invalid_input', 'Confirmation requires one exact owning disk location.')
     return str(rows[0][0]), rows[0][1]
+
+
+def _require_confirmable(connection, member, metadata):
+    if metadata.get('documentDeclarations', {}).get('metadata', {}).get('generated') is True or connection.execute(
+            """SELECT 1 FROM public.mycel_dependencies WHERE dependant_version=%s AND kind='generated'
+            UNION SELECT 1 FROM public.mycel_generated_state WHERE chunk_id=%s""",
+            (member.chunk.version, member.chunk.identifier)).fetchone():
+        raise MycelError('refused', 'Generated text must be regenerated; it cannot be confirmed.')
 
 
 def _graph_rows(connection, catalog):
@@ -159,10 +172,14 @@ class _Repropagation:
         versions = [item.chunk.version for item in selected]
         stale = tuple(self.connection.execute("""SELECT id,chunk_version,dependency,reason
             FROM public.mycel_stale_reasons WHERE chunk_version=ANY(%s) ORDER BY id""", (versions,)).fetchall())
+        inactive = inactive_policy_links(self.connection, self.settings)
+        stale = tuple(row for row in stale if _stored_link(row[2], row[3]) not in inactive)
+        selectors = {str(item.chunk.version): _disk_key(self.settings, item.place.repository) for item in selected}
         locations = tuple(self.connection.execute("""SELECT l.chunk_version,l.metadata,COALESCE(f.metadata,'{}'::jsonb)
             FROM public.mycel_locations l LEFT JOIN public.mycel_file_locations f ON f.id=l.file_location
-            WHERE (l.kind='index' OR (l.kind='disk' AND f.kind='disk')) AND l.chunk_version=ANY(%s) ORDER BY l.id""",
-            (versions,)).fetchall())
+            WHERE (l.kind='index' OR (l.kind='disk' AND f.kind='disk'
+                AND f.location=(%s::jsonb)->>l.chunk_version::text)) AND l.chunk_version=ANY(%s) ORDER BY l.id""",
+            (Jsonb(selectors), versions)).fetchall())
         relevant = tuple(row for row in rows if row[2] in versions)
         return catalog, selected, edges, relevant, stale, locations, affected
 
@@ -276,11 +293,7 @@ class ConfirmationStore:
         if expected_identifier is not None and member.chunk.identifier != expected_identifier:
             raise EvidenceError('changed_since_ingest', (member.place.address,))
         location, metadata = _located(self.connection, selection, settings=settings)
-        if metadata.get('documentDeclarations', {}).get('metadata', {}).get('generated') is True or self.connection.execute(
-                """SELECT 1 FROM public.mycel_dependencies WHERE dependant_version=%s AND kind='generated'
-                UNION SELECT 1 FROM public.mycel_generated_state WHERE chunk_id=%s""",
-                (member.chunk.version, member.chunk.identifier)).fetchone():
-            raise MycelError('refused', 'Generated text must be regenerated; it cannot be confirmed.')
+        _require_confirmable(self.connection, member, metadata)
         inputs = DependencyCaptureInputs(self.connection, settings, settings_home=settings_home,
             guarded_repositories=guarded)
         reread = inputs.rereader(LocationId('disk', None, 'disk'), owner, None)
@@ -339,6 +352,8 @@ class ConfirmationStore:
                 'dependant': {'versionId': member.chunk.version, 'textHash': member.chunk.snapshot_hash,
                     'comparisonHash': blob.evidence.comparison.hash, 'place': _place(member.place),
                     'snapshot': f'snapshot:{blob.evidence.hash}'}, 'selections': selections}
+            if _disk_key(settings, owner) != 'disk':
+                record['diskLocation'] = _disk_key(settings, owner)
             self.connection.execute('INSERT INTO public.mycel_verifications '
                 '(id,repository,chunk_id,recorded_at,record,evidence_owner) VALUES (%s,%s,%s,%s,%s,%s)',
                 (identifier, owner, member.chunk.identifier, captured_at, Jsonb(record), evidence_owner))

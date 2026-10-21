@@ -28,7 +28,7 @@ from ._source_refs import (SourceAddress, SourceAddressError, format_source_addr
 from ._store import checked_store
 
 
-KINDS = frozenset({"ingest", "embed", "derive", "relate", "confirm", "remove", "init",
+KINDS = frozenset({"ingest", "embed", "derive", "relate", "confirm", "justify", "origins", "remove", "init",
                    "summaries_build", "summaries_regenerate", "summaries_remove", "classify"})
 OUTCOMES = frozenset({"done", "refused", "failed", "stopped"})
 EntryKey = tuple[str | None, str]

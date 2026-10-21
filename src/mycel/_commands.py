@@ -28,6 +28,11 @@ COMMANDS = (
     CommandSpec("refs", "Report retained source references and faults", extra_options=("--unresolved",)),
     CommandSpec("derive", "Assert a dependency", scope=False, extra_options=("--remove",)),
     CommandSpec("confirm", "Record verification", scope=False, extra_options=("--by <name>", "--how read|check")),
+    CommandSpec("justify", "State an Origin Link and record verification", scope=False,
+                extra_options=("--by <name>", "--file <pairs.jsonl>")),
+    CommandSpec("origins", "Report Origin Links and coverage", extra_options=("--missing", "--path <path>",
+                "--changes", "--unresting", "--no-fresh", "--needs-nothing <requirement>",
+                "--reason <text>", "--clear-needs-nothing <requirement>")),
     CommandSpec("drifts", "Report dependency review work", extra_options=("--closed", "--all-versions")),
     CommandSpec("relate", "Assert a relation", scope=False, extra_options=("--remove",)),
     CommandSpec("verifications", "Report verification records", extra_options=("--history",)),
@@ -57,7 +62,7 @@ def help_reply(command: str | None = None) -> dict:
         "version": "2.0.0",
         "usage": "mycel <command> [arguments]",
         "commands": [
-            {"name": s.name, "description": s.description, "available": s.name in {"api-key", "info", "grep", "repos", "init", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
+            {"name": s.name, "description": s.description, "available": s.name in {"origins", "justify", "api-key", "info", "grep", "repos", "init", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
              "rawArguments": s.raw_arguments,
              "options": ([] if s.raw_arguments else
                          ["-h", "--help"] + (["--repo <name>"] if s.scope else []) +
