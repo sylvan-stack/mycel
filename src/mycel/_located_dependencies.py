@@ -124,6 +124,36 @@ class LocatedDependencyProducer:
             initialized += changed
         return frozenset(quiet), initialized
 
+    @staticmethod
+    def _retarget_entity_policy(connection, result):
+        """Follow an unchanged UUID row moved between files in this location.
+
+        Its exact version and immutable evidence are unchanged. The file that
+        owns the assertion is a location attribute, rather than the entity's
+        global file pointer, which another clone may already have changed.
+        """
+        keys = sorted({location_key(file.location) for file in result.files})
+        changed = 0
+        for table, column in (('mycel_dependencies','dependant_version'),('mycel_relations','left_version')):
+            rows = connection.execute(f"""SELECT d.id,array_agg(DISTINCT l.file_location)
+                FROM public.{table} d JOIN public.mycel_chunk_versions v ON v.id=d.{column}
+                JOIN public.mycel_chunks c ON c.id=v.chunk_id AND c.kind IN ('req','dec')
+                JOIN public.mycel_locations l ON l.chunk_version=v.id
+                  AND l.kind=d.state->'declarationLocation'->>'kind'
+                  AND l.location=d.state->'declarationLocation'->>'location'
+                WHERE d.repository=%s AND l.location=ANY(%s) AND l.file_location IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM public.mycel_locations old
+                    WHERE old.chunk_version=v.id
+                      AND old.file_location::text=d.state->'declarationLocation'->>'file')
+                GROUP BY d.id ORDER BY d.id""", (result.repository,keys)).fetchall()
+            for identifier, locations in rows:
+                if len(locations) != 1:
+                    raise MycelError('invalid_input','An entity policy has ambiguous current file locations.')
+                changed += connection.execute(f"""UPDATE public.{table}
+                    SET state=jsonb_set(state,'{{declarationLocation,file}}',to_jsonb(%s::text))
+                    WHERE id=%s""", (str(locations[0]),identifier)).rowcount
+        return changed
+
     def __call__(self, connection, result):
         from ._dependency_application import DependencyApplicationStore
         from ._dependency_inputs import DependencyCaptureInputs
@@ -150,6 +180,8 @@ class LocatedDependencyProducer:
                 or self.activity is not None and result.activity is not None and self.activity is not result.activity):
             raise MycelError('invalid_input', 'Dependency activity requires the exact publishing connection.')
 
+        retargeted = self._retarget_entity_policy(connection, result)
+        totals['declarationMetadataChanged'] += retargeted
         quiet, initialized = self._empty_policy_scopes(connection, result, catalogs)
         totals['rolesChanged'] = initialized
         quiet_rows = tuple(row for row in self._policy_scope_rows(connection, result.repository)
@@ -248,7 +280,7 @@ class LocatedDependencyProducer:
         scopes = own_scopes + tuple(sorted(foreign_scopes))
         downstream = {}
         downstream_changed = set()
-        primary_changed = bool(initialized)
+        primary_changed = bool(initialized or retargeted)
         context = store.batch_in_transaction(self.settings, scopes=scopes,
             guarded_repositories=self.guarded_repositories,
             observation_dependencies=foreign_scopes) if scopes else nullcontext(None)

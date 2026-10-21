@@ -273,9 +273,12 @@ class CollectionStore:
             descriptor = baseline.payload['dependant']
             if descriptor['comparison']['kind'] != 'code_text':
                 continue
-            row = self.connection.execute('SELECT file_id FROM public.mycel_chunks WHERE id=%s AND repository=%s',
+            row = self.connection.execute('SELECT file_id,kind FROM public.mycel_chunks WHERE id=%s AND repository=%s',
                 (baseline.payload['dependantId'], repository)).fetchone()
-            if row is None or row[0] is None:
+            # Entity identity is its UUID and needs no original full-file
+            # parser context. Its current file pointer can also belong to a
+            # row moved in another clone; the immutable row evidence suffices.
+            if row is None or row[0] is None or row[1] in ENTITY_KINDS:
                 continue
             file_hash = descriptor.get('fileHash')
             version = self.connection.execute('SELECT id FROM public.mycel_file_versions '

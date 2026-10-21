@@ -266,7 +266,7 @@ JOIN public.mycel_chunk_versions v ON v.id=r.chunk_version
 JOIN public.mycel_chunks c ON c.id=v.chunk_id AND c.repository=r.repository
 JOIN public.mycel_locations l ON l.chunk_version=v.id AND l.kind IN ('disk','index')
 LEFT JOIN public.mycel_file_locations fl ON fl.id=l.file_location AND fl.kind='disk'
-LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version AND fv.file_id=c.file_id
+LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version
 LEFT JOIN public.mycel_files f ON f.id=fv.file_id AND f.repository=c.repository
 WHERE r.repository=%s ORDER BY c.id,v.id,r.id,l.id"""
 

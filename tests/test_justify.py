@@ -306,3 +306,92 @@ class ClonePolicyStoreTests(unittest.TestCase):
             refs=reply['repositories'][0]['result']['refs']
             self.assertEqual(len(refs),1,refs)
             self.assertIn(uri,refs[0]['originLink']['origin'])
+
+
+class JustifySelectionStoreTests(unittest.TestCase):
+    setUp=UriMutationStoreTests.setUp
+    ingest=UriMutationStoreTests.ingest
+
+    @proves('MYC-17.8','MYC-17.9',kind='store')
+    def test_complete_class_family_and_existing_review_are_retained(self):
+        from psycopg.types.json import Jsonb
+        from mycel._justify import JustifyStore
+        from mycel._resolver import SourceResolver
+        source=self.fixture.clone/'value.py'
+        source.write_text(source.read_text()+'\nclass Policy:\n    def first(self):\n        return 1\n    def second(self):\n        return 2\n')
+        self.ingest(self.secondary)
+        origin='fixture:@code/value.py#Policy'
+        with self.base.connect() as connection:
+            selected=SourceResolver.from_store(connection,self.secondary).resolve(origin,purpose='source').selection
+            self.assertEqual(selected.kind,'family')
+            store=JustifyStore(connection)
+            reply=store.apply(self.secondary,self.ref,origin,by='owner')
+            row=connection.execute("SELECT id,state FROM public.mycel_dependencies WHERE kind='asserted'").fetchone()
+            edges=connection.execute('SELECT source_version FROM public.mycel_edges WHERE dependency=%s',(row[0],)).fetchall()
+            self.assertEqual({value[0] for value in edges},{member.chunk.version for member in selected.members})
+            review={'who':'reviewer','when':reply['link']['when'],'outcome':'Reviewed the complete class selection.'}
+            state=row[1];state['originLink']['review']=review
+            connection.execute('UPDATE public.mycel_dependencies SET state=%s WHERE id=%s',(Jsonb(state),row[0]))
+            repeated=store.apply(self.secondary,self.ref,origin,by='owner-again')
+            self.assertEqual(repeated['link']['review'],review)
+            self.assertEqual(repeated['link']['who'],'owner-again')
+            self.assertEqual(len(repeated['verification']['sources']),len(selected.members))
+
+
+class CloneAbsenceStoreTests(unittest.TestCase):
+    setUp=UriMutationStoreTests.setUp
+    ingest=UriMutationStoreTests.ingest
+
+    @proves('MYC-6.22','MYC-1.38',kind='store')
+    def test_absence_guard_compares_only_the_selected_clones_retained_witnesses(self):
+        source=self.base.code/'primary-only.md'
+        source.write_text('# Source\nA source absent from the other clone.\n')
+        self.base.commit()
+        for root in (self.base.code,self.fixture.clone,self.fixture.artifact):
+            (root/'ambiguous.md').write_text('# Source\nOne of two root candidates.\n')
+        answer=self.fixture.artifact/'answer.md'
+        answer.write_text('---\nsources: ["fixture:@code/primary-only.md#Source", "fixture:ambiguous.md#Source"]\n---\n# Answer\nThe source governs this answer.\n')
+        self.ingest(self.primary)
+        self.ingest(self.secondary)
+        with self.base.connect() as connection:
+            rows=connection.execute("SELECT state FROM public.mycel_dependencies WHERE repository='fixture' AND kind='declared'").fetchall()
+            self.assertEqual(len(rows),4)
+            ambiguous=[row[0] for row in rows if bytes.fromhex(row[0]['rawRef']).decode()=='fixture:ambiguous.md#Source']
+            self.assertEqual(len(ambiguous),2)
+            self.assertTrue(all(row['resolution']['fault']=='ambiguous_path' for row in ambiguous))
+            rows=[row for row in rows if bytes.fromhex(row[0]['rawRef']).decode()!='fixture:ambiguous.md#Source']
+            primary=[row[0] for row in rows if row[0]['declarationLocation']['location']=='disk']
+            secondary=[row[0] for row in rows if row[0]['declarationLocation']['location']!='disk']
+            self.assertEqual(primary[0]['resolution']['state'],'resolved')
+            self.assertEqual(secondary[0]['resolution']['state'],'unresolved')
+
+
+class CloneEntityMoveStoreTests(unittest.TestCase):
+    setUp=UriMutationStoreTests.setUp
+    ingest=UriMutationStoreTests.ingest
+    invoke=UriMutationStoreTests.invoke
+
+    @proves('MYC-1.38','MYC-17.10',kind='store')
+    def test_refs_keep_each_entitys_actual_file_when_its_row_moves_in_only_one_clone(self):
+        from mycel._justify import JustifyStore
+        identifier='22222222-3333-4444-8555-666666666666'
+        other='bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
+        text=SPEC.replace(REQ,identifier).replace(OTHER,other)
+        for root in (self.base.code,self.fixture.clone):
+            (root/'spec.md').write_text(text)
+        self.ingest(self.primary);self.ingest(self.secondary)
+        entity=format_entity_uri('req',identifier,'keep the value stable','fixture')
+        with self.base.connect() as connection:
+            JustifyStore(connection).apply(self.primary,entity,self.uri)
+            JustifyStore(connection).apply(self.secondary,entity,self.other)
+        lines=text.splitlines(keepends=True)
+        (self.fixture.clone/'spec.md').write_text(''.join(line for line in lines if identifier not in line))
+        (self.fixture.clone/'moved.md').write_text(''.join(line for line in lines if other not in line))
+        self.ingest(self.secondary)
+        for settings,path in ((self.primary,'spec.md'),(self.secondary,'moved.md')):
+            status,reply=self.invoke('refs','--repo','fixture',settings=settings)
+            self.assertEqual(status,0,reply)
+            refs=reply['repositories'][0]['result']['refs']
+            self.assertEqual(len(refs),1,refs)
+            self.assertTrue(refs[0]['ownerLocationAvailable'],refs)
+            self.assertEqual(refs[0]['chunk']['path'],path)

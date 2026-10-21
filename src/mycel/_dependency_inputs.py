@@ -172,6 +172,9 @@ class DependencyCaptureInputs:
             FROM public.mycel_files f JOIN public.mycel_file_versions v ON v.file_id=f.id
             JOIN public.mycel_file_locations l ON l.file_version=v.id WHERE f.repository=%s""",
             (address.repository,)).fetchall()
+        # A capture establishes absence in its own checkout. Other clones'
+        # retained branch/disk witnesses are not physical inputs of this pass.
+        rows = [row for row in rows if row[3].get('captureLocation', {}).get('clone') == manifest.disk.id.clone]
         retained_paths = {(item['root'], item['path']) for identifier, _, _, metadata, _ in rows
                           if identifier in anchors for item in metadata.get('aliases', ())}
         if natural is not None:

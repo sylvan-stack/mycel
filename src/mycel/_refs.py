@@ -242,7 +242,7 @@ JOIN public.mycel_chunk_versions v ON v.id=d.dependant_version
 JOIN public.mycel_chunks c ON c.id=v.chunk_id
 LEFT JOIN public.mycel_file_locations fl
   ON fl.id::text=d.state->'declarationLocation'->>'file'
-LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version AND fv.file_id=c.file_id
+LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version
 LEFT JOIN public.mycel_files f ON f.id=fv.file_id AND c.repository=d.repository
 LEFT JOIN LATERAL (
   SELECT jsonb_agg(l.metadata ORDER BY l.id) AS metadata
@@ -265,7 +265,7 @@ JOIN public.mycel_chunk_versions v ON v.id=r.left_version
 JOIN public.mycel_chunks c ON c.id=v.chunk_id
 LEFT JOIN public.mycel_file_locations fl
   ON fl.id::text=r.state->'declarationLocation'->>'file'
-LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version AND fv.file_id=c.file_id
+LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version
 LEFT JOIN public.mycel_files f ON f.id=fv.file_id AND c.repository=r.repository
 LEFT JOIN LATERAL (
   SELECT jsonb_agg(l.metadata ORDER BY l.id) AS metadata
