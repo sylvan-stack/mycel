@@ -77,6 +77,56 @@ class IngestStoreTests(unittest.TestCase):
                                                       path.stat().st_mode)
                 for path in self.base.code.rglob('*') if path.is_file()}
 
+    @proves('MYC-1.7', 'MYC-2.9', 'MYC-12.4', kind='store')
+    def test_unchanged_empty_policy_is_batched_but_role_repairs_and_new_refs_run(self):
+        from mycel._dependency_application import DependencyApplicationStore
+        from mycel._relations import RelationApplicationStore
+        guide = self.base.artifact / 'guide.md'
+        guide.write_text(''.join(f'# Part {number}\nBody {number}.\n' for number in range(30)))
+        (self.base.code / 'answer.py').write_text('def answer():\n    return 42\n')
+        self.base.commit()
+        status, first = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, first)
+        with self.base.connect() as connection:
+            before = self.state(connection)
+        with patch.object(DependencyApplicationStore, 'apply_in_transaction',
+                          side_effect=AssertionError('An empty unchanged scope needs no chunk executor')), \
+                patch.object(RelationApplicationStore, 'apply_in_transaction',
+                           side_effect=AssertionError('An empty unchanged scope needs no relation executor')):
+            status, quiet = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, quiet)
+        self.assertFalse(quiet['repositories']['fixture']['changed'])
+        with self.base.connect() as connection:
+            self.assertEqual(self.state(connection), before)
+            connection.execute("UPDATE public.mycel_locations SET metadata=jsonb_set(metadata,'{role}', '\"derived\"') WHERE file_location IS NOT NULL")
+            connection.commit()
+        status, repaired = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, repaired)
+        self.assertTrue(repaired['repositories']['fixture']['changed'])
+        self.assertGreater(repaired['repositories']['fixture']['rolesChanged'], 0)
+        guide.write_text('---\nsources: ["fixture:@code/answer.py#answer"]\n---\n' + guide.read_text())
+        status, declared = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, declared)
+        self.assertGreater(declared['repositories']['fixture']['pinsCaptured'], 0)
+
+    @proves('MYC-1.7', 'MYC-12.4', kind='store')
+    def test_late_empty_policy_mutation_refuses_and_rolls_back(self):
+        from mycel._overview_store import OverviewStore
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        with self.base.connect() as connection:
+            before = self.state(connection)
+        original = OverviewStore.reconcile_in_transaction
+        def change_role(store, repository):
+            changed = original(store, repository)
+            store.connection.execute("UPDATE public.mycel_locations SET metadata=jsonb_set(metadata,'{role}', '\"derived\"') WHERE file_location IS NOT NULL")
+            return changed
+        with patch.object(OverviewStore, 'reconcile_in_transaction', change_role):
+            status, refused = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 1, refused)
+        self.assertEqual(refused['repositories'][0]['error']['code'], 'invalid_input')
+        with self.base.connect() as connection:
+            self.assertEqual(self.state(connection), before)
+
     @proves('MYC-1.20', 'MYC-1.22', 'MYC-1.30', kind='store')
     def test_complete_disk_local_branches_stash_and_exact_quiet_activity(self):
         guide = self.base.artifact / 'guide.md'
