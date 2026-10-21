@@ -182,3 +182,9 @@ proofs cover no-resplit repeats, corrupt-cache fallback, forged input refusal,
 changed source/settings and callback rollback. Separate dual-root store fixtures
 verify document origin, heading chunks and portable reads on disk and in local
 branches with narrowed code subdirectories and shared skip/ignore rules.
+
+## Multiple clones of one repository
+
+Configured `code_clones` share the repository's chunk identities and exact versions. The calling checkout selects the disk location; the primary checkout keeps the legacy `disk` key, while another clone has a canonical location record containing its resolved path. Local branch and stash records carry that clone too. Capturing one checkout leaves the other checkouts' inventories, locations, pins and policy intact. Requirement and decision rows retain their UUID identities in all three location kinds.
+
+A complete pass reserves its own location before capturing. Different clones can capture simultaneously; publication takes the short repository pass guard, and every location reservation also protects against repository removal. A supplied manifest must belong to the selected clone. Collection removes a version only after no location or retained owner needs it. Overview projections and current resolver reads select the calling clone; equal exact versions can retain different location-owned policy, stale reasons and verifications.

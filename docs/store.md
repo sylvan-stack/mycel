@@ -161,3 +161,11 @@ format step from 2 to 3 changes no table: it validates the format-2 structure
 and that no entity chunk exists yet, then raises the number, so that an older
 Build, which would read those chunks as code, refuses the store. `mycel init`
 runs it in one transaction and `mycel info` reports `format: 3`.
+
+## Origin Links and durability
+
+`justify` stores stated Origin Links as metadata of the ordinary asserted dependency, with UUID references for requirement and decision Origins. Its pins, statement, verification and applied activity share one transaction, including an entire JSON-lines batch. A changed final input rolls the transaction back. The [Origin Coverage guide](origins.md) describes the commands and requirement marks.
+
+The Index Store is the only durable store for these statements. Mycel writes no justification ledger or Origin Link into a source file or another product's database, and provides no Origin Link backup command. The owner backs up PostgreSQL, including its ordinary evidence and verification tables. Re-ingest preserves the location-owned statement; another clone's refresh cannot remove its policy or stale reasons.
+
+Location pass reservations are separate from repository publication guards. Different clone captures can overlap, publication is serialized briefly, and repository removal is excluded for the whole capture. Read-only Origin Coverage queries acquire no mutation reservation and change no row.
