@@ -259,14 +259,18 @@ class DocumentDeclarations:
 def _declaration(ref: str, declared: str, raw_line: str,
                  origin: Literal["frontmatter", "comment"], chunk: str | None,
                  line: int | None, *, incomplete: bool = False) -> DeclaredSource:
+    entity = parse_entity_uri(ref)
+    bracketed = isinstance(ref, str) and ref.startswith('[') and ref.endswith(']')
     try:
-        address = parse_source_address(ref)
+        address = None if entity is not None or bracketed else parse_source_address(ref)
     except SourceAddressError:
         address = None
     if incomplete:
         address = None
+    # UUID references have no syntactic path; the store resolver supplies it.
+    valid_entity = not incomplete and entity is not None
     return DeclaredSource(ref, declared, raw_line, origin, chunk, line,
-                          address, "not_a_ref" if address is None else None)
+                          address, "not_a_ref" if address is None and not valid_entity else None)
 
 
 @dataclass(frozen=True)

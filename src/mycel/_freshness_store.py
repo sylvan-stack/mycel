@@ -229,6 +229,8 @@ class StoreFreshnessAdapter:
                         target = _target(self.settings, raw)
                         if target is not None and selected.state != 'invalid':
                             targets.add(target)
+                        if selected.selection is not None and selected.state != 'invalid':
+                            targets.add(selected.selection.place.repository)
                         if retained is not None and selected.state != 'invalid':
                             missing = retained[5].get('sourceAbsence', {})
                             for place in (retained[4], missing.get('place')):

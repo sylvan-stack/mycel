@@ -202,7 +202,9 @@ class LocatedDependencyProducer:
             if (selected.get('kind'), selected.get('location')) != (kind, location):
                 raise MycelError('invalid_input', 'Dependency ownership differs from its current location.')
             record = metadata.get('captureLocation')
-            if not isinstance(record, dict) or set(record) != {'kind', 'checkout', 'identity'}:
+            if (not isinstance(record, dict) or set(record) not in
+                    ({'kind', 'checkout', 'identity'}, {'kind', 'checkout', 'identity', 'clone'})
+                    or 'clone' in record and (not isinstance(record['clone'], str) or not Path(record['clone']).is_absolute())):
                 raise MycelError('invalid_input', 'Dependency refresh requires the exact captured location.')
             identifier = LocationId(**record)
             if identifier.kind != kind or location_key(identifier) != location:

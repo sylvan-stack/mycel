@@ -26,7 +26,7 @@
       "specification_status": "accepted"
     },
     "06-index-store.md": {
-      "sha256": "9c0fe63c8e3babdb7ccc6a114a8a0fba466ceef1dd10b61ff56ea33b9995e1b6",
+      "sha256": "51a9b44a7985a733d66dc683ff857718a898b949088def5b31b530b50e4287ec",
       "specification_status": "accepted"
     },
     "07-drifts-and-verification.md": {
@@ -1421,7 +1421,7 @@
     },
     {
       "id": "MYC-6.23",
-      "text": "keep stated Origin Links as unique authored Index Store content, regenerate recovered links from their inputs, keep chat content in its owning database, and leave the shared local PostgreSQL backup to the owner",
+      "text": "persist stated Origin Links in the Index Store without writing a copy into source files or another product database, and provide no backup command because the owner backs up the shared local PostgreSQL",
       "origin": "New",
       "kind": "store",
       "specification": "MYC-6",

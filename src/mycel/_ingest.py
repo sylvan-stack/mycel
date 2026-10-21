@@ -29,8 +29,19 @@ def _target(value):
         return None
 
 
-def _manifest_targets(manifest: CaptureManifest):
+def _manifest_targets(manifest: CaptureManifest, resolver_factory=None):
     targets = set()
+    resolver = None
+    def target(raw):
+        nonlocal resolver
+        from ._source_refs import parse_entity_uri
+        if parse_entity_uri(raw) is None or resolver_factory is None:
+            return _target(raw)
+        if resolver is None:
+            from ._dependency_application import RetainedDependencyResolver
+            resolver = RetainedDependencyResolver(resolver_factory(), {})
+        result = resolver.resolve(raw)
+        return None if result.selection is None else result.selection.place.repository
     for location in manifest.locations:
         for captured in location.files:
             if captured.corpus != 'documents':
@@ -38,9 +49,9 @@ def _manifest_targets(manifest: CaptureManifest):
             declarations = read_document_declarations(captured.parsed,
                 file=f'{manifest.repository}:@{captured.primary.root}/{captured.primary.path}')
             for chunk in declarations.chunk_sources:
-                targets.update(_target(ref.ref) for ref in chunk.sources)
+                targets.update(target(ref.ref) for ref in chunk.sources)
             for chunk in declarations.chunk_relations:
-                targets.update(_target(ref.ref) for ref in chunk.relations)
+                targets.update(target(ref.ref) for ref in chunk.relations)
     return targets - {None}
 
 
@@ -96,7 +107,9 @@ def _publication_guards(connection, settings, manifest):
             'JOIN public.mycel_chunk_versions v ON v.id=e.source_version '
             'JOIN public.mycel_chunks c ON c.id=v.chunk_id WHERE c.repository=%s',
             (manifest.repository,)).fetchall()}
-    links[manifest.repository].update(_manifest_targets(manifest).intersection(links))
+    from ._resolver import SourceResolver
+    links[manifest.repository].update(_manifest_targets(manifest,
+        lambda: SourceResolver.from_store(connection, settings)).intersection(links))
     required = _upstream({manifest.repository}, links)
     affected = {manifest.repository}
     while True:

@@ -20,7 +20,7 @@ from ._locks import atomic_transaction, operation_guard, require_transaction_gua
 from ._reconciliation import AssertedRemoval, ReconciliationError
 from ._resolver import SourceResolver
 from ._settings import SettingsSnapshot
-from ._source_refs import SourceAddressError, parse_source_address
+from ._source_refs import SourceAddressError, parse_source_address, parse_entity_uri
 from ._store import checked_store
 
 
@@ -48,6 +48,44 @@ def _addresses(dependant, source):
     return places
 
 
+
+def _validate_ref_syntax(refs):
+    for ref in refs:
+        if parse_entity_uri(ref) is not None:
+            continue
+        if isinstance(ref, str) and ref.startswith('[') and ref.endswith(']'):
+            raise MycelError('invalid_input', 'The Entity URI is malformed.')
+        try:
+            parse_source_address(ref)
+        except (SourceAddressError, TypeError):
+            raise MycelError('invalid_input', 'A selection requires a valid address or Entity URI.') from None
+
+
+def _canonical_refs(connection, settings, refs, purposes, *, catalog=None):
+    """Resolve UUID references afresh inside the eventual writing transaction."""
+    _validate_ref_syntax(refs)
+    if not any(parse_entity_uri(ref) is not None for ref in refs):
+        return tuple(refs)
+    catalog = SourceResolver.from_store(connection, settings) if catalog is None else catalog
+    result = []
+    for ref, purpose in zip(refs, purposes, strict=True):
+        if parse_entity_uri(ref) is None:
+            result.append(ref)
+            continue
+        resolution = catalog.resolve(ref, purpose=purpose)
+        if resolution.state != 'resolved':
+            _fault(resolution, endpoint=purpose == 'endpoint')
+        result.append(resolution.selection.place.address)
+    return tuple(result)
+
+
+def _disk_key(settings, repository):
+    if not any(value.get('code_clones') for value in settings.values['repos'].values()):
+        return 'disk'
+    from ._scope import RepositoryLocations
+    return RepositoryLocations(settings).named(repository)[0].disk_location
+
+
 class DeriveStore:
     def __init__(self, connection):
         self.connection = connection
@@ -62,7 +100,8 @@ class DeriveStore:
         All configured repository guards protect the complete graph/catalog.
         """
         settings.require_valid(require_store=False)
-        places = _addresses(dependant, source)
+        places = _addresses(*_canonical_refs(self.connection, settings, (dependant, source),
+            ("endpoint", "source")))
         if type(remove) is not bool:
             raise MycelError('invalid_input', 'Derive removal must be an explicit boolean.')
         for place in places:
@@ -95,11 +134,17 @@ class DeriveStore:
                              settings_home=None, activity=None):
         """Apply on the caller's exact guarded connection, with a final reread."""
         settings.require_valid(require_store=False)
-        _addresses(dependant, source)
+        _validate_ref_syntax((dependant, source))
         if type(remove) is not bool:
             raise MycelError('invalid_input', 'Derive removal must be an explicit boolean.')
         require_transaction_guards(self.connection, tuple(settings.values['repos']))
         catalog = SourceResolver.from_transaction(self.connection, settings, kind='disk', location='disk')
+        raw_source = source
+        dependant, source = _canonical_refs(self.connection, settings, (dependant, source),
+            ('endpoint', 'source'), catalog=catalog)
+        _addresses(dependant, source)
+        if parse_entity_uri(raw_source) is not None:
+            source = raw_source
         endpoint = catalog.resolve(dependant, purpose='endpoint')
         if endpoint.state != 'resolved':
             _fault(endpoint, endpoint=True)
@@ -109,9 +154,9 @@ class DeriveStore:
         located = self.connection.execute("""SELECT l.id,l.metadata FROM public.mycel_file_locations l
             JOIN public.mycel_file_versions v ON v.id=l.file_version
             JOIN public.mycel_locations c ON c.file_location=l.id
-            WHERE v.file_id=%s AND l.kind='disk' AND l.location='disk' AND c.chunk_version=%s
+            WHERE v.file_id=%s AND l.kind='disk' AND l.location=%s AND c.chunk_version=%s
             ORDER BY l.id FOR SHARE OF l,v,c NOWAIT""",
-            (selected.file.identifier, member.chunk.version)).fetchall()
+            (selected.file.identifier, _disk_key(settings, owner), member.chunk.version)).fetchall()
         if len(located) != 1:
             raise MycelError('invalid_input', 'The dependant requires one exact on-disk owning location.')
         location, _ = located[0]
@@ -223,6 +268,9 @@ def derive(invocation):
     refs = arguments[1:] if remove else arguments
     if len(refs) != 2:
         raise MycelError('invalid_input', 'Use mycel derive [--remove] <dependant> <source>.')
-    _addresses(*refs)
+    if any(parse_entity_uri(ref) is not None for ref in refs):
+        _validate_ref_syntax(refs)
+    else:
+        _addresses(*refs)
     with invocation_store(invocation, operation='write') as (connection, _):
         return Result(DeriveStore(connection).apply(invocation.settings, *refs, remove=remove, build=current_build()))

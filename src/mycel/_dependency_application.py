@@ -56,6 +56,13 @@ class RetainedDependencyResolver(SourceResolver):
             return Resolution(declaration, 'invalid', fault=self.syntax_faults[declaration])
         selected_purpose = 'endpoint' if purpose == 'source' and declaration in self.endpoint_refs else purpose
         result = self.base.resolve(declaration, purpose=selected_purpose)
+        from ._source_refs import parse_entity_uri
+        if parse_entity_uri(declaration) is not None:
+            if result.selection is not None and result.selection.kind in {'req', 'dec'}:
+                result = replace(result, selection=replace(result.selection, kind='chunk'))
+            if result.fault == 'missing_entity':
+                result = replace(result, fault='missing_name')
+            return result  # the UUID is already the exact anchor, even after a move
         anchor = self.anchors.get(declaration)
         if purpose != 'source' or anchor is None:
             return result

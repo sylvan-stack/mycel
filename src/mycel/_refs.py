@@ -21,6 +21,7 @@ _PUBLIC_FAULTS = {
     "unregistered_repository": "unknown_repository",
     "disabled_repository": "disabled_repository",
     "missing_file": "not_found", "missing_name": "not_found",
+    "missing_entity": "not_found", "entity_kind_mismatch": "not_a_ref", "ambiguous_entity": "ambiguous_title",
     "not_checked": "not_found", "owner_location_missing": "not_found",
     "ambiguous_path": "ambiguous_path", "ambiguous_name": "ambiguous_title",
     "ineligible_index": "not_a_ref", "one_chunk_required": "not_a_ref",

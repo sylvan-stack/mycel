@@ -17,7 +17,7 @@ from ._activity import AppliedMutation, MutationActivity
 from ._capture import LocationId
 from ._dependency_application import DependencyApplicationStore, RetainedDependencyResolver, _ROWS_SQL, _current_raw
 from ._dependency_inputs import DependencyCaptureInputs
-from ._derive import _fault, _place
+from ._derive import _fault, _place, _canonical_refs, _validate_ref_syntax, _disk_key
 from ._errors import MycelError
 from ._evidence import (CaptureLocation, EvidenceError, EvidenceStore, InheritanceInputs,
     _chunk_snapshot, canonical_json, checked_transaction_input_guard)
@@ -27,7 +27,7 @@ from ._markdown import split_markdown
 from ._reconciliation import ReconciliationError
 from ._relations import RELATION_ROWS_SQL, RelationApplicationStore, _relation_raw, relation_baseline
 from ._resolver import SelectionMember, SourceResolver
-from ._source_refs import SourceAddressError, parse_source_address, read_document_declarations
+from ._source_refs import SourceAddressError, parse_source_address, read_document_declarations, parse_entity_uri
 from ._staleness import StaleEdge, StaleNode, StaleReason, _closure, _stored_link, plan_staleness
 from ._store import checked_store
 
@@ -60,14 +60,14 @@ def _time(captured_at):
     return parsed
 
 
-def _located(connection, selection, *, lock=True):
+def _located(connection, selection, *, settings=None, lock=True):
     member = selection.members[0]
     rows = connection.execute("""SELECT l.id,l.metadata FROM public.mycel_file_locations l
         JOIN public.mycel_file_versions v ON v.id=l.file_version
         JOIN public.mycel_locations c ON c.file_location=l.id
-        WHERE v.file_id=%s AND l.kind='disk' AND l.location='disk' AND c.chunk_version=%s
+        WHERE v.file_id=%s AND l.kind='disk' AND l.location=%s AND c.chunk_version=%s
         ORDER BY l.id""" + (' FOR SHARE OF l,v,c NOWAIT' if lock else ''),
-        (selection.file.identifier, member.chunk.version)).fetchall()
+        (selection.file.identifier, 'disk' if settings is None else _disk_key(settings, member.place.repository), member.chunk.version)).fetchall()
     if len(rows) != 1:
         raise MycelError('invalid_input', 'Confirmation requires one exact owning disk location.')
     return str(rows[0][0]), rows[0][1]
@@ -91,7 +91,7 @@ def _graph_rows(connection, catalog):
         if version not in members or source_version not in members:
             continue
         location = state.get('declarationLocation', {})
-        if kind != 'generated' and (location.get('kind'), location.get('location')) != ('disk', 'disk'):
+        if kind != 'generated' and (location.get('kind'), location.get('location')) != ('disk', _disk_key(catalog.settings, owner)):
             continue
         selected.append((identifier, owner, version, kind, state, source_version))
         edges.append(StaleEdge(members[source_version].chunk.identifier,
@@ -107,7 +107,7 @@ def _guard_scope(connection, settings, dependant):
     member = endpoint.selection.members[0]
     owner = member.place.repository
     with read_snapshot(connection):
-        location, _ = _located(connection, endpoint.selection, lock=False)
+        location, _ = _located(connection, endpoint.selection, settings=settings, lock=False)
         dependencies = connection.execute(_ROWS_SQL.replace(' FOR UPDATE NOWAIT', ''),
             (owner, member.chunk.version, location)).fetchall()
         relations = connection.execute(RELATION_ROWS_SQL.replace(' FOR UPDATE NOWAIT', ''),
@@ -228,7 +228,8 @@ class ConfirmationStore:
     def apply(self, settings, dependant, *, by=None, how='read', captured_at=None,
               build=None, settings_home=None):
         settings.require_valid(require_store=False)
-        place, by = _arguments(dependant, by, how)
+        canonical, = _canonical_refs(self.connection, settings, (dependant,), ('endpoint',))
+        place, by = _arguments(canonical, by, how)
         if not settings.values['repos'].get(place.repository, {}).get('enabled'):
             raise MycelError('invalid_input', 'Confirmation requires an enabled registered repository.')
         captured_at = (datetime.now(timezone.utc).isoformat(timespec='microseconds')
@@ -259,12 +260,14 @@ class ConfirmationStore:
                              settings_home=None, activity=None, guarded_repositories=None,
                              expected_identifier=None):
         settings.require_valid(require_store=False)
-        _, by = _arguments(dependant, by, how)
+        _validate_ref_syntax((dependant,))
         _time(captured_at)
         guarded = tuple(settings.values['repos']) if guarded_repositories is None else guarded_repositories
         require_transaction_guards(self.connection, guarded)
         catalog = SourceResolver.from_transaction(self.connection, settings, kind='disk',
             location='disk', guarded_repositories=guarded)
+        dependant, = _canonical_refs(self.connection, settings, (dependant,), ('endpoint',), catalog=catalog)
+        _, by = _arguments(dependant, by, how)
         endpoint = catalog.resolve(dependant, purpose='endpoint')
         if endpoint.state != 'resolved':
             _fault(endpoint, endpoint=True)
@@ -272,7 +275,7 @@ class ConfirmationStore:
         owner = member.place.repository
         if expected_identifier is not None and member.chunk.identifier != expected_identifier:
             raise EvidenceError('changed_since_ingest', (member.place.address,))
-        location, metadata = _located(self.connection, selection)
+        location, metadata = _located(self.connection, selection, settings=settings)
         if metadata.get('documentDeclarations', {}).get('metadata', {}).get('generated') is True or self.connection.execute(
                 """SELECT 1 FROM public.mycel_dependencies WHERE dependant_version=%s AND kind='generated'
                 UNION SELECT 1 FROM public.mycel_generated_state WHERE chunk_id=%s""",
@@ -412,7 +415,10 @@ def handle_confirm(invocation):
             refs.append(argument)
     if len(refs) != 1:
         raise MycelError('invalid_input', 'Use mycel confirm [--by <who>] [--how read|check] <chunk>.')
-    _arguments(refs[0], values.get('--by'), values.get('--how', 'read'))
+    if parse_entity_uri(refs[0]) is not None:
+        _validate_ref_syntax(refs)
+    else:
+        _arguments(refs[0], values.get('--by'), values.get('--how', 'read'))
     with invocation_store(invocation, operation='write') as (connection, _):
         return Result(ConfirmationStore(connection).apply(invocation.settings, refs[0],
             by=values.get('--by'), how=values.get('--how', 'read'), build=current_build()))
