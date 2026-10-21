@@ -331,6 +331,7 @@
       "test_ingest.IngestStoreTests.test_failed_complete_capture_and_late_audit_leave_retryable_file_and_no_deletion",
       "test_ingest.IngestStoreTests.test_final_activity_close_failure_retains_committed_ingest_reply",
       "test_ingest.IngestStoreTests.test_guard_cleanup_failure_and_interrupt_keep_acknowledged_publication",
+      "test_ingest_activity.PublicIngestActivityStoreTests.test_public_audit_failure_rolls_back_publication_and_missing_identity_never_downgrades",
       "test_located_declaration_transaction.LocatedDeclarationTransactionStoreTests.test_git_ref_change_after_last_pin_refuses_complete_publication",
       "test_located_declaration_transaction.LocatedDeclarationTransactionStoreTests.test_source_change_after_last_pin_refuses_complete_publication_and_activity",
       "test_located_reconciliation.LocatedReconciliationStoreTests.test_automatic_disk_move_refuses_a_reused_old_physical_path_without_writing",
@@ -1945,6 +1946,7 @@
       "test_activity_store.ActivityStoreTests.test_caller_transaction_publishes_multiple_repository_audits_together",
       "test_activity_store.ActivityStoreTests.test_global_init_remove_and_noop_reports_leave_only_applied_entries",
       "test_activity_store.ActivityStoreTests.test_lazy_entries_scoped_downstream_counts_and_final_reply_are_exact",
+      "test_ingest_activity.PublicIngestActivityStoreTests.test_public_ingest_history_and_detail_match_exact_reply_and_quiet_pass_is_silent",
       "test_init_activity.InitActivityStoreTests.test_actual_empty_init_commits_global_exact_reply_audit_with_liveness_until_commit"
     ],
     "MYC-12.2": [
@@ -1953,6 +1955,7 @@
       "test_activity_store.ActivityDeclaredRefStoreTests.test_repeated_reference_passes_use_producer_cumulative_and_final_noop_counts",
       "test_activity_store.ActivityStoreTests.test_global_init_remove_and_noop_reports_leave_only_applied_entries",
       "test_activity_store.ActivityStoreTests.test_lazy_entries_scoped_downstream_counts_and_final_reply_are_exact",
+      "test_ingest_activity.PublicIngestActivityStoreTests.test_public_ingest_history_and_detail_match_exact_reply_and_quiet_pass_is_silent",
       "test_init_activity.InitActivityStoreTests.test_actual_compatible_init_is_noop_and_dimensions_audit_uses_its_reply"
     ],
     "MYC-12.3": [
@@ -1961,6 +1964,7 @@
       "test_activity_store.ActivityStoreTests.test_cancellation_closes_applied_work_before_releasing_liveness",
       "test_activity_store.ActivityStoreTests.test_global_init_remove_and_noop_reports_leave_only_applied_entries",
       "test_activity_store.ActivityStoreTests.test_lazy_entries_scoped_downstream_counts_and_final_reply_are_exact",
+      "test_ingest_activity.PublicIngestActivityStoreTests.test_public_ingest_history_and_detail_match_exact_reply_and_quiet_pass_is_silent",
       "test_init_activity.InitActivityStoreTests.test_actual_empty_init_commits_global_exact_reply_audit_with_liveness_until_commit"
     ],
     "MYC-12.4": [
@@ -1976,19 +1980,22 @@
       "test_activity_store.ActivityStoreTests.test_classify_bundle_references_counts_and_mechanical_ingest_are_separate",
       "test_activity_store.ActivityStoreTests.test_later_file_failure_retains_only_applied_prefix_and_sanitized_failure",
       "test_activity_store.ActivityStoreTests.test_lazy_entries_scoped_downstream_counts_and_final_reply_are_exact",
+      "test_ingest_activity.PublicIngestActivityStoreTests.test_public_ingest_history_and_detail_match_exact_reply_and_quiet_pass_is_silent",
       "test_init_activity.InitActivityStoreTests.test_actual_compatible_init_is_noop_and_dimensions_audit_uses_its_reply",
       "test_init_activity.InitActivityStoreTests.test_actual_empty_init_commits_global_exact_reply_audit_with_liveness_until_commit"
     ],
     "MYC-12.5": [
       "test_activity_completion.ActivityCompletionStoreTests.test_added_changed_removed_files_and_all_identity_decisions_keep_exact_locations",
-      "test_activity_store.ActivityStoreTests.test_file_and_all_code_document_decisions_rollback_with_the_file_and_retry"
+      "test_activity_store.ActivityStoreTests.test_file_and_all_code_document_decisions_rollback_with_the_file_and_retry",
+      "test_ingest_activity.PublicIngestActivityStoreTests.test_public_ingest_history_and_detail_match_exact_reply_and_quiet_pass_is_silent"
     ],
     "MYC-12.6": [
       "test_activity_completion.ActivityCompletionStoreTests.test_added_changed_removed_files_and_all_identity_decisions_keep_exact_locations",
       "test_activity_store.ActivityStoreTests.test_caller_transaction_late_audit_failure_rolls_back_all_scopes_and_retry",
       "test_activity_store.ActivityStoreTests.test_caller_transaction_publishes_multiple_repository_audits_together",
       "test_activity_store.ActivityStoreTests.test_file_and_all_code_document_decisions_rollback_with_the_file_and_retry",
-      "test_activity_store.ActivityStoreTests.test_later_file_failure_retains_only_applied_prefix_and_sanitized_failure"
+      "test_activity_store.ActivityStoreTests.test_later_file_failure_retains_only_applied_prefix_and_sanitized_failure",
+      "test_ingest_activity.PublicIngestActivityStoreTests.test_public_ingest_history_and_detail_match_exact_reply_and_quiet_pass_is_silent"
     ],
     "MYC-12.7": [
       "test_activity_completion.ActivityCompletionStoreTests.test_added_changed_removed_files_and_all_identity_decisions_keep_exact_locations",
@@ -2018,6 +2025,7 @@
       "test_activity_store.ActivityDeclaredRefStoreTests.test_real_reference_writes_rollback_on_native_audit_insert_failure",
       "test_activity_store.ActivityStoreTests.test_audit_insert_detail_and_close_failures_are_internal_and_atomic",
       "test_activity_store.ActivityStoreTests.test_caller_transaction_late_audit_failure_rolls_back_all_scopes_and_retry",
+      "test_ingest_activity.PublicIngestActivityStoreTests.test_public_audit_failure_rolls_back_publication_and_missing_identity_never_downgrades",
       "test_init_activity.InitActivityStoreTests.test_bad_packaged_identity_refuses_before_schema_change_and_bootstrap_requires_guard",
       "test_init_activity.InitActivityStoreTests.test_missing_installed_identity_cannot_silently_initialize_without_audit",
       "test_init_activity.InitActivityStoreTests.test_native_audit_close_failure_rolls_back_dimension_and_keeps_prior_entry",
@@ -2041,12 +2049,14 @@
     "MYC-12.11": [
       "test_activity_history.ActivityHistoryStoreTests.test_default_cap_all_kinds_and_repository_cwd_selection_use_exact_start_time_id_order",
       "test_activity_history.ActivityHistoryStoreTests.test_public_cli_lists_all_or_named_and_returns_one_detail_without_mutation",
-      "test_activity_history.ActivityHistoryStoreTests.test_running_unfinished_and_over_limit_reads_never_prune_or_write_tables_or_sequences"
+      "test_activity_history.ActivityHistoryStoreTests.test_running_unfinished_and_over_limit_reads_never_prune_or_write_tables_or_sequences",
+      "test_ingest_activity.PublicIngestActivityStoreTests.test_public_ingest_history_and_detail_match_exact_reply_and_quiet_pass_is_silent"
     ],
     "MYC-12.12": [
       "test_activity_history.ActivityHistoryStoreTests.test_complete_entry_details_keep_root_collisions_names_classification_references_and_build_identity",
       "test_activity_history.ActivityHistoryStoreTests.test_public_cli_lists_all_or_named_and_returns_one_detail_without_mutation",
-      "test_activity_history.ActivityHistoryStoreTests.test_running_unfinished_and_over_limit_reads_never_prune_or_write_tables_or_sequences"
+      "test_activity_history.ActivityHistoryStoreTests.test_running_unfinished_and_over_limit_reads_never_prune_or_write_tables_or_sequences",
+      "test_ingest_activity.PublicIngestActivityStoreTests.test_public_ingest_history_and_detail_match_exact_reply_and_quiet_pass_is_silent"
     ],
     "MYC-12.13": [
       "test_activity_completion.ActivityCompletionStoreTests.test_classification_references_rollback_with_native_detail_fault_and_keep_only_summaries",
