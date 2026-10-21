@@ -154,6 +154,39 @@ class LocatedDependencyProducer:
                     WHERE id=%s""", (str(locations[0]),identifier)).rowcount
         return changed
 
+    @staticmethod
+    def _edited_entity_scopes(connection, result):
+        """Select this location's prior UUID-owned policy for a new row version."""
+        keys = sorted({location_key(file.location) for file in result.files})
+        rows = connection.execute("""WITH policy AS (
+            SELECT dependant_version version,repository,state FROM public.mycel_dependencies
+            WHERE kind IN ('declared','asserted')
+            UNION SELECT left_version,repository,state FROM public.mycel_relations)
+            SELECT DISTINCT l.file_location,l.chunk_version,f.metadata,p.version,
+                p.state->'declarationLocation'->>'file'
+            FROM public.mycel_locations l JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version
+            JOIN public.mycel_chunks c ON c.id=v.chunk_id AND c.kind IN ('req','dec')
+            JOIN public.mycel_file_locations f ON f.id=l.file_location
+            JOIN public.mycel_chunk_versions old ON old.chunk_id=c.id AND old.id<>v.id
+            JOIN policy p ON p.version=old.id AND p.repository=c.repository
+              AND p.state->'declarationLocation'->>'kind'=l.kind
+              AND p.state->'declarationLocation'->>'location'=l.location
+            WHERE c.repository=%s AND l.location=ANY(%s)
+              AND NOT EXISTS (SELECT 1 FROM policy current WHERE current.version=v.id
+                  AND current.state->'declarationLocation'->>'file'=l.file_location::text)
+              AND NOT EXISTS (SELECT 1 FROM public.mycel_locations kept
+                  WHERE kept.chunk_version=old.id AND kept.kind=l.kind AND kept.location=l.location)
+            ORDER BY l.file_location,l.chunk_version,p.version DESC""",(result.repository,keys)).fetchall()
+        selected = {}
+        for location,version,metadata,previous,reference in rows:
+            scope = (str(location),version)
+            if scope in selected:
+                if selected[scope][0] == previous and selected[scope][1] != reference:
+                    raise MycelError('invalid_input','An entity edit has ambiguous prior location policy.')
+                continue
+            selected[scope] = (previous,reference,LocationId(**metadata['captureLocation']),metadata.get('commit'))
+        return selected
+
     def __call__(self, connection, result):
         from ._dependency_application import DependencyApplicationStore
         from ._dependency_inputs import DependencyCaptureInputs
@@ -181,6 +214,7 @@ class LocatedDependencyProducer:
             raise MycelError('invalid_input', 'Dependency activity requires the exact publishing connection.')
 
         retargeted = self._retarget_entity_policy(connection, result)
+        entity_scopes = self._edited_entity_scopes(connection, result)
         totals['declarationMetadataChanged'] += retargeted
         quiet, initialized = self._empty_policy_scopes(connection, result, catalogs)
         totals['rolesChanged'] = initialized
@@ -277,7 +311,7 @@ class LocatedDependencyProducer:
                 self.pending_repositories = tuple(sorted(set(self.pending_repositories) | dirty))
         foreign_scopes = {scope: tuple(sorted(item['dependencies'])) for scope, item in incoming.items()
                           if item['dependencies']}
-        scopes = own_scopes + tuple(sorted(foreign_scopes))
+        scopes = own_scopes + tuple(sorted(entity_scopes)) + tuple(sorted(foreign_scopes))
         downstream = {}
         downstream_changed = set()
         primary_changed = bool(initialized or retargeted)
@@ -285,6 +319,20 @@ class LocatedDependencyProducer:
             guarded_repositories=self.guarded_repositories,
             observation_dependencies=foreign_scopes) if scopes else nullcontext(None)
         with context as batch:
+            for (location,version),(previous,reference,identifier,commit) in sorted(entity_scopes.items()):
+                reread = inputs.rereader(identifier,result.repository,commit)
+                applied = store.apply_in_transaction(self.settings,location,version,mode='edit',
+                    pin_version=previous,reference_location=reference,captured_at=self.captured_at,
+                    reread=reread,batch=batch,guarded_repositories=self.guarded_repositories,catalogs=catalogs)
+                primary_changed = primary_changed or applied.mutated
+                for name,value in applied.counts.items():
+                    totals[name] = totals.get(name,0)+value
+                related = relations.apply_in_transaction(self.settings,location,version,mode='edit',
+                    pin_version=previous,reference_location=reference,captured_at=self.captured_at,
+                    reread=reread,guarded_repositories=self.guarded_repositories,catalogs=catalogs)
+                primary_changed = primary_changed or related.mutated
+                for name,value in related.counts.items():
+                    totals[name] = totals.get(name,0)+value
             for located in result.files:
                 prior = dict(located.previous_versions)
                 reread = inputs.rereader(located.location, located.binding.primary.repository, located.commit)

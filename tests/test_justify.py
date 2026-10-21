@@ -395,3 +395,14 @@ class CloneEntityMoveStoreTests(unittest.TestCase):
             self.assertEqual(len(refs),1,refs)
             self.assertTrue(refs[0]['ownerLocationAvailable'],refs)
             self.assertEqual(refs[0]['chunk']['path'],path)
+
+        # A subsequent substantive row edit keeps the UUID-owned statement,
+        # while the old exact verification is no longer current.
+        moved=self.fixture.clone/'moved.md'
+        moved.write_text(moved.read_text().replace('keep the value stable','keep the value strictly stable'))
+        self.ingest(self.secondary)
+        status,reply=self.invoke('origins','--repo','fixture','--no-fresh')
+        self.assertEqual(status,0,reply)
+        row=next(row for row in reply['chunks'] if identifier in row['chunk'])
+        self.assertEqual(len(row['links']),1,row)
+        self.assertIn(OTHER,row['links'][0]['origin'])
