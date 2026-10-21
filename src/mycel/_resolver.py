@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from hashlib import sha256
+from functools import cached_property
 import re
 from contextlib import nullcontext
 from types import MappingProxyType
@@ -64,6 +65,13 @@ class ResolvedFile:
     snapshot_hash: str
     chunks: tuple[ResolvedChunk, ...]
     recognized_moves: tuple[SourceAddress, ...] = ()
+
+    @cached_property
+    def document_declarations(self):
+        """Parse declarations once for these immutable bytes and primary address."""
+        from ._markdown import split_markdown
+        from ._source_refs import read_document_declarations
+        return read_document_declarations(split_markdown(self.source), file=self.primary.address)
 
 
 @dataclass(frozen=True)
