@@ -6,7 +6,7 @@
       "specification_status": "accepted"
     },
     "01-corpora-and-ingest.md": {
-      "sha256": "f2e842543189d0d8ca596472283aec8cc93becf58e18bd45df7f5a6cb88e97f8",
+      "sha256": "563518b79de579e92f2e4785d147379143783fec12b21752f0045c16b46338f5",
       "specification_status": "accepted"
     },
     "02-provenance-and-freshness.md": {
@@ -22,11 +22,11 @@
       "specification_status": "accepted"
     },
     "05-settings.md": {
-      "sha256": "1c737701e3a366fcb593cc929a0a5b0d7c6cef0fcff9bae706cedd8cd8cad039",
+      "sha256": "c2befcd72153f3c9a27d6d20c39138df7ad778c5b578b5c225cb2f08860fe00d",
       "specification_status": "accepted"
     },
     "06-index-store.md": {
-      "sha256": "ad825731b69e2c442c3dd84da0ccf7c878456fa2dc42a91f2305564f81f8f22e",
+      "sha256": "9c0fe63c8e3babdb7ccc6a114a8a0fba466ceef1dd10b61ff56ea33b9995e1b6",
       "specification_status": "accepted"
     },
     "07-drifts-and-verification.md": {
@@ -70,7 +70,7 @@
       "specification_status": "accepted"
     },
     "17-justification.md": {
-      "sha256": "f1835809a9f387f2e7ce35803d99aa7d50b580ae0093fe6e45c0e40693ed6fcb",
+      "sha256": "4ac24606bc9e8dd829367dc3bb877f7a0466a1c7f8097d4cced3b8e16db528f7",
       "specification_status": "draft"
     }
   },
@@ -462,6 +462,22 @@
     {
       "id": "MYC-1.37",
       "text": "save the capture a pass read even when a file of the repository changes before the pass is saved, bind what the pass writes to that capture, name in the reply every file and location that differs from it, retry nothing within the pass, and take the sources of other repositories from the index without comparing their disk",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-1",
+      "source": "01-corpora-and-ingest.md"
+    },
+    {
+      "id": "MYC-1.38",
+      "text": "treat every configured clone as a distinct disk/branch/stash location of one repository, share chunk and exact-version identity across clones, preserve other clones when one is ingested, and scope commands to the listed clone they run in",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-1",
+      "source": "01-corpora-and-ingest.md"
+    },
+    {
+      "id": "MYC-1.39",
+      "text": "find changes on the calling clone by querying its disk versions absent from the retained local main branch in the configured read-only clone, with no Git call in the comparison and a refusal when that baseline is unavailable",
       "origin": "New",
       "kind": "store",
       "specification": "MYC-1",
@@ -1220,6 +1236,14 @@
       "source": "05-settings.md"
     },
     {
+      "id": "MYC-5.18",
+      "text": "accept code_clones as additional absolute checkout folders and readonly_root as the listed main-comparison checkout, normalize home paths, reject invalid shapes and an unlisted readonly_root, and preserve existing single-root settings",
+      "origin": "New",
+      "kind": "unit",
+      "specification": "MYC-5",
+      "source": "05-settings.md"
+    },
+    {
       "id": "MYC-6.1",
       "text": "keep mutable knowledge and invocation state between runs in one index store, with distribution/build files owned separately by MYC-15, and keep in it no copy of the settings, no secret and nothing of another product",
       "origin": "Changed",
@@ -1293,7 +1317,7 @@
     },
     {
       "id": "MYC-6.10",
-      "text": "let one pass and one embed at a time work on a repository, and passes on different repositories run side by side",
+      "text": "let one pass at a time work on each repository location and one embed at a time work on a repository; passes on different locations, including clones of one repository, run side by side",
       "origin": "Changed",
       "kind": "store",
       "specification": "MYC-6",
@@ -1382,6 +1406,22 @@
     {
       "id": "MYC-6.21",
       "text": "hold requirement and decision entities as chunks of kind `req` and `dec` in store format 3, bring a format 2 store forward in one step, report the format in `mycel info`, and never delete an entity row in collection",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-6",
+      "source": "06-index-store.md"
+    },
+    {
+      "id": "MYC-6.22",
+      "text": "reserve passes per configured clone location, allow capture on two clones of one repository concurrently, guard shared identity and evidence publication, and exclude repository removal while any location operation is live",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-6",
+      "source": "06-index-store.md"
+    },
+    {
+      "id": "MYC-6.23",
+      "text": "keep stated Origin Links as unique authored Index Store content, regenerate recovered links from their inputs, keep chat content in its owning database, and leave the shared local PostgreSQL backup to the owner",
       "origin": "New",
       "kind": "store",
       "specification": "MYC-6",
@@ -2862,6 +2902,38 @@
     {
       "id": "MYC-17.8",
       "text": "keep Origin Links in the Index Store and never in a file, each with its method, its confidence score and band, who made it and when, and its review, referencing the Origin's UUID when it has one",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.9",
+      "text": "state an Origin Link and record a verification in one guarded transaction, resolving one current dependant and its complete Origin by URI or address, and return JustifyReply with the exact chunk version, canonical Origin, link and verification",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.10",
+      "text": "refuse an unresolved, invalid or changed-since-ingest justification without any partial link, pin, verification or feature-activity write, and expose successful results through refs, stale and verifications",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.11",
+      "text": "report Origin Links and chunks without them by current repository, path or calling-clone changes, with one optional scoped ingest and no model call, a read-only report query and status zero regardless of what the list contains",
+      "origin": "New",
+      "kind": "store",
+      "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.12",
+      "text": "report requirements and decisions that have no dependant and let a requirement be marked needs nothing with a nonempty reason or have that mark withdrawn, without creating a link or a proof",
       "origin": "New",
       "kind": "store",
       "specification": "MYC-17",
