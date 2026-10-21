@@ -21,12 +21,11 @@ from ._evidence import (CaptureLocation, EvidenceError, EvidenceStore,
     _INHERITANCE_VERSION_SQL, _inheritance_version, _validate_inheritance,
     checked_transaction_input_guard, inherit_baseline)
 from ._locks import require_transaction_guards
-from ._markdown import split_markdown
 from ._reconciliation import (AssertedRemoval, DependencyRecord, DependencyRequest,
     DependencyDecision, DependencyPlan, GraphEdge, ReconciliationError, _cycle, plan_dependencies)
 from ._resolver import (Resolution, SelectionMember, SourceResolver, replace_resolution)
 from ._settings import SettingsSnapshot
-from ._source_refs import SourceAddress, SourceAddressError, parse_source_address, read_document_declarations
+from ._source_refs import SourceAddress, SourceAddressError, parse_source_address
 from ._store import exact_bytes
 
 
@@ -39,7 +38,12 @@ class RetainedDependencyResolver(SourceResolver):
     """
     def __init__(self, catalog: SourceResolver, anchors: dict[str, str],
                  syntax_faults: dict[str, str] | None = None, *, endpoint_refs=()):
-        super().__init__(catalog.settings, catalog.files, index=catalog.index)
+        # The base catalog already validated its immutable files/chunks. This
+        # adapter adds only per-dependant resolution policy; rebuilding that
+        # catalog here rehashed every source once per chunk (quadratic work).
+        if not isinstance(catalog, SourceResolver):
+            raise MycelError('invalid_input', 'Retained resolution requires a validated source catalog.')
+        self.settings, self.files, self.index = catalog.settings, catalog.files, catalog.index
         self.anchors = dict(anchors)
         self.base = catalog
         self.syntax_faults = dict(syntax_faults or {})
@@ -212,8 +216,8 @@ class DependencyApplicationStore:
     def _graph(self, settings, catalog, kind, location, *, exclusions=frozenset(),
                guarded_repositories=None):
         """Complete authoritative graph in this exact catalog/location scope."""
-        current = {member.chunk.version: member.chunk.identifier for file in catalog.files
-                   for member in catalog._members(file, file.chunks)
+        current = {chunk.version: chunk.identifier for file in catalog.files
+                   for chunk in file.chunks
                    if settings.values['repos'].get(file.repository, {}).get('enabled')}
         current.update({chunk.version: chunk.identifier for place, chunk in catalog.index
                         if settings.values['repos'].get(place.repository, {}).get('enabled')})
@@ -445,7 +449,7 @@ class DependencyApplicationStore:
                 records[identifier] = DependencyRecord(identifier, capture.manifest, place,
                     row[6].get('anchor'), _current_raw(row))
         anchors = {_current_raw(row): row[6]['anchor'] for row in rows if row[6].get('anchor')}
-        declarations = read_document_declarations(split_markdown(file.source), file=file.primary.address) if dependant.chunk.kind == 'document' else None
+        declarations = file.document_declarations if dependant.chunk.kind == 'document' else None
         refs = next((chunk.sources for chunk in declarations.chunk_sources if chunk.chunk == dependant.chunk.name), ()) if declarations else ()
         if assertions_only:
             refs = ()

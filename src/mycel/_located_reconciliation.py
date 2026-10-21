@@ -66,6 +66,14 @@ JOIN public.mycel_file_locations l ON l.file_version=v.id
 WHERE f.repository=%s ORDER BY f.id,l.id"""
 
 
+# Reconciliation of one file needs all of that file's retained versions, not
+# every other file's chunks and parse metadata again.
+_FILE_CHUNKS_SQL = _CHUNKS_SQL.replace('WHERE c.repository=%s',
+                                      'WHERE c.repository=%s AND c.file_id=%s')
+_FILE_LOCATIONS_SQL = _FILES_SQL.replace('WHERE f.repository=%s',
+                                        'WHERE f.repository=%s AND f.id=%s')
+
+
 def _catalog(connection, repository):
     return (_location_rows(connection.execute(_FILES_SQL, (repository,)).fetchall()),
             connection.execute(_ALIASES_SQL, (repository,)).fetchall(),
@@ -428,7 +436,7 @@ class LocatedCaptureStore:
                                 metadata['moveEvidence'] = [*metadata.get('moveEvidence', ()), evidence]
                         elif evidence is not None:
                             metadata['gitCorrespondence'] = evidence
-                        current_chunks = connection.execute(_CHUNKS_SQL, (repository.name,)).fetchall()
+                        current_chunks = connection.execute(_FILE_CHUNKS_SQL, (repository.name, identifier)).fetchall()
                         known = _known(identifier, None if old is None else str(old[4]), current_chunks)
                         plan = reconcile_file(_inputs(captured), known)
                         prior_ids = set() if old is None else {str(item[1]) for item in current_chunks if item[7] == old[4]}
@@ -458,7 +466,13 @@ class LocatedCaptureStore:
                                                           not unchanged, previous_versions))
                         for item in (*plan.decisions, *plan.removed):
                             counts['chunks'][item.reason] += 1
-                        candidates = _location_rows(connection.execute(_FILES_SQL, (repository.name,)).fetchall())
+                        if not unchanged:
+                            # Only this file's locations changed. Retain the
+                            # other candidates for subsequent move/restore checks.
+                            updated = _location_rows(connection.execute(
+                                _FILE_LOCATIONS_SQL, (repository.name, identifier)).fetchall())
+                            candidates = sorted([row for row in candidates if str(row[0]) != identifier] + updated,
+                                                key=lambda row: (str(row[0]), str(row[4])))
                 if used_moves != {move.identifier for move in recognized_moves}:
                     _invalid('Every recognized move must bind one captured disk destination.')
                 retired = tuple(str(row[4]) for row in rows if str(row[4]) not in kept)

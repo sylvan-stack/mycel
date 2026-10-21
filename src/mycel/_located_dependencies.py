@@ -45,6 +45,85 @@ class LocatedDependencyProducer:
         self.defer_changed_dependants = defer_changed_dependants
         self._publication = None
 
+    @staticmethod
+    def _policy_scope_rows(connection, repository):
+        return connection.execute("""SELECT l.file_location,l.chunk_version,l.metadata->>'role',
+            EXISTS (SELECT 1 FROM public.mycel_dependencies d WHERE d.dependant_version=l.chunk_version
+                AND (d.state->'declarationLocation'->>'file' IS NULL
+                     OR d.state->'declarationLocation'->>'file'=l.file_location::text)),
+            EXISTS (SELECT 1 FROM public.mycel_relations r WHERE r.left_version=l.chunk_version
+                AND (r.state->'declarationLocation'->>'file' IS NULL
+                     OR r.state->'declarationLocation'->>'file'=l.file_location::text))
+            FROM public.mycel_locations l JOIN public.mycel_file_locations f ON f.id=l.file_location
+            JOIN public.mycel_file_versions v ON v.id=f.file_version
+            JOIN public.mycel_files p ON p.id=v.file_id WHERE p.repository=%s
+            ORDER BY l.file_location,l.chunk_version,l.id""", (repository,)).fetchall()
+
+    def _empty_policy_scopes(self, connection, result, catalogs):
+        """Prove empty policy scopes together under publication guards.
+
+        Only a snapshot publication with final evidence collection can omit the
+        per-chunk executor. Any retained authority, relation, new declaration or
+        role repair keeps that chunk on the complete guarded path.
+        """
+        if (catalogs is None or self.collection_manifest is None or self.pending_repositories):
+            return frozenset(), 0
+        from ._locks import require_transaction_guards
+        from ._resolver import SourceResolver
+        require_transaction_guards(connection, tuple(self.settings.values['repos'])
+            if self.guarded_repositories is None else self.guarded_repositories)
+        rows = {}
+        for file_location, version, role, dependency, relation in self._policy_scope_rows(connection, result.repository):
+            rows.setdefault((str(file_location), version), []).append((role, dependency, relation))
+        quiet, initialize = set(), {}
+        for located in result.files:
+            catalog = SourceResolver.from_transaction(connection, self.settings,
+                kind=located.location.kind, location=location_key(located.location),
+                guarded_repositories=self.guarded_repositories, catalogs=catalogs)
+            files = [file for file in catalog.files if file.identifier == located.binding.identifier]
+            if len(files) != 1:
+                continue
+            file = files[0]
+            for decision, (identifier, version) in zip(located.identity.decisions, located.chunk_versions):
+                # Changed existing chunks can inherit assertions from their
+                # identity-selected prior version even when the new rows are
+                # empty. Keep their complete edit/restore/inherit executor.
+                if located.changed and (identifier in dict(located.previous_versions)
+                                        or decision.pin_decision == 'inherit_existing'):
+                    continue
+                chunks = [chunk for chunk in file.chunks if chunk.identifier == identifier and chunk.version == version]
+                if len(chunks) != 1:
+                    continue
+                chunk = chunks[0]
+                role = 'authored'
+                if chunk.kind == 'document':
+                    declarations = file.document_declarations
+                    if (any(group.sources for group in declarations.chunk_sources if group.chunk == chunk.name)
+                            or any(group.relations for group in declarations.chunk_relations if group.chunk == chunk.name)):
+                        continue
+                    role = declarations.role or 'unclassified'
+                scope = (located.binding.location, version)
+                if rows.get(scope) == [(role, False, False)]:
+                    quiet.add(scope)
+                elif located.changed and rows.get(scope) == [(None, False, False)]:
+                    # Newly written locations have no policy role yet. With no
+                    # authority or relation, the declaration/default role is
+                    # exact and can be initialized for the whole group.
+                    quiet.add(scope)
+                    initialize.setdefault(role, []).append(scope)
+        initialized = 0
+        for role, scopes in initialize.items():
+            changed = connection.execute("""UPDATE public.mycel_locations l
+                SET metadata=l.metadata || jsonb_build_object('role',%s::text)
+                FROM unnest(%s::uuid[],%s::bigint[]) AS q(file_location,version)
+                WHERE l.file_location=q.file_location AND l.chunk_version=q.version
+                AND l.metadata->>'role' IS NULL""",
+                (role, [scope[0] for scope in scopes], [scope[1] for scope in scopes])).rowcount
+            if changed != len(scopes):
+                raise MycelError('invalid_input', 'An empty policy scope changed during role initialization.')
+            initialized += changed
+        return frozenset(quiet), initialized
+
     def __call__(self, connection, result):
         from ._dependency_application import DependencyApplicationStore
         from ._dependency_inputs import DependencyCaptureInputs
@@ -56,7 +135,11 @@ class LocatedDependencyProducer:
         inputs = DependencyCaptureInputs(connection, self.settings, settings_home=self.settings_home,
                                          guarded_repositories=self.guarded_repositories, snapshot=self.snapshot,
                                          catalogs=catalogs)
-        totals = {}
+        totals = {name: 0 for name in ('refsChecked', 'refsChanged', 'refFaults', 'pinsCaptured',
+            'pinsInherited', 'dependenciesReleased', 'rolesChanged', 'declarationMetadataChanged',
+            'evidenceSnapshotsCollected', 'evidenceManifestsCollected', 'relationsChecked',
+            'relationsChanged', 'relationPinsCaptured', 'relationPinsInherited',
+            'relationBaselinesReleased', 'relationFaults')}
 
         store = DependencyApplicationStore(connection)
         relations = RelationApplicationStore(connection)
@@ -67,7 +150,12 @@ class LocatedDependencyProducer:
                 or self.activity is not None and result.activity is not None and self.activity is not result.activity):
             raise MycelError('invalid_input', 'Dependency activity requires the exact publishing connection.')
 
-        own_scopes = tuple((file.binding.location, version) for file in result.files for _, version in file.chunk_versions)
+        quiet, initialized = self._empty_policy_scopes(connection, result, catalogs)
+        totals['rolesChanged'] = initialized
+        quiet_rows = tuple(row for row in self._policy_scope_rows(connection, result.repository)
+                           if (str(row[0]), row[1]) in quiet) if quiet else ()
+        own_scopes = tuple((file.binding.location, version) for file in result.files for _, version in file.chunk_versions
+                           if (file.binding.location, version) not in quiet)
         published = {file.binding.primary.repository for file in result.files}
         if self.collection_manifest is not None:
             published.add(self.collection_manifest.repository)
@@ -158,7 +246,7 @@ class LocatedDependencyProducer:
         scopes = own_scopes + tuple(sorted(foreign_scopes))
         downstream = {}
         downstream_changed = set()
-        primary_changed = False
+        primary_changed = bool(initialized)
         context = store.batch_in_transaction(self.settings, scopes=scopes,
             guarded_repositories=self.guarded_repositories,
             observation_dependencies=foreign_scopes) if scopes else nullcontext(None)
@@ -167,6 +255,8 @@ class LocatedDependencyProducer:
                 prior = dict(located.previous_versions)
                 reread = inputs.rereader(located.location, located.binding.primary.repository, located.commit)
                 for decision, (identifier, version) in zip(located.identity.decisions, located.chunk_versions):
+                    if (located.binding.location, version) in quiet:
+                        continue
                     if decision.pin_decision == 'inherit_existing':
                         mode, pin_version = 'inherit', decision.pin_version
                         authorization = ('recognized_rename' if decision.reason == 'renamed'
@@ -265,7 +355,7 @@ class LocatedDependencyProducer:
             totals['dependencyRepositories'] = downstream
         result.counts.update(totals)
         result.dependency_changes.update(downstream_changed)
-        self._publication = (connection, result, inputs)
+        self._publication = (connection, result, inputs, quiet, quiet_rows)
         return primary_changed
 
     def verify_in_transaction(self, connection, result):
@@ -278,3 +368,7 @@ class LocatedDependencyProducer:
             raise MycelError('invalid_input', 'Dependency final checks require their exact publication.')
         self.settings.require_current()
         self._publication[2].verify()
+        quiet, expected = self._publication[3:]
+        if quiet and tuple(row for row in self._policy_scope_rows(connection, result.repository)
+                           if (str(row[0]), row[1]) in quiet) != expected:
+            raise MycelError('invalid_input', 'An empty policy scope changed before publication.')

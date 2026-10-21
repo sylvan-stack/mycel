@@ -435,7 +435,7 @@ class MechanicalStalenessStore:
             if member is None or member.chunk.version != version:
                 raise MycelError('invalid_input', 'Mechanical detection requires one exact current disk location.')
             declarations = file_metadata.get('documentDeclarations', {}).get('metadata', {})
-            if not declarations and member.chunk.kind == 'document':
+            if 'documentDeclarations' not in file_metadata and member.chunk.kind == 'document':
                 file = next(file for file in catalog.files if member.chunk in file.chunks)
                 parsed = file_from_parse_history(file.source, 'documents',
                     FileAlias(file.primary.root, file.primary.path),

@@ -21,10 +21,9 @@ from ._evidence import (CaptureLocation, ComparisonRecord, EvidenceError, Eviden
     _INHERITANCE_VERSION_SQL, _inheritance_version, _validate_inheritance,
     capture_baseline, checked_transaction_input_guard, chunk_comparison, inherit_baseline)
 from ._locks import require_transaction_guards
-from ._markdown import split_markdown
 from ._reconciliation import DependencyRequest, _comparison
 from ._resolver import SourceResolver
-from ._source_refs import parse_source_address, read_document_declarations
+from ._source_refs import parse_source_address
 from ._store import exact_bytes
 
 
@@ -181,7 +180,7 @@ class RelationApplicationStore:
                     parse_source_address(place), state.get('anchor'))
             mapped.append((identifier, owner, version, _relation_raw(state), place, state['ownership'],
                            {**state, 'rawRef': _raw(_relation_raw(state))}, row[5]))
-        declarations = (read_document_declarations(split_markdown(file.source), file=file.primary.address)
+        declarations = (file.document_declarations
                         if dependant.chunk.kind == 'document' else None)
         refs = next((group.relations for group in declarations.chunk_relations
                      if group.chunk == dependant.chunk.name), ()) if declarations and not assertions_only else ()

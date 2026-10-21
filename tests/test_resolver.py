@@ -4,6 +4,7 @@ from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from psycopg.types.json import Jsonb
@@ -37,6 +38,25 @@ def file(path, source, *, root='artifact', members=(), aliases=()):
 
 
 class ResolverUnitTests(unittest.TestCase):
+    @proves('MYC-13.15')
+    def test_file_declarations_are_reused_but_an_edited_capture_is_parsed_afresh(self):
+        from mycel import _source_refs
+        retained = file('guide.md', '---\nrole: authored\nsources: ["fixture:source.md"]\n---\n# Guide\nBody.\n')
+        catalog = SourceResolver(settings(), (retained,))
+        with patch.object(_source_refs, 'read_document_declarations',
+                          wraps=_source_refs.read_document_declarations) as read:
+            original = catalog.files[0].document_declarations
+            for _ in range(100):
+                self.assertIs(catalog.files[0].document_declarations, original)
+            self.assertEqual(read.call_count, 1)
+            self.assertEqual(original.role, 'authored')
+            edited = retained.source.replace(b'authored', b'derived')
+            current = replace(retained, source=edited, snapshot_hash=sha256(edited).hexdigest())
+            changed = SourceResolver(settings(), (current,)).files[0].document_declarations
+            self.assertEqual(changed.role, 'derived')
+            self.assertEqual(read.call_count, 2)
+            self.assertEqual(original.role, 'authored')
+
     @proves('MYC-13.15')
     def test_authoritative_body_nul_survives_and_text_projection_is_not_a_source(self):
         raw = '# Heading\n雪\0body\0\n'.encode()

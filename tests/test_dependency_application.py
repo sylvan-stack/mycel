@@ -7,6 +7,7 @@ from contextlib import ExitStack
 from dataclasses import replace
 from hashlib import sha256
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from psycopg.types.json import Jsonb
@@ -29,6 +30,36 @@ try:
     from . import test_located_reconciliation as fixtures
 except ImportError:
     import test_located_reconciliation as fixtures
+
+
+class RetainedResolverUnitTests(unittest.TestCase):
+    @proves('MYC-13.15')
+    def test_policy_wrappers_reuse_validated_catalog_bytes_and_keep_selection_rules(self):
+        from mycel import _resolver
+        try:
+            from .test_resolver import settings, chunk, file
+        except ImportError:
+            from test_resolver import settings, chunk, file
+        members = tuple(chunk(f'Part{i}', f'Body {i}', number=i + 1) for i in range(100))
+        retained = file('guide.md', 'whole file', members=members)
+        with patch.object(_resolver, '_exact', wraps=_resolver._exact) as exact:
+            catalog = SourceResolver(settings(), (retained,))
+            validations = exact.call_count
+            self.assertGreaterEqual(validations, len(members))
+            for member in members:
+                policy = RetainedDependencyResolver(catalog, {})
+                ref = f'fixture:@artifact/guide.md#{member.name}'
+                self.assertEqual(policy.resolve(ref), catalog.resolve(ref))
+                self.assertEqual(policy.resolve('disabled:guide.md').fault, 'disabled_repository')
+                self.assertEqual(policy.resolve('fixture:guide.md', purpose='endpoint').fault,
+                                 'one_chunk_required')
+            self.assertEqual(exact.call_count, validations,
+                             'Per-chunk policy must not rehash the complete immutable catalog')
+        # Invalid input still fails at the catalog boundary, before any adapter.
+        with self.assertRaises(MycelError):
+            SourceResolver(settings(), (replace(retained, snapshot_hash='0' * 64),))
+        with self.assertRaises(MycelError):
+            RetainedDependencyResolver(object(), {})
 
 
 class DependencyApplicationStoreTests(unittest.TestCase):

@@ -94,6 +94,33 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
              'fixture:@artifact/source.md#Source', 'asserted', Jsonb({'label': label}), owner))
         return str(owner), str(dependency)
 
+    @proves('MYC-1.7', 'MYC-1.31', 'MYC-1.34', kind='store')
+    def test_file_reconciliation_reads_only_its_own_retained_chunk_versions(self):
+        from mycel import _located_reconciliation as publication
+        self.initialize()
+        for number in range(3):
+            (self.artifact / f'other{number}.md').write_text(f'# Other {number}\nSeparate body.\n')
+        self.commit()
+        with self.connect() as connection:
+            first = self.apply(connection)
+            self.assertTrue(first.changed)
+            before = self.state(connection)
+            known = publication._known
+            checked = []
+            def only_owned(file_id, old_location, rows):
+                self.assertTrue(rows)
+                self.assertEqual({str(row[0]) for row in rows}, {file_id},
+                                 'One file must not repeatedly fetch every other file in the repository')
+                checked.append(file_id)
+                return known(file_id, old_location, rows)
+            with patch.object(publication, '_known', side_effect=only_owned):
+                quiet = self.apply(connection)
+            self.assertFalse(quiet.changed)
+            self.assertGreaterEqual(len(set(checked)), 4)
+            self.assertEqual(self.state(connection), before)
+            self.assertEqual({(f.binding.primary.address, f.location): f.chunk_versions for f in quiet.files},
+                             {(f.binding.primary.address, f.location): f.chunk_versions for f in first.files})
+
     @proves('MYC-1.30', 'MYC-1.31', kind='store')
     def test_publish_disk_branches_and_untracked_stash_without_changing_checkout(self):
         self.initialize()
