@@ -131,6 +131,36 @@ def _ambiguous(declaration: str, fault: str, candidates) -> Resolution:
                       candidate_count=len(ordered))
 
 
+
+def _location_selectors(settings, kind, location):
+    from ._scope import RepositoryLocations
+    from ._evidence import canonical_json
+    if not any(value.get('code_clones') for value in settings.values['repos'].values()):
+        return ('disk' if kind == 'disk' and location is None else location), None
+    repositories = RepositoryLocations(settings).repositories
+    if kind == 'disk' and location in {None, 'disk'}:
+        return None, {repository.name: repository.disk_location for repository in repositories}
+    try:
+        import json
+        identifier = json.loads(location)
+    except (TypeError, ValueError):
+        return location, None
+    if not isinstance(identifier, dict) or not identifier.get('clone'):
+        return location, None
+    selectors = {}
+    for repository in repositories:
+        place = dict(identifier)
+        explicit = any(str(folder.path) == identifier['clone'] for folder in repository.clones)
+        clone = identifier['clone'] if explicit else repository.location
+        if clone is None:
+            place.pop('clone', None)
+        else:
+            place['clone'] = clone
+        selectors[repository.name] = ('disk' if kind == 'disk' and clone is None else
+                                     canonical_json(place).decode('utf-8'))
+    return None, selectors
+
+
 class SourceResolver:
     """A finite retained catalog, suitable for every source/ref/read consumer.
 
@@ -362,8 +392,10 @@ class SourceResolver:
                 # snapshot, including inside a writing READ COMMITTED pass.
                 # An unguarded disjoint owner may publish concurrently without
                 # pairing yesterday's full-file bytes with today's chunks.
+                selected_location, selectors = _location_selectors(settings, kind, location)
+                from psycopg.types.json import Jsonb
                 observed = connection.execute(_CATALOG_SQL,
-                    (kind, location, eligible)).fetchall()
+                    (kind, selected_location, eligible, None if selectors is None else Jsonb(selectors))).fetchall()
                 portions = {'file': [], 'alias': [], 'chunk': [], 'index': []}
                 for category, values in observed:
                     values = list(values)
@@ -544,30 +576,36 @@ FROM public.mycel_chunks c JOIN public.mycel_chunk_versions v ON v.chunk_id = c.
 JOIN public.mycel_locations l ON l.chunk_version = v.id
 WHERE c.file_id IS NULL AND l.kind = 'index' AND c.repository = ANY(%s)"""
 
-_CATALOG_SQL = """WITH scope AS (SELECT %s::text AS kind,%s::text AS location,%s::text[] AS eligible)
+_CATALOG_SQL = """WITH scope AS (SELECT %s::text AS kind,%s::text AS location,%s::text[] AS eligible,%s::jsonb AS selectors)
 SELECT DISTINCT 'file' AS category,jsonb_build_array(f.id,f.repository,f.root,f.path,v.snapshot_hash,
     encode(v.source_bytes,'hex'),l.metadata) AS values
 FROM public.mycel_files f JOIN public.mycel_file_versions v ON v.file_id=f.id
 JOIN public.mycel_file_locations l ON l.file_version=v.id CROSS JOIN scope s
-WHERE l.kind=s.kind AND (s.location IS NULL OR l.location=s.location) AND f.repository=ANY(s.eligible)
+WHERE l.kind=s.kind AND (s.location IS NULL OR l.location=s.location) AND
+    (s.selectors IS NULL OR l.location=s.selectors->>f.repository) AND f.repository=ANY(s.eligible)
 UNION ALL
 SELECT DISTINCT 'alias',jsonb_build_array(f.id,f.repository,a.root,a.path)
 FROM public.mycel_files f JOIN public.mycel_file_versions v ON v.file_id=f.id
 JOIN public.mycel_file_locations l ON l.file_version=v.id
 JOIN public.mycel_file_aliases a ON a.file_id=f.id CROSS JOIN scope s
-WHERE l.kind=s.kind AND (s.location IS NULL OR l.location=s.location) AND f.repository=ANY(s.eligible)
+WHERE l.kind=s.kind AND (s.location IS NULL OR l.location=s.location) AND
+    (s.selectors IS NULL OR l.location=s.selectors->>f.repository) AND f.repository=ANY(s.eligible)
 UNION ALL
 SELECT DISTINCT 'chunk',jsonb_build_array(f.id,f.repository,c.repository,c.id,v.id,v.snapshot_hash,
     encode(v.source_bytes,'hex'),v.comparison,v.metadata,l.metadata)
-FROM public.mycel_files f JOIN public.mycel_chunks c ON c.file_id=f.id
-JOIN public.mycel_chunk_versions v ON v.chunk_id=c.id JOIN public.mycel_locations l ON l.chunk_version=v.id
-JOIN public.mycel_file_locations fl ON fl.id=l.file_location
-JOIN public.mycel_file_versions fv ON fv.id=fl.file_version AND fv.file_id=f.id CROSS JOIN scope s
+FROM public.mycel_files f JOIN public.mycel_file_versions fv ON fv.file_id=f.id
+JOIN public.mycel_file_locations fl ON fl.file_version=fv.id
+JOIN public.mycel_locations l ON l.file_location=fl.id
+JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version
+JOIN public.mycel_chunks c ON c.id=v.chunk_id CROSS JOIN scope s
 WHERE fl.kind=l.kind AND fl.location=l.location AND l.kind=s.kind
-    AND (s.location IS NULL OR l.location=s.location) AND f.repository=ANY(s.eligible)
+    AND (s.location IS NULL OR l.location=s.location) AND
+    (s.selectors IS NULL OR l.location=s.selectors->>f.repository) AND f.repository=ANY(s.eligible)
 UNION ALL
 SELECT DISTINCT 'index',jsonb_build_array(c.repository,c.id,v.id,v.snapshot_hash,
     encode(v.source_bytes,'hex'),v.comparison,v.metadata)
 FROM public.mycel_chunks c JOIN public.mycel_chunk_versions v ON v.chunk_id=c.id
 JOIN public.mycel_locations l ON l.chunk_version=v.id CROSS JOIN scope s
-WHERE c.file_id IS NULL AND l.kind='index' AND c.repository=ANY(s.eligible)"""
+WHERE c.file_id IS NULL AND l.kind='index' AND c.repository=ANY(s.eligible)
+    AND (c.kind<>'overview' OR (s.kind='disk' AND COALESCE(l.metadata->>'cloneLocation','disk')=
+        COALESCE(s.selectors->>c.repository,'disk')))"""

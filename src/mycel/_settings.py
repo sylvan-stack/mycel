@@ -70,6 +70,7 @@ class SettingsSnapshot:
     readable: bool
     _faults: tuple[_Fault, ...] = field(default=(), repr=False)
     _home: Path | None = field(default=None, compare=False, repr=False)
+    _cwd: Path | None = field(default=None, compare=False, repr=False)
 
     @property
     def valid(self) -> bool:

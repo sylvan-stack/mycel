@@ -145,7 +145,7 @@ def _guard_disk_corpora(rows, manifest, confirm_empty):
                 raise MycelError('refused', f'The on-disk {corpus} corpus became empty; explicit confirmation is required.')
 
 
-def _parse_history(repository, rows, inventory=()):
+def _parse_history(repository, rows, inventory=(), *, clone=None):
     """Prepare advisory parse reuse from committed exact located file bytes.
 
     The actual scanner still selects roots, reads disk bytes, checks policy and
@@ -178,7 +178,7 @@ def _parse_history(repository, rows, inventory=()):
                 groups.setdefault(identifier, []).append(captured)
         except (ValueError, TypeError, KeyError):
             continue
-    disk_id = LocationId('disk', None, 'disk')
+    disk_id = LocationId('disk', None, 'disk', clone)
     # Disk reuse is always per file and never skips physical acquisition.
     locations = [CapturedLocation(disk_id, None, tuple(sorted(groups.get(disk_id, ()),
                                                            key=lambda file: file.primary)), False)]

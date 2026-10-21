@@ -149,7 +149,7 @@ class RepositoryLocations:
     def __init__(self, snapshot: SettingsSnapshot, *, cwd: Path | str | None = None):
         snapshot.require_valid()
         self.snapshot = snapshot
-        self.cwd = _resolved(Path.cwd() if cwd is None else Path(cwd))
+        self.cwd = _resolved((snapshot._cwd or Path.cwd()) if cwd is None else Path(cwd))
         self.organizations = tuple(
             Organization(name, Path(value["root"]), Path(value["artifact_root"]))
             for name, value in sorted(snapshot.values["organizations"].items())

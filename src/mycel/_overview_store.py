@@ -18,13 +18,13 @@ _SCHEMA = 'mycel-overview-v1'
 _FILES = """SELECT f.id,fl.id,fl.metadata FROM public.mycel_files f
 JOIN public.mycel_file_versions fv ON fv.file_id=f.id
 JOIN public.mycel_file_locations fl ON fl.file_version=fv.id
-WHERE f.repository=%s AND fl.kind='disk' ORDER BY f.id,fl.id"""
+WHERE f.repository=%s AND fl.kind='disk' AND fl.location=%s ORDER BY f.id,fl.id"""
 _CHUNKS = """SELECT l.file_location,v.metadata,l.metadata,v.source_bytes FROM public.mycel_chunks c
 JOIN public.mycel_chunk_versions v ON v.chunk_id=c.id
 JOIN public.mycel_locations l ON l.chunk_version=v.id
 JOIN public.mycel_file_locations fl ON fl.id=l.file_location
 JOIN public.mycel_file_versions fv ON fv.id=fl.file_version AND fv.file_id=c.file_id
-WHERE c.repository=%s AND fl.kind='disk' AND l.kind='disk' AND l.location=fl.location
+WHERE c.repository=%s AND fl.kind='disk' AND fl.location=%s AND l.kind='disk' AND l.location=fl.location
 ORDER BY l.file_location,v.id"""
 _SECTIONS = """SELECT c.id,v.id,v.source_bytes,l.id,l.file_location,COALESCE(l.metadata,v.metadata),g.kind,g.state
 FROM public.mycel_chunks c JOIN public.mycel_chunk_versions v ON v.chunk_id=c.id
@@ -39,13 +39,16 @@ def _bad():
 
 
 class OverviewStore:
-    def __init__(self, connection):
+    def __init__(self, connection, *, location='disk'):
         self.connection = connection
+        self.location = location
 
     def _stored(self, repository, *, include_missing=False):
         result = {}
         for identifier, version, source, location, file_location, metadata, kind, state in self.connection.execute(
                 _SECTIONS, (repository,)).fetchall():
+            if isinstance(metadata, dict) and metadata.get('cloneLocation', 'disk') != self.location:
+                continue
             if location is None and not include_missing:
                 continue
             if (not isinstance(metadata, dict) or not isinstance(state, dict)
@@ -62,7 +65,8 @@ class OverviewStore:
             except MycelError:
                 _bad()
             if (normalized != directory or directory in result
-                    or metadata != {'kind': 'overview', 'path': 'overview', 'name': directory}):
+                    or metadata != {'kind': 'overview', 'path': 'overview', 'name': directory,
+                        **({'cloneLocation': self.location} if self.location != 'disk' else {})}):
                 _bad()
             result[directory] = (identifier, version, location,
                 {'directory': directory, 'files': state['files'], 'symbols': state['symbols'],
@@ -78,7 +82,7 @@ class OverviewStore:
 
     def _files(self, repository):
         chunks = {}
-        for location, version, placed, source in self.connection.execute(_CHUNKS, (repository,)).fetchall():
+        for location, version, placed, source in self.connection.execute(_CHUNKS, (repository,self.location)).fetchall():
             if not isinstance(version, dict) or not isinstance(placed, dict):
                 _bad()
             metadata = {**version, **placed}
@@ -100,7 +104,7 @@ class OverviewStore:
             except (KeyError, TypeError, ValueError, UnicodeError):
                 _bad()
         files, seen = [], set()
-        for identifier, location, metadata in self.connection.execute(_FILES, (repository,)).fetchall():
+        for identifier, location, metadata in self.connection.execute(_FILES, (repository,self.location)).fetchall():
             if location_corpus(metadata) != 'code':
                 continue
             aliases = metadata.get('aliases', [])
@@ -128,7 +132,8 @@ class OverviewStore:
             if old is not None and old[2] is not None and old[3] == section:
                 continue
             identifier = uuid4() if old is None else old[0]
-            metadata = {'kind': 'overview', 'path': 'overview', 'name': directory}
+            metadata = {'kind': 'overview', 'path': 'overview', 'name': directory,
+                        **({'cloneLocation': self.location} if self.location != 'disk' else {})}
             raw = section['text'].encode('utf-8')
             self.connection.execute('INSERT INTO public.mycel_chunks VALUES (%s,%s,NULL,%s,%s) '
                 'ON CONFLICT(id) DO NOTHING', (identifier, repository, 'overview', Jsonb({})))

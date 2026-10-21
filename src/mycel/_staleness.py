@@ -303,6 +303,16 @@ class MechanicalStalenessStore:
             guarded_repositories=guards.writable)
         rows = _links(self.connection, eligible)
         located = tuple(self.connection.execute(_NODES, (eligible, eligible)).fetchall())
+        if any(value.get('code_clones') for value in settings.values['repos'].values()):
+            from ._scope import RepositoryLocations
+            locations = {repository.name: repository for repository in RepositoryLocations(settings).repositories}
+            rows = tuple(row for row in rows if row[5] == 'generated' or
+                row[6].get('declarationLocation', {}).get('location', 'disk') == locations[row[1]].disk_location)
+            index_ids = {chunk.identifier for _, chunk in catalog.index}
+            selected_versions = {chunk.version for file in catalog.files for chunk in file.chunks}
+            selected_versions.update(chunk.version for _, chunk in catalog.index)
+            located = tuple(row for row in located if row[2] in selected_versions and
+                (str(row[0]) in index_ids or row[5].get('captureLocation', {}).get('clone') == locations[row[1]].location))
         # These observations can include a busy owner. Keep all exact row and
         # evidence inputs in the final CAS; no unheld peer can change a pin,
         # exemption, version or source selection unnoticed before publication.

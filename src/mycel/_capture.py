@@ -77,9 +77,11 @@ class LocationId:
     kind: Literal["disk", "branch", "stash"]
     checkout: Root | None
     identity: str
+    clone: str | None = None
 
     def record(self) -> dict[str, Any]:
-        return {"kind": self.kind, "checkout": self.checkout, "identity": self.identity}
+        return {"kind": self.kind, "checkout": self.checkout, "identity": self.identity,
+                **({"clone": self.clone} if self.clone is not None else {})}
 
 
 @dataclass(frozen=True)
@@ -1079,6 +1081,14 @@ def capture_repository(snapshot: SettingsSnapshot, repository: Repository | str,
     if previous is not None and previous.repository != repository.name:
         raise MycelError("invalid_input", "Capture comparison requires the same exact repository.")
     check_deadline()
+    if previous is not None:
+        previous = replace(previous, locations=tuple(replace(item,
+            id=replace(item.id, clone=None)) for item in previous.locations))
     captured = _Capture(snapshot, repository, previous, _git, cancelled).capture()
+    if repository.location is not None:
+        captured = replace(captured, locations=tuple(replace(item,
+            id=replace(item.id, clone=repository.location)) for item in captured.locations),
+            diagnostics=tuple(replace(item, location=None if item.location is None else
+                replace(item.location, clone=repository.location)) for item in captured.diagnostics))
     check_deadline()
     return captured

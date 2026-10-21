@@ -30,6 +30,7 @@ ALLOCATOR_LOCK = (-2147483648, 1)
 
 class LockNamespace(StrEnum):
     PASS = "repository.pass"
+    LOCATION_PASS = "location.pass"
     EMBED = "repository.embed"
     CLASSIFY = "repository.classify"
     SUMMARIES = "repository.summaries"
@@ -241,6 +242,22 @@ def removal_guard(connection, repository: str) -> Iterator[int]:
     with structure_guard(connection), _repository_lock(
             connection, repository, LockNamespace.MUTATION, shared=False,
             message="This repository has an active operation or evidence mutation.") as key:
+        yield key
+
+
+
+@contextmanager
+def location_guard(connection, repository: str, location: str) -> Iterator[int]:
+    """Reserve one clone's pass while permitting another clone's capture.
+
+    Shared identity/evidence writes still take their short repository pass
+    guards; repository removal excludes every live location operation.
+    """
+    import json
+    identity = json.dumps([_identity(repository), _identity(location)], separators=(',', ':'))
+    with mutation_guard(connection, repository), _repository_lock(
+            connection, identity, LockNamespace.LOCATION_PASS, shared=False,
+            message="Another pass is running for this repository location.") as key:
         yield key
 
 

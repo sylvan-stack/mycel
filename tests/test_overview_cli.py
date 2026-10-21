@@ -75,7 +75,7 @@ class OverviewCliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertEqual(json.loads(output.getvalue()), {"repository": "example", "sections": []})
             self.assertEqual(diagnostic.getvalue(), "")
-            catalog.assert_called_once_with(connection)
+            catalog.assert_called_once_with(connection, location="disk")
             catalog.return_value.sections.assert_called_once_with("example", "missing")
             ingest.assert_not_called()
             embed.assert_not_called()

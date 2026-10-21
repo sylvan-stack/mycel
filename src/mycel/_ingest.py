@@ -17,7 +17,7 @@ from ._errors import MycelError
 from ._deadline import check_deadline
 from ._located_dependencies import LocatedDependencyProducer
 from ._located_reconciliation import LocatedCaptureStore
-from ._locks import operation_guard, read_snapshot
+from ._locks import operation_guard, location_guard, read_snapshot
 from ._scope import RepositoryLocations
 from ._source_refs import SourceAddressError, parse_source_address, read_document_declarations
 
@@ -159,7 +159,8 @@ class _CompleteProducer(LocatedDependencyProducer):
 
     def finalize_in_transaction(self, connection, result):
         from ._overview_store import OverviewStore
-        return OverviewStore(connection).reconcile_in_transaction(result.repository)
+        return OverviewStore(connection, location=RepositoryLocations(self.settings).named(
+            result.repository)[0].disk_location).reconcile_in_transaction(result.repository)
 
     def __call__(self, connection, result):
         from ._evidence import EvidenceError
@@ -269,7 +270,8 @@ def _ingest(invocation, state):
             stack.enter_context(activity.session())
         for name in selected:
             try:
-                with operation_guard(connection, name, 'pass'):
+                selected_location = RepositoryLocations(settings).named(name)[0].disk_location
+                with location_guard(connection, name, selected_location):
                     store = LocatedCaptureStore(connection)
                     manifest = store.capture(settings, name)
                     if not manifest.deletion_safe:
