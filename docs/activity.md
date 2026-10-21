@@ -7,6 +7,23 @@ ordered history and `activity --entry <id>` exposes one pass with its ordered
 file, identity and classification details. Writer transactions retain bounded
 history while preserving exact live invocations and independent evidence.
 
+Activity requires the package's numbered Build identity. An unnumbered source
+development run deliberately leaves no activity, including after an ingest that
+changes the index; it never substitutes a number for a Build. A numbered package
+with a missing or damaged identity fails with `internal` instead of falling back
+to development behavior. Use the numbered package when checking public activity.
+
+The public subprocess store checks run ingest, list and detail commands from a
+private package copy with fictional Build `1a`. They compare the complete stored
+counts with the repository's ingest reply, inspect code and document decisions,
+require no new entry after a no-op, and force an audit write failure to prove
+publication rolls back. `scripts/check_real.py` uses the same explicit test
+identity on copies of real repositories in its own disposable store. Each
+changing pass must add exactly one entry with matching counts and readable
+details; an unchanged pass must preserve history. Its report labels the runtime
+`numbered_test_package` and `qualifiedBuild: false`. These are automatic activity
+checks, not creation, installation or qualification of a working Build.
+
 Each entry also returns its persisted `indexGeneration` UUID. A fresh store
 initialization and its later ingest entries share the new generation, so their
 activity cannot impersonate work from a lost store. Reporting reads this identity

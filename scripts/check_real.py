@@ -10,6 +10,12 @@ name the file under `changedDuringPass`, and the second pass must take it up
 `embed --dry-run` on the result. Every command must end with status 0, and no
 reply may carry the error code `internal`.
 
+Commands run from a private copy of the current package with fictional Build
+1a. This exercises the numbered public activity path without registering,
+installing or qualifying a Build. Each changing ingest must add exactly one
+entry for its repository, with exact reply counts and readable file/identity
+details; a no-op must leave its history unchanged.
+
     PYTHONPATH=src .venv/bin/python scripts/check_real.py --report /tmp/check_real.json
 
 Options: `--store-settings` (default `~/.mycel/config.toml`, only its
@@ -41,6 +47,7 @@ from mycel._check_store import NativePostgresBackend  # noqa: E402
 from mycel._coverage import require_check_database  # noqa: E402
 
 CHANGED_FILE = "INDEX.md"
+TEST_BUILD = 26
 COMMANDS = (
     ("search", "--repo", "{last}", "the pass publishes the capture it read"),
     ("read", "--repo", "mycel", "mycel:@code/src/mycel/_ingest.py#ingest"),
@@ -85,10 +92,23 @@ def _remove(folder: Path) -> None:
         shutil.rmtree(folder, ignore_errors=True)
 
 
-def _mycel(settings: Path, *arguments: str) -> tuple[int, dict | None, float]:
+def _numbered_package(work: Path) -> Path:
+    """Use an explicit test identity; never invent an installed Build record."""
+    root = work / "numbered-test-package"
+    package = root / "mycel"
+    shutil.copytree(REPOSITORY / "src/mycel", package,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    (package / "data/development-identity.json").unlink(missing_ok=True)
+    (package / "data/build-identity.json").write_text(
+        json.dumps({"schemaVersion": 1, "build": TEST_BUILD}) + "\n", encoding="utf-8")
+    return root
+
+
+def _mycel(settings: Path, *arguments: str, package: Path) -> tuple[int, dict | None, float]:
     started = time.monotonic()
-    completed = subprocess.run([sys.executable, "-m", "mycel", *arguments],
-                               env={**os.environ, "MYCEL_CONFIG": str(settings)},
+    completed = subprocess.run([sys.executable, "-B", "-P", "-m", "mycel", *arguments],
+                               env={**os.environ, "MYCEL_CONFIG": str(settings),
+                                    "PYTHONPATH": str(package)},
                                cwd=settings.parent, capture_output=True, text=True)
     elapsed = time.monotonic() - started
     try:
@@ -110,6 +130,53 @@ def _internal(value) -> bool:
     return False
 
 
+def _entries(reply) -> list[dict] | None:
+    entries = reply.get("entries") if isinstance(reply, dict) else None
+    if not isinstance(entries, list) or not all(
+            isinstance(entry, dict) and isinstance(entry.get("id"), str) for entry in entries):
+        return None
+    if len({entry["id"] for entry in entries}) != len(entries):
+        return None
+    return entries
+
+
+def _activity_problems(repository: str, result: dict, before, after, detail) -> list[str]:
+    """Check public history against this invocation, not an older good entry."""
+    previous, current = _entries(before), _entries(after)
+    if previous is None or current is None:
+        return ["activity history is malformed"]
+    if not isinstance(result.get("changed"), bool):
+        return ["ingest reply has no change result"]
+    if not result["changed"]:
+        return [] if previous == current else ["a no-op changed activity history"]
+    old = {entry["id"]: entry for entry in previous}
+    new = [entry for entry in current if entry["id"] not in old]
+    if len(new) != 1:
+        return [f"a changing ingest added {len(new)} entries instead of one"]
+    problems = []
+    if any(entry != old[entry["id"]] for entry in current if entry["id"] in old):
+        problems.append("ingest changed an earlier activity entry")
+    entry = new[0]
+    expected = {"repository": repository, "kind": "ingest", "startedBy": "command",
+                "build": format(TEST_BUILD, "x"), "outcome": "done", "counts": result}
+    for key, value in expected.items():
+        if entry.get(key) != value:
+            problems.append(f"activity {key} differs from the completed numbered ingest")
+    details = _entries(detail)
+    if details is None or len(details) != 1 or any(
+            details[0].get(key) != value for key, value in entry.items()):
+        problems.append("activity detail differs from its listed entry")
+    elif not all(isinstance(details[0].get(key), list) for key in ("files", "decisions")):
+        problems.append("activity detail has no file/identity lists")
+    else:
+        files, chunks = result.get("files", {}), result.get("chunks", {})
+        if any(files.get(key, 0) for key in ("changed", "removed")) and not details[0]["files"]:
+            problems.append("activity detail omits changed files")
+        if any(chunks.get(key, 0) for key in ("new", "edited", "renamed", "removed")) and not details[0]["decisions"]:
+            problems.append("activity detail omits identity decisions")
+    return problems
+
+
 class Helper(threading.Thread):
     """Change one Markdown file once the pass has begun to write."""
 
@@ -124,9 +191,13 @@ class Helper(threading.Thread):
         started = time.monotonic()
         while not self.stop.is_set():
             with self.backend.connection(self.database) as connection:
+                # Invocation registration writes before capture. Wait for the
+                # publication's file-table lock, which is held until commit.
                 writing = connection.execute(
-                    "SELECT count(*) FROM pg_catalog.pg_stat_activity WHERE datname = %s "
-                    "AND backend_xid IS NOT NULL", (self.database,)).fetchone()[0]
+                    "SELECT count(*) FROM pg_catalog.pg_locks l "
+                    "JOIN pg_catalog.pg_stat_activity a ON a.pid=l.pid "
+                    "WHERE a.datname=%s AND l.relation='public.mycel_files'::regclass "
+                    "AND l.mode='RowExclusiveLock' AND l.granted", (self.database,)).fetchone()[0]
             if writing:
                 self.path.write_bytes(self.path.read_bytes() + b"\nChanged by check_real.py during the first pass.\n")
                 self.changed_at = time.time()
@@ -157,7 +228,9 @@ def main(argv: list[str] | None = None) -> int:
     backend = NativePostgresBackend(owner, _ownership_journal=journal)
     database = require_check_database("mycel_check_real_" + uuid4().hex)
     report = {"database": database, "server": backend.server_label, "repositories": {},
-              "commands": [], "ok": True, "problems": []}
+              "commands": [], "ok": True, "problems": [],
+              "runtime": {"kind": "numbered_test_package", "build": format(TEST_BUILD, "x"),
+                          "qualifiedBuild": False}}
     last = arguments.repos[-1]
 
     def problem(text: str) -> None:
@@ -166,6 +239,17 @@ def main(argv: list[str] | None = None) -> int:
         print("problem:", text, file=sys.stderr)
 
     try:
+        package = _numbered_package(work)
+
+        def command(*words: str):
+            return _mycel(settings, *words, package=package)
+
+        def history(name: str):
+            status, reply, _ = command("activity", "--repo", name, "--kind", "ingest", "--k", "500")
+            if status != 0 or _internal(reply):
+                problem(f"activity history for {name} failed with status {status}")
+            return reply
+
         repositories = {}
         for name in arguments.repos:
             # Copies of the clone and the corpus: another agent's `git pull` of a
@@ -188,11 +272,12 @@ def main(argv: list[str] | None = None) -> int:
         changed_path = repositories[last][1] / CHANGED_FILE
         for number in range(1, arguments.passes + 1):
             for name in arguments.repos:
+                before = history(name)
                 helper = None
                 if number == 1 and name == last and not arguments.no_change:
                     helper = Helper(backend, database, changed_path)
                     helper.start()
-                status, reply, elapsed = _mycel(settings, "ingest", "--repo", name)
+                status, reply, elapsed = command("ingest", "--repo", name)
                 if helper is not None:
                     helper.stop.set()
                     helper.join(timeout=5)
@@ -205,6 +290,19 @@ def main(argv: list[str] | None = None) -> int:
                 if isinstance(repositories_reply, list):  # a refused pass: entries of {repository, error}
                     repositories_reply = {item.get("repository"): item for item in repositories_reply if isinstance(item, dict)}
                 result = repositories_reply.get(name, {}) if isinstance(repositories_reply, dict) else {}
+                after = history(name)
+                old_ids = {item["id"] for item in (_entries(before) or [])}
+                added = [item for item in (_entries(after) or []) if item["id"] not in old_ids]
+                detail = None
+                if len(added) == 1:
+                    detail_status, detail, _ = command("activity", "--entry", added[0]["id"])
+                    if detail_status != 0 or _internal(detail):
+                        problem(f"activity detail for {name} failed with status {detail_status}")
+                activity_problems = _activity_problems(name, result, before, after, detail)
+                entry["activity"] = {"before": before, "after": after, "detail": detail,
+                                     "ok": not activity_problems}
+                for issue in activity_problems:
+                    problem(f"pass {number} of {name}: {issue}")
                 print(f"pass {number} {name}: status {status} in {elapsed / 60:.1f} min; "
                       f"files {result.get('files')}; chunks {result.get('chunks')}; "
                       f"changedDuringPass {result.get('changedDuringPass')}", file=sys.stderr)
@@ -219,20 +317,20 @@ def main(argv: list[str] | None = None) -> int:
                     if expected not in (result.get("changedDuringPass") or []):
                         problem(f"the first pass of {name} did not name {expected} under changedDuringPass: "
                                 f"{result.get('changedDuringPass')}")
-                if number == 2:
-                    if name == last and not arguments.no_change:
+                if number >= 2:
+                    if number == 2 and name == last and not arguments.no_change:
                         if not result.get("changed") or result.get("changedDuringPass"):
                             problem(f"the second pass of {name} did not take the changed file up alone: "
                                     f"changed {result.get('changed')}, changedDuringPass {result.get('changedDuringPass')}")
                     elif result.get("changed"):
-                        problem(f"the second pass of {name} found changes in an unchanged repository")
+                        problem(f"pass {number} of {name} found changes in an unchanged repository")
                 if number >= 2 and result.get("changedDuringPass"):
                     problem(f"pass {number} of {name} saw changes in an unchanged repository: {result.get('changedDuringPass')}")
-        for command in COMMANDS:
-            words = [word.format(last=last) for word in command]
+        for template in COMMANDS:
+            words = [word.format(last=last) for word in template]
             if words[0] == "read" and "mycel" not in arguments.repos:
                 continue
-            status, reply, elapsed = _mycel(settings, *words)
+            status, reply, elapsed = command(*words)
             report["commands"].append({"command": words, "status": status, "seconds": round(elapsed, 1),
                                        "reply": reply})
             print(f"{' '.join(words)}: status {status} in {elapsed:.1f} s", file=sys.stderr)
@@ -240,6 +338,10 @@ def main(argv: list[str] | None = None) -> int:
                 problem(f"{' '.join(words)} ended with status {status}: {json.dumps(reply)[:600]}")
             if _internal(reply):
                 problem(f"{' '.join(words)} reported an internal fault")
+    except BaseException:
+        report["ok"] = False
+        report["problems"].append("the real-repository check did not complete")
+        raise
     finally:
         if arguments.report is not None:
             arguments.report.parent.mkdir(parents=True, exist_ok=True)
