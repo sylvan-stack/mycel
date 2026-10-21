@@ -85,8 +85,13 @@ class IngestStoreTests(unittest.TestCase):
         guide.write_text(''.join(f'# Part {number}\nBody {number}.\n' for number in range(30)))
         (self.base.code / 'answer.py').write_text('def answer():\n    return 42\n')
         self.base.commit()
-        status, first = self.invoke('--repo', 'fixture')
+        with patch.object(DependencyApplicationStore, 'apply_in_transaction',
+                          side_effect=AssertionError('An empty new scope can initialize its role together')), \
+                patch.object(RelationApplicationStore, 'apply_in_transaction',
+                           side_effect=AssertionError('An empty new scope needs no relation executor')):
+            status, first = self.invoke('--repo', 'fixture')
         self.assertEqual(status, 0, first)
+        self.assertGreater(first['repositories']['fixture']['rolesChanged'], 0)
         with self.base.connect() as connection:
             before = self.state(connection)
         with patch.object(DependencyApplicationStore, 'apply_in_transaction',
@@ -126,6 +131,86 @@ class IngestStoreTests(unittest.TestCase):
         self.assertEqual(refused['repositories'][0]['error']['code'], 'invalid_input')
         with self.base.connect() as connection:
             self.assertEqual(self.state(connection), before)
+
+    @proves('MYC-1.7', 'MYC-12.4', kind='store')
+    def test_empty_scope_mutation_during_active_policy_refuses(self):
+        from mycel._relations import RelationApplicationStore
+        (self.base.artifact / 'derived.md').write_text(
+            '---\nsources: ["fixture:@artifact/guide.md#Guide"]\n---\n# Derived\nBody.\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        with self.base.connect() as connection:
+            before = self.state(connection)
+        original = RelationApplicationStore.apply_in_transaction
+        def mutate(store, *args, **kwargs):
+            observed = original(store, *args, **kwargs)
+            store.connection.execute("""UPDATE public.mycel_locations l
+                SET metadata=jsonb_set(l.metadata,'{role}','"derived"')
+                FROM public.mycel_file_locations f WHERE f.id=l.file_location
+                AND f.metadata->>'path'='guide.md'""")
+            return observed
+        with patch.object(RelationApplicationStore, 'apply_in_transaction', mutate):
+            status, refused = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 1, refused)
+        self.assertEqual(refused['repositories'][0]['error']['code'], 'invalid_input')
+        with self.base.connect() as connection:
+            self.assertEqual(self.state(connection), before)
+
+    @proves('MYC-1.7', 'MYC-2.9', 'MYC-7.26', kind='store')
+    def test_edited_chunks_keep_prior_asserted_sources_and_relations(self):
+        from mycel._derive import DeriveStore
+        from mycel._relate import RelateStore
+        guide = self.base.artifact / 'guide.md'
+        code = self.base.code / 'answer.py'
+        code.write_text('def answer():\n    return 42\n')
+        (self.base.artifact / 'source.md').write_text('# Source\nStable source.\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        with self.base.connect() as connection:
+            for dependant in ('fixture:@artifact/guide.md#Guide', 'fixture:@code/answer.py#answer'):
+                for store in (DeriveStore(connection), RelateStore(connection)):
+                    store.apply(self.base.settings, dependant, 'fixture:@artifact/source.md#Source',
+                                settings_home=self.base.base, build=1)
+        for normalized in (True, False):
+            guide.write_bytes(b'# Guide\n' + (b'Original   body.\n' if normalized else b'Substantive new body.\n'))
+            code.write_bytes(b'def answer():\n    ' + (b'return   42\n' if normalized else b'return 43\n'))
+            status, reply = self.invoke('--repo', 'fixture')
+            self.assertEqual(status, 0, reply)
+            result = reply['repositories']['fixture']
+            self.assertGreater(result['pinsInherited' if normalized else 'pinsCaptured'], 0)
+            self.assertGreater(result['relationPinsInherited' if normalized else 'relationPinsCaptured'], 0)
+            with self.base.connect() as connection:
+                for table, column, predicate in (
+                        ('mycel_dependencies', 'dependant_version', "p.kind='asserted'"),
+                        ('mycel_relations', 'left_version', "p.state->>'ownership'='asserted'")):
+                    rows = connection.execute(f"""SELECT p.baseline_owner FROM public.{table} p
+                        JOIN public.mycel_locations l ON l.chunk_version=p.{column}
+                        AND l.file_location::text=p.state->'declarationLocation'->>'file'
+                        WHERE l.kind='disk' AND {predicate}""").fetchall()
+                    self.assertEqual(len(rows), 2)
+                    self.assertTrue(all(row[0] is not None for row in rows))
+
+    @proves('MYC-1.7', 'MYC-2.9', 'MYC-7.26', kind='store')
+    def test_restored_historical_chunk_inherits_assertions_absent_from_current_file(self):
+        from mycel._derive import DeriveStore
+        from mycel._relate import RelateStore
+        guide = self.base.artifact / 'guide.md'
+        original = guide.read_bytes()
+        guide.write_bytes(original + b'# Tail\nRetained body.\n')
+        (self.base.artifact / 'source.md').write_text('# Source\nStable source.\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        with self.base.connect() as connection:
+            for store in (DeriveStore(connection), RelateStore(connection)):
+                store.apply(self.base.settings, 'fixture:@artifact/guide.md#Tail',
+                            'fixture:@artifact/source.md#Source', settings_home=self.base.base, build=1)
+        guide.write_bytes(original)
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        guide.write_bytes(original + b'# Tail\nRetained   body.\n')
+        status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        self.assertGreater(reply['repositories']['fixture']['pinsInherited'], 0)
+        self.assertGreater(reply['repositories']['fixture']['relationPinsInherited'], 0)
 
     @proves('MYC-1.20', 'MYC-1.22', 'MYC-1.30', kind='store')
     def test_complete_disk_local_branches_stash_and_exact_quiet_activity(self):
