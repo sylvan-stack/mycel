@@ -2949,6 +2949,12 @@
     ],
     "MYC-17.12": [
       "test_origins.OriginsStoreTests.test_unresting_and_reasoned_requirement_marks_never_invent_edges_or_proofs"
+    ],
+    "MYC-5.18": [
+      "test_clone_locations.CloneScopeTests.test_listed_clone_wins_over_organization_and_selects_only_its_checkout",
+      "test_clone_locations.CloneScopeTests.test_clone_paths_are_typed_and_home_expanded_and_baseline_must_be_listed",
+      "test_clone_locations.CloneScopeTests.test_symlink_alias_names_one_location_and_unknown_folders_register_nothing",
+      "test_clone_locations.CloneScopeTests.test_unresolvable_clone_remains_a_local_repository_fault"
     ]
   }
 }
