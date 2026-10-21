@@ -6,7 +6,7 @@
       "specification_status": "accepted"
     },
     "01-corpora-and-ingest.md": {
-      "sha256": "563518b79de579e92f2e4785d147379143783fec12b21752f0045c16b46338f5",
+      "sha256": "d69071428ce1c125650cd110ed75e602018c9e8c04021651dcf86ef045ec50c0",
       "specification_status": "accepted"
     },
     "02-provenance-and-freshness.md": {
@@ -22,11 +22,11 @@
       "specification_status": "accepted"
     },
     "05-settings.md": {
-      "sha256": "c2befcd72153f3c9a27d6d20c39138df7ad778c5b578b5c225cb2f08860fe00d",
+      "sha256": "1bfa8f72e2440b3c541adfefe253bf04a247c411430223dd0122ed5160b863d3",
       "specification_status": "accepted"
     },
     "06-index-store.md": {
-      "sha256": "51a9b44a7985a733d66dc683ff857718a898b949088def5b31b530b50e4287ec",
+      "sha256": "138b23c3b4c9370d1232518bd93133957dd1ebe12daf61d552fa414ab98da934",
       "specification_status": "accepted"
     },
     "07-drifts-and-verification.md": {
@@ -70,7 +70,7 @@
       "specification_status": "accepted"
     },
     "17-justification.md": {
-      "sha256": "4ac24606bc9e8dd829367dc3bb877f7a0466a1c7f8097d4cced3b8e16db528f7",
+      "sha256": "f91c88c0cf410d704743910011e75defab7745c78378be78b9240c6c04538dd6",
       "specification_status": "draft"
     }
   },
