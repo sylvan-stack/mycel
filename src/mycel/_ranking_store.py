@@ -20,7 +20,7 @@ _CITATIONS_SQL = """SELECT d.dependant_version,d.state,f.id,fv.snapshot_hash
     JOIN public.mycel_files f ON f.id=fv.file_id AND f.repository=d.repository
     JOIN public.mycel_chunk_versions cv ON cv.id=d.dependant_version
     JOIN public.mycel_chunks c ON c.id=cv.chunk_id
-      AND c.file_id=f.id AND c.repository=f.repository
+      AND c.repository=f.repository
     JOIN public.mycel_locations l ON l.chunk_version=d.dependant_version
       AND l.file_location=fl.id AND l.location=fl.location
     WHERE d.kind IN ('declared','asserted') AND fl.kind='disk' AND l.kind='disk'
@@ -47,7 +47,7 @@ def graph_for(snapshot, repository: str, *, only: str | None = None) -> RankingG
         document = by_version.get(version)
         file = files.get(str(file_id))
         if (document is None or file is None or file.repository != document.repository
-                or file.snapshot_hash != digest):
+                or file.snapshot_hash != digest or not snapshot.resolver.owns_policy(file.repository, state)):
             continue
         try:
             raw = _text(state['rawRef'])

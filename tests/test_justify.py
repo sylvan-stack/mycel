@@ -300,6 +300,16 @@ class ClonePolicyStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT id FROM public.mycel_stale_reasons').fetchall(),primary_reasons)
             self.assertEqual(ProvenanceReports(connection,self.secondary).stale('fixture')['count'],0)
             self.assertEqual(ProvenanceReports(connection,self.primary).stale('fixture')['count'],1)
+        from mycel._search import QueryEmbedding
+        for settings,expected in ((self.primary,True),(self.secondary,False)):
+            status,reply=self.invoke('read',self.ref,'--no-fresh',settings=settings)
+            self.assertEqual(status,0,reply)
+            self.assertEqual(reply['stale'],expected,reply)
+            with patch('mycel._search.prepare_query',return_value=QueryEmbedding(reason='Provider-free fixture')):
+                status,reply=self.invoke('search','--repo','fixture','--only','code','--no-fresh','return 1',settings=settings)
+            self.assertEqual(status,0,reply)
+            value=next(row for row in reply['results'] if row['name']=='value')
+            self.assertEqual(value['stale'],expected,value)
         for settings,uri in ((self.primary,REQ),(self.secondary,OTHER)):
             status,reply=self.invoke('refs','--repo','fixture',settings=settings)
             self.assertEqual(status,0,reply)
@@ -406,3 +416,28 @@ class CloneEntityMoveStoreTests(unittest.TestCase):
         row=next(row for row in reply['chunks'] if identifier in row['chunk'])
         self.assertEqual(len(row['links']),1,row)
         self.assertIn(OTHER,row['links'][0]['origin'])
+
+
+class CloneGraphStoreTests(unittest.TestCase):
+    setUp=UriMutationStoreTests.setUp
+    ingest=UriMutationStoreTests.ingest
+
+    @proves('MYC-1.38','MYC-17.10',kind='store')
+    def test_cycles_use_the_selected_location_of_every_repository(self):
+        from mycel._derive import DeriveStore
+        from mycel._justify import JustifyStore
+        with self.base.connect() as connection:
+            DeriveStore(connection).apply(self.primary,self.other,self.ref)
+            with self.assertRaises(MycelError) as caught:
+                JustifyStore(connection).apply(self.secondary,self.ref,self.other)
+            self.assertIn('cycle',str(caught.exception).lower())
+            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_dependencies').fetchone()[0],1)
+            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone()[0],0)
+        for root in (self.base.code,self.fixture.clone):
+            path=root/'value.py';path.write_text(path.read_text()+'\ndef other():\n    return 2\n')
+        self.ingest(self.primary);self.ingest(self.secondary)
+        other='fixture:@code/value.py#other'
+        with self.base.connect() as connection:
+            # Opposite policies in two clones are individually acyclic.
+            DeriveStore(connection).apply(self.primary,self.ref,other)
+            DeriveStore(connection).apply(self.secondary,other,self.ref)

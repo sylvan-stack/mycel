@@ -58,7 +58,7 @@ _READ_FAULTS = """SELECT f.declaration,f.fault,
         WHERE d.id=f.id AND d.repository=f.repository AND d.dependant_version=f.chunk_version
           AND ((d.kind='generated' AND l.kind='index' AND c.file_id IS NULL)
             OR (l.kind='disk' AND fl.kind='disk' AND l.location=fl.location
-              AND fl.id::text=d.state->'declarationLocation'->>'file' AND c.file_id::text=%s)))
+              AND fl.id::text=d.state->'declarationLocation'->>'file' AND fl.id::text=%s)))
       OR EXISTS (SELECT 1 FROM public.mycel_relations r
         JOIN public.mycel_locations l ON l.chunk_version=r.left_version
         JOIN public.mycel_file_locations fl ON fl.id=l.file_location
@@ -66,8 +66,23 @@ _READ_FAULTS = """SELECT f.declaration,f.fault,
         JOIN public.mycel_chunks c ON c.id=v.chunk_id
         WHERE r.id=f.id AND r.repository=f.repository AND r.left_version=f.chunk_version
           AND l.kind='disk' AND fl.kind='disk' AND l.location=fl.location
-          AND fl.id::text=r.state->'declarationLocation'->>'file' AND c.file_id::text=%s))
+          AND fl.id::text=r.state->'declarationLocation'->>'file' AND fl.id::text=%s))
     ORDER BY f.id"""
+
+
+def selection_file_location(connection, settings, selected):
+    if selected.file is None:
+        return None
+    from ._derive import _disk_key
+    rows = connection.execute("""SELECT DISTINCT f.id FROM public.mycel_file_locations f
+        JOIN public.mycel_file_versions v ON v.id=f.file_version
+        JOIN public.mycel_locations l ON l.file_location=f.id
+        WHERE v.file_id=%s AND l.chunk_version=%s AND l.kind='disk'
+          AND f.kind='disk' AND f.location=%s""",
+        (selected.file.identifier,selected.chunk.version,_disk_key(settings,selected.place.repository))).fetchall()
+    if len(rows) != 1:
+        raise MycelError('store_format','A read requires one exact current file location.')
+    return str(rows[0][0])
 
 
 def _generated_resolution(resolver, row):
@@ -115,7 +130,8 @@ class StoreReadFreshnessAdapter(StoreFreshnessAdapter):
                     'SELECT id,corpus FROM public.mycel_files WHERE id=ANY(%s::uuid[])', (file_ids,)).fetchall()}
                 rows = defaultdict(list)
                 for row in self.connection.execute(_READ_DEPENDENCIES).fetchall():
-                    rows[row[1]].append(row)
+                    if row[2] == 'generated' or resolver.owns_policy(row[0], row[5]):
+                        rows[row[1]].append(row)
                 declarations = {}
                 for file in resolver.files:
                     deadline.check()
@@ -150,7 +166,8 @@ class StoreReadFreshnessAdapter(StoreFreshnessAdapter):
                                     and places.intersection((alias.root, alias.path) for alias in file.aliases)]
                         old = previous[0] if len(previous) == 1 else None
                         located = [row for row in catalog[0] if old is not None
-                                   and str(row[0]) == old.identifier and row[8] == 'disk']
+                                   and str(row[0]) == old.identifier and row[8] == 'disk'
+                                   and row[7].get('captureLocation', {}).get('clone') == manifest.disk.id.clone]
                         known = _known(old.identifier, str(located[0][4]), catalog[2]) if len(located) == 1 else ()
                         # Follow a retained heading only when the normal pure
                         # same-file identity planner preserves its logical ID.
@@ -400,13 +417,12 @@ def read_from_store(connection, settings, place=None, *, identifier=None, reposi
             selected = select_chunk(resolver, place, identifier=identifier, repository=repository)
             if expected_kind is not None and selected.chunk.kind != expected_kind:
                 raise ReadSelectionError('The kind tag of the Entity URI does not match the entity.')
-            reasons = [row[0] for row in connection.execute('SELECT reason FROM public.mycel_stale_reasons '
-                'WHERE repository=%s AND chunk_version=%s ORDER BY id',
-                (owner, selected.chunk.version)).fetchall()]
+            from ._staleness import current_stale_reasons
+            reasons = [row[2] for row in current_stale_reasons(connection,settings,(selected.chunk.version,))]
             faults = dependency_faults(freshness, resolver, selected)
             # Keep directly retained faults visible even when discovery used
             # its entire allowance before reaching this chunk's declarations.
-            file_id = selected.file.identifier if selected.file is not None else None
+            file_id = selection_file_location(connection,settings,selected)
             for declaration, fault, raw_ref in connection.execute(_READ_FAULTS,
                 (owner, selected.chunk.version, file_id, file_id)).fetchall():
                 record = {'chunk': _place(selected.place), 'ref': _text(raw_ref) if raw_ref else declaration,

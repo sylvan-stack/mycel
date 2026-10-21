@@ -8,7 +8,9 @@ changes one Markdown file of the corpus copy: the pass must still complete and
 name the file under `changedDuringPass`, and the second pass must take it up
 (MYC-1.37). Then it runs `search`, `read`, `refs`, `stale`, `status` and
 `embed --dry-run` on the result. Every command must end with status 0, and no
-reply may carry the error code `internal`.
+reply may carry the error code `internal`. Disposable settings override embedding
+key acquisition with `/usr/bin/false`, so search cannot use the owner's Keychain
+API key or make a provider request.
 
 Commands run from a private copy of the current package with fictional Build
 1a. This exercises the numbered public activity path without registering,
@@ -68,7 +70,8 @@ def _toml_string(value: str) -> str:
 
 
 def _settings(address: str, repositories: dict[str, tuple[Path, Path]], clones=None) -> str:
-    lines = ["[store]", f"address = {_toml_string(address)}", ""]
+    lines = ["[store]", f"address = {_toml_string(address)}", "", "[embedding]",
+             'key_command = ["/usr/bin/false"]', ""]
     clones = {} if clones is None else clones
     for name, (code, artifact) in repositories.items():
         lines += [f"[repos.{json.dumps(name)}]", "enabled = true", "code_subdirs = []",

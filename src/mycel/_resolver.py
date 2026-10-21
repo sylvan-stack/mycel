@@ -169,6 +169,18 @@ class SourceResolver:
     one chunk and rejects a file or index namespace before any mutation.
     """
 
+    @cached_property
+    def _disk_policy_locations(self):
+        return _location_selectors(self.settings, 'disk', 'disk')[1] or {}
+
+    def owns_policy(self, repository, state):
+        """Whether a disk policy belongs to this catalog's calling clone."""
+        if not self.settings.values['repos'].get(repository, {}).get('code_clones'):
+            return True
+        location = state.get('declarationLocation', {})
+        return (location.get('kind') == 'disk' and
+                location.get('location') == self._disk_policy_locations.get(repository))
+
     def __init__(self, settings: SettingsSnapshot, files: tuple[ResolvedFile, ...], *,
                  index: tuple[tuple[SourceAddress, ResolvedChunk], ...] = ()):
         settings.require_valid(require_store=False)

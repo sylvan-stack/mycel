@@ -180,9 +180,21 @@ def inactive_policy_links(connection, settings):
         return frozenset()
     from ._scope import RepositoryLocations
     locations = {repo.name: repo.disk_location for repo in RepositoryLocations(settings).repositories}
-    return frozenset(str(row[0]) for row in _links(connection, _eligible(settings))
-        if row[5] != 'generated' and
-        row[6].get('declarationLocation', {}).get('location', 'disk') != locations[row[1]])
+    rows = connection.execute("""SELECT id,repository,state FROM public.mycel_dependencies
+        WHERE kind IN ('declared','asserted') AND repository=ANY(%s)
+        UNION ALL SELECT id,repository,state FROM public.mycel_relations WHERE repository=ANY(%s)""",
+        (_eligible(settings),_eligible(settings))).fetchall()
+    return frozenset(str(identifier) for identifier,owner,state in rows
+        if state.get('declarationLocation', {}).get('location', 'disk') != locations[owner])
+
+
+def current_stale_reasons(connection, settings, versions):
+    """Read marks owned by the calling locations of shared exact versions."""
+    inactive = inactive_policy_links(connection, settings)
+    rows = connection.execute("""SELECT repository,chunk_version,dependency,reason
+        FROM public.mycel_stale_reasons WHERE chunk_version=ANY(%s) ORDER BY id""", (list(versions),)).fetchall()
+    return tuple((owner,version,reason) for owner,version,dependency,reason in rows
+                 if _stored_link(dependency,reason) not in inactive)
 
 
 def _relation_evidence(connection, rows):

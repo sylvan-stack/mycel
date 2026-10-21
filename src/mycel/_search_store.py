@@ -26,7 +26,7 @@ from ._markdown import split_markdown
 from ._ranking import rank_repository
 from ._ranking_store import graph_for
 from ._read import ReadSelection, _lines
-from ._read_store import _READ_FAULTS, _ingested
+from ._read_store import _READ_FAULTS, _ingested, selection_file_location
 from ._refs import _PUBLIC_FAULTS, _place
 from ._retrieval import _unit_vector, validate_search
 from ._retrieval_store import StoreCandidates
@@ -162,10 +162,9 @@ def _metadata(snapshot, rankings, freshness, fault_places=None):
             for chunk in (entry.chunk, *((entry.via,) if entry.via else ()), *entry.documented_in):
                 required[chunk.key] = chunk
     reasons = defaultdict(list)
-    for repository, version, reason in snapshot._connection.execute(
-            'SELECT repository,chunk_version,reason FROM public.mycel_stale_reasons '
-            'WHERE chunk_version=ANY(%s) ORDER BY id',
-            (sorted({key[1] for key in required}),)).fetchall():
+    from ._staleness import current_stale_reasons
+    for repository, version, reason in current_stale_reasons(snapshot._connection,snapshot._settings,
+            sorted({key[1] for key in required})):
         reasons[repository, version].append(reason)
     heartwood = {}
     descriptions = document_links(snapshot._connection, snapshot.resolver)
@@ -174,8 +173,9 @@ def _metadata(snapshot, rankings, freshness, fault_places=None):
         selected = selections[key]
         faults = _fault_records(freshness, snapshot.resolver, selected, places, fault_places)
         file_id = None if selected.file is None else selected.file.identifier
+        file_location = selection_file_location(snapshot._connection,snapshot._settings,selected)
         for declaration, fault, raw_ref in snapshot._connection.execute(_READ_FAULTS,
-                (chunk.repository, chunk.version, file_id, file_id)).fetchall():
+                (chunk.repository, chunk.version, file_location, file_location)).fetchall():
             record = {'chunk': _place(selected.place), 'ref': _text(raw_ref) if raw_ref else declaration,
                       'fault': _PUBLIC_FAULTS.get(fault.get('fault', fault.get('reason')), 'not_found')}
             if fault.get('candidates'):

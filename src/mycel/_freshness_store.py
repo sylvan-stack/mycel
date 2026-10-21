@@ -129,7 +129,8 @@ class StoreFreshnessAdapter:
                     'SELECT id,corpus FROM public.mycel_files WHERE id=ANY(%s::uuid[])', (file_ids,)).fetchall()}
                 rows = defaultdict(list)
                 for row in self.connection.execute(_DEPENDENCIES).fetchall():
-                    rows[row[1]].append(row)
+                    if resolver.owns_policy(row[0], row[5]):
+                        rows[row[1]].append(row)
                 declarations = {}
                 disk = []
                 for file in resolver.files:
@@ -166,7 +167,8 @@ class StoreFreshnessAdapter:
                                     and places.intersection((alias.root, alias.path) for alias in file.aliases)]
                         old = previous[0] if len(previous) == 1 else None
                         located = [row for row in catalog[0] if old is not None
-                                   and str(row[0]) == old.identifier and row[8] == 'disk']
+                                   and str(row[0]) == old.identifier and row[8] == 'disk'
+                                   and row[7].get('captureLocation', {}).get('clone') == manifest.disk.id.clone]
                         known = _known(old.identifier, str(located[0][4]), catalog[2]) if len(located) == 1 else ()
                         # Follow a retained heading only when the normal pure
                         # same-file identity planner preserves its logical ID.
