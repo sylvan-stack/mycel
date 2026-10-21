@@ -8,7 +8,8 @@ All filesystem inspection here is read-only, with no store or Git invocation.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+import json
 from pathlib import Path
 from typing import Any, Literal
 
@@ -51,6 +52,33 @@ class Repository:
     _organizations: tuple[str, ...] = field(default=(), repr=False)
     _candidate_roots: tuple[Path, ...] = field(default=(), repr=False)
 
+    clones: tuple[Folder, ...] = field(default=(), repr=False)
+    primary_code: Folder | None = field(default=None, repr=False)
+    readonly_root: Path | None = None
+    location: str | None = None
+
+    def at(self, cwd: Path) -> Repository:
+        primary = self.primary_code or self.code
+        if self.fault is not None:
+            return replace(self, code=primary, location=None)
+        matches = []
+        for folder in ((primary,) if primary is not None else ()) + self.clones:
+            resolved = _resolved(folder.path)
+            if cwd.is_relative_to(resolved):
+                matches.append((len(resolved.parts), folder, resolved))
+        if not matches:
+            return replace(self, code=primary, location=None)
+        _, folder, resolved = max(matches, key=lambda item: item[0])
+        return replace(self, code=folder, location=None if primary is not None and
+                       resolved == _resolved(primary.path) else str(resolved))
+
+    @property
+    def disk_location(self) -> str:
+        if self.location is None:
+            return "disk"
+        return json.dumps({"kind": "disk", "checkout": None, "identity": "disk",
+                           "clone": self.location}, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
     def report(self) -> dict[str, Any]:
         result: dict[str, Any] = {"name": self.name, "enabled": self.enabled}
         if self.organization is not None:
@@ -59,6 +87,13 @@ class Repository:
             result["code"] = self.code.report(code=True)
         if self.documents is not None:
             result["documents"] = self.documents.report()
+        if self.clones:
+            primary = self.primary_code or self.code
+            result["codeLocations"] = [str(folder.path) for folder in
+                (((primary,) if primary is not None else ()) + self.clones)]
+            result["location"] = self.disk_location
+        if self.readonly_root is not None:
+            result["readonlyRoot"] = str(self.readonly_root)
         if self.fault is not None:
             result["fault"] = self.fault
         return result
@@ -108,9 +143,10 @@ def _checkout(path: Path) -> bool:
 class RepositoryLocations:
     """One invocation's resolved folders, preserving per-repository faults."""
 
-    def __init__(self, snapshot: SettingsSnapshot):
+    def __init__(self, snapshot: SettingsSnapshot, *, cwd: Path | str | None = None):
         snapshot.require_valid()
         self.snapshot = snapshot
+        self.cwd = _resolved(Path.cwd() if cwd is None else Path(cwd))
         self.organizations = tuple(
             Organization(name, Path(value["root"]), Path(value["artifact_root"]))
             for name, value in sorted(snapshot.values["organizations"].items())
@@ -184,9 +220,25 @@ class RepositoryLocations:
         elif "evaluation" in value and not faults:
             faults.append("evaluation requires an artifact_root or organization document folder.")
 
+        clones = []
+        primary_root, readonly = None, None
+        try:
+            primary_root = None if code is None else _resolved(code.path)
+            for path in value.get("code_clones", ()):
+                resolved = _resolved(Path(path))
+                if resolved != primary_root and all(_resolved(item.path) != resolved for item in clones):
+                    clones.append(Folder(resolved, "repository", tuple(value["code_subdirs"])))
+            if clones and code is None:
+                faults.append("code_clones requires a primary code_root or organization checkout.")
+            readonly = Path(value["readonly_root"]).resolve() if "readonly_root" in value else None
+            if readonly is not None and readonly not in {primary_root, *(item.path for item in clones)}:
+                faults.append("readonly_root must name the primary code_root or a listed code_clones folder.")
+        except (OSError, RuntimeError, ValueError):
+            faults.append("The configured clone locations cannot be resolved.")
         return Repository(name, value["enabled"], organization_name, code, documents,
                           " ".join(faults) if faults else None, value,
-                          tuple(organization.name for organization, _ in matches), candidates)
+                          tuple(organization.name for organization, _ in matches), candidates,
+                          tuple(clones), code, readonly).at(self.cwd)
 
     def repositories_reply(self) -> dict[str, Any]:
         """The MYC-5 repos report includes disabled and locally faulty names."""
@@ -227,20 +279,22 @@ class RepositoryLocations:
             for name in names:
                 for repository in self.named(name):
                     selected.setdefault(repository.name, repository)
-            return tuple(selected.values())
+            return tuple(repository.at(_resolved(Path(cwd))) if cwd is not None else repository
+                         for repository in selected.values())
         if all_repositories:
             selected = tuple(repository for repository in self.repositories if repository.enabled)
             if not selected:
                 raise MycelError(ErrorCode.REFUSED, "No enabled configured repository could be selected.")
             return selected
         try:
-            current = _resolved(Path.cwd() if cwd is None else Path(cwd))
+            current = self.cwd if cwd is None else _resolved(Path(cwd))
         except (OSError, RuntimeError, ValueError):
             raise MycelError(ErrorCode.UNKNOWN_REPOSITORY, "The current directory cannot be resolved.") from None
 
         bindings: list[tuple[int, int, str, bool]] = []
         for repository in self.repositories:
-            roots = tuple(folder.path for folder in (repository.code, repository.documents) if folder is not None)
+            roots = tuple(folder.path for folder in (repository.primary_code, repository.code,
+                repository.documents, *repository.clones) if folder is not None)
             for root in (*roots, *repository._candidate_roots):
                 try:
                     resolved = _resolved(root)
@@ -267,4 +321,5 @@ class RepositoryLocations:
                              "The longest containing folder belongs to several configured names: "
                              + ", ".join(repr(name) for name, _ in sorted(winners)) + ".")
         name, is_repository = next(iter(winners))
-        return (self._repositories[name],) if is_repository else self._members(name)
+        return ((self._repositories[name].at(current),) if is_repository else
+                tuple(repository.at(current) for repository in self._members(name)))
