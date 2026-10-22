@@ -33,8 +33,13 @@ class PublicIngestActivityStoreTests(unittest.TestCase):
         package = self.package_root / 'mycel'
         shutil.copytree(Path(mycel.__file__).parent, package,
                         ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        # Installed inputs are sealed. Only this independent fictional copy
+        # may replace its identity; the source package stays untouched.
+        data = package / 'data'
+        data.chmod(data.stat().st_mode | 0o200)
         (package / 'data/development-identity.json').unlink(missing_ok=True)
         self.identity = package / 'data/build-identity.json'
+        self.identity.unlink(missing_ok=True)
         self.identity.write_bytes(b'{"schemaVersion":1,"build":26}\n')
 
     def invoke(self, *arguments, status=0):

@@ -179,10 +179,12 @@ class CloneStoreTests(unittest.TestCase):
         self.ingest(self.primary);self.ingest(self.secondary)
         self.source.write_text('def value():\n    return 10\n')
         (self.clone/'value.py').write_text('def value():\n    return 20\n')
-        simultaneous=Barrier(2);primary_done=Event()
+        simultaneous=Barrier(2);primary_captured=Event();primary_done=Event()
         original=LocatedCaptureStore.capture
         def capture(store,settings,repository):
             manifest=original(store,settings,repository)
+            if settings._cwd==self.base.code:
+                primary_captured.set()
             simultaneous.wait(timeout=20)
             if settings._cwd==self.clone:
                 self.assertTrue(primary_done.wait(timeout=20))
@@ -194,7 +196,12 @@ class CloneStoreTests(unittest.TestCase):
                 if settings._cwd==self.base.code:primary_done.set()
         with patch('mycel._build_identity.current_build',return_value=1), \
                 patch.object(LocatedCaptureStore,'capture',capture), ThreadPoolExecutor(2) as pool:
-            first=pool.submit(run,self.primary);second=pool.submit(run,self.secondary)
+            first=pool.submit(run,self.primary)
+            # The allocator deliberately refuses peers without waiting. Start
+            # the second invocation after those short guards are released;
+            # both captures must still finish before either can publish.
+            self.assertTrue(primary_captured.wait(timeout=20))
+            second=pool.submit(run,self.secondary)
             results=(first.result(timeout=30),second.result(timeout=30))
         self.assertTrue(all(result.status==0 for result in results),[r.value for r in results])
         with self.base.connect() as connection:

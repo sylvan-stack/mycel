@@ -7,6 +7,7 @@ Only closed, sanitized check outcomes cross back into the retained registry.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import ipaddress
 import os
@@ -21,7 +22,7 @@ import tomllib
 from urllib.parse import urlsplit
 
 from ._core import BuildError, TARGETS, digest, file_manifest, json_bytes
-from ._process import run_group
+from ._process import run_group, _defer_cleanup_signals
 from ._qualification import automatic_contract, requirement_results
 from mycel._coverage import ACTIVE_REQUIREMENTS, REQUIREMENT_ID
 
@@ -38,28 +39,14 @@ if (not sys.flags.isolated or not sys.dont_write_bytecode or platform.python_ver
 # fixtures remain available from the frozen development inputs beside them.
 sys.path[:0] = [str(root / 'src'), str(root), str(root / 'tests')]
 from mycel._coverage import declaration, iter_checks, load_claims, load_registry, run_checks
-from mycel._check_store import NativePostgresBackend
+from mycel_build._automatic_backend import InstalledFixtureBackend
 from mycel._build_identity import current_build
 if current_build() != configuration['build']:
     raise RuntimeError('installed automatic gate Build identity differs')
-class AutomaticFixtureBackend(NativePostgresBackend):
-    def initialize(self, settings_file):
-        # Establish the empty SQL fixture expected by lower-level checks. This
-        # uses the installed schema initializer, without inventing a user init
-        # operation or suppressing its audit. Explicit init/audit checks supply
-        # their own empty-database bootstrap and call the real installed CLI.
-        from urllib.parse import unquote, urlsplit
-        from mycel._settings import load_settings
-        from mycel._store import initialize_store
-        snapshot = load_settings(path=settings_file)
-        snapshot.require_valid()
-        address = snapshot.values['store']['address']
-        database = self._require_database(unquote(urlsplit(address).path[1:]), owned=True)
-        if address != self.address(database):
-            raise RuntimeError('automatic fixture initializer target differs')
-        with self.connection(database) as connection:
-            initialize_store(connection, dimensions=snapshot.values['embedding']['dimensions'])
-backend = AutomaticFixtureBackend(configuration['storeAddress']) if configuration['storeAddress'] else None
+backend = (InstalledFixtureBackend(configuration['storeAddress'],
+    _ownership_journal=pathlib.Path(configuration['ownershipJournal']))
+    if configuration['storeAddress'] else None)
+native = backend
 suite = unittest.defaultTestLoader.discover(str(root / 'tests'))
 observed = []
 for check in iter_checks(suite):
@@ -73,8 +60,19 @@ if sorted(observed, key=lambda row: row['name']) != configuration['declarations'
 # Check details can contain exceptions, SQL and arbitrary fixture output. They
 # stay in memory and are never emitted or retained by the development tool.
 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-    report = run_checks(suite, registry=load_registry(), claims=load_claims(root / 'checks/claims.json'),
-                        store_backend=backend)
+    try:
+        if native is not None:
+            try:
+                native.preflight()
+            except Exception:
+                backend = None
+        report = run_checks(suite, registry=load_registry(), claims=load_claims(root / 'checks/claims.json'),
+                            store_backend=backend, workers=configuration['workers'], tests_directory=root / 'tests')
+    finally:
+        if native is not None:
+            from mycel_build._process import _defer_cleanup_signals
+            with _defer_cleanup_signals():
+                native.recover_owned_databases()
 for name, module in tuple(sys.modules.items()):
     if name == 'mycel' or name.startswith('mycel.'):
         origin = getattr(module, '__file__', None)
@@ -92,6 +90,69 @@ print(json.dumps({'passed': report.passed, 'executed': True, 'checks': checks,
                   'isolated': bool(sys.flags.isolated), 'dontWriteBytecode': sys.dont_write_bytecode,
                   'installedProductImports': True, 'build': current_build()}))
 '''
+
+
+_RECOVER = r'''
+import json, pathlib, platform, sys, sysconfig
+root = pathlib.Path(sys.argv[1])
+program = pathlib.Path(sys.argv[2]).resolve()
+configuration = json.loads((root / 'gate-config.json').read_text())
+sys.path[:0] = [str(root / 'src'), str(root), str(root / 'tests')]
+from mycel._build_identity import current_build
+from mycel_build._automatic_backend import recover_owned
+if (not sys.flags.isolated or not sys.dont_write_bytecode or platform.python_version() != '3.14.7'
+        or sysconfig.get_config_var('Py_GIL_DISABLED') or current_build() != configuration['build']):
+    raise RuntimeError('installed cleanup identity differs')
+for name, module in tuple(sys.modules.items()):
+    if name == 'mycel' or name.startswith('mycel.'):
+        origin = getattr(module, '__file__', None)
+        if origin is None or not pathlib.Path(origin).resolve().is_relative_to(program):
+            raise RuntimeError('automatic cleanup imported product outside the installed Build')
+recovered = recover_owned(configuration['storeAddress'], configuration['ownershipJournal'])
+if any(pathlib.Path(configuration['ownershipJournal']).iterdir()):
+    raise RuntimeError('owned automatic cleanup is incomplete')
+print(json.dumps({'recovered': len(recovered), 'remaining': 0}))
+'''
+
+
+@contextmanager
+def _automatic_workspace():
+    base = Path(tempfile.mkdtemp(prefix='mycel-installed-checks-'))
+    state = {'path': base, 'retain': False}
+    try:
+        yield state
+    finally:
+        if not state['retain']:
+            with _defer_cleanup_signals():
+                for path in base.rglob('*'):
+                    if path.is_dir() and not path.is_symlink():
+                        path.chmod(0o700)
+                base.chmod(0o700)
+                shutil.rmtree(base)
+
+
+def _unsafe_process(error):
+    state = getattr(error, 'process_state', None)
+    return bool(state and (state.get('spawnOutcomeUnconfirmed')
+                or (state.get('spawnConfirmed') and state.get('processGroupAbsent') is not True)))
+
+
+def _recover_automatic(journal, command, options, state):
+    if not any(journal.iterdir()):
+        return
+    try:
+        with _defer_cleanup_signals():
+            reply = run_group([*command[:-3], _RECOVER, *command[-2:]], **{**options, 'timeout': 60})
+        if reply.returncode or reply.stderr or json.loads(reply.stdout).get('remaining') != 0:
+            raise BuildError('refused', 'The owned automatic-check databases could not be cleaned.')
+        if any(journal.iterdir()):
+            raise BuildError('refused', 'The owned automatic-check database journal remains incomplete.')
+    except BaseException as error:
+        state['retain'] = True
+        error.retained_check_workspace = str(state['path'])
+        if isinstance(error, (ValueError, TypeError)):
+            raise BuildError('refused', 'The owned automatic-check cleanup returned invalid evidence.') from None
+        raise
 
 
 def store_address(settings: Path | None) -> str | None:
@@ -202,8 +263,11 @@ def _run_automatic(program: Path, target: str, frozen: dict[str, bytes], *, sour
     retained_program = program.resolve()
     contract = automatic_contract(frozen)
     before = file_manifest(retained_program)
-    with tempfile.TemporaryDirectory(prefix="mycel-installed-checks-") as directory:
-        base = Path(directory)
+    with _automatic_workspace() as state:
+        base = state['path']
+        journal = base / 'owned-databases'
+        journal.mkdir(mode=0o700)
+        workers = min(6, os.cpu_count() or 1, len(contract['declarations']))
         # The owner registry is deliberately unreadable to check processes.
         # Relocate an exact installed copy outside it rather than weakening
         # owner-state denial when the ordinary default registry is selected.
@@ -223,7 +287,8 @@ def _run_automatic(program: Path, target: str, frozen: dict[str, bytes], *, sour
         installed = program.resolve() / "runtime/lib/python3.14/site-packages/mycel"
         (workspace / "src/mycel").symlink_to(installed, target_is_directory=True)
         (workspace / "gate-config.json").write_bytes(json_bytes({"build": int(number, 16), "storeAddress": address,
-            "declarations": contract['declarations'], "inventorySha256": contract['inventorySha256']}))
+            'declarations': contract['declarations'], 'inventorySha256': contract['inventorySha256'],
+            'workers': workers, 'ownershipJournal': str(journal)}))
         (workspace / "gate-config.json").chmod(0o600)
         home = base / "private-home"
         home.mkdir()
@@ -256,8 +321,20 @@ def _run_automatic(program: Path, target: str, frozen: dict[str, bytes], *, sour
         environment = {"HOME": str(owner_home if address else home), "PATH": os.defpath,
                        "LC_ALL": "C", "TMPDIR": str(temporary),
                        "MYCEL_CONFIG": str(home / "missing.toml"), "PYTHONDONTWRITEBYTECODE": "1"}
+        environment.update({name: '1' for name in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS',
+            'MKL_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS')})
+        options = {'cwd': workspace, 'env': environment, 'timeout': timeout}
         try:
-            reply = run_group(command, cwd=workspace, env=environment, timeout=timeout)
+            try:
+                reply = run_group(command, **options)
+            except BaseException as error:
+                if _unsafe_process(error):
+                    state['retain'] = True
+                    error.retained_check_workspace = str(base)
+                else:
+                    _recover_automatic(journal, command, options, state)
+                raise
+            _recover_automatic(journal, command, options, state)
             if reply.returncode or reply.stderr:
                 raise BuildError("refused", "The installed automatic check process could not complete.")
             result = _sanitize_report(reply.stdout, int(number, 16), contract=contract)
@@ -268,6 +345,8 @@ def _run_automatic(program: Path, target: str, frozen: dict[str, bytes], *, sour
                 "The installed automatic checks could not complete.", executed=not isinstance(error, OSError))
             failure.update(expectedDeclarations=contract['declarations'], inventorySha256=contract['inventorySha256'],
                 missingAutomaticChecks=[row['name'] for row in contract['declarations']])
+            if state['retain']:
+                failure['retainedCheckWorkspace'] = str(base)
             if hasattr(error, 'process_state'):
                 failure['processState'] = error.process_state
                 failure['executed'] = error.process_state['spawnConfirmed']
@@ -278,7 +357,7 @@ def _run_automatic(program: Path, target: str, frozen: dict[str, bytes], *, sour
                   passedCount=len(result["checks"]) - failed, failedCount=failed + declaration_failure,
                   automaticQualification=False, networkRestrictedToCheckStore=True,
                   sourceReadDenied=True, developerReadDenied=True, installedFilesUnchanged=True,
-                  verifiedPrivateRelocation=True,
+                  verifiedPrivateRelocation=True, workers=workers, ownershipJournalCleaned=True,
                   fixtureInitialization="Installed SQL schema initializer; explicit init command/audit proofs use uninitialized fixtures.",
                   initCommandProofs=[check["name"] for check in result["checks"]
                                     if check["name"].startswith("test_init_activity.InitActivityStoreTests.")],
