@@ -23,6 +23,8 @@ FILES = (
     "operations/code-research-levels.md", "operations/code-research.md",
     "operations/deep-research.md", "operations/retrieval.md",
     "operations/embedding.md", "operations/authored-work-integration.md",
+    "skills/mycel-search/SKILL.md", "skills/code-research/SKILL.md",
+    "skills/corpus-admin/SKILL.md",
 )
 SPANS = re.compile(r"```[^\n]*\n(?P<fence>.*?)```|`(?P<inline>[^`]+)`", re.S)
 PROGRAM = re.compile(r"(?<![\w./-])mycel(?=\s|$)")
