@@ -415,6 +415,63 @@ class ReplacementTests(unittest.TestCase):
             self.assertEqual(fixture.shell.read_bytes(), before + b'# separately changed tail\n')
 
 
+    @proves('MYC-15.11')
+    def test_already_absent_old_runtime_is_observed_without_inventing_cleanup_or_availability(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory).resolve())
+            fixture.link.unlink(); fixture.old.unlink()
+            fixture.inventory['aliases'] = []
+            for row in fixture.inventory['files'][:2]:
+                row.update(kind='absent', sha256=None, ownership=None)
+            fixture.compile()
+            self.assertFalse(fixture.plan['blocked'])
+            self.assertEqual(fixture.plan['files'], [])
+            self.assertFalse(any(row['id'].startswith('remove_file:') for row in fixture.plan['steps']))
+            self.assertEqual(fixture.validate()['commandAvailability'], 'unverified')
+            for step in fixture.plan['steps']:
+                if step['required']:
+                    fixture.observe(step['id'], 'completed', fixture.action(step['id']))
+            self.assertTrue(fixture.validate()['complete'])
+            # Final verification refuses a newly present file or dangling link.
+            for kind in ('file', 'symlink'):
+                with self.subTest(kind=kind):
+                    if kind == 'file': fixture.old.write_bytes(b'new unrelated owner')
+                    else: fixture.old.symlink_to('missing-target')
+                    with self.assertRaises(BuildError): fixture.validate()
+                    fixture.old.unlink()
+
+    @proves('MYC-15.11')
+    def test_absent_inventory_refuses_present_objects_ambiguous_claims_and_unobservable_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory).resolve())
+            fixture.inventory['aliases'] = []
+            original = deepcopy(fixture.inventory['files'][0])
+            row = fixture.inventory['files'][0]
+            row.update(kind='absent', sha256=None, ownership=None)
+            for kind in ('file', 'directory', 'symlink'):
+                with self.subTest(presentKind=kind):
+                    fixture.save()
+                    with self.assertRaises(BuildError): replacement_plan(fixture.inventory_path, now=AT)
+                    if fixture.old.is_dir(): fixture.old.rmdir()
+                    else: fixture.old.unlink()
+                    if kind == 'file': fixture.old.mkdir()
+                    elif kind == 'directory': fixture.old.symlink_to('missing-target')
+            # The last loop leaves a genuinely absent target.
+            valid = deepcopy(row)
+            for change in ({'sha256': sha(b'')}, {'ownership': original['ownership']},
+                           {'role': 'source_corpus'}, {'uncertainty': 'Not observed'}):
+                with self.subTest(change=change):
+                    row.clear(); row.update(valid); row.update(change); fixture.save()
+                    with self.assertRaises(BuildError): replacement_plan(fixture.inventory_path, now=AT)
+            row.clear(); row.update(valid); fixture.save()
+            from mycel_build import _replacement as replacement
+            original_stat = Path.lstat
+            def denied(selected, *args, **kwargs):
+                if selected == fixture.old: raise PermissionError('Cannot observe this path')
+                return original_stat(selected, *args, **kwargs)
+            with patch.object(Path, 'lstat', denied):
+                with self.assertRaises(BuildError): replacement_plan(fixture.inventory_path, now=AT)
+
     @proves('MYC-15.12', 'MYC-15.11')
     def test_mycel_owned_help_and_replacement_guide_require_no_other_product_or_runtime_cleanup_command(self):
         root = Path(__file__).resolve().parents[1]

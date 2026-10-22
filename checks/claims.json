@@ -2848,7 +2848,9 @@
       "test_replacement.ReplacementTests.test_plan_is_read_only_exactly_inventoried_restrictive_and_contains_no_state_import",
       "test_replacement.ReplacementTests.test_report_rejects_unverified_flags_changed_approved_plan_sequence_jumps_and_copied_state",
       "test_replacement.ReplacementTests.test_uncertain_and_corpus_ownership_is_preserved_and_changed_or_stale_evidence_refuses",
-      "test_replacement.ReplacementTests.test_uninventoried_dependents_block_without_cascade_and_changed_catalog_identity_refuses"
+      "test_replacement.ReplacementTests.test_uninventoried_dependents_block_without_cascade_and_changed_catalog_identity_refuses",
+      "test_replacement.ReplacementTests.test_already_absent_old_runtime_is_observed_without_inventing_cleanup_or_availability",
+      "test_replacement.ReplacementTests.test_absent_inventory_refuses_present_objects_ambiguous_claims_and_unobservable_paths"
     ],
     "MYC-15.12": [
       "test_replacement.ReplacementTests.test_mycel_owned_help_and_replacement_guide_require_no_other_product_or_runtime_cleanup_command"

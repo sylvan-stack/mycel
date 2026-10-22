@@ -180,6 +180,9 @@ def _file_state(path, kind):
             return _digest(os.fsencode(os.readlink(path)))
         if kind == 'directory' and stat.S_ISDIR(actual.st_mode) and not path.is_symlink():
             return None
+    except FileNotFoundError:
+        if kind == 'absent':
+            return None
     except OSError:
         pass
     _fail('An inventoried path is missing or has a changed type.')
@@ -289,13 +292,17 @@ def replacement_plan(inventory_path, *, now=None):
         _keys(row, ('id', 'path', 'role', 'kind', 'sha256', 'ownership', 'uncertainty'))
         name = _text(row['id']); path = _path(row['path'])
         if row['uncertainty'] is not None: _text(row['uncertainty'])
-        if name in ids or str(path) in paths or row['role'] not in _ROLES or row['kind'] not in {'file', 'symlink', 'directory'}:
+        if name in ids or str(path) in paths or row['role'] not in _ROLES or row['kind'] not in {'file', 'symlink', 'directory', 'absent'}:
             _fail(code='invalid_input')
         ids.add(name); paths.add(str(path))
-        if row['kind'] != 'directory': _fingerprint(row['sha256'])
+        if row['kind'] in {'file', 'symlink'}: _fingerprint(row['sha256'])
         elif row['sha256'] is not None: _fail(code='invalid_input')
         if _file_state(str(path), row['kind']) != row['sha256']:
             _fail('Inventoried file bytes or link targets changed.')
+        if row['kind'] == 'absent':
+            if row['role'] not in _REMOVE or row['ownership'] is not None or row['uncertainty'] is not None:
+                _fail('An absent runtime observation grants no ownership or removal permission.', 'invalid_input')
+            continue
         if row['role'] in {'source_corpus', 'document_corpus'}: protected.append(path)
         if row['role'] not in _REMOVE:
             if row['role'] == 'uncertain': blocked.append({'object': name, 'reason': _text(row['uncertainty'])})
@@ -510,7 +517,7 @@ def validate_replacement_report(plan_path, report_path, *, expected_plan_sha256,
     if not cutover:
         previous = next((row for row in plan['files'] + plan['preservedFiles'] if row['path'] == plan['previousCommand']), None)
         try:
-            if previous is not None and _file_state(previous['path'], previous['kind']) == previous['sha256']:
+            if previous is not None and previous['kind'] != 'absent' and _file_state(previous['path'], previous['kind']) == previous['sha256']:
                 available = 'previous_command_present'
         except BuildError:
             pass
