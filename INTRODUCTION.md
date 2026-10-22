@@ -52,16 +52,32 @@ embedding model without ever being truncated.
 Code: [`_retrieval.py`](https://github.com/sylvan-stack/mycel/blob/main/src/mycel/_retrieval.py),
 [`_ranking.py`](https://github.com/sylvan-stack/mycel/blob/main/src/mycel/_ranking.py)
 
-## Reproducible summaries of a whole corpus
+## RAPTOR summaries that stay current
 
-Mycel can summarize a whole documentation corpus as a tree of topics. Sections
-are grouped level by level with PCA and Gaussian mixture models, whose number
-of groups is chosen by BIC, and a section may belong to several topics. Every
-source of numerical nondeterminism is pinned, so the same corpus always gives
-the same tree. When a section changes, the summaries above it are marked for
-regeneration through the same staleness mechanism as documents.
+A broad question such as "how does sign-in work here" has no single section
+that answers it. For such questions Mycel builds a RAPTOR tree (Recursive
+Abstractive Processing for Tree-Organized Retrieval). It groups document
+sections by meaning, has a language model write one summary per group, then
+groups and summarizes those summaries again, level by level. Search runs over
+the whole tree at once, so a broad question lands on a summary and a precise
+one on the section itself.
 
-Code: [`_summary_grouping.py`](https://github.com/sylvan-stack/mycel/blob/main/src/mycel/_summary_grouping.py)
+Mycel adds what the original method lacks for a code base that keeps changing:
+- **Reproducible grouping.** Sections are grouped with PCA and Gaussian mixture
+  models, with the number of groups chosen by BIC. A section may belong to
+  several topics. Every source of numerical nondeterminism is pinned, so the
+  same corpus always gives the same tree.
+- **Incremental upkeep.** Each summary records the exact versions of the
+  sections it was written from. When a section changes, only the summaries
+  above it are marked stale, and regeneration rewrites just those, lowest
+  level first.
+- **Atomic replacement.** A new tree is written and embedded privately, then
+  replaces the old one in a single transaction. A failed or interrupted build
+  never leaves search with half a tree.
+
+Code: [`_summary_grouping.py`](https://github.com/sylvan-stack/mycel/blob/main/src/mycel/_summary_grouping.py),
+[`_summary_build.py`](https://github.com/sylvan-stack/mycel/blob/main/src/mycel/_summary_build.py),
+[`_summary_regenerate.py`](https://github.com/sylvan-stack/mycel/blob/main/src/mycel/_summary_regenerate.py)
 
 ## Specifications the code must prove
 
