@@ -110,7 +110,12 @@ def _numbered_package(work: Path) -> Path:
     package = root / "mycel"
     shutil.copytree(REPOSITORY / "src/mycel", package,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    # The source can be a sealed installed package. Change only this owned
+    # fictional copy, replacing its identity instead of overwriting the seal.
+    data = package / "data"
+    data.chmod(data.stat().st_mode | 0o200)
     (package / "data/development-identity.json").unlink(missing_ok=True)
+    (package / "data/build-identity.json").unlink(missing_ok=True)
     (package / "data/build-identity.json").write_text(
         json.dumps({"schemaVersion": 1, "build": TEST_BUILD}) + "\n", encoding="utf-8")
     return root
