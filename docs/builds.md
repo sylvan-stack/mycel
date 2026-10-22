@@ -177,9 +177,23 @@ the complete installed unit/store suite, and the packaged selector/CLI checks
 from two private installation paths. The receiver derives its expected named
 inventory and ordered claim lists independently from the frozen source; a
 child cannot define its own expected count or substitute a partial report.
-The retained report names every outcome and preserves all 333 requirement rows,
-including pending requirements. Evaluation and live checks are never selected
-by this automatic gate and their pending rows are not promoted.
+The retained report names every outcome and preserves every registered requirement
+row, including pending requirements and each chapter's actual `draft` or `accepted`
+status. A passing automatic proof does not accept a draft chapter. Every automatic
+proof remains required regardless of chapter status; evaluation and live checks
+are never selected and their pending rows are not promoted.
+
+The installed gate uses the same canonical process runner as `make check`, with
+up to six workers and one disposable database per store check. Its independent
+frozen inventory includes inherited test methods in Python's method order, and
+must match actual discovery before execution. Numeric-library threads are bounded
+separately so the workers do not multiply their thread pools.
+
+Acknowledged database creations are recorded in a private journal. Known child
+groups stop before recovery uses the sealed installed interpreter to remove only
+those owned targets. If a child lifetime or cleanup result is unconfirmed, the
+Build fails and retains its private workspace as `retainedCheckWorkspace` for
+inspection. A database name alone never grants cleanup permission.
 
 An unavailable required probe or failed check produces `failed` and retains its
 sanitized name and reason. If the suite passes but active unit/store requirements
@@ -189,12 +203,19 @@ when all required groups and all active automatic requirement proofs pass; its
 certificate binds the exact Build, source/check inputs, installed manifests and
 results. Pending eval/live rows remain separate on-demand work.
 
-**The internal staging seam never publishes `working`**. The prepared development
-release continuation described below owns final atomic publication; Mycel1
-replacement remains separate. Private working records used by
-the relocation checks exist only in disposable probe homes, never in the owner's
-published registry. The packaged checks measure actual elapsed times and record
-the target/runtime; they claim no unmeasured startup threshold.
+**The internal staging seam never publishes `working`**. Development `create`
+continues through the final private credential check and atomic publication
+described below; Mycel 1 replacement remains separate. Private working records
+used by relocation checks exist only in disposable probe homes, never in the
+owner's published registry. Packaged checks measure elapsed time and record the
+target/runtime; they claim no unmeasured startup threshold.
+
+<!-- sources:
+mycel:@code/src/mycel_build/_automatic.py#run_automatic
+mycel:@code/src/mycel_build/_automatic_backend.py#InstalledFixtureBackend
+mycel:@code/src/mycel_build/_qualification.py#automatic_contract
+mycel:@code/src/mycel_build/_qualification.py#requirement_results
+-->
 
 
 ## Installing the independent launcher
@@ -291,8 +312,8 @@ Internal `create_stage` stays staging-only. Development `create` continues via
 and packaged checks and every active automatic requirement proof pass. It
 recaptures the exact source, requires a separate private credential group, and
 revalidates all checked inputs under the nonwaiting registry maintenance lock.
-The current strict frozen inventory, full332 proof map, queued cancellation,
-and exact16 ordered packaged cases at each of two relocations remain required.
+The complete current frozen inventory and ordered proof map, queued cancellation,
+and sixteen ordered packaged cases at each of two relocations remain required.
 
 Publication writes final checks and the sanitized log before atomically
 replacing the working record last. Earlier failure or interruption leaves the
@@ -318,13 +339,12 @@ is attempted. Apple source and license are frozen offline inputs under
 `packaging/native-fixtures/apple-security`; the installed wheel remains
 product-only.
 
-A separate accepted-program feasibility diagnostic informed this implementation.
-Every new Build must execute its own current-source/current-program check; the
-diagnostic cannot be replayed as qualification. Unit fixtures use openly
-fictional complete328-automatic/333-registry preconditions and fake native APIs
-to test policy. No new source application, automatic Build qualification,
-provider qualification or working release is claimed by this preparation; all315
-previous shared ordered claim lists remain unchanged.
+Every new Build executes its own current-source/current-program credential check;
+a feasibility diagnostic cannot be replayed as qualification. Unit fixtures use
+openly fictional complete proof maps and fake native APIs to test publication
+policy. Actual native qualification requires the current installed program's own
+results. Provider qualification, owner installation and replacement remain
+separate from private working publication.
 
 <!-- sources:
 mycel:@code/src/mycel_build/_release.py#create_release
@@ -362,6 +382,9 @@ mycel:@code/tests/test_replacement.py#ReplacementTests
 -->
 
 ## Final automatic Build preparation — 16 October 2026
+
+This is the historical preparation snapshot. Current creation follows the
+contract above and records fresh results for each Build.
 
 This separate candidate carries **327 proposed automatic proof lists** while
 retaining all315 existing ordered lists. Its complete automatic inventory is

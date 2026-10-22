@@ -43,8 +43,12 @@ Internal `create_stage` stays staging-only. Development `create` continues via
 and packaged checks and every active automatic requirement proof pass. It
 recaptures the exact source, requires a separate private credential group, and
 revalidates all checked inputs under the nonwaiting registry maintenance lock.
-The current strict frozen inventory, full333 proof map, queued cancellation,
-and exact16 ordered packaged cases at each of two relocations remain required.
+The complete frozen inventory, including inherited test methods, its ordered proof
+map, queued cancellation and sixteen ordered packaged cases at each of two
+relocations remain required. The installed gate uses the shared bounded worker
+runner and acknowledged database recovery; it does not substitute a development
+report for installed execution. Requirement rows retain actual chapter status,
+and draft status waives no automatic proof.
 
 Publication writes final checks and the sanitized log before atomically
 replacing the working record last. Earlier failure or interruption leaves the
@@ -52,14 +56,17 @@ old numeric default available. A failure after that final replacement reports
 the actual working record as partial; it cannot downgrade a committed record.
 No owner launcher installation, replacement or cleanup is part of creation.
 
-The selected private credential check currently returns a named unsupported,
-failed/unexecuted result before native, child, metadata or secret operations.
-A separate HOME and filesystem sandbox do not prove Keychain session isolation.
-This implementation therefore cannot publish a real working Build. Its new
-unit fixtures use complete fictional328-automatic/333-registry preconditions
-to test publication transactions; they are not executed native/gate evidence.
-No new test, application, provider qualification or working release is claimed
-by this source preparation, and all315 shared ordered claim lists stay unchanged.
+The private credential check uses a fresh copy of a licensed, pinned public Apple
+regression Keychain. Its Python helper validates a nonnull explicit native handle
+and private path before unlock, lookup or lock. The staged program consumes the
+supported `embedding.key_command` output privately. No item creation/deletion,
+default/search-list setter, compiler, provider or database is used by this probe.
+Preference equality describes the probe profile's observed view; it is not an
+exhaustive owner-preference or default login-item-reader proof. The current
+Build must pass this check and its cleanup; old diagnostic results cannot qualify
+it. Synthetic complete proof maps test publication policy, while real installed
+results are required for each working record. Owner launcher installation and
+replacement remain separate.
 
 <!-- sources:
 mycel:@code/src/mycel_build/_release.py#create_release
