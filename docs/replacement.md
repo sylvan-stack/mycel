@@ -12,11 +12,12 @@ Use Mycel's build and installation instructions in the [Build guide](builds.md).
 
 ## Preparing the exact inventory
 
-The development commands return one JSON result:
+From the Mycel source root, with its prepared interpreter, these development
+commands return one JSON result (`src` is the development import path):
 
 ```sh
-python -m mycel_build replacement-plan --inventory /absolute/operator/inventory.json
-python -m mycel_build replacement-validate --plan /absolute/operator/approved-plan.json --plan-sha256 EXACT_APPROVED_FILE_SHA256 --report /absolute/operator/report.json
+PYTHONPATH=src python -m mycel_build replacement-plan --inventory /absolute/operator/inventory.json
+PYTHONPATH=src python -m mycel_build replacement-validate --plan /absolute/operator/approved-plan.json --plan-sha256 EXACT_APPROVED_FILE_SHA256 --report /absolute/operator/report.json
 ```
 
 Both commands are read-only. Save the `plan` and initial `report` objects from the first reply as separate files using your editor or ordinary operator tools. Independently review the exact plan file and retain its SHA-256; validation requires that approved file digest. A changed plan is refused even if someone recalculates its internal fingerprint. There is no `replacement-execute` command.
