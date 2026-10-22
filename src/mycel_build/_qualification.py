@@ -15,6 +15,59 @@ from ._credential_contract import credential_probe_passed
 from mycel._coverage import ACTIVE_REQUIREMENTS, REQUIREMENT_ID, SPECIFICATION_COUNT, SPECIFICATION_STATUSES
 
 
+def _test_class_methods(tree):
+    """Resolve local test inheritance with Python's C3 order, without imports.
+
+    External fixture/stdlib bases are opaque: any inherited test they add is
+    still caught by the independent runtime-inventory equality check.
+    """
+    classes = {}
+    own = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        if node.name in classes:
+            raise ValueError('repeated frozen class')
+        classes[node.name] = node
+        methods = [method for method in node.body
+                   if isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef))
+                   and method.name.startswith('test')]
+        own[node.name] = {method.name: method for method in methods}
+        if len(own[node.name]) != len(methods):
+            raise ValueError('repeated frozen test method')
+    orders = {}
+    def linearize(name, active=()):
+        if name not in classes:
+            return [name]
+        if name in active:
+            raise ValueError('cyclic frozen class inheritance')
+        if name not in orders:
+            bases = [ast.unparse(base) for base in classes[name].bases]
+            if len(set(bases)) != len(bases):
+                raise ValueError('repeated frozen base')
+            pending = [linearize(base, (*active, name))[:] for base in bases] + [bases[:]]
+            result = [name]
+            while any(pending):
+                pending = [order for order in pending if order]
+                first = next((order[0] for order in pending
+                              if all(order[0] not in other[1:] for other in pending)), None)
+                if first is None:
+                    raise ValueError('inconsistent frozen method order')
+                result.append(first)
+                for order in pending:
+                    if order[0] == first:
+                        order.pop(0)
+            orders[name] = result
+        return orders[name]
+    result = {}
+    for name in classes:
+        methods = {}
+        for base in reversed(linearize(name)):
+            methods.update(own.get(base, {}))
+        result[name] = methods
+    return result
+
+
 def automatic_contract(frozen: dict[str, bytes]) -> dict:
     """Derive every declaration independently from the captured test sources."""
     try:
@@ -26,7 +79,8 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
                 or any(row['specification_status'] not in SPECIFICATION_STATUSES
                        for row in data['specifications'].values())
                 or {row['specification'] for row in registry.values()} != {f'MYC-{n}' for n in range(SPECIFICATION_COUNT)}
-                or any(not REQUIREMENT_ID.fullmatch(key)
+                or any(row.get('source') not in data['specifications']
+                       or not REQUIREMENT_ID.fullmatch(key)
                        or row['kind'] not in {'unit', 'store', 'eval', 'live'}
                        or row['specification'] != key.split('.')[0] for key, row in registry.items())):
             raise ValueError('registry')
@@ -40,10 +94,8 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
             if not re.fullmatch(r'tests/test_[A-Za-z0-9_]+\.py', path):
                 continue
             module = path.removeprefix('tests/').removesuffix('.py')
-            for cls in ast.parse(raw).body:
-                if not isinstance(cls, ast.ClassDef):
-                    continue
-                for method in cls.body:
+            for class_name, methods in _test_class_methods(ast.parse(raw)).items():
+                for method in methods.values():
                     if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)) or not method.name.startswith('test'):
                         continue
                     decorators = [node for node in method.decorator_list if isinstance(node, ast.Call)
@@ -60,7 +112,7 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
                             or len(set(requirements)) != len(requirements)
                             or any(key not in registry or registry[key]['kind'] != kind for key in requirements)):
                         raise ValueError('declaration requirements')
-                    name = f'{module}.{cls.name}.{method.name}'
+                    name = f'{module}.{class_name}.{method.name}'
                     if name in declarations:
                         raise ValueError('duplicate declaration')
                     declarations[name] = {'name': name, 'kind': kind, 'requirements': requirements}
@@ -79,6 +131,8 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
         if not automatic:
             raise ValueError('empty automatic inventory')
         return {'schemaVersion': 1, 'declarations': automatic, 'registry': registry, 'claims': claims,
+                'specificationStatuses': {name: row['specification_status']
+                                          for name, row in data['specifications'].items()},
                 'registrySha256': digest(frozen['src/mycel/data/requirements.json']),
                 'claimsSha256': digest(frozen['checks/claims.json']),
                 'inventorySha256': digest(json_bytes(automatic))}
@@ -94,7 +148,8 @@ def requirement_results(contract: dict, checks: list[dict]) -> dict:
         names = contract['claims'].get(key, [])
         implemented = bool(names) and all(name in by_name and by_name[name]['status'] == 'passed'
             and key in by_name[name]['requirements'] and by_name[name]['kind'] == row['kind'] for name in names)
-        result[key] = {'specification': row['specification'], 'specification_status': 'accepted',
+        result[key] = {'specification': row['specification'],
+                       'specification_status': contract['specificationStatuses'][row['source']],
                        'kind': row['kind'], 'status': 'implemented' if implemented else 'pending',
                        'verified_by': list(names) if implemented else []}
     return result

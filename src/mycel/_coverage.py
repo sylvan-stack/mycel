@@ -59,6 +59,7 @@ class Requirement:
     kind: str
     specification: str
     source: str
+    specification_status: str = "accepted"
 
 
 def load_registry(path: Path | str | None = None) -> dict[str, Requirement]:
@@ -82,8 +83,8 @@ def load_registry(path: Path | str | None = None) -> dict[str, Requirement]:
     registry: dict[str, Requirement] = {}
     for row in rows:
         try:
-            requirement = Requirement(**row)
-        except (TypeError, ValueError) as error:
+            requirement = Requirement(**row, specification_status=sources[row['source']]['specification_status'])
+        except (KeyError, TypeError, ValueError) as error:
             raise CoverageError("invalid requirement row") from error
         if not all(isinstance(value, str) and value for value in asdict(requirement).values()):
             raise CoverageError("requirement fields must be nonempty strings")
@@ -762,7 +763,7 @@ def run_checks(suite: unittest.TestSuite, *, registry: Mapping[str, Requirement]
                     proven = False
         requirements[identifier] = {
             "specification": requirement.specification,
-            "specification_status": "accepted",
+            "specification_status": requirement.specification_status,
             "kind": requirement.kind,
             "status": "implemented" if proven else "pending",
             "verified_by": list(names) if proven else [],

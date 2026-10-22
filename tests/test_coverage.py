@@ -71,6 +71,15 @@ class SimulatedBackend:
 
 
 class CoverageTests(unittest.TestCase):
+    @proves('MYC-13.15')
+    def test_passing_draft_requirement_keeps_its_snapshot_status(self):
+        check = example_check(requirement='MYC-17.2')
+        report = run_checks(unittest.TestSuite([check]), claims={'MYC-17.2': [check.id()]})
+        self.assertTrue(report.passed)
+        self.assertEqual(report.requirements['MYC-17.2']['status'], 'implemented')
+        self.assertEqual(report.requirements['MYC-17.2']['specification_status'], 'draft')
+        self.assertEqual(report.requirements['MYC-13.3']['specification_status'], 'accepted')
+
     @proves("MYC-13.3", "MYC-13.15")
     def test_process_workers_keep_canonical_outcomes_claims_and_network_denial(self):
         with tempfile.TemporaryDirectory() as directory:

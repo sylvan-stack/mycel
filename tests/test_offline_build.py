@@ -268,5 +268,99 @@ class InstalledAutomaticTests(unittest.TestCase):
                     self.assertIn('MYC-13.16', coverage['pendingRequirements'])
 
 
+    @proves('MYC-15.8', 'MYC-13.15')
+    def test_spawned_workers_deserialize_installed_backend_and_keep_unit_network_denied(self):
+        import sys
+        from mycel._coverage import discover_checks, run_checks
+        from mycel_build._automatic_backend import InstalledFixtureBackend
+        source = b'\n'.join((
+            b'import os,socket,tempfile,time,unittest', b'from pathlib import Path',
+            b'from mycel._coverage import proves', b'class Workers(unittest.TestCase):',
+            b' def check_worker(self):',
+            b'  Path(__file__).with_name(str(os.getpid())+".pid").write_text("ready")',
+            b'  until=time.monotonic()+10',
+            b'  while len(list(Path(__file__).parent.glob("*.pid")))<2:',
+            b'   self.assertLess(time.monotonic(),until);time.sleep(0.01)',
+            b'  with self.assertRaisesRegex(RuntimeError,"network access is forbidden"):',
+            b'   socket.create_connection(("127.0.0.1",1))',
+            b' @proves("MYC-13.3")', b' def test_one(self): self.check_worker()',
+            b' @proves("MYC-13.3")', b' def test_two(self): self.check_worker()', b''))
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                journal = root / 'owned'
+                journal.mkdir(mode=0o700)
+                (root / 'test_installed_worker_fixture.py').write_bytes(source)
+                backend = InstalledFixtureBackend('postgresql://fixture@localhost/owner',
+                                                   _ownership_journal=journal)
+                report = run_checks(discover_checks(root), store_backend=backend,
+                                    workers=2, tests_directory=root)
+                self.assertTrue(report.passed, report.errors)
+                self.assertEqual(len(report.checks), 2)
+                self.assertEqual(len(list(root.glob('*.pid'))), 2)
+                self.assertEqual(list(journal.iterdir()), [])
+        finally:
+            sys.modules.pop('test_installed_worker_fixture', None)
+
+    @proves('MYC-15.8')
+    def test_unknown_child_lifetime_retains_its_private_workspace_without_database_recovery(self):
+        from mycel_build import _automatic
+        from mycel_build._staging import _delete_tree
+        with tempfile.TemporaryDirectory() as directory:
+            program = Path(directory) / 'program'
+            product = program / 'runtime/lib/python3.14/site-packages/mycel'
+            product.mkdir(parents=True)
+            (product / '__init__.py').write_bytes(b'# diagnostic fixture\n')
+            for process_state in (
+                    {'spawnConfirmed': False, 'spawnOutcomeUnconfirmed': True, 'processGroupAbsent': None},
+                    {'spawnConfirmed': True, 'spawnOutcomeUnconfirmed': False, 'processGroupAbsent': False}):
+                error = BuildError('refused', 'Fixture child lifetime is unconfirmed.')
+                error.process_state = process_state
+                with patch.object(_automatic.platform, 'system', return_value='Darwin'), \
+                        patch.object(_automatic.platform, 'machine', return_value='arm64'), \
+                        patch.object(_automatic, 'run_group', side_effect=error), \
+                        patch.object(_automatic, '_recover_automatic') as recovery:
+                    result = run_automatic(program, 'macos-arm64', frozen_contract_fixture(),
+                                           source_root=Path('/source'), number='a')
+                retained = Path(result['retainedCheckWorkspace'])
+                try:
+                    self.assertFalse(result['passed'])
+                    self.assertEqual(result['processState'], process_state)
+                    self.assertTrue(retained.is_dir())
+                    self.assertEqual(retained.stat().st_mode & 0o777, 0o700)
+                    recovery.assert_not_called()
+                finally:
+                    # No actual process was launched by this lifecycle fixture.
+                    _delete_tree(retained)
+
+    @proves('MYC-15.8', 'MYC-13.15')
+    def test_incomplete_recovery_keeps_acknowledged_records_and_does_not_follow_external_links(self):
+        from mycel_build import _automatic
+        from mycel_build._staging import _delete_tree
+        with tempfile.TemporaryDirectory() as directory:
+            outside = Path(directory) / 'outside'
+            outside.mkdir()
+            sentinel = outside / 'sentinel'
+            sentinel.write_bytes(b'unchanged outside evidence')
+            with _automatic._automatic_workspace() as state:
+                base = state['path']
+                (base / 'alias').symlink_to(outside, target_is_directory=True)
+                journal = base / 'owned-databases'
+                journal.mkdir(mode=0o700)
+                record = journal / 'mycel_check_fixture.json'
+                record.write_text('retained permission fixture')
+                with patch.object(_automatic, 'run_group', return_value=
+                        subprocess.CompletedProcess([], 0, b'{"remaining":1}', b'')), \
+                        self.assertRaises(BuildError):
+                    _automatic._recover_automatic(journal, ['fixture', 'runner', 'workspace', 'program'], {}, state)
+            try:
+                self.assertTrue(base.is_dir())
+                self.assertEqual(record.read_text(), 'retained permission fixture')
+                self.assertEqual(sentinel.read_bytes(), b'unchanged outside evidence')
+            finally:
+                _delete_tree(base)
+            self.assertEqual(sentinel.read_bytes(), b'unchanged outside evidence')
+
+
 if __name__ == "__main__":
     unittest.main()

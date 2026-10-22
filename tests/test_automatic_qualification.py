@@ -480,3 +480,64 @@ class AutomaticQualificationTests(unittest.TestCase):
                 with self.subTest(timeout=timeout), self.assertRaises(BuildError):
                     run_group(['never-run'], timeout=timeout)
             spawn.assert_not_called()
+
+
+    @proves('MYC-15.8', 'MYC-13.15')
+    def test_inherited_methods_keep_each_subclass_name_and_original_ordered_proofs(self):
+        frozen = contract_inputs()
+        frozen['tests/test_fixture.py'] += b'\nclass Inherited(Proofs): pass\n'
+        contract = automatic_contract(frozen)
+        rows = {row['name']: row for row in contract['declarations']}
+        self.assertEqual(len(rows), 6)
+        for method in ('test_one', 'test_two', 'test_store'):
+            parent = rows['test_fixture.Proofs.' + method]
+            child = rows['test_fixture.Inherited.' + method]
+            self.assertEqual((child['kind'], child['requirements']),
+                             (parent['kind'], parent['requirements']))
+        self.assertFalse(any(row['kind'] in {'eval', 'live'} for row in rows.values()))
+        # contract_inputs begins by raising: deriving this inventory must never
+        # import or execute the frozen class or any inherited body.
+
+    @proves('MYC-15.8', 'MYC-13.15')
+    def test_frozen_diamond_method_order_matches_real_unittest_discovery_and_execution(self):
+        from mycel._coverage import declaration, discover_checks, iter_checks, run_checks
+        frozen = contract_inputs()
+        frozen.pop('tests/test_fixture.py')
+        frozen['checks/claims.json'] = json_bytes({'schema_version': 1, 'implemented': {}})
+        source = b'\n'.join((
+            b'import unittest', b'from mycel._coverage import proves',
+            b'class Root(unittest.TestCase):', b' @proves("MYC-13.3")',
+            b' def test_shared(self): self.assertTrue(True)',
+            b'class Left(Root): pass', b'class Right(Root):', b' @proves("MYC-13.15")',
+            b' def test_shared(self): self.assertTrue(True)', b'class Diamond(Left, Right): pass', b''))
+        frozen['tests/test_c3_fixture.py'] = source
+        contract = automatic_contract(frozen)
+        expected = {row['name']: (row['kind'], row['requirements']) for row in contract['declarations']}
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                (Path(directory) / 'test_c3_fixture.py').write_bytes(source)
+                suite = discover_checks(directory)
+                actual = {check.id(): (declaration(check).kind, list(declaration(check).requirements))
+                          for check in iter_checks(suite)}
+                self.assertEqual(expected, actual)
+                self.assertEqual(expected['test_c3_fixture.Diamond.test_shared'], ('unit', ['MYC-13.15']))
+                self.assertTrue(run_checks(suite).passed)
+        finally:
+            sys.modules.pop('test_c3_fixture', None)
+
+    @proves('MYC-15.8', 'MYC-13.15')
+    def test_frozen_inheritance_cycles_or_inconsistent_orders_refuse_before_execution(self):
+        for extra in (b'\nclass A(B): pass\nclass B(A): pass\n',
+                      b'\nclass X: pass\nclass Y: pass\nclass A(X,Y): pass\n'
+                      b'class B(Y,X): pass\nclass C(A,B): pass\n'):
+            frozen = contract_inputs()
+            frozen['tests/test_fixture.py'] += extra
+            with self.assertRaises(BuildError):
+                automatic_contract(frozen)
+
+    @proves('MYC-15.8', 'MYC-13.15')
+    def test_independent_requirement_rows_keep_draft_snapshot_metadata(self):
+        contract = automatic_contract(contract_inputs())
+        result = _sanitize_report(json_bytes(closed_reply(contract)), 10, contract=contract)
+        self.assertEqual(result['requirements']['MYC-17.2']['specification_status'], 'draft')
+        self.assertEqual(result['requirements']['MYC-13.3']['specification_status'], 'accepted')

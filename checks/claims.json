@@ -2774,7 +2774,14 @@
       "test_coverage.CoverageTests.test_standard_and_preimported_psycopg_entries_and_default_pq_are_blocked",
       "test_coverage.CoverageTests.test_store_names_and_addresses_are_refused_before_backend_calls",
       "test_coverage.CoverageTests.test_subtest_and_setup_failures_reach_the_gate",
-      "test_packaged_release.PackagedReleaseTests.test_last_packaged_failure_blocks_qualification_and_retains_all_prior_results_without_publication"
+      "test_packaged_release.PackagedReleaseTests.test_last_packaged_failure_blocks_qualification_and_retains_all_prior_results_without_publication",
+      "test_coverage.CoverageTests.test_passing_draft_requirement_keeps_its_snapshot_status",
+      "test_automatic_qualification.AutomaticQualificationTests.test_frozen_diamond_method_order_matches_real_unittest_discovery_and_execution",
+      "test_automatic_qualification.AutomaticQualificationTests.test_frozen_inheritance_cycles_or_inconsistent_orders_refuse_before_execution",
+      "test_automatic_qualification.AutomaticQualificationTests.test_independent_requirement_rows_keep_draft_snapshot_metadata",
+      "test_automatic_qualification.AutomaticQualificationTests.test_inherited_methods_keep_each_subclass_name_and_original_ordered_proofs",
+      "test_offline_build.InstalledAutomaticTests.test_incomplete_recovery_keeps_acknowledged_records_and_does_not_follow_external_links",
+      "test_offline_build.InstalledAutomaticTests.test_spawned_workers_deserialize_installed_backend_and_keep_unit_network_denied"
     ],
     "MYC-13.16": [
       "test_automatic_qualification.AutomaticQualificationTests.test_already_delivered_cancellation_is_not_dispatched_again_after_an_ordinary_failure",
@@ -2824,7 +2831,14 @@
       "test_working_publication.WorkingPublicationTests.test_corrupt_manifests_proofs_results_identities_or_missing_required_groups_never_publish",
       "test_working_publication.WorkingPublicationTests.test_create_orchestration_recaptures_source_keeps_paid_probes_out_and_preserves_published_partial",
       "test_working_publication.WorkingPublicationTests.test_unavailable_private_keychain_boundary_refuses_without_native_operations_or_publication",
-      "test_working_publication.WorkingPublicationTests.test_working_record_is_last_replacement_and_only_then_changes_real_numeric_selector"
+      "test_working_publication.WorkingPublicationTests.test_working_record_is_last_replacement_and_only_then_changes_real_numeric_selector",
+      "test_automatic_qualification.AutomaticQualificationTests.test_frozen_diamond_method_order_matches_real_unittest_discovery_and_execution",
+      "test_automatic_qualification.AutomaticQualificationTests.test_frozen_inheritance_cycles_or_inconsistent_orders_refuse_before_execution",
+      "test_automatic_qualification.AutomaticQualificationTests.test_independent_requirement_rows_keep_draft_snapshot_metadata",
+      "test_automatic_qualification.AutomaticQualificationTests.test_inherited_methods_keep_each_subclass_name_and_original_ordered_proofs",
+      "test_offline_build.InstalledAutomaticTests.test_incomplete_recovery_keeps_acknowledged_records_and_does_not_follow_external_links",
+      "test_offline_build.InstalledAutomaticTests.test_spawned_workers_deserialize_installed_backend_and_keep_unit_network_denied",
+      "test_offline_build.InstalledAutomaticTests.test_unknown_child_lifetime_retains_its_private_workspace_without_database_recovery"
     ],
     "MYC-15.11": [
       "test_replacement.ReplacementTests.test_disposable_rehearsal_removes_only_approved_objects_and_preserves_sources_shell_tail_and_catalog",
