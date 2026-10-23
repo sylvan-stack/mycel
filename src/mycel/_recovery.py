@@ -25,7 +25,7 @@ from ._errors import MycelError
 from ._evidence import EvidenceError, _chunk_snapshot, snapshot
 from ._freshness import Deadline
 from ._jev import JevFailure, JevRequest, JevResponse, route_response
-from ._justify import checked_link, public_reference
+from ._justify import checked_link, public_reference, confidence_band as _confidence_band
 from ._locks import atomic_transaction, operation_guard, mutation_guard, read_snapshot, invocation_guard
 from ._origins import _selection, origins_in_transaction
 from ._resolver import SourceResolver
@@ -38,8 +38,6 @@ from ._store import checked_store
 from ._undocumented import normalize_paths
 from ._verification import _located, _require_confirmable
 
-# The higher bands require a statement or a check. A model score stays intact.
-INFERRED_FLOOR = 0.5
 SOURCES = ('document', 'test', 'commit', 'issue', 'embedding')
 _LINEAR = re.compile(r'https?://(?:[^/\s]+\.)?linear\.app(?:/|\b)|\bLinear issue\b|^#\s+SYL-\d+', re.I | re.M)
 _URL = re.compile(r'https?://[^\s<>"\[\]()]+')
@@ -50,7 +48,7 @@ _ORIGIN_ROWS = """SELECT id,state,kind FROM public.mycel_dependencies WHERE repo
 
 
 def confidence_band(score):
-    return 'inferred' if score >= INFERRED_FLOOR else 'candidate'
+    return _confidence_band(score, model_claim=True)
 
 
 def _text(file, member):

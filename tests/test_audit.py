@@ -201,3 +201,103 @@ class AuditProtocolTests(unittest.TestCase):
         for purpose in ('embedding','summary','jev','reviewer'):
             self.assertFalse(model_call_allowed(InvocationPolicy('audit',dry_run=True),purpose))
         self.assertFalse(model_call_allowed(InvocationPolicy('audit'),'embedding'))
+
+
+class SemanticAuditStoreTests(AuditStoreTests):
+    # Inherit fixture helpers only; the deterministic proofs live above.
+    test_seven_deterministic_rules_use_only_current_indexed_evidence = None
+    test_person_settles_with_reason_history_and_exact_observation_never_reopens = None
+    test_dry_run_is_readonly_and_paths_are_component_scoped = None
+    test_requirement_marks_and_withdrawal_exempt_only_unresting_requirements = None
+    test_repeated_human_names_are_ambiguous_but_uuid_diagnostics_remain_auditable = None
+
+    def dependencies(self, *, changed=None, top=.9, label=None, limits=None, failure=None):
+        from mycel._jev import JevClient, JevLimits, HTTPResult
+        from mycel._classification_runner import ClassifyDependencies
+        from mycel._credentials import Credentials
+        from mycel._safeguards import CompletedChild
+        def factory(settings, policy):
+            def credential(*args, **kwargs):return CompletedChild(0,b'public-fixture-only\n',b'',0)
+            def transport(body,key,**kwargs):
+                request=json.loads(body);self.calls.append(request)
+                if changed:changed(request)
+                if failure:raise failure
+                state=request['state'];question=state['question']
+                labels=state['labels'];chosen=label or labels[0]
+                if label is None:
+                    if question=='conformance' and state['origins'][0]['snapshot']['place']['path']=='spec.md':chosen='nonconforming'
+                    elif question=='consistency':chosen='contradictory'
+                    elif question=='ambiguity' and REQ in json.dumps(state['subject']):chosen='ambiguous'
+                probabilities={item:(1-top)/2 for item in labels};probabilities[chosen]=top
+                return HTTPResult(200,json.dumps({'model':settings.values['drifts']['model'],
+                    'answers':{'dependency':{'type':'choice','choice':chosen,'probabilities':probabilities,'confidence':(3*top-1)/2}},
+                    'usage':{'input_tokens':100,'output_tokens':8}}).encode(),{})
+            return JevClient(Credentials(settings,policy,_runner=credential),policy,
+                limits=limits or JevLimits.from_settings(settings),_transport=transport)
+        return ClassifyDependencies(jev_factory=factory)
+
+    def audit(self, **options):
+        from mycel._audit_semantic import run_audit, SemanticAuditStore
+        with self.base.connect() as connection:
+            return run_audit(SemanticAuditStore(connection),self.settings,'fixture',**options)
+
+    def links(self):
+        from mycel._origins import origins_in_transaction
+        with self.base.connect() as connection,read_snapshot(connection):
+            return origins_in_transaction(connection,self.settings,'fixture',chunk=self.ref)['chunks'][0]['links']
+
+    def two_origins(self):
+        self.justify();self.justify('fixture:@artifact/other.md#FIX-2.1')
+
+    @proves('MYC-17.17','MYC-17.18','MYC-14.29',kind='store')
+    def test_three_negative_questions_retain_exact_evidence_lower_only_disputed_link_and_reuse(self):
+        from mycel._classification_payload import AuditDecisionPayload
+        self.two_origins()
+        with self.base.connect() as connection:
+            before=connection.execute('SELECT to_jsonb(t),xmin::text FROM public.mycel_verifications t ORDER BY id').fetchall()
+        reply=self.audit(dependencies=self.dependencies())
+        self.assertEqual(reply['status'],0,reply)
+        negatives=[row for row in reply['findings'] if row['mode']=='semantic']
+        self.assertEqual({r['kind'] for r in negatives},{'nonconforming','contradictory','ambiguous'},negatives)
+        self.assertEqual(len(negatives),3,negatives)
+        self.assertEqual(reply['completed'],6,reply)
+        links=self.links();lowered=next(link for link in links if REQ in link['origin'])
+        conforming=next(link for link in links if OTHER in link['origin'])
+        self.assertEqual((lowered['confidenceScore'],lowered['confidence'],lowered['method']),(.15,'candidate','stated'))
+        self.assertEqual(conforming['confidenceScore'],1)
+        self.assertEqual(lowered['who'],'fixture-owner')
+        self.assertEqual(lowered['review']['outcome'],'nonconforming')
+        with self.base.connect() as connection:
+            self.assertEqual(connection.execute('SELECT to_jsonb(t),xmin::text FROM public.mycel_verifications t ORDER BY id').fetchall(),before)
+            for digest,raw,metadata in connection.execute("SELECT hash,bytes,metadata FROM public.mycel_manifests WHERE kind='origin_audit_request'").fetchall():
+                payload=AuditDecisionPayload.from_bytes(bytes(raw),digest)
+                self.assertEqual(payload.input_hash,metadata['record']['inputHash'])
+                self.assertEqual(metadata['record']['status'],'complete')
+            self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_audit_request' AND invocation IS NOT NULL").fetchone(),(0,))
+        again=self.audit(dependencies=self.dependencies())
+        self.assertEqual(again['status'],0,again);self.assertEqual(again['jevCalls'],0,again)
+        self.assertEqual(again['reused'],6);self.assertEqual(again['newFindings'],0)
+        with self.base.connect() as connection:
+            AuditStore(connection).settle(self.settings,'fixture',negatives[0]['id'],reason='The owner accepts this discrepancy.',by='fixture-owner')
+        settled=self.audit(dependencies=self.dependencies())
+        self.assertEqual(settled['status'],0,settled);self.assertEqual(settled['jevCalls'],0)
+        self.assertNotIn(negatives[0]['id'],[r['id'] for r in settled['findings']])
+
+    @proves('MYC-17.17','MYC-14.29',kind='store')
+    def test_changed_input_and_late_activity_edit_roll_back_findings_and_score(self):
+        self.justify()
+        reply=self.audit(k=1,paths=('value.py',),dependencies=self.dependencies(changed=lambda request:self.source.write_text('def value():\n    return 9\n')))
+        self.assertEqual(reply['status'],1,reply);self.assertEqual(reply['jevCalls'],1)
+        self.assertEqual(self.links()[0]['confidenceScore'],1)
+        self.assertFalse(any(r['mode']=='semantic' for r in reply['findings']))
+        self.source.write_text('def value():\n    return 1\n\ndef spare():\n    return 2\n');self.old_files()
+        # First collect mechanical findings so this callback happens only
+        # inside the semantic effect transaction.
+        self.deterministic(paths=('value.py',))
+        source=self.source
+        class EditingActivity:
+            def record_in_transaction(self,*args):source.write_text('def value():\n    return 3\n')
+        reply=self.audit(k=1,paths=('value.py',),dependencies=self.dependencies(),activity=EditingActivity())
+        self.assertEqual(reply['status'],1,reply);self.assertEqual(reply['jevCalls'],1)
+        self.assertEqual(self.links()[0]['confidenceScore'],1)
+        findings,_=self.deterministic();self.assertFalse(any(r['mode']=='semantic' for r in findings))
