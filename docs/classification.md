@@ -132,3 +132,29 @@ If a final audit or close fails after a repository returns, the command preserve
 its completed repository replies, includes a safe invocation error and reports
 `countsState: committed_prefix`. Remaining requested repositories are explicit
 errors. Interruption keeps the same prefix and exits 2 after attempt cleanup.
+
+## Origin-pair classification
+
+[Origin recovery](recovery.md) uses the same bounded Jev/reviewer transports
+with `OriginDecisionPayload` and question `mycel-origin-v1`, in the fixed order
+`governs`, `related`, `unrelated`. Complete current chunk/candidate text,
+one-hop governor/ancestor context, exact local history and source categories
+replace the drift question's pinned/current comparison. Model, question,
+criteria, labels, canonical floor and reviewer command identities are hashed;
+Origin results cannot stand in for drift results.
+
+Jev keeps one Choice question named `dependency` in its transport envelope,
+using the Origin instruction/criteria and the same exact canonical confidence
+formula and floor. Its complete judgement's score is that canonical confidence.
+A protocol-1 Origin reviewer success additionally requires `confidenceScore`
+in [0,1]; the drift reply forbids that member. The request supplies the Origin
+labels and exact allowed snapshot locators. `recovery --review` invokes this
+reviewer directly for existing model proposals, with no Jev call. Model claims
+never confirm freshness or enter the authoritative source-policy graph.
+
+Recovery reuses the quiet-period observation functions and finite `[drifts]`
+budgets; it rechecks local history and all complete files at both stages and
+application, retains exact request/text ownership and validates cached stages.
+Dry-run reaches the store normally and reads local evidence without writing or
+acquiring a model credential. This question has its own live-qualification
+identity; earlier drift quality measurements do not qualify it.

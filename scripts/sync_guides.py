@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render or check the 19 Mycel 2 guide copies in an explicit corpus folder."""
+"""Render or check the 20 Mycel 2 guide copies in an explicit corpus folder."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import tempfile
 GUIDES = (
     "activity", "capture", "classification", "drifts", "embedding", "evidence",
     "generated", "identity", "origins", "overview", "parsing", "pin-observation", "reading",
-    "reconciliation", "relations", "retrieval", "source-refs", "store", "summaries",
+    "reconciliation", "recovery", "relations", "retrieval", "source-refs", "store", "summaries",
 )
 FRONTMATTER = "---\nrole: authored\n---\n"
 LINK_NAMES = dict.fromkeys(GUIDES + (
