@@ -188,6 +188,29 @@ class ProvenImportStoreTests(unittest.TestCase):
             self.assertEqual(len(migration.apply_disposable(connection, self.settings, self.plan)), 2)
         self.assertEqual(captures, ['fixture', 'fixture'])
 
+    def test_one_batch_syncs_derived_drift_once_and_reuses_its_catalogs(self):
+        from mycel import _drift_store, _resolver
+        syncs, reads = [], []
+        sync = _drift_store.DriftStore.sync_in_transaction
+        def counted_sync(store, *arguments, **options):
+            syncs.append((options.get('captures') is not None, options.get('catalogs') is not None,
+                          options.get('closure')))
+            return sync(store, *arguments, **options)
+        read = _resolver.SourceResolver.from_store.__func__
+        def counted_read(cls, *arguments, **options):
+            reads.append((options.get('kind', 'disk'), options.get('location')))
+            return read(cls, *arguments, **options)
+        with self.base.connect() as connection, \
+                patch.object(_drift_store.DriftStore, 'sync_in_transaction', counted_sync), \
+                patch.object(_resolver.SourceResolver, 'from_store', classmethod(counted_read)):
+            self.assertEqual(len(migration.apply_disposable(connection, self.settings, self.plan)), 2)
+        # One sync for both derived pairs, then the verification's own confirmation sync.
+        self.assertEqual([(captures, catalogs) for captures, catalogs, _ in syncs], [(True, True), (True, True)])
+        self.assertIsNone(syncs[0][2])
+        self.assertIsNotNone(syncs[1][2])
+        # Each catalog is read once per kind, location and guard set, not once per pair.
+        self.assertLessEqual(len(reads), 5, reads)
+
     def test_an_edit_between_pairs_refuses_the_whole_batch(self):
         from mycel import _derive
         derive = _derive.DeriveStore.apply_in_transaction

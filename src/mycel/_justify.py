@@ -237,6 +237,13 @@ class JustifyStore:
                                                 (Jsonb(state), identifier))
                         replies.append({'chunk': public_reference(selection), 'chunkVersion': member.chunk.version,
                             'origin': public_reference(origin), 'link': link})
+                    # One Drift sync for every derived dependant, with the batch's
+                    # captures and catalogs, before the verifications below.
+                    from ._drift_store import DriftStore
+                    DriftStore(self.connection).sync_in_transaction(settings,
+                        tuple(sorted({pair[2].place.repository for pair in planned})),
+                        versions=tuple(sorted({pair[2].members[0].chunk.version for pair in planned})),
+                        at=captured_at, captures=inputs.captures, catalogs=inputs.catalogs)
                     # State the entire batch before verifying a chunk. Several
                     # Origins for one dependant share its complete final policy,
                     # avoiding competing same-time partial verification records.

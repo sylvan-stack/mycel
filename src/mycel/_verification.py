@@ -155,14 +155,15 @@ class _Repropagation:
     Existing direct observations upstream remain claims of their own passes.
     Confirming a direct source never acknowledges those upstream claims.
     """
-    def __init__(self, connection, settings, guarded, identifier):
+    def __init__(self, connection, settings, guarded, identifier, catalogs=None):
         self.connection, self.settings, self.guarded = connection, settings, guarded
         self.identifier = identifier
         self.signature = None
+        self.catalogs = catalogs
 
     def _read(self):
         catalog = SourceResolver.from_transaction(self.connection, self.settings,
-            kind='disk', location='disk', guarded_repositories=self.guarded)
+            kind='disk', location='disk', guarded_repositories=self.guarded, catalogs=self.catalogs)
         members, edges, rows = _graph_rows(self.connection, catalog)
         affected = _closure({self.identifier}, edges)
         reverse = tuple(StaleEdge(edge.dependant, edge.source, edge.dependency, edge.kind) for edge in edges)
@@ -282,7 +283,7 @@ class ConfirmationStore:
         guarded = tuple(settings.values['repos']) if guarded_repositories is None else guarded_repositories
         require_transaction_guards(self.connection, guarded)
         catalog = SourceResolver.from_transaction(self.connection, settings, kind='disk',
-            location='disk', guarded_repositories=guarded)
+            location='disk', guarded_repositories=guarded, catalogs=None if inputs is None else inputs.catalogs)
         dependant, = _canonical_refs(self.connection, settings, (dependant,), ('endpoint',), catalog=catalog)
         _, by = _arguments(dependant, by, how)
         endpoint = catalog.resolve(dependant, purpose='endpoint')
@@ -304,12 +305,13 @@ class ConfirmationStore:
         guard = InheritanceInputs(settings, member, selection.file, CaptureLocation('disk'),
             resolver.resolve(''), resolver, {'dependencyApplication': {'sourcePlaces': {}}})
         with checked_transaction_input_guard(self.connection, guard, lambda: reread(guard)):
+            batch = inputs.catalogs if shared else None
             dependencies = DependencyApplicationStore(self.connection).apply_in_transaction(settings,
                 location, member.chunk.version, mode='confirm', captured_at=captured_at, reread=reread,
-                guarded_repositories=guarded)
+                guarded_repositories=guarded, catalogs=batch)
             RelationApplicationStore(self.connection).apply_in_transaction(settings, location,
                 member.chunk.version, mode='confirm', captured_at=captured_at, reread=reread,
-                guarded_repositories=guarded)
+                guarded_repositories=guarded, catalogs=batch)
             captures, selections, sources = [], [], []
             store = DependencyApplicationStore(self.connection)
             evidence = EvidenceStore(self.connection)
@@ -362,14 +364,15 @@ class ConfirmationStore:
                 (identifier, owner, member.chunk.identifier, captured_at, Jsonb(record), evidence_owner))
             direct = tuple((decision.identifier, StaleReason(reason, decision.natural_place, decision.kind))
                 for decision in dependencies.plan.decisions for reason in decision.reasons)
-            propagation = _Repropagation(self.connection, settings, guarded, member.chunk.identifier)
+            propagation = _Repropagation(self.connection, settings, guarded, member.chunk.identifier, catalogs=batch)
             propagation.apply(direct)
             from ._drift_store import DriftStore
             propagated = propagation._read()
             DriftStore(self.connection).sync_in_transaction(settings, guarded, at=captured_at,
                 versions=tuple(item.chunk.version for item in propagated[1]
                     if item.chunk.identifier in propagated[-1]),
-                closure={member.chunk.version: 'confirmed'}, verification=public)
+                closure={member.chunk.version: 'confirmed'}, verification=public,
+                captures=inputs.captures if shared else None, catalogs=batch)
             # Classification annotations are work evidence on mechanical reasons;
             # retain them in the exact post-confirmation CAS as well.
             propagation.signature = propagation._signature(propagation._read())

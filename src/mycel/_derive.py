@@ -134,14 +134,16 @@ class DeriveStore:
                              settings_home=None, activity=None, inputs=None):
         """Apply on the caller's exact guarded connection, with a final reread.
 
-        A caller that passes its batch `inputs` performs that final reread itself.
+        A caller that passes its batch `inputs` performs that final reread and
+        the Drift sync of the dependant itself, once for the whole batch.
         """
         settings.require_valid(require_store=False)
         _validate_ref_syntax((dependant, source))
         if type(remove) is not bool:
             raise MycelError('invalid_input', 'Derive removal must be an explicit boolean.')
         require_transaction_guards(self.connection, tuple(settings.values['repos']))
-        catalog = SourceResolver.from_transaction(self.connection, settings, kind='disk', location='disk')
+        catalog = SourceResolver.from_transaction(self.connection, settings, kind='disk', location='disk',
+            catalogs=None if inputs is None else inputs.catalogs)
         raw_source = source
         dependant, source = _canonical_refs(self.connection, settings, (dependant, source),
             ('endpoint', 'source'), catalog=catalog)
@@ -233,7 +235,8 @@ class DeriveStore:
             applied = store.apply_in_transaction(settings, str(location), member.chunk.version,
                 mode='observe', captured_at=captured_at, reread=reread,
                 assertions=() if remove else (source,), remove_assertions=(removal,) if remove else (),
-                assertions_only=True, assertion_dependencies=() if match is None else (str(match[0]),))
+                assertions_only=True, assertion_dependencies=() if match is None else (str(match[0]),),
+                catalogs=inputs.catalogs if shared else None)
         decision = next((item for item in applied.plan.decisions if item.kind == 'asserted' and
             (item.identifier == str(match[0]) if match else item.natural_place == natural)), None)
         baseline = None if decision is None else decision.baseline
@@ -252,7 +255,7 @@ class DeriveStore:
                         len(baseline.payload['members']) if baseline else 0)}
         if baseline_id is not None:
             reply['baselineManifest'] = baseline_id
-        if applied.mutated:
+        if applied.mutated and not shared:
             from ._drift_store import DriftStore
             DriftStore(self.connection).sync_in_transaction(settings, (owner,),
                 versions=(member.chunk.version,), at=captured_at)

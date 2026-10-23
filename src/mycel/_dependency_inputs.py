@@ -33,6 +33,9 @@ class DependencyCaptureInputs:
     A batch shares one instance across several guarded mutations in one
     transaction: each repository is captured once, and its owner calls
     `verify()` once at the end, so a change anywhere still refuses the batch.
+    The batch also keeps one catalog per kind, location and guard set: its
+    guards exclude every pass, so the index rows a catalog reads cannot change
+    while the batch writes dependencies, pins, relations and verifications.
     """
     def __init__(self, connection, settings: SettingsSnapshot, *, settings_home: Path | None = None,
                  guarded_repositories: tuple[str, ...] | None = None,
@@ -46,7 +49,8 @@ class DependencyCaptureInputs:
         self.captures = {} if snapshot is None else {snapshot.repository: snapshot}
         self.guarded_repositories = guarded_repositories
         self.snapshot = snapshot
-        self.catalogs = catalogs  # one catalog per location for a complete pass's run
+        # One catalog per location for a complete pass's run or a guarded batch.
+        self.catalogs = {} if catalogs is None and batch else catalogs
         self.batch = batch
 
     def observe(self, repository):
