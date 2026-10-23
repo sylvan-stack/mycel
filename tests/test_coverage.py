@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from hashlib import sha256
 from importlib.resources import files
 import json
@@ -511,7 +510,7 @@ class WorkerCrash(unittest.TestCase):
     def test_previously_requested_acceptance_does_not_run_during_automatic_gate(self):
         touched = []
         live = example_check(name="RequestedLive", requirement="MYC-13.9", kind="live", action=lambda case: touched.append("explicit"))
-        proofs = run_on_demand_checks(unittest.TestSuite([live]), kinds=frozenset({"live"}),
+        proofs = run_on_demand_checks(((live, "live", ("MYC-13.9",)),),
                                      implementation_identity="fictional-build-manifest-hash")
         self.assertEqual(touched, ["explicit"])
         report = run_checks(unittest.TestSuite([example_check()]), claims={"MYC-13.9": [live.id()]},
@@ -523,29 +522,28 @@ class WorkerCrash(unittest.TestCase):
         self.assertEqual([result.kind for result in report.checks], ["unit"])
 
     @proves("MYC-13.2", "MYC-13.15")
-    def test_on_demand_proofs_cannot_be_reused_for_a_different_build_or_registry(self):
+    def test_on_demand_proofs_cannot_be_reused_for_a_different_build(self):
         live = example_check(name="RequestedLive", requirement="MYC-13.9", kind="live")
-        proofs = run_on_demand_checks(unittest.TestSuite([live]), kinds=frozenset({"live"}),
+        proofs = run_on_demand_checks(((live, "live", ("MYC-13.9",)),),
                                      implementation_identity="fictional-build-one")
         report = run_checks(unittest.TestSuite([example_check()]), claims={"MYC-13.9": [live.id()]},
                             on_demand_proofs=[proofs], implementation_identity="fictional-build-two")
         self.assertFalse(report.passed)
         self.assertEqual(report.requirements["MYC-13.9"]["status"], "pending")
-        registry = load_registry()
-        registry["MYC-0.1"] = replace(registry["MYC-0.1"], text="changed requirement contract")
-        report = run_checks(unittest.TestSuite([example_check()]), registry=registry,
-                            claims={"MYC-13.9": [live.id()]}, on_demand_proofs=[proofs],
-                            implementation_identity="fictional-build-one")
-        self.assertFalse(report.passed)
-        self.assertEqual(report.requirements["MYC-13.9"]["status"], "pending")
 
     @proves("MYC-13.2", "MYC-13.15")
     def test_on_demand_requires_explicit_kinds_and_failed_proof_stays_pending(self):
-        for kinds, identity in ((frozenset({"unit"}), "build"), (frozenset(), "build"), (frozenset({"live"}), "")):
-            with self.assertRaises(CoverageError):
-                run_on_demand_checks(unittest.TestSuite([example_check()]), kinds=kinds, implementation_identity=identity)
+        check = example_check()
+        for declared, identity in (((check, "unit", ("MYC-13.9",)), "build"), ((check, "live", ()), "build"),
+                                   ((check, "live", ("MYC-13.9", "MYC-13.9")), "build"),
+                                   ((check, "live", ("not-a-requirement",)), "build"),
+                                   ((check, "live", ("MYC-13.9",)), "")):
+            with self.subTest(declared=declared[1:], identity=identity), self.assertRaises(CoverageError):
+                run_on_demand_checks((declared,), implementation_identity=identity)
+        with self.assertRaises(CoverageError):
+            run_on_demand_checks((), implementation_identity="build")
         live = example_check(name="FailedLive", requirement="MYC-13.9", kind="live", action=lambda case: case.fail("failed acceptance"))
-        proofs = run_on_demand_checks(unittest.TestSuite([live]), kinds=frozenset({"live"}), implementation_identity="build")
+        proofs = run_on_demand_checks(((live, "live", ("MYC-13.9",)),), implementation_identity="build")
         report = run_checks(unittest.TestSuite([example_check()]), claims={"MYC-13.9": [live.id()]},
                             on_demand_proofs=[proofs], implementation_identity="build")
         self.assertFalse(report.passed)

@@ -202,10 +202,9 @@ def _validated_registry(registry: Mapping[str, Requirement] | None) -> dict[str,
 
 @dataclass(frozen=True)
 class OnDemandProofs:
-    """Executed acceptance bound to an immutable Build and contract snapshot."""
+    """Executed acceptance bound to one immutable Build."""
 
     implementation_identity: str
-    registry_fingerprint: str
     checks: tuple[CheckResult, ...]
 
 
@@ -649,36 +648,31 @@ def _parallel_checks(selected, backend, workers: int, directory: Path | str):
     return tuple(results[index] for index in range(len(selected)))
 
 
-def run_on_demand_checks(suite: unittest.TestSuite, *, kinds: frozenset[str],
-                         implementation_identity: str,
-                         registry: Mapping[str, Requirement] | None = None) -> OnDemandProofs:
+def run_on_demand_checks(checks: Sequence[tuple[unittest.TestCase, str, Sequence[str]]], *,
+                         implementation_identity: str) -> OnDemandProofs:
     """Explicitly execute eval/live checks; never called by the Build gate.
 
-    The caller supplies the immutable Build manifest identity. These proofs can
-    satisfy contract completion only for that same Build and registry snapshot.
+    Each check is given with its kind and the requirements it proves. The caller
+    supplies the immutable Build manifest identity; the proofs count only for
+    that same Build.
     """
-    if not kinds or not kinds <= {"eval", "live"}:
-        raise CoverageError("on-demand acceptance explicitly selects eval or live checks")
     if not isinstance(implementation_identity, str) or not implementation_identity:
         raise CoverageError("on-demand acceptance requires an immutable implementation identity")
-    registry = _validated_registry(registry)
-    checks = []
+    results = []
     seen = set()
-    for check in iter_checks(suite):
-        proof = declaration(check)
-        if proof is None:
-            raise CoverageError(f"check names no requirements: {check.id()}")
-        if proof.kind not in kinds:
-            continue
+    for check, kind, requirements in checks:
+        requirements = tuple(requirements)
+        if (kind not in {"eval", "live"} or not requirements or len(set(requirements)) != len(requirements)
+                or any(not isinstance(identifier, str) or not REQUIREMENT_ID.fullmatch(identifier)
+                       for identifier in requirements)):
+            raise CoverageError(f"an on-demand check needs an eval or live kind and distinct requirements: {check.id()}")
         if check.id() in seen:
             raise CoverageError(f"duplicate check: {check.id()}")
         seen.add(check.id())
-        if any(identifier not in registry or registry[identifier].kind != proof.kind for identifier in proof.requirements):
-            raise CoverageError(f"on-demand check declares an unknown requirement or wrong kind: {check.id()}")
-        checks.append(_execute_check(check, proof, None))
-    if not checks:
+        results.append(_execute_check(check, CheckDeclaration(requirements, kind), None))
+    if not results:
         raise CoverageError("no requested on-demand acceptance checks executed")
-    return OnDemandProofs(implementation_identity, _registry_fingerprint(registry), tuple(checks))
+    return OnDemandProofs(implementation_identity, tuple(results))
 
 
 def run_checks(suite: unittest.TestSuite, *, registry: Mapping[str, Requirement] | None = None,
@@ -731,9 +725,8 @@ def run_checks(suite: unittest.TestSuite, *, registry: Mapping[str, Requirement]
     by_name = {result.name: result for result in results}
     accepted = []
     for evidence in on_demand_proofs:
-        if (not implementation_identity or evidence.implementation_identity != implementation_identity
-                or evidence.registry_fingerprint != _registry_fingerprint(registry)):
-            errors.append("on-demand proofs belong to a different implementation or requirement registry")
+        if not implementation_identity or evidence.implementation_identity != implementation_identity:
+            errors.append("on-demand proofs belong to a different implementation")
             continue
         for result in evidence.checks:
             if (result.kind not in {"eval", "live"} or result.name in by_name

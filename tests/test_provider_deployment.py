@@ -291,7 +291,6 @@ class SameRunProviderDeploymentCallerTests(unittest.TestCase):
             self.assertEqual(proofs[1].checks[0].status, 'passed')
             self.assertEqual(proofs[1].checks[0].requirements, ('MYC-14.22',))
             self.assertEqual(proofs[0].implementation_identity, proofs[1].implementation_identity)
-            self.assertEqual(proofs[0].registry_fingerprint, proofs[1].registry_fingerprint)
             self.assertTrue(reports['deployment']['sameProcessProviderGroupConsumed'])
             self.assertEqual(reports['deployment']['additionalProviderCallsByConsumer'], 0)
             self.assertFalse(reports['deployment']['sameBuildOnDemandProof'])
