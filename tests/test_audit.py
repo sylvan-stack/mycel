@@ -286,11 +286,20 @@ class SemanticAuditStoreTests(AuditFixture):
         again=self.audit(dependencies=self.dependencies())
         self.assertEqual(again['status'],0,again);self.assertEqual(again['jevCalls'],0,again)
         self.assertEqual(again['reused'],6);self.assertEqual(again['newFindings'],0)
+        disputed=next(row for row in negatives if row['kind']=='nonconforming')
         with self.base.connect() as connection:
-            AuditStore(connection).settle(self.settings,'fixture',negatives[0]['id'],reason='The owner accepts this discrepancy.',by='fixture-owner')
+            from psycopg.types.json import Jsonb
+            AuditStore(connection).settle(self.settings,'fixture',disputed['id'],reason='The owner accepts this discrepancy.',by='fixture-owner')
+            # Restoring a score without changing the claim cannot make an
+            # accepted exact observation reopen or lower the link again.
+            identifier=disputed['links'][0]['id']
+            state=connection.execute('SELECT state FROM public.mycel_dependencies WHERE id=%s',(identifier,)).fetchone()[0]
+            state['originLink'].update(confidenceScore=1,confidence='asserted')
+            connection.execute('UPDATE public.mycel_dependencies SET state=%s WHERE id=%s',(Jsonb(state),identifier))
         settled=self.audit(dependencies=self.dependencies())
         self.assertEqual(settled['status'],0,settled);self.assertEqual(settled['jevCalls'],0)
-        self.assertNotIn(negatives[0]['id'],[r['id'] for r in settled['findings']])
+        self.assertNotIn(disputed['id'],[r['id'] for r in settled['findings']])
+        self.assertEqual(next(link for link in self.links() if REQ in link['origin'])['confidenceScore'],1)
 
     @proves('MYC-17.17','MYC-14.29',kind='store')
     def test_changed_input_and_late_activity_edit_roll_back_findings_and_score(self):

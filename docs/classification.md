@@ -158,3 +158,29 @@ application, retains exact request/text ownership and validates cached stages.
 Dry-run reaches the store normally and reads local evidence without writing or
 acquiring a model credential. This question has its own live-qualification
 identity; earlier drift quality measurements do not qualify it.
+
+## Origin audit questions
+
+[Audit](audit.md) uses `AuditDecisionPayload` for three independent fixed
+questions: `mycel-audit-conformance-v1` (`conforms`, `nonconforming`,
+`insufficient_evidence`), `mycel-audit-consistency-v1` (`consistent`,
+`contradictory`, `insufficient_evidence`) and `mycel-audit-ambiguity-v1`
+(`clear`, `ambiguous`, `insufficient_evidence`). Each has its own criteria and
+routing revision. Complete subject/Origin and governor/ancestor texts, model
+identities and the canonical confidence floor determine its input hash.
+All supplied text remains data. No audit result substitutes for Drift or
+Origin-recovery evidence.
+
+Audit uses the existing strict Jev and isolated-reviewer transports and finite
+`[drifts]` budgets. Audit reviewer successes, like Origin recovery, require an
+exact `confidenceScore` in [0,1] in addition to matching identity, labels,
+rationale and allowed evidence citations. Drift review still forbids this field.
+Quiet observations and fresh claim/file/clone guards remain outside semantic
+identity. A pending clone cannot replace an exact completed result in the cache.
+
+Negative results create durable operator-settled findings. Only nonconformance
+can lower an existing score; it preserves method, source policy, pins,
+verification and staleness. Complete results are revalidated before reuse, with
+no further call after local eligibility. Finding and request ownership protects
+open and in-flight evidence and bounds settled/ended history. The audit guide
+specifies the queries, score formula, human settlement and reply fields.
