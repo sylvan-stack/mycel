@@ -2971,6 +2971,45 @@
       "test_clone_locations.CloneScopeTests.test_clone_paths_are_typed_and_home_expanded_and_baseline_must_be_listed",
       "test_clone_locations.CloneScopeTests.test_symlink_alias_names_one_location_and_unknown_folders_register_nothing",
       "test_clone_locations.CloneScopeTests.test_unresolvable_clone_remains_a_local_repository_fault"
+    ],
+    "MYC-14.28": [
+      "test_recovery.RecoveryStoreTests.test_busy_and_expired_deadline_make_no_model_call",
+      "test_recovery.RecoveryStoreTests.test_byte_budget_and_terminal_fault_never_write_a_link",
+      "test_recovery.RecoveryStoreTests.test_changed_inputs_after_call_have_no_link_or_verification_effect",
+      "test_recovery.RecoveryStoreTests.test_clone_clock_and_equal_version_links_belong_only_to_calling_location",
+      "test_recovery.RecoveryStoreTests.test_complete_judgements_write_exact_scores_and_methods_without_verification",
+      "test_recovery.RecoveryStoreTests.test_edit_during_final_audit_rolls_back_the_origin_claim_and_edge",
+      "test_recovery.RecoveryStoreTests.test_interrupt_preserves_completed_prefix_and_releases_evidence_leases",
+      "test_recovery.RecoveryStoreTests.test_numbered_public_command_records_committed_origin_mutations",
+      "test_recovery.RecoveryStoreTests.test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect",
+      "test_recovery.RecoveryStoreTests.test_real_isolated_standin_review_raises_and_lowers_scores_and_bands",
+      "test_recovery.RecoveryStoreTests.test_transient_attempts_stop_at_configured_cap",
+      "test_recovery.RecoveryStoreTests.test_unrelated_review_withdraws_only_model_claims",
+      "test_recovery.RecoveryStoreTests.test_validated_result_reuse_and_corrupt_cache_refusal"
+    ],
+    "MYC-17.13": [
+      "test_recovery.RecoveryStoreTests.test_clone_clock_and_equal_version_links_belong_only_to_calling_location",
+      "test_recovery.RecoveryStoreTests.test_dry_run_lists_each_local_source_without_writes_or_model_credentials",
+      "test_recovery.RecoveryStoreTests.test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri",
+      "test_recovery.RecoveryStoreTests.test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link",
+      "test_recovery.RecoveryStoreTests.test_path_repository_and_public_chunk_commands_use_same_candidates",
+      "test_recovery.RecoveryStoreTests.test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect"
+    ],
+    "MYC-17.14": [
+      "test_recovery.RecoveryStoreTests.test_changed_inputs_after_call_have_no_link_or_verification_effect",
+      "test_recovery.RecoveryStoreTests.test_clone_clock_and_equal_version_links_belong_only_to_calling_location",
+      "test_recovery.RecoveryStoreTests.test_complete_judgements_write_exact_scores_and_methods_without_verification",
+      "test_recovery.RecoveryStoreTests.test_edit_during_final_audit_rolls_back_the_origin_claim_and_edge",
+      "test_recovery.RecoveryStoreTests.test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link",
+      "test_recovery.RecoveryStoreTests.test_model_claims_survive_ingest_without_source_cycles_and_statement_supersedes",
+      "test_recovery.RecoveryStoreTests.test_numbered_public_command_records_committed_origin_mutations",
+      "test_recovery.RecoveryStoreTests.test_real_isolated_standin_review_raises_and_lowers_scores_and_bands",
+      "test_recovery.RecoveryStoreTests.test_statement_supersedes_moved_uuid_proposal_without_duplicate",
+      "test_recovery.RecoveryStoreTests.test_unrelated_review_withdraws_only_model_claims",
+      "test_recovery.RecoveryStoreTests.test_validated_result_reuse_and_corrupt_cache_refusal"
+    ],
+    "MYC-17.15": [
+      "test_recovery.RecoveryStoreTests.test_third_party_snapshots_recover_without_linear_or_remote_reads"
     ]
   }
 }
