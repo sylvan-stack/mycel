@@ -10,7 +10,7 @@
       "specification_status": "accepted"
     },
     "02-provenance-and-freshness.md": {
-      "sha256": "a4ccfa8f1bbca2d19ba95b34d6952e520886508382cd7a11fc94d68b12707dbc",
+      "sha256": "5340dd82a00a8d575c2fe658aa2071edae7e01fa1f2bfa19066db6a8f274d442",
       "specification_status": "accepted"
     },
     "03-embedding.md": {
@@ -22,7 +22,7 @@
       "specification_status": "accepted"
     },
     "05-settings.md": {
-      "sha256": "1bfa8f72e2440b3c541adfefe253bf04a247c411430223dd0122ed5160b863d3",
+      "sha256": "89d38c29b58dadcc26fb053da92b6291e9624c6d6f11f82af51d471432c09332",
       "specification_status": "accepted"
     },
     "06-index-store.md": {
@@ -58,7 +58,7 @@
       "specification_status": "accepted"
     },
     "14-drift-detection.md": {
-      "sha256": "185a1df4ef911b1c1713ccc92d9024909dbbf03bb8bb9f2bdfd3a56abdb35526",
+      "sha256": "0d6fcfcac767e9aea2ba459d9c1b4b2de52e4825fc80f0e49f283f268a2ad00a",
       "specification_status": "accepted"
     },
     "15-distribution-and-replacement.md": {
@@ -70,7 +70,7 @@
       "specification_status": "accepted"
     },
     "17-justification.md": {
-      "sha256": "61fd7ecd071d1bf8d2c4486a3f3d1e583a8c9c861458a129945102179b8401ad",
+      "sha256": "f1935126f669480f673df2e56730364f7be1136f6abf8eb7e7facc25ddd88f20",
       "specification_status": "draft"
     }
   },
@@ -1205,7 +1205,7 @@
     },
     {
       "id": "MYC-5.14",
-      "text": "read Jev's key only for explicit classification or live drift qualification from the named Keychain item, forward none of Mycel's credentials to reviewer commands, and acquire no Jev or Voyage credential during dry-run",
+      "text": "read Jev's key only for explicit classification (including Origin recovery) or live drift qualification from the named Keychain item, forward none of Mycel's credentials to reviewer commands, and acquire no Jev or Voyage credential during dry-run",
       "origin": "New",
       "kind": "unit",
       "specification": "MYC-5",
@@ -2628,6 +2628,14 @@
       "source": "14-drift-detection.md"
     },
     {
+      "id": "MYC-14.28",
+      "specification": "MYC-14",
+      "text": "classify Origin candidate pairs with the distinct versioned governs/related/unrelated question, exact evidence and matching identities; apply the same quiet period, canonical confidence routing, finite budgets and isolated reviewer with strict confidenceScore replies, no truncation, dry-run calls or obsolete effects",
+      "origin": "New",
+      "kind": "store",
+      "source": "14-drift-detection.md"
+    },
+    {
       "id": "MYC-15.1",
       "text": "ship an independent Apple Silicon macOS 14-or-later command-line distribution for macos-arm64 only, with its pinned Python runtime, locked non-editable dependencies and required data files, and no system-Python, Node, Arbol or source-checkout runtime dependency",
       "origin": "Changed",
@@ -2937,6 +2945,30 @@
       "origin": "New",
       "kind": "store",
       "specification": "MYC-17",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.13",
+      "specification": "MYC-17",
+      "text": "gather and name local document, test-call, introducing-commit/snapshotted-issue and existing-vector requirement/decision candidates for current unlinked chunks by chunk, path or repository; expose dry-run provenance, unavailable sources, exact byte counts and eligibility without writes or model calls",
+      "origin": "New",
+      "kind": "store",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.14",
+      "specification": "MYC-17",
+      "text": "write one inferred or recovered Origin Link per complete governs/related judgement with its score and a band capped at inferred, no verification, guarded exact inputs and retained evidence; allow isolated smarter review to raise/lower the score and band or withdraw an unrelated model proposal, exposing results through origins",
+      "origin": "New",
+      "kind": "store",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.15",
+      "specification": "MYC-17",
+      "text": "recover third-party code against the owner requirements and indexed time-pinned upstream snapshots, exclude Linear/task text before judgement, and perform no remote read or source-file write",
+      "origin": "New",
+      "kind": "store",
       "source": "17-justification.md"
     }
   ]
