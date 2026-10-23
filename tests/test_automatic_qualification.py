@@ -1,4 +1,4 @@
-"""Independent frozen inventory, proof-map and real process boundary regressions.
+"""Independent frozen inventory, check kinds and real process boundary regressions.
 
 Protocol fixture outcomes test receiver validation, not a native Build pass.
 The process fixtures execute real OS processes without credentials or a store.
@@ -15,13 +15,12 @@ import time
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import ACTIVE_REQUIREMENTS
 from mycel._coverage import proves
 from mycel_build._automatic import _sanitize_report
 from mycel_build._core import BuildError, digest, json_bytes
 from mycel_build import _process
 from mycel_build._process import _defer_cleanup_signals, owned_process, run_group
-from mycel_build._qualification import automatic_contract, qualification_certificate, requirement_results
+from mycel_build._qualification import automatic_contract, qualification_certificate
 
 
 try:
@@ -34,21 +33,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def contract_inputs():
-    return {'src/mycel/data/requirements.json': (ROOT / 'src/mycel/data/requirements.json').read_bytes(),
-        'checks/claims.json': json_bytes({'schema_version': 1, 'implemented': {
-            'MYC-13.3': ['test_fixture.Proofs.test_two', 'test_fixture.Proofs.test_one'],
-            'MYC-13.4': ['test_fixture.Proofs.test_store'], 'MYC-13.15': ['test_fixture.Proofs.test_one']}}),
-        'tests/test_fixture.py': b'''raise AssertionError("receiver must never import frozen tests")
+    return {'tests/test_fixture.py': b'''raise AssertionError("receiver must never import frozen tests")
 class Proofs:
- @proves("MYC-13.3", "MYC-13.15")
  def test_one(self): raise AssertionError("never execute while discovering")
- @proves("MYC-13.3")
  def test_two(self): pass
- @proves("MYC-13.4", kind="store")
+class StoreProofs:
+ check_kind = "store"
  def test_store(self): pass
- @proves("MYC-13.20", kind="eval")
+class EvalProofs:
+ check_kind = "eval"
  def test_eval(self): raise AssertionError("paid or eval dispatch")
- @proves("MYC-13.9", kind="live")
+class LiveProofs:
+ check_kind = "live"
  def test_live(self): raise AssertionError("paid or live dispatch")
 '''}
 
@@ -56,31 +52,10 @@ class Proofs:
 def closed_reply(contract, *, failed=()):
     checks = [{**copy.deepcopy(row), 'status': 'failed' if row['name'] in failed else 'passed',
         'passed': row['name'] not in failed, 'detail': 'private-provider-body'} for row in contract['declarations']]
-    requirements = requirement_results(contract, checks)
-    implemented = sum(row['status'] == 'implemented' for row in requirements.values())
     return {'passed': not failed, 'executed': True, 'python': '3.14.7', 'machine': 'arm64',
         'isolated': True, 'dontWriteBytecode': True, 'installedProductImports': True, 'build': 10,
-        'checks': checks, 'requirements': requirements, 'inventorySha256': contract['inventorySha256'],
-        'coverage': {'active': ACTIVE_REQUIREMENTS, 'implemented': implemented,
-                     'pending': ACTIVE_REQUIREMENTS - implemented},
+        'checks': checks, 'inventorySha256': contract['inventorySha256'],
         'gateErrorCount': int(bool(failed)), 'gateErrors': ['private-provider-body'] if failed else []}
-
-
-def complete_automatic_contract():
-    """Synthetic receiver protocol only; no fixture method is executed here."""
-    frozen = contract_inputs()
-    registry = json.loads(frozen['src/mycel/data/requirements.json'])['requirements']
-    declarations, claims = [], {}
-    for kind in ('unit', 'store'):
-        identifiers = [row['id'] for row in registry if row['kind'] == kind]
-        name = 'test_complete.Automatic.test_' + kind
-        claims.update({key: [name] for key in identifiers})
-        declarations.append(' @proves(' + ', '.join(repr(key) for key in identifiers)
-                            + ', kind=' + repr(kind) + ')\n def test_' + kind + '(self): pass\n')
-    frozen.pop('tests/test_fixture.py')
-    frozen['tests/test_complete.py'] = ('class Automatic:\n' + ''.join(declarations)).encode()
-    frozen['checks/claims.json'] = json_bytes({'schema_version': 1, 'implemented': claims})
-    return automatic_contract(frozen)
 
 
 class AutomaticQualificationTests(unittest.TestCase):
@@ -90,85 +65,71 @@ class AutomaticQualificationTests(unittest.TestCase):
         before = copy.deepcopy(frozen)
         contract = automatic_contract(frozen)
         self.assertEqual(frozen, before)
-        self.assertEqual([row['name'] for row in contract['declarations']], [
-            'test_fixture.Proofs.test_one', 'test_fixture.Proofs.test_store', 'test_fixture.Proofs.test_two'])
-        self.assertEqual([row['kind'] for row in contract['declarations']], ['unit', 'store', 'unit'])
-        self.assertEqual(contract['declarations'][0]['requirements'], ['MYC-13.3', 'MYC-13.15'])
+        self.assertEqual(contract['declarations'], [
+            {'name': 'test_fixture.Proofs.test_one', 'kind': 'unit'},
+            {'name': 'test_fixture.Proofs.test_two', 'kind': 'unit'},
+            {'name': 'test_fixture.StoreProofs.test_store', 'kind': 'store'}])
         result = _sanitize_report(json_bytes(closed_reply(contract)), 10, contract=contract)
         self.assertTrue(result['completeFrozenInventory'])
         self.assertTrue(result['passed'])
-        self.assertEqual(len(result['requirements']), ACTIVE_REQUIREMENTS)
-        self.assertEqual(result['requirements']['MYC-13.3']['verified_by'],
-            ['test_fixture.Proofs.test_two', 'test_fixture.Proofs.test_one'])
-        for key in ('MYC-13.9', 'MYC-13.20'):
-            self.assertEqual(result['requirements'][key]['status'], 'pending')
-            self.assertEqual(result['requirements'][key]['verified_by'], [])
+        self.assertNotIn('requirements', result)
+        self.assertNotIn('coverage', result)
         self.assertNotIn('private-provider-body', json.dumps(result))
 
     @proves('MYC-13.1', 'MYC-13.3', 'MYC-13.15', kind='unit')
-    def test_receiver_refuses_omitted_substituted_extra_and_reordered_requirement_results(self):
+    def test_receiver_refuses_omitted_substituted_extra_and_rekinded_results(self):
         contract = automatic_contract(contract_inputs())
         for mutation in (
             lambda data: data['checks'].pop(),
             lambda data: data['checks'][0].update(name='test_fixture.Other.test_replacement'),
             lambda data: data['checks'].append({**data['checks'][0], 'name': 'test_extra.Extra.test_one'}),
-            lambda data: data['checks'][0]['requirements'].reverse(),
             lambda data: data['checks'][0].update(kind='store'),
             lambda data: data.update(inventorySha256='f' * 64)):
             with self.subTest(mutation=mutation):
                 reply = closed_reply(contract)
                 mutation(reply)
-                # Even a child's self-consistent proof map cannot define what
-                # the independently frozen receiver expected to execute.
-                reply['requirements'] = requirement_results(contract, reply['checks'])
-                count = sum(row['status'] == 'implemented' for row in reply['requirements'].values())
-                reply['coverage'].update(implemented=count, pending=ACTIVE_REQUIREMENTS - count)
                 with self.assertRaises(BuildError) as error:
                     _sanitize_report(json_bytes(reply), 10, contract=contract)
                 self.assertEqual(error.exception.code, 'refused')
 
     @proves('MYC-13.2', 'MYC-13.15', kind='unit')
-    def test_full_proof_map_refuses_fabricated_provider_acceptance_counts_and_claim_order(self):
+    def test_receiver_refuses_eval_live_rows_and_requirement_claims(self):
         contract = automatic_contract(contract_inputs())
         for mutation in (
-            lambda data: data['requirements']['MYC-13.3']['verified_by'].reverse(),
-            lambda data: data['requirements']['MYC-13.9'].update(status='implemented', verified_by=['saved.live.report']),
-            lambda data: data['requirements']['MYC-13.20'].update(status='implemented', verified_by=['saved.eval.report']),
-            lambda data: data['requirements'].pop('MYC-9.10'),
-            lambda data: data['coverage'].update(implemented=ACTIVE_REQUIREMENTS, pending=0)):
+            lambda data: data['checks'].append({**data['checks'][0], 'name': 'test_fixture.LiveProofs.test_live', 'kind': 'live'}),
+            lambda data: data['checks'][1].update(kind='eval'),
+            lambda data: data['checks'][0].update(requirements=['MYC-13.3'])):
             reply = closed_reply(contract)
             mutation(reply)
             with self.subTest(mutation=mutation), self.assertRaises(BuildError):
                 _sanitize_report(json_bytes(reply), 10, contract=contract)
 
     @proves('MYC-13.3', 'MYC-13.15', kind='unit')
-    def test_frozen_missing_duplicate_wrong_kind_and_unmapped_claims_refuse_before_execution(self):
+    def test_frozen_duplicate_unknown_repeated_or_computed_kinds_refuse_before_execution(self):
         original = contract_inputs()
         for mutation in (
-            lambda data: data.update({'tests/test_fixture.py': data['tests/test_fixture.py'].replace(b'@proves("MYC-13.3")', b'@unknown')}),
-            lambda data: data.update({'tests/test_fixture.py': data['tests/test_fixture.py'] + b'\nclass Proofs:\n @proves("MYC-13.3")\n def test_one(self): pass\n'}),
-            lambda data: data.update({'tests/test_fixture.py': data['tests/test_fixture.py'].replace(b'"MYC-13.4", kind="store"', b'"MYC-13.4", kind="unit"')}),
-            lambda data: data.update({'checks/claims.json': json_bytes({'schema_version': 1, 'implemented': {'MYC-13.3': ['not.executed']}})})):
+            lambda data: data.update({'tests/test_fixture.py': data['tests/test_fixture.py'] + b'\nclass Proofs:\n def test_one(self): pass\n'}),
+            lambda data: data.update({'tests/test_fixture.py': data['tests/test_fixture.py'].replace(b'check_kind = "store"', b'check_kind = "paid"')}),
+            lambda data: data.update({'tests/test_fixture.py': data['tests/test_fixture.py'].replace(b'check_kind = "store"', b'check_kind = "store"\n check_kind = "unit"')}),
+            lambda data: data.update({'tests/test_fixture.py': data['tests/test_fixture.py'].replace(b'check_kind = "store"', b'check_kind = KIND')})):
             frozen = copy.deepcopy(original)
             mutation(frozen)
             with self.subTest(mutation=mutation), self.assertRaises(BuildError):
                 automatic_contract(frozen)
 
     @proves('MYC-13.1', 'MYC-13.15', kind='unit')
-    def test_failed_store_outcome_retains_every_name_and_pending_requirement_without_private_details(self):
+    def test_failed_store_outcome_retains_every_name_without_private_details(self):
         contract = automatic_contract(contract_inputs())
-        reply = closed_reply(contract, failed=('test_fixture.Proofs.test_store',))
+        reply = closed_reply(contract, failed=('test_fixture.StoreProofs.test_store',))
         result = _sanitize_report(json_bytes(reply), 10, contract=contract)
         self.assertFalse(result['passed'])
         self.assertEqual([row['name'] for row in result['checks']], [row['name'] for row in contract['declarations']])
-        self.assertEqual(result['checks'][1]['status'], 'failed')
-        self.assertEqual(result['requirements']['MYC-13.4']['status'], 'pending')
-        self.assertEqual(result['requirements']['MYC-13.3']['status'], 'implemented')
+        self.assertEqual(result['checks'][2]['status'], 'failed')
         self.assertNotIn('private-provider-body', json.dumps(result))
 
     @proves('MYC-13.1', 'MYC-13.15', 'MYC-13.16', kind='unit')
-    def test_certificate_requires_every_executed_group_and_binds_manifests_results_and_proofs(self):
-        contract = complete_automatic_contract()
+    def test_certificate_requires_every_executed_group_and_binds_manifests_results_and_inventory(self):
+        contract = automatic_contract(contract_inputs())
         automatic = _sanitize_report(json_bytes(closed_reply(contract)), 10, contract=contract)
         automatic['sourceInputsSha256'] = 'b' * 64
         names = ('installed_native_and_two_path_probe', 'independent_launcher_bootstrap_two_path_probe',
@@ -182,10 +143,9 @@ class AutomaticQualificationTests(unittest.TestCase):
             'runtime': {'python': '3.14.7'}, 'results': results}
         certificate = qualification_certificate(**options)
         self.assertIsNotNone(certificate)
-        for row in automatic['requirements'].values():
-            self.assertEqual(row['status'], 'implemented' if row['kind'] in {'unit', 'store'} else 'pending')
         self.assertEqual(certificate['resultsSha256'], digest(json_bytes(results)))
-        self.assertEqual(certificate['requirementsSha256'], digest(json_bytes(automatic['requirements'])))
+        self.assertEqual(certificate['automaticInventorySha256'], contract['inventorySha256'])
+        self.assertNotIn('requirementsSha256', certificate)
         self.assertEqual(certificate['checkInputsSha256'], digest(json_bytes(options['check_inputs'])))
         self.assertEqual(certificate['sha256'], digest(json_bytes({k: v for k, v in certificate.items() if k != 'sha256'})))
         for field in ('program_sha256', 'launcher_sha256'):
@@ -215,7 +175,7 @@ class AutomaticQualificationTests(unittest.TestCase):
         changed[0]['relocations'][1]['build'] = 11
         self.assertIsNone(qualification_certificate(**{**options, 'results': changed}))
         changed = copy.deepcopy(results)
-        changed[2]['requirements']['MYC-15.11'].update(status='pending', verified_by=[])
+        changed[2]['gateErrorCount'] = 1
         self.assertIsNone(qualification_certificate(**{**options, 'results': changed}))
         changed = copy.deepcopy(results)
         changed[2]['completeFrozenInventory'] = False
@@ -483,45 +443,39 @@ class AutomaticQualificationTests(unittest.TestCase):
 
 
     @proves('MYC-15.8', 'MYC-13.15')
-    def test_inherited_methods_keep_each_subclass_name_and_original_ordered_proofs(self):
+    def test_inherited_methods_keep_each_subclass_name_and_class_kind(self):
         frozen = contract_inputs()
-        frozen['tests/test_fixture.py'] += b'\nclass Inherited(Proofs): pass\n'
+        frozen['tests/test_fixture.py'] += b'\nclass Inherited(Proofs): pass\nclass InheritedStore(StoreProofs): pass\n'
         contract = automatic_contract(frozen)
         rows = {row['name']: row for row in contract['declarations']}
         self.assertEqual(len(rows), 6)
-        for method in ('test_one', 'test_two', 'test_store'):
-            parent = rows['test_fixture.Proofs.' + method]
-            child = rows['test_fixture.Inherited.' + method]
-            self.assertEqual((child['kind'], child['requirements']),
-                             (parent['kind'], parent['requirements']))
+        for parent, child, method in (('Proofs', 'Inherited', 'test_one'), ('Proofs', 'Inherited', 'test_two'),
+                                      ('StoreProofs', 'InheritedStore', 'test_store')):
+            self.assertEqual(rows[f'test_fixture.{child}.{method}']['kind'], rows[f'test_fixture.{parent}.{method}']['kind'])
+        self.assertEqual(rows['test_fixture.InheritedStore.test_store']['kind'], 'store')
         self.assertFalse(any(row['kind'] in {'eval', 'live'} for row in rows.values()))
         # contract_inputs begins by raising: deriving this inventory must never
         # import or execute the frozen class or any inherited body.
 
     @proves('MYC-15.8', 'MYC-13.15')
-    def test_frozen_diamond_method_order_matches_real_unittest_discovery_and_execution(self):
-        from mycel._coverage import declaration, discover_checks, iter_checks, run_checks
-        frozen = contract_inputs()
-        frozen.pop('tests/test_fixture.py')
-        frozen['checks/claims.json'] = json_bytes({'schema_version': 1, 'implemented': {}})
+    def test_frozen_diamond_kind_order_matches_real_unittest_discovery(self):
+        from mycel._coverage import discover_checks, iter_checks
         source = b'\n'.join((
-            b'import unittest', b'from mycel._coverage import proves',
-            b'class Root(unittest.TestCase):', b' @proves("MYC-13.3")',
+            b'import unittest',
+            b'class Root(unittest.TestCase):', b' check_kind = "unit"',
             b' def test_shared(self): self.assertTrue(True)',
-            b'class Left(Root): pass', b'class Right(Root):', b' @proves("MYC-13.15")',
-            b' def test_shared(self): self.assertTrue(True)', b'class Diamond(Left, Right): pass', b''))
-        frozen['tests/test_c3_fixture.py'] = source
-        contract = automatic_contract(frozen)
-        expected = {row['name']: (row['kind'], row['requirements']) for row in contract['declarations']}
+            b'class Left(Root): pass', b'class Right(Root):', b' check_kind = "eval"',
+            b'class Diamond(Left, Right): pass', b''))
+        contract = automatic_contract({'tests/test_c3_fixture.py': source})
+        expected = {row['name']: row['kind'] for row in contract['declarations']}
         try:
             with tempfile.TemporaryDirectory() as directory:
                 (Path(directory) / 'test_c3_fixture.py').write_bytes(source)
-                suite = discover_checks(directory)
-                actual = {check.id(): (declaration(check).kind, list(declaration(check).requirements))
-                          for check in iter_checks(suite)}
-                self.assertEqual(expected, actual)
-                self.assertEqual(expected['test_c3_fixture.Diamond.test_shared'], ('unit', ['MYC-13.15']))
-                self.assertTrue(run_checks(suite).passed)
+                actual = {check.id(): getattr(check, 'check_kind', 'unit')
+                          for check in iter_checks(discover_checks(directory))}
+                # C3 puts Right before Root, so Diamond is eval and never automatic.
+                self.assertEqual(actual['test_c3_fixture.Diamond.test_shared'], 'eval')
+                self.assertEqual(expected, {name: kind for name, kind in actual.items() if kind in {'unit', 'store'}})
         finally:
             sys.modules.pop('test_c3_fixture', None)
 
@@ -534,10 +488,3 @@ class AutomaticQualificationTests(unittest.TestCase):
             frozen['tests/test_fixture.py'] += extra
             with self.assertRaises(BuildError):
                 automatic_contract(frozen)
-
-    @proves('MYC-15.8', 'MYC-13.15')
-    def test_independent_requirement_rows_keep_draft_snapshot_metadata(self):
-        contract = automatic_contract(contract_inputs())
-        result = _sanitize_report(json_bytes(closed_reply(contract)), 10, contract=contract)
-        self.assertEqual(result['requirements']['MYC-17.2']['specification_status'], 'draft')
-        self.assertEqual(result['requirements']['MYC-13.3']['specification_status'], 'accepted')

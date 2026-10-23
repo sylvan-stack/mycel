@@ -12,17 +12,17 @@ import re
 
 from ._core import BuildError, digest, json_bytes
 from ._credential_contract import credential_probe_passed
-from mycel._coverage import ACTIVE_REQUIREMENTS, REQUIREMENT_ID, SPECIFICATION_COUNT, SPECIFICATION_STATUSES
 
 
-def _test_class_methods(tree):
-    """Resolve local test inheritance with Python's C3 order, without imports.
+def _test_classes(tree):
+    """Resolve local test methods and `check_kind` with Python's C3 order, without imports.
 
     External fixture/stdlib bases are opaque: any inherited test they add is
     still caught by the independent runtime-inventory equality check.
     """
     classes = {}
     own = {}
+    kinds = {}
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):
             continue
@@ -35,6 +35,12 @@ def _test_class_methods(tree):
         own[node.name] = {method.name: method for method in methods}
         if len(own[node.name]) != len(methods):
             raise ValueError('repeated frozen test method')
+        declared = [statement for statement in node.body if isinstance(statement, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == 'check_kind' for target in statement.targets)]
+        if len(declared) > 1:
+            raise ValueError('repeated frozen check kind')
+        if declared:
+            kinds[node.name] = ast.literal_eval(declared[0].value)
     orders = {}
     def linearize(name, active=()):
         if name not in classes:
@@ -62,97 +68,35 @@ def _test_class_methods(tree):
     result = {}
     for name in classes:
         methods = {}
-        for base in reversed(linearize(name)):
+        order = linearize(name)
+        for base in reversed(order):
             methods.update(own.get(base, {}))
-        result[name] = methods
+        result[name] = (methods, next((kinds[base] for base in order if base in kinds), 'unit'))
     return result
 
 
 def automatic_contract(frozen: dict[str, bytes]) -> dict:
-    """Derive every declaration independently from the captured test sources."""
+    """Derive every automatic check and its class kind independently from the captured test sources."""
     try:
-        data = json.loads(frozen['src/mycel/data/requirements.json'])
-        registry = {row['id']: row for row in data['requirements']}
-        if (type(data['schema_version']) is not int or data['schema_version'] != 1
-                or len(data['requirements']) != len(registry) or len(registry) != ACTIVE_REQUIREMENTS
-                or len(data['specifications']) != SPECIFICATION_COUNT
-                or any(row['specification_status'] not in SPECIFICATION_STATUSES
-                       for row in data['specifications'].values())
-                or {row['specification'] for row in registry.values()} != {f'MYC-{n}' for n in range(SPECIFICATION_COUNT)}
-                or any(row.get('source') not in data['specifications']
-                       or not REQUIREMENT_ID.fullmatch(key)
-                       or row['kind'] not in {'unit', 'store', 'eval', 'live'}
-                       or row['specification'] != key.split('.')[0] for key, row in registry.items())):
-            raise ValueError('registry')
-        raw_claims = json.loads(frozen['checks/claims.json'])
-        if (set(raw_claims) != {'schema_version', 'implemented'}
-                or type(raw_claims['schema_version']) is not int or raw_claims['schema_version'] != 1
-                or not isinstance(raw_claims['implemented'], dict)):
-            raise ValueError('claims')
         declarations = {}
         for path, raw in sorted(frozen.items()):
             if not re.fullmatch(r'tests/test_[A-Za-z0-9_]+\.py', path):
                 continue
             module = path.removeprefix('tests/').removesuffix('.py')
-            for class_name, methods in _test_class_methods(ast.parse(raw)).items():
+            for class_name, (methods, kind) in _test_classes(ast.parse(raw)).items():
+                if kind not in {'unit', 'store', 'eval', 'live'}:
+                    raise ValueError('check kind')
                 for method in methods.values():
-                    if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)) or not method.name.startswith('test'):
-                        continue
-                    decorators = [node for node in method.decorator_list if isinstance(node, ast.Call)
-                                  and isinstance(node.func, ast.Name) and node.func.id == 'proves']
-                    if len(decorators) != 1:
-                        raise ValueError('declaration')
-                    node = decorators[0]
-                    requirements = [ast.literal_eval(arg) for arg in node.args]
-                    kinds = [ast.literal_eval(kw.value) for kw in node.keywords if kw.arg == 'kind']
-                    if len(kinds) > 1 or any(kw.arg != 'kind' for kw in node.keywords):
-                        raise ValueError('declaration options')
-                    kind = kinds[0] if kinds else 'unit'
-                    if (kind not in {'unit', 'store', 'eval', 'live'} or not requirements
-                            or len(set(requirements)) != len(requirements)
-                            or any(key not in registry or registry[key]['kind'] != kind for key in requirements)):
-                        raise ValueError('declaration requirements')
                     name = f'{module}.{class_name}.{method.name}'
                     if name in declarations:
                         raise ValueError('duplicate declaration')
-                    declarations[name] = {'name': name, 'kind': kind, 'requirements': requirements}
-        if not declarations:
-            raise ValueError('empty inventory')
-        claims = raw_claims['implemented']
-        for key, names in claims.items():
-            if (key not in registry or not isinstance(names, list) or not names
-                    or any(not isinstance(name, str) for name in names) or len(set(names)) != len(names)):
-                raise ValueError('claim')
-            for name in names:
-                if (name not in declarations or key not in declarations[name]['requirements']
-                        or declarations[name]['kind'] != registry[key]['kind']):
-                    raise ValueError('unmapped claim')
+                    declarations[name] = {'name': name, 'kind': kind}
         automatic = [row for _, row in sorted(declarations.items()) if row['kind'] in {'unit', 'store'}]
         if not automatic:
             raise ValueError('empty automatic inventory')
-        return {'schemaVersion': 1, 'declarations': automatic, 'registry': registry, 'claims': claims,
-                'specificationStatuses': {name: row['specification_status']
-                                          for name, row in data['specifications'].items()},
-                'registrySha256': digest(frozen['src/mycel/data/requirements.json']),
-                'claimsSha256': digest(frozen['checks/claims.json']),
-                'inventorySha256': digest(json_bytes(automatic))}
+        return {'schemaVersion': 2, 'declarations': automatic, 'inventorySha256': digest(json_bytes(automatic))}
     except (AttributeError, KeyError, TypeError, ValueError, SyntaxError):
-        raise BuildError('refused', 'Frozen requirement claims or check declarations are incomplete or invalid.') from None
-
-
-def requirement_results(contract: dict, checks: list[dict]) -> dict:
-    """Reconstruct all proof rows from this run's exact passing outcomes."""
-    by_name = {row['name']: row for row in checks}
-    result = {}
-    for key, row in contract['registry'].items():
-        names = contract['claims'].get(key, [])
-        implemented = bool(names) and all(name in by_name and by_name[name]['status'] == 'passed'
-            and key in by_name[name]['requirements'] and by_name[name]['kind'] == row['kind'] for name in names)
-        result[key] = {'specification': row['specification'],
-                       'specification_status': contract['specificationStatuses'][row['source']],
-                       'kind': row['kind'], 'status': 'implemented' if implemented else 'pending',
-                       'verified_by': list(names) if implemented else []}
-    return result
+        raise BuildError('refused', 'Frozen test sources or their check kinds are incomplete or invalid.') from None
 
 
 def required_packaged_cases(number: str) -> tuple[str, ...]:
@@ -222,24 +166,17 @@ def qualification_certificate(*, number: str, source: dict, check_inputs: list[d
     if target != 'macos-arm64' or runtime.get('python') != '3.14.7' or not _relocations_passed(by_name, number=number, target=target):
         return None
     automatic = next(row for row in results if row['name'] == 'installed_automatic_unit_store_gate')
-    if (automatic.get('completeFrozenInventory') is not True or not isinstance(automatic.get('requirements'), dict)
-            or len(automatic['requirements']) != ACTIVE_REQUIREMENTS or automatic.get('gateErrorCount') != 0
+    if (automatic.get('completeFrozenInventory') is not True or automatic.get('gateErrorCount') != 0
             or type(automatic.get('build')) is not int or automatic['build'] != int(number, 16)
             or automatic.get('sourceInputsSha256') != source['inputsSha256']):
-        return None
-    # Passing the currently declared suite cannot promote missing automatic
-    # requirement proofs. Eval/live stay pending until explicitly requested.
-    if any(row['kind'] in {'unit', 'store'} and row['status'] != 'implemented'
-           for row in automatic['requirements'].values()):
         return None
     if publication:
         credential = by_name['private_dummy_keychain_installed_credentials_probe']
         if not credential_probe_passed(credential, number=number, target=target,
                 source_sha256=source['inputsSha256'], program_sha256=program_sha256, check_inputs=check_inputs):
             return None
-    identity = {'schemaVersion': 1, 'build': number, 'source': source, 'checkInputsSha256': digest(json_bytes(check_inputs)),
+    identity = {'schemaVersion': 2, 'build': number, 'source': source, 'checkInputsSha256': digest(json_bytes(check_inputs)),
                 'programManifestSha256': program_sha256, 'launcherBundleSha256': launcher_sha256,
                 'target': target, 'runtime': runtime, 'resultsSha256': digest(json_bytes(results)),
-                'automaticInventorySha256': automatic['inventorySha256'],
-                'requirementsSha256': digest(json_bytes(automatic['requirements']))}
+                'automaticInventorySha256': automatic['inventorySha256']}
     return {**identity, 'sha256': digest(json_bytes(identity))}

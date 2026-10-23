@@ -25,7 +25,7 @@ from mycel_build._credential_contract import HELPERS, PROVENANCE, TRUE_FIELDS, F
 from mycel_build.__main__ import main
 from mycel_build._core import BuildError, atomic_json, digest, file_manifest, json_bytes, seal_program
 from mycel_build._launcher_runtime import select_build
-from mycel_build._qualification import automatic_contract, qualification_certificate, requirement_results, required_packaged_cases
+from mycel_build._qualification import automatic_contract, qualification_certificate, required_packaged_cases
 from mycel_build._registry import allocate, read_record
 from mycel_build._staging import check_input_manifest, input_manifest
 
@@ -56,34 +56,15 @@ def corrupt(path):
 
 
 def publication_contract_inputs():
-    """Complete fictional protocol preconditions, never executed check evidence.
-
-    Every automatic requirement gets a named fixture row. The two ordered
-    unit IDs in the first declaration and two names for13.3 make the negative
-    ordering mutations substantive. The real registry is unchanged.
-    """
-    registry_raw = (ROOT / 'src/mycel/data/requirements.json').read_bytes()
-    registry = json.loads(registry_raw)['requirements']
-    primary = ('MYC-13.3', 'MYC-13.15')
-    declarations = [('test_a_unit_pair', 'unit', primary),
-                    ('test_b_unit_second', 'unit', ('MYC-13.3',))]
-    declarations.extend(('test_' + row['kind'] + '_' + row['id'].replace('-', '_').replace('.', '_'),
-                         row['kind'], (row['id'],)) for row in registry
-                        if row['kind'] in {'unit', 'store'} and row['id'] not in primary)
-    claims = {}
-    bodies = ['raise AssertionError("synthetic declaration bytes must never execute")\nclass PublicationProofs:\n']
-    for method, kind, identifiers in declarations:
-        name = 'test_publication_protocol.PublicationProofs.' + method
-        for identifier in identifiers:
-            claims.setdefault(identifier, []).append(name)
-        bodies.append(' @proves(' + ', '.join(repr(key) for key in identifiers)
-                      + ', kind=' + repr(kind) + ')\n def ' + method + '(self): pass\n')
-    automatic = sum(row['kind'] in {'unit', 'store'} for row in registry)
-    assert len(declarations) == len(claims) == automatic
-    assert len(claims['MYC-13.3']) == 2
-    return {'src/mycel/data/requirements.json': registry_raw,
-            'checks/claims.json': json_bytes({'schema_version': 1, 'implemented': claims}),
-            'tests/test_publication_protocol.py': ''.join(bodies).encode()}
+    """Complete fictional protocol preconditions, never executed check evidence."""
+    return {'tests/test_publication_protocol.py': b'''raise AssertionError("synthetic declaration bytes must never execute")
+class PublicationProofs:
+ def test_a_unit(self): pass
+ def test_b_unit(self): pass
+class PublicationStoreProofs:
+ check_kind = "store"
+ def test_store(self): pass
+'''}
 
 
 def credential_reply(number, source_identity, program_sha, check_inputs):
@@ -130,6 +111,7 @@ class PublicationFixture:
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(raw)
+        (site / 'mycel/data').mkdir(parents=True, exist_ok=True)
         atomic_json(site / 'mycel/data/build-identity.json', {'schemaVersion': 1, 'build': int(self.number, 16)})
         interpreter = self.program / 'runtime/bin/python3'
         interpreter.parent.mkdir(parents=True)
@@ -179,8 +161,7 @@ class PublicationFixture:
         automatic = closed_reply(contract)
         for row in automatic['checks']:row['detail'] = None
         automatic.update(name='installed_automatic_unit_store_gate', target='macos-arm64', build=int(self.number,16),
-            required=self.automatic_count, passedCount=self.automatic_count, failedCount=0, registrySha256=contract['registrySha256'],
-            claimsSha256=contract['claimsSha256'], completeFrozenInventory=True,
+            required=self.automatic_count, passedCount=self.automatic_count, failedCount=0, completeFrozenInventory=True,
             sourceInputsSha256=self.identity['inputsSha256'], networkRestrictedToCheckStore=True,
             sourceReadDenied=True, developerReadDenied=True, installedFilesUnchanged=True, verifiedPrivateRelocation=True)
         probe = {'name':'installed_native_and_two_path_probe', 'passed':True, 'executed':True,
@@ -289,12 +270,12 @@ class WorkingPublicationTests(unittest.TestCase):
     def test_corrupt_manifests_proofs_results_identities_or_missing_required_groups_never_publish(self):
         mutations=(lambda f:f.checks['results'].pop(),
             lambda f:f.checks['results'][2]['checks'].pop(),
-            lambda f:f.checks['results'][2]['checks'][0]['requirements'].reverse(),
-            lambda f:f.checks['results'][2]['requirements']['MYC-13.3']['verified_by'].reverse(),
+            lambda f:f.checks['results'][2]['checks'][0].update(kind='store'),
+            lambda f:f.checks['results'][2]['checks'][0].update(name='test_publication_protocol.PublicationProofs.test_invented'),
             lambda f:f.checks['results'][3]['relocations'][1]['cases'].pop(),
             lambda f:f.checks['results'][3]['relocations'][1]['cases'][0].update(name='invented_same_count_case'),
             lambda f:f.checks['results'][3]['relocations'][0]['cases'].reverse(),
-            lambda f:f.checks['results'][2]['requirements']['MYC-15.11'].update(status='pending',verified_by=[]),
+            lambda f:f.checks['results'][2].update(gateErrorCount=1),
             lambda f:f.checks['results'][4]['profilePreferenceValues'].update(unchanged=False),
             lambda f:f.record.update(source={**f.identity,'inputsSha256':'f'*64}),
             lambda f:f.record.update(qualification={**f.record['qualification'],'sha256':'f'*64}),
@@ -328,7 +309,7 @@ class WorkingPublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             fixture=PublicationFixture(temporary)
             failed={**fixture.stage_record(),'status':'failed','automaticQualification':False,
-                'reason':'Required automatic proofs remain pending; see automatic_requirement_proof_gate in checks.json.'}
+                'reason':'A required installed check failed; see checks.json.'}
             before=tree_state(fixture.root)
             with patch.object(release,'create_stage',return_value=failed), \
                     patch.object(release,'source_inputs') as source, \

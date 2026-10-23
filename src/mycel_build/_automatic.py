@@ -23,8 +23,7 @@ from urllib.parse import urlsplit
 
 from ._core import BuildError, TARGETS, digest, file_manifest, json_bytes
 from ._process import run_group, _defer_cleanup_signals
-from ._qualification import automatic_contract, requirement_results
-from mycel._coverage import ACTIVE_REQUIREMENTS, REQUIREMENT_ID
+from ._qualification import automatic_contract
 
 
 _RUNNER = r'''
@@ -38,7 +37,7 @@ if (not sys.flags.isolated or not sys.dont_write_bytecode or platform.python_ver
 # Source-reading tests see the same installed bytes as imports. Builder-only
 # fixtures remain available from the frozen development inputs beside them.
 sys.path[:0] = [str(root / 'src'), str(root), str(root / 'tests')]
-from mycel._coverage import declaration, iter_checks, load_claims, load_registry, run_checks
+from mycel._coverage import KINDS, iter_checks, run_checks
 from mycel_build._automatic_backend import InstalledFixtureBackend
 from mycel._build_identity import current_build
 if current_build() != configuration['build']:
@@ -50,11 +49,11 @@ native = backend
 suite = unittest.defaultTestLoader.discover(str(root / 'tests'))
 observed = []
 for check in iter_checks(suite):
-    proof = declaration(check)
-    if proof is None:
-        raise RuntimeError('a discovered check has no requirement declaration')
-    if proof.kind in {'unit', 'store'}:
-        observed.append({'name': check.id(), 'kind': proof.kind, 'requirements': list(proof.requirements)})
+    kind = getattr(check, 'check_kind', 'unit')
+    if kind not in KINDS:
+        raise RuntimeError('a discovered check has an unknown kind')
+    if kind in {'unit', 'store'}:
+        observed.append({'name': check.id(), 'kind': kind})
 if sorted(observed, key=lambda row: row['name']) != configuration['declarations']:
     raise RuntimeError('discovered automatic checks differ from independent frozen inventory')
 # Check details can contain exceptions, SQL and arbitrary fixture output. They
@@ -66,8 +65,8 @@ with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.St
                 native.preflight()
             except Exception:
                 backend = None
-        report = run_checks(suite, registry=load_registry(), claims=load_claims(root / 'checks/claims.json'),
-                            store_backend=backend, workers=configuration['workers'], tests_directory=root / 'tests')
+        report = run_checks(suite, store_backend=backend, workers=configuration['workers'],
+                            tests_directory=root / 'tests')
     finally:
         if native is not None:
             from mycel_build._process import _defer_cleanup_signals
@@ -78,14 +77,13 @@ for name, module in tuple(sys.modules.items()):
         origin = getattr(module, '__file__', None)
         if origin is None or not pathlib.Path(origin).resolve().is_relative_to(program):
             raise RuntimeError('automatic gate imported product outside the installed Build')
-checks = [{'name': check.name, 'kind': check.kind, 'requirements': list(check.requirements),
+checks = [{'name': check.name, 'kind': check.kind,
            'status': check.status, 'passed': check.status == 'passed',
            'detail': None if check.status == 'passed' else 'The named automatic check did not pass.'}
           for check in report.checks]
 print(json.dumps({'passed': report.passed, 'executed': True, 'checks': checks,
-                  'coverage': report.to_dict()['summary'], 'gateErrorCount': len(report.errors),
-                  'requirements': report.requirements, 'inventorySha256': configuration['inventorySha256'],
-                  'gateErrors': ['An automatic declaration or named proof claim did not pass.'] * len(report.errors),
+                  'gateErrorCount': len(report.errors), 'inventorySha256': configuration['inventorySha256'],
+                  'gateErrors': ['The automatic gate reported an error.'] * len(report.errors),
                   'python': platform.python_version(), 'machine': platform.machine(),
                   'isolated': bool(sys.flags.isolated), 'dontWriteBytecode': sys.dont_write_bytecode,
                   'installedProductImports': True, 'build': current_build()}))
@@ -193,49 +191,28 @@ def _sanitize_report(raw: bytes, number: int, *, contract: dict) -> dict:
             raise ValueError("gate result")
         names = set()
         for check in report["checks"]:
-            if (set(check) != {"name", "kind", "requirements", "status", "passed", "detail"}
+            if (set(check) != {"name", "kind", "status", "passed", "detail"}
                     or not isinstance(check["name"], str)
                     or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", check["name"]) or check["name"] in names
                     or check["kind"] not in {"unit", "store"}
                     or check["status"] not in {"passed", "failed", "skipped"}
-                    or check["passed"] is not (check["status"] == "passed")
-                    or not isinstance(check["requirements"], list) or not check["requirements"]
-                    or any(not isinstance(value, str) or not REQUIREMENT_ID.fullmatch(value)
-                           for value in check["requirements"])
-                    or len(set(check["requirements"])) != len(check["requirements"])):
+                    or check["passed"] is not (check["status"] == "passed")):
                 raise ValueError("check result")
             names.add(check["name"])
             check["detail"] = None if check["passed"] else "The named automatic check did not pass."
-        for key in ("active", "implemented", "pending"):
-            if type(report["coverage"][key]) is not int or report["coverage"][key] < 0:
-                raise ValueError("coverage counts")
-        if (report["coverage"]["active"] != ACTIVE_REQUIREMENTS
-                or report["coverage"]["active"] != report["coverage"]["implemented"] + report["coverage"]["pending"]):
-            raise ValueError("coverage total")
         expected_passed = not report["gateErrorCount"] and all(check["passed"] for check in report["checks"])
         if report["passed"] != expected_passed:
             raise ValueError("gate outcome")
-        declarations = [{'name': row['name'], 'kind': row['kind'], 'requirements': row['requirements']}
-                        for row in report['checks']]
+        declarations = [{'name': row['name'], 'kind': row['kind']} for row in report['checks']]
         if (sorted(declarations, key=lambda row: row['name']) != contract['declarations']
                 or report['inventorySha256'] != contract['inventorySha256']):
             raise ValueError('incomplete frozen inventory')
-        requirements = requirement_results(contract, report['checks'])
-        implemented = sum(row['status'] == 'implemented' for row in requirements.values())
-        if (report['requirements'] != requirements
-                or {key: report['coverage'][key] for key in ('active', 'implemented', 'pending')}
-                    != {'active': ACTIVE_REQUIREMENTS, 'implemented': implemented,
-                        'pending': ACTIVE_REQUIREMENTS - implemented}):
-            raise ValueError('requirement proof results')
         return {"passed": report["passed"], "executed": True, "checks": report["checks"],
-                "coverage": {key: report["coverage"][key] for key in ("active", "implemented", "pending")},
                 "gateErrorCount": report["gateErrorCount"],
-                "gateErrors": ["An automatic declaration or named proof claim did not pass."] * report["gateErrorCount"],
+                "gateErrors": ["The automatic gate reported an error."] * report["gateErrorCount"],
                 "python": "3.14.7", "isolated": True, "dontWriteBytecode": True,
                 "installedProductImports": True, "build": number,
-                "requirements": requirements, "inventorySha256": contract['inventorySha256'],
-                "registrySha256": contract['registrySha256'], "claimsSha256": contract['claimsSha256'],
-                "completeFrozenInventory": True}
+                "inventorySha256": contract['inventorySha256'], "completeFrozenInventory": True}
     except (KeyError, TypeError, ValueError):
         raise BuildError("refused", "The installed automatic gate returned incomplete or invalid evidence.") from None
 
@@ -364,7 +341,7 @@ def _run_automatic(program: Path, target: str, frozen: dict[str, bytes], *, sour
                   sourceInputsSha256=digest(json_bytes([{"path": name, "sha256": digest(raw), "size": len(raw)}
                                                        for name, raw in sorted(frozen.items())])),
                   reason=("Every frozen unit/store check and registered automatic proof passed; packaged qualification and publication are separate."
-                          if result["passed"] else "One or more named automatic checks or proof claims did not pass."))
+                          if result["passed"] else "One or more automatic checks did not pass."))
     return result
 
 

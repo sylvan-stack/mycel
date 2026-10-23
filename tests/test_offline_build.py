@@ -9,20 +9,15 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import ACTIVE_REQUIREMENTS
 from mycel._coverage import proves
 from mycel_build._automatic import _sanitize_report, run_automatic, store_address
 from mycel_build._core import BuildError, digest, json_bytes
 from mycel_build._staging import create_stage
-from mycel_build._qualification import automatic_contract, requirement_results, required_packaged_cases
+from mycel_build._qualification import automatic_contract, required_packaged_cases
 
 
 def frozen_contract_fixture():
-    root = Path(__file__).resolve().parents[1]
-    return {'src/mycel/data/requirements.json': (root / 'src/mycel/data/requirements.json').read_bytes(),
-            'checks/claims.json': json_bytes({'schema_version': 1, 'implemented': {
-                'MYC-13.15': ['test_fixture.AutomaticTests.test_one']}}),
-            'tests/test_fixture.py': b'from mycel._coverage import proves\nclass AutomaticTests:\n @proves("MYC-13.15")\n def test_one(self): pass\n'}
+    return {'tests/test_fixture.py': b'class AutomaticTests:\n def test_one(self): pass\n'}
 
 
 def contract_fixture():
@@ -52,13 +47,10 @@ def report(*, passed=True, errors=0):
     result = {"passed": passed, "executed": True, "python": "3.14.7", "machine": "arm64",
             "isolated": True, "dontWriteBytecode": True, "installedProductImports": True, "build": 10,
             "checks": [{"name": "test_fixture.AutomaticTests.test_one", "kind": "unit",
-                        "requirements": ["MYC-13.15"], "status": "passed" if passed else "failed",
+                        "status": "passed" if passed else "failed",
                         "passed": passed, "detail": "private-password-provider-body"}],
-            "coverage": {"active": ACTIVE_REQUIREMENTS, "implemented": int(passed),
-                         "pending": ACTIVE_REQUIREMENTS - int(passed)},
             "gateErrorCount": errors, "gateErrors": ["private-password-provider-body"] * errors}
-    contract = contract_fixture()
-    result.update(requirements=requirement_results(contract, result['checks']), inventorySha256=contract['inventorySha256'])
+    result.update(inventorySha256=contract_fixture()['inventorySha256'])
     return result
 
 
@@ -69,11 +61,10 @@ class InstalledAutomaticTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertNotIn("private-password", json.dumps(result))
         self.assertEqual(result["checks"][0]["name"], "test_fixture.AutomaticTests.test_one")
-        self.assertEqual(result["checks"][0]["requirements"], ["MYC-13.15"])
         extra = report()
-        extra["coverage"]["providerBody"] = "private-password-provider-body"
+        extra["providerBody"] = "private-password-provider-body"
         clean = _sanitize_report(json.dumps(extra).encode(), 10, contract=contract_fixture())
-        self.assertEqual(set(clean["coverage"]), {"active", "implemented", "pending"})
+        self.assertNotIn("providerBody", clean)
         self.assertNotIn("private-password", json.dumps(clean))
         for mutation in (lambda value: value.update(build=11),
                          lambda value: value.update(isolated=False),
@@ -82,10 +73,9 @@ class InstalledAutomaticTests(unittest.TestCase):
                          lambda value: value.pop("machine"),
                          lambda value: value.update(checks=[]),
                          lambda value: value["checks"][0].update(kind="live"),
-                         lambda value: value["checks"][0].update(requirements=["unknown"]),
+                         lambda value: value["checks"][0].update(requirements=["MYC-13.15"]),
                          lambda value: value["checks"].append(dict(value["checks"][0])),
-                         lambda value: value.update(passed=False),
-                         lambda value: value["coverage"].update(pending=True)):
+                         lambda value: value.update(passed=False)):
             value = report()
             mutation(value)
             with self.assertRaises(BuildError):
@@ -232,7 +222,7 @@ class InstalledAutomaticTests(unittest.TestCase):
                 gate = {"passed": passed, "executed": True, "checks": [{"name": "test_fixture.Unit.test_one", "passed": True},
                          {"name": "test_fixture.Store.test_two", "passed": passed}], "required": 2,
                         "passedCount": 1 + int(passed), "failedCount": int(not passed), "reason": "Fixed gate result."}
-                gate.update(completeFrozenInventory=True, requirements=report(passed=passed)['requirements'],
+                gate.update(completeFrozenInventory=True,
                             inventorySha256=contract_fixture()['inventorySha256'], gateErrorCount=0, build=1,
                             sourceInputsSha256=digest(json_bytes([{'path': name, 'sha256': digest(raw), 'size': len(raw)}
                                 for name, raw in sorted(frozen.items())])))
@@ -246,26 +236,21 @@ class InstalledAutomaticTests(unittest.TestCase):
                         "mycel_build._staging.probe_packaged_release", return_value=packaged_probe), patch(
                         "mycel_build._launcher.stage_launcher", return_value=launcher) as bundle:
                     record = create_stage(source, source / "packaging/build-lock.json", assets, registry, "macos-arm64")
-                # A passing finite protocol fixture still leaves other active
-                # automatic requirements pending; it cannot qualify a Build.
+                # The pinned runtime of this fixture names no Python version,
+                # so no certificate is issued even when every group passes.
                 all_groups_passed = passed and launcher_passed
                 self.assertEqual(record["status"], "failed")
                 self.assertFalse(record["automaticQualification"])
-                self.assertEqual(record["checks"], {"required": 5 + int(all_groups_passed),
+                self.assertEqual(record["checks"], {"required": 5,
                     "passed": 2 + int(passed) + int(launcher_passed) + int(all_groups_passed),
-                    "failed": int(not passed) + int(not launcher_passed) + 1, "report": "checks.json"})
+                    "failed": int(not passed) + int(not launcher_passed) + int(not all_groups_passed), "report": "checks.json"})
                 self.assertEqual(bundle.call_args.args[3], registry / "1/launcher-bundle")
                 self.assertEqual(bundle.call_args.kwargs["frozen"], frozen)
                 checks = read_json(registry / "1/checks.json")
                 self.assertEqual(checks["results"][1], {"name": "independent_launcher_bootstrap_two_path_probe", **launcher["checks"]})
                 self.assertEqual(checks["results"][2], {"name": "installed_automatic_unit_store_gate", **gate})
-                self.assertEqual(checks["pending"], ['automatic_requirement_proofs', 'publication']
-                    if all_groups_passed else ["packaged_release", "publication"])
-                if all_groups_passed:
-                    coverage = checks['results'][4]
-                    self.assertEqual(coverage['name'], 'automatic_requirement_proof_gate')
-                    self.assertFalse(coverage['passed'])
-                    self.assertIn('MYC-13.16', coverage['pendingRequirements'])
+                self.assertEqual(checks["pending"], ["packaged_release", "publication"])
+                self.assertEqual(len(checks['results']), 4)
 
 
     @proves('MYC-15.8', 'MYC-13.15')

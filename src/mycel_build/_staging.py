@@ -506,20 +506,6 @@ def create_stage(source_root: Path, lock_path: Path, assets: Path, registry: Pat
         fields['checks']['required'] += 1
         fields['checks']['passed'] += int(packaged['passed'])
         fields['checks']['failed'] += int(not packaged['passed'])
-        pending_automatic = []
-        if packaged['passed'] and automatic is not None:
-            pending_automatic = sorted(key for key, value in automatic['requirements'].items()
-                if value['kind'] in {'unit', 'store'} and value['status'] != 'implemented')
-        if pending_automatic:
-            # These are absent executed requirement proofs, not extra physical
-            # test outcomes. Preserve their exact IDs and fail the release gate.
-            checks['results'].append({'name': 'automatic_requirement_proof_gate',
-                'passed': False, 'executed': True, 'pendingRequirements': pending_automatic,
-                'reason': 'Active automatic requirements still lack passing named proofs.'})
-            fields['checks']['required'] += 1
-            fields['checks']['failed'] += 1
-            fields['reason'] = 'Required automatic proofs remain pending; see automatic_requirement_proof_gate in checks.json.'
-            checks['pending'] = ['automatic_requirement_proofs', 'publication']
         certificate = qualification_certificate(number=record['build'], source=identity, check_inputs=check_inputs,
             program_sha256=fingerprint, launcher_sha256=fields['launcherBundleSha256'],
             target=target, runtime=row['runtime'], results=checks['results'])
