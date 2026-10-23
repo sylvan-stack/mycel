@@ -1,8 +1,10 @@
-"""Prepare the legacy @proves import; apply only to an explicit disposable store.
+"""Prepare the legacy @proves import; apply it to a disposable or the named owner store.
 
-The owner-store phase is deferred by the Instructions Hub's 22 October rule.
-This development script cannot initialize, ingest, embed or target that store.
-Plans and receipts belong outside the source checkout and artifact corpus.
+The owner allowed one owner-store import on 23 October 2026 (SYL-261): the plan
+must be frozen from the clone and specifications the settings index for the
+repository, and the operator names the owner's database. This script never
+initializes, ingests or embeds. Plans and receipts belong outside the source
+checkout and artifact corpus.
 """
 from __future__ import annotations
 
@@ -154,6 +156,31 @@ def apply_disposable(connection, settings, plan):
         by=plan['by'], captured_at=plan['when'], validate_inputs=lambda: validate_plan(plan))
 
 
+def apply_owner(connection, settings, plan, *, owner_database):
+    """The owner's single authorized import; the plan must name the indexed clone."""
+    from mycel._justify import JustifyStore
+    database = unquote(urlsplit(settings.values['store']['address']).path).removeprefix('/')
+    if not owner_database or database != owner_database:
+        raise ValueError('The settings must name the owner database given by --owner-store.')
+    try:
+        require_check_database(database)
+    except ValueError:
+        pass
+    else:
+        raise ValueError('A mycel_check_ database is disposable; use apply-disposable.')
+    repository = settings.values['repos'].get(plan['repository'])
+    if (not repository or not repository.get('enabled')
+            or Path(repository['code_root']).resolve() != Path(plan['sourceRoot'])
+            or Path(repository['artifact_root']).resolve() / 'specs' != Path(plan['specificationsRoot'])):
+        raise ValueError('The plan must be frozen from the indexed code root and its specifications.')
+    validate_plan(plan)
+    if connection.execute('SELECT current_database()').fetchone()[0] != database:
+        raise MycelError('invalid_input', 'The owner connection names another database.')
+    return JustifyStore(connection).import_proven_pairs(settings,
+        [(row['chunk'], row['origin']) for row in plan['pairs']],
+        by=plan['by'], captured_at=plan['when'], validate_inputs=lambda: validate_plan(plan))
+
+
 def write_private(path, value, plan):
     path = Path(path).expanduser().resolve()
     if any(path.is_relative_to(Path(plan[key])) for key in ('sourceRoot', 'specificationsRoot')):
@@ -173,15 +200,21 @@ def main():
     prepare.add_argument('--output', type=Path, required=True)
     prepare.add_argument('--repo', default='mycel')
     prepare.add_argument('--by', default=None)
-    apply = sub.add_parser('apply-disposable')
-    apply.add_argument('--plan', type=Path, required=True)
-    apply.add_argument('--plan-sha256', required=True)
-    apply.add_argument('--settings', type=Path, required=True)
-    apply.add_argument('--receipt', type=Path, required=True)
+    prepare.add_argument('--source', type=Path, default=Path(__file__).resolve().parents[1],
+                         help='the clone to freeze; for the owner import, the indexed code root')
+    for name in ('apply-disposable', 'apply-owner'):
+        apply = sub.add_parser(name)
+        apply.add_argument('--plan', type=Path, required=True)
+        apply.add_argument('--plan-sha256', required=True)
+        apply.add_argument('--settings', type=Path, required=True)
+        apply.add_argument('--receipt', type=Path, required=True)
+        if name == 'apply-owner':
+            apply.add_argument('--owner-store', required=True,
+                               help="the owner's database name, stated by the operator")
     args = parser.parse_args()
     try:
         if args.command == 'prepare':
-            plan = make_plan(Path(__file__).resolve().parents[1], args.specifications,
+            plan = make_plan(args.source, args.specifications,
                              repository=args.repo, by=_identity(args.by),
                              when=datetime.now(timezone.utc).isoformat(timespec='microseconds'))
             write_private(args.output, plan, plan)
@@ -199,7 +232,9 @@ def main():
         from mycel._safeguards import InvocationPolicy
         settings = load_settings(path=args.settings)
         settings.require_valid()
-        require_check_database(unquote(urlsplit(settings.values['store']['address']).path).removeprefix('/'))
+        owner = args.command == 'apply-owner'
+        if not owner:
+            require_check_database(unquote(urlsplit(settings.values['store']['address']).path).removeprefix('/'))
         if args.receipt.exists():
             raise ValueError('The receipt already exists; retain and inspect it before retrying.')
         # Validate destination before connecting or mutating.
@@ -207,7 +242,8 @@ def main():
         if any(receipt_parent.is_relative_to(Path(plan[key])) for key in ('sourceRoot', 'specificationsRoot')) or receipt_parent.is_relative_to(Path(plan['specificationsRoot']).parent):
             raise ValueError('Keep receipts outside the source and artifact corpus.')
         with store_connection(Credentials(settings, InvocationPolicy('justify'))) as connection:
-            replies = apply_disposable(connection, settings, plan)
+            replies = (apply_owner(connection, settings, plan, owner_database=args.owner_store)
+                       if owner else apply_disposable(connection, settings, plan))
         write_private(args.receipt, {'planSha256': args.plan_sha256, 'justifications': replies}, plan)
         print(json.dumps({'imported': len(replies), 'receipt': str(args.receipt)}))
         return 0

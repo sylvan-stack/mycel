@@ -106,6 +106,24 @@ class ImportPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'mycel_check_'):
             migration.apply_disposable(None, settings, self.plan())
 
+    @proves('MYC-13.3')
+    def test_owner_import_requires_the_named_database_and_the_indexed_clone(self):
+        from mycel._settings import load_settings
+        other = self.base / 'other'
+        other.mkdir()
+
+        def settings(database, code_root):
+            config = self.base / f'{database}-{code_root.name}.toml'
+            config.write_text(f'[store]\naddress="postgresql://fixture@localhost:55432/{database}"\n'
+                              f'[repos.fixture]\nenabled=true\ncode_root="{code_root}"\n'
+                              f'artifact_root="{self.specs.parent}"\n')
+            return load_settings(path=config)
+        for values, owner, message in ((settings('mycel', self.root), 'other', '--owner-store'),
+                                       (settings('mycel_check_x1', self.root), 'mycel_check_x1', 'apply-disposable'),
+                                       (settings('mycel', other), 'mycel', 'indexed code root')):
+            with self.subTest(message), self.assertRaisesRegex(ValueError, message):
+                migration.apply_owner(None, values, self.plan(), owner_database=owner)
+
 
 class ProvenImportStoreTests(unittest.TestCase):
     def setUp(self):
