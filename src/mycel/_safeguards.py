@@ -58,7 +58,7 @@ def model_call_allowed(policy: InvocationPolicy, purpose: str) -> bool:
             return policy.action in {"build", "regenerate"}
         return policy.command == "evaluate" and policy.kind in {None, "retrieval"}
     if purpose in {"jev", "reviewer"}:
-        return policy.command in {"classify", "recovery"} or (
+        return policy.command in {"classify", "recovery", "audit"} or (
             policy.command == "evaluate" and policy.kind == "drift" and policy.live
         )
     if purpose == "summary":

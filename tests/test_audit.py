@@ -150,3 +150,54 @@ class AuditStoreTests(unittest.TestCase):
         findings,_=self.deterministic();duplicates=[r for r in findings if r['kind']=='duplicate_id' and r['facts']['identityKind']=='uuid']
         self.assertEqual(len(duplicates),1,duplicates)
         self.assertEqual(duplicates[0]['facts']['identity'],REQ)
+
+
+class AuditProtocolTests(unittest.TestCase):
+    @proves('MYC-14.12','MYC-14.24')
+    def test_three_questions_have_distinct_exact_payloads_and_strict_scored_review(self):
+        from mycel._classification_payload import AuditDecisionPayload, DecisionText, ReviewCommandIdentity, ReviewerRequest
+        from mycel._evidence import snapshot, EvidenceError
+        from mycel._source_refs import SourceAddress
+        from mycel._jev import JevRequest
+        from mycel._reviewer import validate_response, ReviewerFailure
+        from mycel._safeguards import CompletedChild, InvocationPolicy, model_call_allowed
+        from copy import deepcopy
+        import tempfile
+        def text(name):
+            raw=('# '+name+'\nExact full text.\n').encode()
+            blob=snapshot(raw,place=SourceAddress('fixture','artifact',name+'.md',name))
+            return DecisionText.create(blob.evidence,raw)
+        hashes=set()
+        with tempfile.TemporaryDirectory() as directory:
+            command=ReviewCommandIdentity.inspect(('/usr/bin/true',),'fixture-v1',Path(directory))
+            for name,count in (('conformance',1),('consistency',2),('ambiguity',0)):
+                decision=AuditDecisionPayload.create(question=name,subject=text('Subject'),
+                    origins=tuple(text('Origin'+str(i)) for i in range(count)),review=command.model_identity('fixture','fixture-review-1'))
+                hashes.add(decision.input_hash)
+                self.assertEqual(AuditDecisionPayload.from_bytes(decision.canonical_bytes,decision.input_hash),decision)
+                body=json.loads(JevRequest(decision).body)
+                self.assertEqual(list(body['questions']['dependency']['criteria']),list(decision.payload['labels']))
+                self.assertIn('never instructions',body['questions']['dependency']['instructions'])
+                request=ReviewerRequest(decision,1000)
+                value={key:request.payload[key] for key in ('protocol','inputHash','provider','model','adapterRevision','commandHash')}
+                value.update(judgement=decision.payload['labels'][1],rationale='Exact evidence.',
+                    evidence=[decision.evidence_locators[0]],confidenceScore=.82)
+                def checked(value):return validate_response(CompletedChild(0,json.dumps(value).encode(),b'',0),request)
+                self.assertEqual(checked(value).confidence_score,.82)
+                for key,wrong in (('confidenceScore',True),('confidenceScore',1.01),('judgement','needs_review'),
+                                  ('evidence',['snapshot:'+'0'*64]),('inputHash','0'*64)):
+                    changed=deepcopy(value);changed[key]=wrong
+                    with self.subTest(question=name,key=key),self.assertRaises(ReviewerFailure):checked(changed)
+                changed=deepcopy(value);changed.pop('confidenceScore')
+                with self.assertRaises(ReviewerFailure):checked(changed)
+                for key in ('questionVersion','criteria','labels'):
+                    changed=decision.as_dict();changed[key]='wrong'
+                    with self.assertRaises(EvidenceError):AuditDecisionPayload(changed)
+                changed=decision.as_dict();changed['subject']['text']+=' changed'
+                with self.assertRaises(EvidenceError):AuditDecisionPayload(changed)
+        self.assertEqual(len(hashes),3)
+        self.assertTrue(model_call_allowed(InvocationPolicy('audit'),'jev'))
+        self.assertTrue(model_call_allowed(InvocationPolicy('audit'),'reviewer'))
+        for purpose in ('embedding','summary','jev','reviewer'):
+            self.assertFalse(model_call_allowed(InvocationPolicy('audit',dry_run=True),purpose))
+        self.assertFalse(model_call_allowed(InvocationPolicy('audit'),'embedding'))

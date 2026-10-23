@@ -187,11 +187,11 @@ def validate_response(child: CompletedChild, request: ReviewerRequest) -> Review
                               returncode=child.returncode, elapsed_seconds=child.elapsed_seconds)
     if (child.returncode != 0 or not {"judgement", "rationale", "evidence"} <= value.keys()
             or value.keys() - _IDENTITY - {"judgement", "rationale", "evidence", "usage"} -
-                ({"confidenceScore"} if request.decision.payload["questionVersion"] == "mycel-origin-v1" else set())
+                ({"confidenceScore"} if request.decision.payload["questionVersion"] in {"mycel-origin-v1", "mycel-audit-conformance-v1", "mycel-audit-consistency-v1", "mycel-audit-ambiguity-v1"} else set())
             or not isinstance(value["judgement"], str) or value["judgement"] not in request.decision.payload["labels"]
             or not _text(value["rationale"])):
         _invalid(child)
-    origin = request.decision.payload["questionVersion"] == "mycel-origin-v1"
+    origin = request.decision.payload["questionVersion"] in {"mycel-origin-v1", "mycel-audit-conformance-v1", "mycel-audit-consistency-v1", "mycel-audit-ambiguity-v1"}
     score = value.get("confidenceScore")
     if origin and (not _finite_number(score) or not 0 <= score <= 1):
         _invalid(child)
