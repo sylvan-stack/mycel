@@ -20,7 +20,7 @@ import threading
 import time
 from types import MappingProxyType
 
-from ._classification_payload import (CHOICE_CRITERIA, INSTRUCTION, LABELS,
+from ._classification_payload import (OriginDecisionPayload, ORIGIN_QUESTION, CHOICE_CRITERIA, INSTRUCTION, LABELS,
                                      DecisionPayload, ReviewerRequest)
 from ._credentials import Credentials, CredentialUnavailable, Secret
 from ._errors import MycelError
@@ -103,8 +103,9 @@ class JevRequest:
         # reorder production Choices and change the accepted question.
         return json.dumps({"state": self.decision.as_dict(),
             "model": self.decision.payload["models"]["jev"]["model"],
-            "questions": {"dependency": {"type": "choice", "instructions": INSTRUCTION,
-                "criteria": dict(zip(LABELS, CHOICE_CRITERIA, strict=True))}}},
+            "questions": {"dependency": {"type": "choice", "instructions": ORIGIN_QUESTION["instruction"] if isinstance(self.decision, OriginDecisionPayload) else INSTRUCTION,
+                "criteria": dict(zip(self.decision.payload["labels"],
+                    ORIGIN_QUESTION["criteria"] if isinstance(self.decision, OriginDecisionPayload) else CHOICE_CRITERIA, strict=True))}}},
             ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
 
 
@@ -204,16 +205,17 @@ class JevResponse:
     usage: Mapping[str, int]
     tied: bool
     reported_confidence: Decimal | None = None
+    labels: tuple[str, ...] = LABELS
 
     def __post_init__(self):
         if (not isinstance(self.model, str) or not re.fullmatch(r"jev-[0-9]+\.[0-9]+\.[0-9]+", self.model)
-                or not isinstance(self.label, str) or self.label not in LABELS
-                or not isinstance(self.probabilities, Mapping) or set(self.probabilities) != set(LABELS)
+                or not isinstance(self.label, str) or self.label not in self.labels
+                or not isinstance(self.probabilities, Mapping) or set(self.probabilities) != set(self.labels)
                 or not isinstance(self.usage, Mapping) or set(self.usage) != {"input_tokens", "output_tokens"}
                 or any(type(member) is not int or member < 0 for member in self.usage.values())
                 or type(self.tied) is not bool):
             _invalid()
-        probabilities = {label: _fraction(self.probabilities[label]) for label in LABELS}
+        probabilities = {label: _fraction(self.probabilities[label]) for label in self.labels}
         confidence = _fraction(self.confidence)
         if self.tied != _distribution(probabilities, confidence, self.label):
             _invalid()
@@ -229,17 +231,17 @@ class JevResponse:
     def as_dict(self) -> dict:
         difference = _confidence_difference(self.reported_confidence, self.confidence)
         return {"provider": "typesafe", "model": self.model, "label": self.label,
-            "probabilities": {label: float(self.probabilities[label]) for label in LABELS},
+            "probabilities": {label: float(self.probabilities[label]) for label in self.labels},
             "confidence": float(self.confidence), "reportedConfidence": float(self.reported_confidence),
             "confidenceComparison": {"matches": self.reported_confidence == self.confidence,
                 "reportedMinusCanonical": float(difference)},
-            "exactDecimals": {"probabilities": {label: str(self.probabilities[label]) for label in LABELS},
+            "exactDecimals": {"probabilities": {label: str(self.probabilities[label]) for label in self.labels},
                 "confidence": str(self.confidence), "reportedConfidence": str(self.reported_confidence),
                 "reportedMinusCanonical": str(difference)},
             "tied": self.tied, "usage": dict(self.usage)}
 
 
-def validate_response(result: HTTPResult, *, model: str) -> JevResponse:
+def validate_response(result: HTTPResult, *, model: str, labels=LABELS) -> JevResponse:
     """Use decimal JSON numbers so exact tolerance/floor boundaries stay exact."""
     if not isinstance(result, HTTPResult) or result.status != 200:
         _invalid()
@@ -251,10 +253,10 @@ def validate_response(result: HTTPResult, *, model: str) -> JevResponse:
     answer = value["answers"]["dependency"]
     if (not isinstance(answer, dict) or set(answer) != {"type", "choice", "probabilities", "confidence"}
             or answer["type"] != "choice" or not isinstance(answer["choice"], str)
-            or answer["choice"] not in LABELS or not isinstance(answer["probabilities"], dict)
-            or set(answer["probabilities"]) != set(LABELS)):
+            or answer["choice"] not in labels or not isinstance(answer["probabilities"], dict)
+            or set(answer["probabilities"]) != set(labels)):
         _invalid()
-    probabilities = {label: _fraction(answer["probabilities"][label]) for label in LABELS}
+    probabilities = {label: _fraction(answer["probabilities"][label]) for label in labels}
     reported = _fraction(answer["confidence"])
     confidence = _canonical_confidence(probabilities, reported)
     tied = _distribution(probabilities, confidence, answer["choice"])
@@ -263,7 +265,7 @@ def validate_response(result: HTTPResult, *, model: str) -> JevResponse:
             or any(type(member) is not int or member < 0 for member in usage.values())):
         _invalid()
     return JevResponse(model, answer["choice"], MappingProxyType(probabilities), confidence,
-                       MappingProxyType(dict(usage)), tied, reported_confidence=reported)
+                       MappingProxyType(dict(usage)), tied, reported_confidence=reported, labels=tuple(labels))
 
 
 @dataclass(frozen=True)
@@ -311,7 +313,8 @@ class JevOutcome:
 
 
 def route_response(decision: DecisionPayload, response: JevResponse) -> JevOutcome:
-    if response.model != decision.payload["models"]["jev"]["model"]:
+    if (response.model != decision.payload["models"]["jev"]["model"]
+            or response.labels != tuple(decision.payload["labels"])):
         _invalid()
     reason = ("jev_tied" if response.tied else "insufficient_evidence" if response.label == "insufficient_evidence"
               else "jev_low_confidence" if response.confidence < Decimal(decision.payload["routing"]["confidenceFloor"])
@@ -538,6 +541,6 @@ class JevClient:
             return JevOutcome(decision, None, "needs_llm_review", "jev_context_refused")
         if result.status != 200:
             raise JevFailure("invalid_request")
-        response = validate_response(result, model=decision.payload["models"]["jev"]["model"])
+        response = validate_response(result, model=decision.payload["models"]["jev"]["model"], labels=decision.payload["labels"])
         _check(attempt_deadline, cancelled)
         return route_response(decision, response)

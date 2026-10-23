@@ -33,6 +33,8 @@ COMMANDS = (
     CommandSpec("origins", "Report Origin Links and coverage", extra_options=("--missing", "--path <path>",
                 "--changes", "--unresting", "--no-fresh", "--needs-nothing <requirement>",
                 "--reason <text>", "--clear-needs-nothing <requirement>")),
+    CommandSpec("recovery", "Recover inferred Origin Links from local evidence",
+                extra_options=("--path <path>", "--k <pairs>", "--dry-run", "--review")),
     CommandSpec("drifts", "Report dependency review work", extra_options=("--closed", "--all-versions")),
     CommandSpec("relate", "Assert a relation", scope=False, extra_options=("--remove",)),
     CommandSpec("verifications", "Report verification records", extra_options=("--history",)),
@@ -62,7 +64,7 @@ def help_reply(command: str | None = None) -> dict:
         "version": "2.0.0",
         "usage": "mycel <command> [arguments]",
         "commands": [
-            {"name": s.name, "description": s.description, "available": s.name in {"origins", "justify", "api-key", "info", "grep", "repos", "init", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
+            {"name": s.name, "description": s.description, "available": s.name in {"recovery", "origins", "justify", "api-key", "info", "grep", "repos", "init", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
              "rawArguments": s.raw_arguments,
              "options": ([] if s.raw_arguments else
                          ["-h", "--help"] + (["--repo <name>"] if s.scope else []) +
@@ -71,5 +73,5 @@ def help_reply(command: str | None = None) -> dict:
         ],
         "options": ["-h", "--help", "--repo <name> (repeatable where supported)", "--all (where supported)"],
         "buildSelection": "Installed launcher: -v <number> must be first",
-        "stage": "CLI foundation, strict settings and diagnostics, repository listing and atomic removal, complete repository status, complete scoped ingest, read-only ordered activity history and exact entry details, retained reference reporting, guarded dependency and relation assertions, exact verification and read-only history, atomic stated justification and on-demand Origin Coverage, exact indexed chunk reading, evidence-bearing search, scoped embedding, atomic summary builds, summary regeneration and removal, read-only summary status and dry-runs, finite classification, local provenance reports, and private store initialization; system grep preserves its output and can append a read-only related search tail",
+        "stage": "CLI foundation, strict settings and diagnostics, repository listing and atomic removal, complete repository status, complete scoped ingest, read-only ordered activity history and exact entry details, retained reference reporting, guarded dependency and relation assertions, exact verification and read-only history, atomic stated justification and on-demand Origin Coverage, exact indexed chunk reading, evidence-bearing search, scoped embedding, atomic summary builds, summary regeneration and removal, read-only summary status and dry-runs, finite classification and guarded Origin recovery, local provenance reports, and private store initialization; system grep preserves its output and can append a read-only related search tail",
     }
