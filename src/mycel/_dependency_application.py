@@ -207,7 +207,8 @@ FROM public.mycel_file_locations l JOIN public.mycel_file_versions v ON v.id=l.f
 JOIN public.mycel_files f ON f.id=v.file_id WHERE l.id=%s FOR SHARE OF l,v,f NOWAIT"""
 _ROWS_SQL = """SELECT id,repository,dependant_version,declaration,source_place,kind,state,baseline_owner
 FROM public.mycel_dependencies WHERE repository=%s AND dependant_version=%s
-AND state->'declarationLocation'->>'file'=%s ORDER BY id FOR UPDATE NOWAIT"""
+AND state->'declarationLocation'->>'file'=%s AND kind=ANY(ARRAY['declared','asserted','generated'])
+ORDER BY id FOR UPDATE NOWAIT"""
 _GRAPH_SQL = """SELECT d.id,d.repository,d.dependant_version,d.state,s.id,c.id,e.source_version
 FROM public.mycel_dependencies d JOIN public.mycel_chunk_versions v ON v.id=d.dependant_version
 JOIN public.mycel_chunks c ON c.id=v.chunk_id JOIN public.mycel_edges e ON e.dependency=d.id

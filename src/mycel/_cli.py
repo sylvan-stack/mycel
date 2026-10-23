@@ -336,6 +336,9 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         parser.add_argument("--needs-nothing")
         parser.add_argument("--clear-needs-nothing")
         parser.add_argument("--reason")
+    if name == "recovery":
+        parser.add_argument("--path", action="append", default=[])
+        parser.add_argument("--review", action="store_true")
     if name == "verifications":
         parser.add_argument("--history", action="store_true")
     if name == "overview":
@@ -343,9 +346,9 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "undocumented":
         parser.add_argument("--path", action="append", default=[])
         parser.add_argument("--no-fresh", action="store_true")
-    if name in {"embed", "summaries", "classify"}:
+    if name in {"embed", "summaries", "classify", "recovery"}:
         parser.add_argument("--dry-run", action="store_true")
-    if name == "classify":
+    if name in {"classify", "recovery"}:
         parser.add_argument("--k", type=int)
     if name == "embed":
         parser.add_argument("--retry-failed", action="store_true")
@@ -405,6 +408,9 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
                 (parsed.needs_nothing is not None and (parsed.clear_needs_nothing is not None or not parsed.reason or not parsed.reason.strip())) or
                 (parsed.reason is not None and parsed.needs_nothing is None)):
             raise MycelError(ErrorCode.INVALID_INPUT, "Origins takes one repository and report options, or one requirement mark with its reason.")
+    if name == "recovery" and (len(repos)>1 or len(parsed.arguments)>1 or
+            (parsed.arguments and parsed.path) or (parsed.k is not None and parsed.k<1)):
+        raise MycelError(ErrorCode.INVALID_INPUT, "Recovery takes one chunk or one repository with paths, --k, --dry-run and --review.")
     if name == "verifications" and (parsed.arguments or len(repos) > 1):
         raise MycelError(ErrorCode.INVALID_INPUT, "Verifications takes one repository and optional --history.")
     if name == "overview" and (parsed.arguments or len(repos) > 1):
@@ -470,6 +476,11 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         arguments = ('--k', str(parsed.k)) + \
                     (('--only', parsed.only) if parsed.only is not None else ()) + \
                     (('--no-fresh',) if parsed.no_fresh else ()) + (('--', parsed.arguments[0]) if parsed.arguments else ())
+    if name == "recovery":
+        from ._undocumented import normalize_paths
+        arguments = tuple(parsed.arguments) + tuple(value for path in normalize_paths(parsed.path) for value in ("--path",path)) + \
+            (("--k",str(parsed.k)) if parsed.k is not None else ()) + \
+            (("--dry-run",) if parsed.dry_run else ()) + (("--review",) if parsed.review else ())
     if name == "classify":
         arguments = (("--k", str(parsed.k)) if parsed.k is not None else ()) + \
                     (("--dry-run",) if parsed.dry_run else ())
@@ -550,6 +561,8 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
             selected_handlers["confirm"] = handle_confirm
             from ._justify import handle_justify
             selected_handlers["justify"] = handle_justify
+            from ._recovery import handle_recovery
+            selected_handlers["recovery"] = handle_recovery
             from ._origins import handle_origins
             selected_handlers["origins"] = handle_origins
             from ._verification_reader import handle_verifications

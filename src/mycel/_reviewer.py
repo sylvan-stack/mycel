@@ -112,10 +112,13 @@ class ReviewerSuccess:
     evidence: tuple[str, ...]
     usage: Mapping[str, int] | None = None
     elapsed_seconds: float = 0.0
+    confidence_score: float | None = None
 
     def as_dict(self) -> dict:
         value = {key: self.request.payload[key] for key in _IDENTITY}
         value.update(judgement=self.judgement, rationale=self.rationale, evidence=list(self.evidence))
+        if self.confidence_score is not None:
+            value["confidenceScore"] = self.confidence_score
         if self.usage is not None:
             value["usage"] = dict(self.usage)
         return value
@@ -183,9 +186,14 @@ def validate_response(child: CompletedChild, request: ReviewerRequest) -> Review
         raise ReviewerFailure(error["code"], retry_after_seconds=delay,
                               returncode=child.returncode, elapsed_seconds=child.elapsed_seconds)
     if (child.returncode != 0 or not {"judgement", "rationale", "evidence"} <= value.keys()
-            or value.keys() - _IDENTITY - {"judgement", "rationale", "evidence", "usage"}
-            or not isinstance(value["judgement"], str) or value["judgement"] not in LABELS
+            or value.keys() - _IDENTITY - {"judgement", "rationale", "evidence", "usage"} -
+                ({"confidenceScore"} if request.decision.payload["questionVersion"] == "mycel-origin-v1" else set())
+            or not isinstance(value["judgement"], str) or value["judgement"] not in request.decision.payload["labels"]
             or not _text(value["rationale"])):
+        _invalid(child)
+    origin = request.decision.payload["questionVersion"] == "mycel-origin-v1"
+    score = value.get("confidenceScore")
+    if origin and (not _finite_number(score) or not 0 <= score <= 1):
         _invalid(child)
     citations = value["evidence"]
     if (type(citations) is not list or not citations or any(not isinstance(item, str) for item in citations)
@@ -197,7 +205,7 @@ def validate_response(child: CompletedChild, request: ReviewerRequest) -> Review
             or any(type(number) is not int or number < 0 for number in usage.values())):
         _invalid(child)
     return ReviewerSuccess(request, value["judgement"], value["rationale"].strip(), tuple(citations),
-                           MappingProxyType(usage) if usage is not None else None, child.elapsed_seconds)
+                           MappingProxyType(usage) if usage is not None else None, child.elapsed_seconds, score if origin else None)
 
 
 def _check(deadline: float, cancelled: Callable[[], bool]):

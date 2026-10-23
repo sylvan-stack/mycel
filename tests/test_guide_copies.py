@@ -16,13 +16,13 @@ SYNC = runpy.run_path(str(ROOT / "scripts/sync_guides.py"))
 class GuideCopyTests(unittest.TestCase):
     @proves("MYC-0.12")
     def test_every_repository_guide_has_a_portable_corpus_copy(self):
-        self.assertEqual(len(SYNC["GUIDES"]), 19)
-        self.assertEqual(len(set(SYNC["GUIDES"])), 19)
+        self.assertEqual(len(SYNC["GUIDES"]), 20)
+        self.assertEqual(len(set(SYNC["GUIDES"])), 20)
         with tempfile.TemporaryDirectory() as directory:
             corpus = Path(directory)
             SYNC["write_copies"](ROOT / "docs", corpus)
             self.assertEqual(SYNC["check_copies"](ROOT / "docs", corpus), [])
-            self.assertEqual(len(list(corpus.glob("*.md"))), 19)
+            self.assertEqual(len(list(corpus.glob("*.md"))), 20)
 
     @proves("MYC-0.12")
     def test_projection_keeps_prose_exact_and_rewrites_only_local_guide_links(self):
@@ -63,7 +63,7 @@ class GuideCopyTests(unittest.TestCase):
             args = ["--corpus", directory, "--docs", str(ROOT / "docs")]
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()) as errors:
                 self.assertEqual(SYNC["main"](["check", *args]), 1)
-                self.assertEqual(errors.getvalue().count("corpus copy is missing"), 19)
+                self.assertEqual(errors.getvalue().count("corpus copy is missing"), 20)
                 self.assertEqual(SYNC["main"](["write", *args]), 0)
                 self.assertEqual(SYNC["main"](["check", *args]), 0)
                 (corpus / "mycel-2-capture.md").write_text("# Obsolete\n", encoding="utf-8")

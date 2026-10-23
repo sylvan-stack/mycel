@@ -178,6 +178,10 @@ class ClassificationStore:
         source = next((item for item in row[5]['sources'] if item['id'] == reason_id), None)
         if source is None:
             raise EvidenceError('reason_removed')
+        from ._staleness import inactive_policy_links
+        inactive = inactive_policy_links(self.connection, settings)
+        if source['dependency'] in inactive:
+            raise MycelError('invalid_input', 'Classification requires work owned by the invoking clone.')
         catalog = SourceResolver.from_observation_transaction(self.connection, settings,
             guarded_repositories=guarded_repositories)
         located = [(file, member) for file in catalog.files for member in catalog._members(file, file.chunks)
@@ -190,10 +194,10 @@ class ClassificationStore:
         if source['kind'] in {'upstream_stale', 'ref_fault', 'baseline_missing'}:
             raise EvidenceError(source['input'].get('fault') or source['kind'])
         links = [link for link in _links(self.connection, _eligible(settings))
-                 if link[1] == row[1] and link[2] == row[2]]
+                 if link[1] == row[1] and link[2] == row[2] and str(link[0]) not in inactive]
         faults = self.connection.execute('SELECT id FROM public.mycel_ref_faults '
             'WHERE repository=%s AND chunk_version=%s', (row[1], row[2])).fetchall()
-        if any(str(fault[0]) not in {str(link[0]) for link in links} for fault in faults):
+        if any(str(fault[0]) not in inactive and str(fault[0]) not in {str(link[0]) for link in links} for fault in faults):
             raise EvidenceError('context_missing')
         selected_link = next((link for link in links if str(link[0]) == source['dependency']), None)
         if selected_link is None:

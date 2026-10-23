@@ -184,6 +184,13 @@ class JustifyStore:
                         if len(rows) != 1:
                             raise MycelError('store_format', 'The justification assertion has no unique owner.')
                         identifier, state = rows[0]
+                        # A human statement supersedes the model's proposal at
+                        # this exact clone/version/Origin without a duplicate.
+                        self.connection.execute("DELETE FROM public.mycel_dependencies WHERE repository=%s "
+                            "AND dependant_version=%s AND kind='origin' AND (source_place=%s OR state->>'originId'=%s) "
+                            "AND state->'declarationLocation'->>'file'=%s",
+                            (owner,member.chunk.version,origin.place.address,
+                             origin.members[0].chunk.identifier if len(origin.members)==1 and origin.members[0].chunk.kind in {'req','dec'} else None,location))
                         link = {'chunk': public_reference(selection), 'origin': public_reference(origin),
                             'method': 'stated', 'confidenceScore': 1.0, 'confidence': 'asserted',
                             'who': by, 'when': captured_at}

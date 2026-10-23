@@ -489,6 +489,69 @@ class DecisionPayload:
         return result
 
 
+ORIGIN_QUESTION = _PROMPTS['origin']
+ORIGIN_LABELS = ('governs', 'related', 'unrelated')
+ORIGIN_VERSION = 'mycel-origin-v1'
+if (ORIGIN_QUESTION.get('questionVersion') != ORIGIN_VERSION
+        or tuple(ORIGIN_QUESTION.get('labels', ())) != ORIGIN_LABELS
+        or not isinstance(ORIGIN_QUESTION.get('instruction'), str)
+        or len(ORIGIN_QUESTION.get('criteria', ())) != 3
+        or not all(isinstance(item, str) for item in ORIGIN_QUESTION['criteria'])):
+    raise RuntimeError('The packaged Origin question has incompatible fixed data.')
+ORIGIN_CRITERIA = ORIGIN_QUESTION['instruction'] + '\n\n' + '\n'.join(
+    f'{label}: {criterion}' for label, criterion in zip(ORIGIN_LABELS, ORIGIN_QUESTION['criteria'], strict=True))
+
+
+@dataclass(frozen=True)
+class OriginDecisionPayload(DecisionPayload):
+    """A distinct pair question with complete, immutable current evidence."""
+    def __post_init__(self):
+        value = _copy(self.payload)
+        _keys(value, {'protocol', 'questionVersion', 'criteria', 'labels', 'chunk', 'candidate',
+                      'sources', 'history', 'context', 'models', 'routing'})
+        if (type(value['protocol']) is not int or value['protocol'] != PROTOCOL
+                or value['questionVersion'] != ORIGIN_VERSION or value['criteria'] != ORIGIN_CRITERIA
+                or value['labels'] != list(ORIGIN_LABELS)):
+            _fail()
+        DecisionText(value['chunk']); DecisionText(value['candidate'])
+        if not value['sources'] or value['sources'] != sorted(set(value['sources'])):
+            _fail()
+        for source in value['sources']:
+            _enum(source, {'document', 'test', 'commit', 'issue', 'embedding'})
+        for history in _members(value['history']):
+            DecisionText(history)
+        context = [DecisionText(item) for item in _members(value['context'])]
+        addresses = [item.payload['snapshot']['place']['address'] for item in context]
+        if addresses != sorted(set(addresses)):
+            _fail()
+        _keys(value['models'], {'jev', 'review'})
+        _keys(value['models']['jev'], {'provider', 'model'})
+        if value['models']['jev']['provider'] != 'typesafe' or not _JEV_MODEL.fullmatch(value['models']['jev']['model']):
+            _fail()
+        _review_model(value['models']['review'])
+        _keys(value['routing'], {'revision', 'confidenceFloor'})
+        if (value['routing']['revision'] != 'mycel-origin-routing-v1'
+                or canonical_decimal(value['routing']['confidenceFloor']) != value['routing']['confidenceFloor']):
+            _fail()
+        object.__setattr__(self, 'payload', _frozen(value))
+
+    @classmethod
+    def create(cls, *, chunk, candidate, sources, history=(), context=(), jev_model='jev-1.13.0',
+               review=None, confidence_floor='0.7'):
+        return cls({'protocol': PROTOCOL, 'questionVersion': ORIGIN_VERSION, 'criteria': ORIGIN_CRITERIA,
+                    'labels': ORIGIN_LABELS, 'chunk': chunk.as_dict(), 'candidate': candidate.as_dict(),
+                    'sources': sorted(set(sources)), 'history': [item.as_dict() for item in history],
+                    'context': [item.as_dict() for item in context],
+                    'models': {'jev': {'provider': 'typesafe', 'model': jev_model}, 'review': review},
+                    'routing': {'revision': 'mycel-origin-routing-v1',
+                                'confidenceFloor': canonical_decimal(confidence_floor)}})
+
+    @property
+    def evidence_locators(self):
+        values = [self.payload['chunk'], self.payload['candidate'], *self.payload['context'], *self.payload['history']]
+        return tuple(sorted({item['locator'] for item in values}))
+
+
 @dataclass(frozen=True)
 class ReviewCommandIdentity:
     payload: Mapping[str, Any] = field(repr=False)
@@ -586,8 +649,8 @@ class ReviewerRequest:
     def payload(self) -> Mapping:
         review = self.decision.payload["models"]["review"]
         return _frozen({"protocol": PROTOCOL, "inputHash": self.decision.input_hash,
-                        "questionVersion": QUESTION_VERSION, **review, "payload": self.decision.payload,
-                        "judgements": LABELS, "evidenceLocators": self.decision.evidence_locators,
+                        "questionVersion": self.decision.payload["questionVersion"], **review, "payload": self.decision.payload,
+                        "judgements": self.decision.payload["labels"], "evidenceLocators": self.decision.evidence_locators,
                         "budget": {"timeoutMs": self.timeout_ms, "maxProviderCalls": 1, "maxOutputBytes": 1048576}})
 
     @property

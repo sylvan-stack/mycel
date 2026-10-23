@@ -80,6 +80,8 @@ def origins_in_transaction(connection, settings, repository, *, chunk=None, miss
         link = checked_link(state['originLink'])
         links.setdefault(version,[]).append(link)
         rested.update(origins)
+        if state.get('originId') is not None:
+            rested.add(state['originId'])
     marks = {str(identifier):metadata.get('needsNothing') for identifier,metadata in connection.execute(
         "SELECT id,metadata FROM public.mycel_chunks WHERE repository=%s AND kind='req'",(repository,)).fetchall()}
     chunks, unused = [], []
