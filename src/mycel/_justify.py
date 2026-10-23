@@ -188,7 +188,10 @@ class JustifyStore:
                                 file = resolved.selection.file
                                 files[(file.repository, file.identifier)] = file
                         planned.append((raw_chunk, raw_origin, selection, source.selection, location))
-                    inputs = DependencyCaptureInputs(self.connection, settings, settings_home=settings_home)
+                    # One capture per repository for the whole batch; the final
+                    # verify() below compares it with a fresh capture.
+                    inputs = DependencyCaptureInputs(self.connection, settings, settings_home=settings_home,
+                        guarded_repositories=guarded, batch=True)
                     for file in files.values():
                         manifest = inputs.observe(file.repository)
                         aliases = {(place.root, place.path) for place in file.aliases}
@@ -200,7 +203,7 @@ class JustifyStore:
                         member = selection.members[0]
                         owner = member.place.repository
                         DeriveStore(self.connection).apply_in_transaction(settings, raw_chunk, raw_origin,
-                            remove=False, captured_at=captured_at, settings_home=settings_home)
+                            remove=False, captured_at=captured_at, settings_home=settings_home, inputs=inputs)
                         rows = self.connection.execute("""SELECT id,state FROM public.mycel_dependencies
                             WHERE repository=%s AND dependant_version=%s AND kind='asserted'
                               AND source_place=%s AND state->'declarationLocation'->>'file'=%s
@@ -244,7 +247,8 @@ class JustifyStore:
                         if key not in verified:
                             verified[key] = ConfirmationStore(self.connection).apply_in_transaction(settings, raw_chunk,
                                 by=by, how='check' if proven else 'read', captured_at=captured_at, settings_home=settings_home,
-                                guarded_repositories=guarded, expected_identifier=member.chunk.identifier)
+                                guarded_repositories=guarded, expected_identifier=member.chunk.identifier,
+                                inputs=inputs)
                         reply['verification'] = verified[key]
                     for owner in sorted({pair[2].place.repository for pair in planned}):
                         current = [reply for reply, pair in zip(replies, planned)

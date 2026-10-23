@@ -275,7 +275,7 @@ class ConfirmationStore:
 
     def apply_in_transaction(self, settings, dependant, *, by=None, how='read', captured_at,
                              settings_home=None, activity=None, guarded_repositories=None,
-                             expected_identifier=None):
+                             expected_identifier=None, inputs=None):
         settings.require_valid(require_store=False)
         _validate_ref_syntax((dependant,))
         _time(captured_at)
@@ -294,8 +294,11 @@ class ConfirmationStore:
             raise EvidenceError('changed_since_ingest', (member.place.address,))
         location, metadata = _located(self.connection, selection, settings=settings)
         _require_confirmable(self.connection, member, metadata)
-        inputs = DependencyCaptureInputs(self.connection, settings, settings_home=settings_home,
-            guarded_repositories=guarded)
+        # A batch caller passes its shared inputs and verifies them at its end.
+        shared = inputs is not None
+        if not shared:
+            inputs = DependencyCaptureInputs(self.connection, settings, settings_home=settings_home,
+                guarded_repositories=guarded)
         reread = inputs.rereader(LocationId('disk', None, 'disk'), owner, None)
         resolver = RetainedDependencyResolver(catalog, {})
         guard = InheritanceInputs(settings, member, selection.file, CaptureLocation('disk'),
@@ -388,7 +391,8 @@ class ConfirmationStore:
             # The guarded endpoint's complete disk file, each selected source,
             # settings, record evidence and final graph all fit after callbacks.
             reread(guard)
-            inputs.verify()
+            if not shared:
+                inputs.verify()
             propagation.verify()
             return public
 

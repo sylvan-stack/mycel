@@ -184,6 +184,33 @@ class ProvenImportStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(), (0,))
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_evidence_owners').fetchone(), before)
 
+    @proves('MYC-17.10', kind='store')
+    def test_one_batch_captures_each_repository_once_and_compares_once_at_its_end(self):
+        from mycel import _dependency_inputs
+        captures = []
+        capture = _dependency_inputs.capture_repository
+        def counted(settings, repository, *arguments, **options):
+            captures.append(repository)
+            return capture(settings, repository, *arguments, **options)
+        with self.base.connect() as connection, \
+                patch.object(_dependency_inputs, 'capture_repository', side_effect=counted):
+            self.assertEqual(len(migration.apply_disposable(connection, self.settings, self.plan)), 2)
+        self.assertEqual(captures, ['fixture', 'fixture'])
+
+    @proves('MYC-17.10', kind='store')
+    def test_an_edit_between_pairs_refuses_the_whole_batch(self):
+        from mycel import _derive
+        derive = _derive.DeriveStore.apply_in_transaction
+        def edited(store, *arguments, **options):
+            reply = derive(store, *arguments, **options)
+            self.source.write_text(self.source.read_text() + '\n# edited mid-batch\n')
+            return reply
+        with self.base.connect() as connection:
+            with patch.object(_derive.DeriveStore, 'apply_in_transaction', edited), self.assertRaises(MycelError):
+                migration.apply_disposable(connection, self.settings, self.plan)
+            self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_dependencies WHERE kind='asserted'").fetchone(), (0,))
+            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(), (0,))
+
     @proves('MYC-17.8', 'MYC-17.10', kind='store')
     def test_import_refuses_to_replace_a_newer_human_statement(self):
         from mycel._justify import JustifyStore

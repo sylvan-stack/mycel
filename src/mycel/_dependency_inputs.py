@@ -29,10 +29,15 @@ class DependencyCaptureInputs:
     is observed through that capture, another repository is observed once and
     never compared with its index (its own pass does that), and later disk
     changes are the next pass's business (MYC-1.37, MYC-D64).
+
+    A batch shares one instance across several guarded mutations in one
+    transaction: each repository is captured once, and its owner calls
+    `verify()` once at the end, so a change anywhere still refuses the batch.
     """
     def __init__(self, connection, settings: SettingsSnapshot, *, settings_home: Path | None = None,
                  guarded_repositories: tuple[str, ...] | None = None,
-                 snapshot: CaptureManifest | None = None, catalogs: dict | None = None):
+                 snapshot: CaptureManifest | None = None, catalogs: dict | None = None,
+                 batch: bool = False):
         if snapshot is not None and not isinstance(snapshot, CaptureManifest):
             raise MycelError('invalid_input', 'A capture snapshot must be a complete capture manifest.')
         self.connection = connection
@@ -42,9 +47,10 @@ class DependencyCaptureInputs:
         self.guarded_repositories = guarded_repositories
         self.snapshot = snapshot
         self.catalogs = catalogs  # one catalog per location for a complete pass's run
+        self.batch = batch
 
     def observe(self, repository):
-        if self.snapshot is not None and repository in self.captures:
+        if (self.snapshot is not None or self.batch) and repository in self.captures:
             return self.captures[repository]
         observed = capture_repository(self.settings, repository)
         if not observed.deletion_safe:
