@@ -58,7 +58,7 @@
       "specification_status": "accepted"
     },
     "14-drift-detection.md": {
-      "sha256": "0d6fcfcac767e9aea2ba459d9c1b4b2de52e4825fc80f0e49f283f268a2ad00a",
+      "sha256": "0a9f4332fb82b92e565fe8950a7f073bce33167633cb67e8a78665a47a6d15c1",
       "specification_status": "accepted"
     },
     "15-distribution-and-replacement.md": {
@@ -70,7 +70,7 @@
       "specification_status": "accepted"
     },
     "17-justification.md": {
-      "sha256": "f1935126f669480f673df2e56730364f7be1136f6abf8eb7e7facc25ddd88f20",
+      "sha256": "840883a64b9b9078b05ea1ee255488ba2ce36f3add5d78fb3edac24c644a23f5",
       "specification_status": "draft"
     }
   },
