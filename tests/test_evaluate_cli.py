@@ -9,7 +9,6 @@ import unittest
 from unittest.mock import Mock, patch
 
 from mycel._cli import parse, run
-from mycel._coverage import proves
 from mycel._evaluate import evaluate
 
 
@@ -30,7 +29,6 @@ class EvaluateCliTests(unittest.TestCase):
                          stdout=output, stderr=diagnostic)
         return status, json.loads(output.getvalue()), diagnostic.getvalue()
 
-    @proves("MYC-0.6", "MYC-0.7", "MYC-13.10")
     def test_kind_and_live_validation_and_help_precede_configuration_and_services(self):
         with tempfile.TemporaryDirectory() as directory, \
                 patch("mycel._database.store_connection") as store, \
@@ -52,7 +50,6 @@ class EvaluateCliTests(unittest.TestCase):
             key.assert_not_called()
             provider.assert_not_called()
 
-    @proves("MYC-13.10", "MYC-0.6")
     def test_organization_and_disabled_scope_refuse_before_file_access(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -72,7 +69,6 @@ class EvaluateCliTests(unittest.TestCase):
                 self.assertEqual((status, reply["error"]["code"]), (1, "refused"))
                 loading.assert_not_called()
 
-    @proves("MYC-13.10", "MYC-0.10")
     def test_empty_selected_sections_are_null_reports_without_any_service_or_write(self):
         with tempfile.TemporaryDirectory() as directory, \
                 patch("mycel._database.store_connection") as store, \
@@ -102,7 +98,6 @@ class EvaluateCliTests(unittest.TestCase):
             for mock in (store, key, provider, activity):
                 mock.assert_not_called()
 
-    @proves("MYC-13.10", "MYC-0.7")
     def test_unselected_section_faults_and_unreadable_files_precede_pipeline(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -121,7 +116,6 @@ class EvaluateCliTests(unittest.TestCase):
             self.assertEqual((status, reply["error"]["code"]), (1, "io"))
             pipeline.assert_not_called()
 
-    @proves("MYC-13.10", "MYC-0.10")
     def test_nonempty_unavailable_pipelines_refuse_without_paid_or_store_work(self):
         with tempfile.TemporaryDirectory() as directory, \
                 patch("mycel._database.store_connection") as store, \

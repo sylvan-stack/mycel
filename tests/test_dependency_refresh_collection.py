@@ -5,7 +5,6 @@ import unittest
 from psycopg.types.json import Jsonb
 
 from mycel._activity import MutationActivity, activity_state
-from mycel._coverage import proves
 
 try:
     from . import test_located_dependency_application as fixtures
@@ -14,6 +13,8 @@ except ImportError:
 
 
 class DependencyRefreshCollectionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.LocatedDependencyApplicationStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -21,7 +22,6 @@ class DependencyRefreshCollectionStoreTests(unittest.TestCase):
         self.addCleanup(self.fixture.doCleanups)
         self.base = self.fixture.base
 
-    @proves('MYC-12.1', 'MYC-12.4', 'MYC-16.11', kind='store')
     def test_orphan_snapshot_refresh_is_scoped_audited_and_a_genuine_repeat_is_quiet(self):
         raw = b'An unowned evidence snapshot left by an earlier operation.'
         digest = sha256(raw).hexdigest()

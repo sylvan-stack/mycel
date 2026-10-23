@@ -1,4 +1,4 @@
-.PHONY: check check-release
+.PHONY: check
 PYTHON ?= .venv/bin/python
 STORE_SETTINGS ?= $(HOME)/.mycel/config.toml
 WORKERS ?= 6
@@ -6,6 +6,3 @@ CHECK_ARGS = --store-settings "$(STORE_SETTINGS)" --workers $(WORKERS) $(foreach
 
 check:
 	PYTHONPATH=src $(PYTHON) scripts/run_checks.py $(CHECK_ARGS)
-
-check-release:
-	PYTHONPATH=src $(PYTHON) scripts/run_checks.py --release $(CHECK_ARGS)

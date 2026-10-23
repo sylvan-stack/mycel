@@ -12,7 +12,6 @@ from uuid import uuid4
 
 from mycel._activity import AppliedMutation, FileChange, IdentityChange, MutationActivity
 from mycel._cli import Invocation, run
-from mycel._coverage import proves
 from mycel._activity_reader import handle_activity
 from mycel._errors import MycelError
 from mycel._settings import load_settings
@@ -31,7 +30,6 @@ def state(connection):
 
 
 class ActivityReaderTests(unittest.TestCase):
-    @proves("MYC-0.6", "MYC-0.7")
     def test_invalid_identifiers_and_filters_stop_before_store_access(self):
         with patch("mycel._activity_reader.invocation_store") as connect:
             for arguments in (("--entry", "0"), ("--entry", "-1"), ("--entry", "01"),
@@ -47,7 +45,6 @@ class ActivityReaderTests(unittest.TestCase):
                     handle_activity(invocation)
             connect.assert_not_called()
 
-    @proves("MYC-0.6", "MYC-0.7", "MYC-0.10")
     def test_cli_entry_syntax_and_help_are_finite_without_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "settings.toml"
@@ -68,7 +65,8 @@ class ActivityReaderTests(unittest.TestCase):
 
 
 class ActivityReaderStoreTests(unittest.TestCase):
-    @proves("MYC-1.20", kind="store")
+    check_kind = "store"
+
     def test_public_pass_details_preserve_all_ordered_identity_decisions_without_writes(self):
         settings = load_settings(path=self.store_fixture.settings_file)
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
@@ -107,7 +105,6 @@ class ActivityReaderStoreTests(unittest.TestCase):
             self.assertEqual(state(connection), before)
             embedding.assert_not_called()
 
-    @proves("MYC-1.20", kind="store")
     def test_running_and_unfinished_entry_details_do_not_rewrite_activity_or_prune(self):
         settings = load_settings(path=self.store_fixture.settings_file)
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:

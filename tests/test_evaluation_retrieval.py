@@ -19,7 +19,6 @@ from unittest.mock import Mock, patch
 from psycopg import pq
 
 from mycel._cli import parse, run
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._evaluate import evaluate
 from mycel._evaluation import (EvaluationSet, PreparedQueryVector, RetrievalQuery,
@@ -103,7 +102,6 @@ def _forbid_side_effects():
 
 
 class EvaluationRetrievalUnitTests(unittest.TestCase):
-    @proves('MYC-0.10', kind='unit')
     def test_query_adapter_passes_explicit_evaluation_intent_through_normal_preparation_and_client(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -139,7 +137,6 @@ class EvaluationRetrievalUnitTests(unittest.TestCase):
             self.assertEqual(result.vector, vector)
             self.assertIsNone(result.reason)
 
-    @proves('MYC-13.10', 'MYC-0.10', kind='unit')
     def test_full_schema_validation_and_empty_selected_sections_precede_all_execution_adapters(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -182,6 +179,8 @@ class EvaluationRetrievalUnitTests(unittest.TestCase):
 
 
 class EvaluationRetrievalStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.ranking = ranking_fixtures.RankingStoreTests()
         self.ranking.store_fixture = self.store_fixture
@@ -224,7 +223,6 @@ class EvaluationRetrievalStoreTests(unittest.TestCase):
         return [(row['route'], [(place['id'], place['version'], place['address']) for place in row['returned']])
                 for row in report['results']]
 
-    @proves('MYC-13.11', kind='store')
     def test_actual_top_ten_matches_normal_routes_scopes_bridges_shared_aliases_and_generated_results(self):
         with self.base.connection() as connection:
             for number in range(25):
@@ -298,7 +296,6 @@ class EvaluationRetrievalStoreTests(unittest.TestCase):
             self.assertFalse(observed[0]._lease.active)
             self.assertEqual(_state(connection), before)
 
-    @proves('MYC-13.11', kind='store')
     def test_wording_fallback_uses_actual_normal_positions_and_never_creates_vector_or_cache_state(self):
         with self.base.connection() as connection:
             code = self.seed(connection, path='needle.py', name='Needle', source='needle only source\n', embedded=False)
@@ -320,7 +317,6 @@ class EvaluationRetrievalStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_vectors').fetchone(), (0,))
             self.assertEqual(_state(connection), before)
 
-    @proves('MYC-13.11', kind='store')
     def test_dimension_mismatch_keeps_normal_wording_without_calling_query_preparation(self):
         with self.base.connection() as connection:
             self.seed(connection, path='needle.py', name='Needle', source='needle source\n')
@@ -338,7 +334,6 @@ class EvaluationRetrievalStoreTests(unittest.TestCase):
             prepare.assert_not_called()
             self.assertEqual(_state(connection), before)
 
-    @proves('MYC-13.11', kind='store')
     def test_peer_publication_cannot_mix_actual_ranking_expectations_or_fingerprints_between_queries(self):
         with self.base.connection() as connection, self.base.connection() as writer:
             old = self.seed(connection, path='needle.py', name='Needle', source='needle original\n', cosine=.8)
@@ -378,7 +373,6 @@ class EvaluationRetrievalStoreTests(unittest.TestCase):
                 self.assertEqual(member.chunk.version, current[0][2])
             self.assertEqual(_state(writer), committed[0])
 
-    @proves('MYC-13.11', kind='store')
     def test_actual_results_resolve_class_headers_and_exclude_every_faulted_ground_truth_query(self):
         with self.base.connection() as connection:
             header = 'class Policy:\n'
@@ -416,7 +410,6 @@ class EvaluationRetrievalStoreTests(unittest.TestCase):
                              ['not_in_index', 'not_one_chunk', 'malformed', 'ambiguous', 'ineligible'])
             self.assertEqual(_state(connection), before)
 
-    @proves('MYC-13.11', kind='store')
     def test_nonempty_public_cli_uses_real_default_retrieval_with_fake_preparer_before_its_snapshot(self):
         with self.base.connection() as connection:
             code = self.seed(connection, path='needle.py', name='Needle', source='needle public source\n')

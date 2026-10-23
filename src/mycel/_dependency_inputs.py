@@ -29,10 +29,18 @@ class DependencyCaptureInputs:
     is observed through that capture, another repository is observed once and
     never compared with its index (its own pass does that), and later disk
     changes are the next pass's business (MYC-1.37, MYC-D64).
+
+    A batch shares one instance across several guarded mutations in one
+    transaction: each repository is captured once, and its owner calls
+    `verify()` once at the end, so a change anywhere still refuses the batch.
+    The batch also keeps one catalog per kind, location and guard set: its
+    guards exclude every pass, so the index rows a catalog reads cannot change
+    while the batch writes dependencies, pins, relations and verifications.
     """
     def __init__(self, connection, settings: SettingsSnapshot, *, settings_home: Path | None = None,
                  guarded_repositories: tuple[str, ...] | None = None,
-                 snapshot: CaptureManifest | None = None, catalogs: dict | None = None):
+                 snapshot: CaptureManifest | None = None, catalogs: dict | None = None,
+                 batch: bool = False):
         if snapshot is not None and not isinstance(snapshot, CaptureManifest):
             raise MycelError('invalid_input', 'A capture snapshot must be a complete capture manifest.')
         self.connection = connection
@@ -41,10 +49,12 @@ class DependencyCaptureInputs:
         self.captures = {} if snapshot is None else {snapshot.repository: snapshot}
         self.guarded_repositories = guarded_repositories
         self.snapshot = snapshot
-        self.catalogs = catalogs  # one catalog per location for a complete pass's run
+        # One catalog per location for a complete pass's run or a guarded batch.
+        self.catalogs = {} if catalogs is None and batch else catalogs
+        self.batch = batch
 
     def observe(self, repository):
-        if self.snapshot is not None and repository in self.captures:
+        if (self.snapshot is not None or self.batch) and repository in self.captures:
             return self.captures[repository]
         observed = capture_repository(self.settings, repository)
         if not observed.deletion_safe:

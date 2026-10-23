@@ -18,10 +18,9 @@ import tomllib
 from ._core import BuildError, RUNTIME_HASHES, atomic_json, digest, file_manifest, json_bytes, read_json, utc_now, validate_manifest
 from ._launcher import _validate_bundle
 from ._credential_contract import credential_probe_passed
-from ._qualification import automatic_contract, qualification_certificate, requirement_results, required_packaged_cases
+from ._qualification import automatic_contract, qualification_certificate, required_packaged_cases
 from ._registry import _folder, _ledger, build_number, maintenance, read_record, registry_path
 from ._staging import check_input_manifest, input_manifest
-from mycel._coverage import ACTIVE_REQUIREMENTS
 
 
 KEYCHAIN_CHECK = 'private_dummy_keychain_installed_credentials_probe'
@@ -81,18 +80,11 @@ def _automatic(result, frozen, number):
     _require(len(checks) == len(expected) and len({row['name'] for row in checks}) == len(checks))
     declarations = []
     for row in checks:
-        _require(set(row) == {'name', 'kind', 'requirements', 'status', 'passed', 'detail'}
+        _require(set(row) == {'name', 'kind', 'status', 'passed', 'detail'}
                  and row['status'] == 'passed' and row['passed'] is True and row['detail'] is None)
-        declarations.append({key: row[key] for key in ('name', 'kind', 'requirements')})
+        declarations.append({key: row[key] for key in ('name', 'kind')})
     _require(sorted(declarations, key=lambda row: row['name']) == expected)
-    _require(result['inventorySha256'] == contract['inventorySha256']
-             and result['registrySha256'] == contract['registrySha256']
-             and result['claimsSha256'] == contract['claimsSha256'])
-    requirements = requirement_results(contract, checks)
-    implemented = sum(row['status'] == 'implemented' for row in requirements.values())
-    _require(result['requirements'] == requirements
-             and result['coverage'] == {'active': ACTIVE_REQUIREMENTS, 'implemented': implemented,
-                                        'pending': ACTIVE_REQUIREMENTS - implemented})
+    _require(result['inventorySha256'] == contract['inventorySha256'])
     _require(result['build'] == build_number(number) and result['python'] == '3.14.7'
              and result['target'] == 'macos-arm64' and result['gateErrorCount'] == 0
              and result['required'] == result['passedCount'] == len(expected) and result['failedCount'] == 0)

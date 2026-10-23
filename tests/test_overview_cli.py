@@ -10,7 +10,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import parse, run
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._overview import handle_overview, overview_repository
 from mycel._settings import load_settings
@@ -31,7 +30,6 @@ class OverviewCliTests(unittest.TestCase):
         self.settings = load_settings(path=self.config, home=self.root)
         self.settings.require_valid()
 
-    @proves("MYC-9.13")
     def test_directory_options_are_normalized_and_escape_is_rejected_before_store_access(self):
         for value, expected in ((".", "."), ("src/./net", "src/net"),
                 ("src/cache/../net", "src/net"), ("src/net/", "src/net")):
@@ -47,7 +45,6 @@ class OverviewCliTests(unittest.TestCase):
                 self.assertEqual(error.exception.code.value, "invalid_input")
             store.assert_not_called()
 
-    @proves("MYC-9.13")
     def test_stored_report_returns_empty_without_folders_freshness_embedding_or_writes(self):
         connection = object()
         observations = []
@@ -83,7 +80,6 @@ class OverviewCliTests(unittest.TestCase):
         self.assertEqual(self.config.read_bytes(), before)
         self.assertEqual(list(self.root.iterdir()), [self.config])
 
-    @proves("MYC-9.13")
     def test_repository_scope_is_single_enabled_and_explicit_reports_need_no_folder(self):
         self.assertEqual(overview_repository(self.settings, ("example",)), "example")
         self.assertEqual(overview_repository(self.settings, cwd=self.root / "team" / "example"), "example")

@@ -5,14 +5,12 @@ import tomllib
 import unittest
 
 from mycel._commands import help_reply
-from mycel._coverage import proves
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class ArchitectureTests(unittest.TestCase):
-    @proves("MYC-0.1", "MYC-0.2", "MYC-0.3")
     def test_product_surface_is_one_independent_cli(self):
         project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
         self.assertEqual(project["scripts"], {"mycel": "mycel._cli:main"})
@@ -33,7 +31,6 @@ class ArchitectureTests(unittest.TestCase):
         commands = {command["name"] for command in help_reply()["commands"]}
         self.assertTrue(commands.isdisjoint({"serve", "daemon", "watch", "schedule", "worktree"}))
 
-    @proves("MYC-0.12")
     def test_program_version_matches_package_metadata(self):
         version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
         self.assertEqual(help_reply()["version"], version)

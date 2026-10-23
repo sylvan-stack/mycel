@@ -10,7 +10,6 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel_build._core import BuildError
 from mycel_build._replacement import replacement_plan, validate_replacement_report
 from mycel_build.__main__ import main
@@ -146,7 +145,6 @@ class Fixture:
 
 
 class ReplacementTests(unittest.TestCase):
-    @proves('MYC-15.11')
     def test_plan_is_read_only_exactly_inventoried_restrictive_and_contains_no_state_import(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(Path(directory).resolve()); before = {p: p.read_bytes() for p in fixture.root.rglob('*') if p.is_file()}
@@ -163,7 +161,6 @@ class ReplacementTests(unittest.TestCase):
             self.assertTrue(all(x['status'] == 'pending' for x in result['report']['steps']))
             self.assertEqual(before, {p: p.read_bytes() for p in fixture.root.rglob('*') if p.is_file()})
 
-    @proves('MYC-15.11')
     def test_patterns_aliases_database_drop_unqualified_names_and_unknown_authority_are_refused(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(Path(directory).resolve()); original = deepcopy(fixture.inventory)
@@ -184,7 +181,6 @@ class ReplacementTests(unittest.TestCase):
             fixture.save(); plan = replacement_plan(fixture.inventory_path, now=AT)['plan']
             self.assertTrue(plan['blocked']); self.assertIsNone(plan['operatorSql'])
 
-    @proves('MYC-15.11')
     def test_uncertain_and_corpus_ownership_is_preserved_and_changed_or_stale_evidence_refuses(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(Path(directory).resolve()); fixture.inventory['files'][0]['ownership'] = None
@@ -230,7 +226,6 @@ class ReplacementTests(unittest.TestCase):
                 replacement_plan(fixture.inventory_path, now=AT)
             self.assertEqual(before, {p: p.read_bytes() for p in fixture.root.rglob('*') if p.is_file()})
 
-    @proves('MYC-15.11')
     def test_uninventoried_dependents_block_without_cascade_and_changed_catalog_identity_refuses(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(Path(directory).resolve())
@@ -244,7 +239,6 @@ class ReplacementTests(unittest.TestCase):
             fixture.inventory['oldDatabase']['catalog'] = write(Path(fixture.catalog_binding['path']), fixture.catalog); fixture.save()
             with self.assertRaises(BuildError): replacement_plan(fixture.inventory_path, now=AT)
 
-    @proves('MYC-15.11')
     def test_disposable_rehearsal_removes_only_approved_objects_and_preserves_sources_shell_tail_and_catalog(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(Path(directory).resolve()); fixture.compile()
@@ -260,7 +254,6 @@ class ReplacementTests(unittest.TestCase):
             self.assertEqual(report['commandAvailability'], 'mycel2_verified')
             self.assertFalse(report['ownerReplacementPerformedByValidator']); self.assertEqual(report['databaseConnections'], 0)
 
-    @proves('MYC-15.11')
     def test_each_failure_or_interruption_keeps_actual_prefix_and_late_effects_without_old_store_fallback(self):
         for late in (False, True):
             with tempfile.TemporaryDirectory() as directory:
@@ -299,7 +292,6 @@ class ReplacementTests(unittest.TestCase):
             self.assertEqual(report['commandAvailability'], 'mycel2_verified')
             self.assertTrue(fixture.old.exists()); self.assertTrue(fixture.corpus.exists())
 
-    @proves('MYC-15.11')
     def test_report_rejects_unverified_flags_changed_approved_plan_sequence_jumps_and_copied_state(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(Path(directory).resolve()); fixture.compile()
@@ -415,7 +407,6 @@ class ReplacementTests(unittest.TestCase):
             self.assertEqual(fixture.shell.read_bytes(), before + b'# separately changed tail\n')
 
 
-    @proves('MYC-15.11')
     def test_already_absent_old_runtime_is_observed_without_inventing_cleanup_or_availability(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(Path(directory).resolve())
@@ -440,7 +431,6 @@ class ReplacementTests(unittest.TestCase):
                     with self.assertRaises(BuildError): fixture.validate()
                     fixture.old.unlink()
 
-    @proves('MYC-15.11')
     def test_absent_inventory_refuses_present_objects_ambiguous_claims_and_unobservable_paths(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(Path(directory).resolve())
@@ -472,7 +462,6 @@ class ReplacementTests(unittest.TestCase):
             with patch.object(Path, 'lstat', denied):
                 with self.assertRaises(BuildError): replacement_plan(fixture.inventory_path, now=AT)
 
-    @proves('MYC-15.12', 'MYC-15.11')
     def test_mycel_owned_help_and_replacement_guide_require_no_other_product_or_runtime_cleanup_command(self):
         root = Path(__file__).resolve().parents[1]
         guide = (root / 'docs/replacement.md').read_text()

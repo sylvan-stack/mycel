@@ -10,7 +10,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._settings import load_settings
 
@@ -50,7 +49,6 @@ class SettingsTests(unittest.TestCase):
     def load(self, content="", *, store=True):
         return load_settings(path=self.write_settings(content, store=store), home=self.home)
 
-    @proves("MYC-1.1", "MYC-5.2")
     def test_mutation_guard_preserves_original_home_and_ignores_format_only_changes(self):
         snapshot = self.load('[repos.fixture]\nenabled=true\nartifact_root="~/artifacts"\n')
         snapshot.require_current()
@@ -58,7 +56,6 @@ class SettingsTests(unittest.TestCase):
         snapshot.require_current()
         self.assertEqual(snapshot.values['repos']['fixture']['artifact_root'], str(self.home / 'artifacts'))
 
-    @proves("MYC-1.1", "MYC-5.2")
     def test_mutation_guard_refuses_changed_or_unavailable_effective_settings(self):
         for replacement in ('[repos.fixture]\nenabled=false\n', 'invalid = "private-sentinel"\n', None):
             with self.subTest(replacement=replacement):
@@ -86,7 +83,6 @@ class SettingsTests(unittest.TestCase):
             self.assertIn(key, str(raised.exception))
         return report, raised.exception
 
-    @proves("MYC-5.1", "MYC-5.7")
     def test_home_default_and_config_override_are_the_only_file_sources(self):
         default = self.home / ".mycel" / "config.toml"
         default.parent.mkdir()
@@ -108,7 +104,6 @@ class SettingsTests(unittest.TestCase):
             expanded = load_settings(home=self.home)
         self.assertEqual(expanded.file, override)
 
-    @proves("MYC-5.1", "MYC-5.7", "MYC-1.1")
     def test_legacy_environment_overrides_cannot_change_the_snapshot(self):
         path = self.write_settings('[repos.cellar]\ncode_root = "~/repos/cellar"\nenabled = false\n')
         overrides = {
@@ -136,7 +131,6 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(set(actual.values["repos"]), {"cellar"})
         self.assertIs(actual.values["repos"]["cellar"]["enabled"], False)
 
-    @proves("MYC-5.1", "MYC-1.1")
     def test_each_load_reads_the_file_once_and_holds_an_immutable_snapshot(self):
         path = self.write_settings('[repos.cellar]\ncode_root = "~/repos/cellar"\nenabled = true\n')
         real_open = Path.open
@@ -179,7 +173,6 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(first.report()["unknownKeys"], [])
         self.assertEqual(first.report()["faults"], [])
 
-    @proves("MYC-5.2")
     def test_absent_keys_have_the_specified_defaults(self):
         snapshot = self.load()
         snapshot.require_valid()
@@ -225,7 +218,6 @@ class SettingsTests(unittest.TestCase):
         organization = self.load('[organizations.Orchard]\nroot = "~/repos/orchard"\n').values["organizations"]["Orchard"]
         self.assertEqual(organization["artifact_root"], str(self.home / "Artifacts/orchard"))
 
-    @proves("MYC-5.2", "MYC-1.1")
     def test_complete_schema_accepts_custom_values_and_literal_repository_names(self):
         snapshot = self.load('''[embedding]
 model = "voyage-code-4"
@@ -279,7 +271,6 @@ evaluation = "evaluation/search.toml"
         self.assertEqual(snapshot.values["repos"]["Literal.Repository"]["evaluation"], "evaluation/search.toml")
         self.assertEqual(snapshot.report()["unknownKeys"], [])
 
-    @proves("MYC-5.2", "MYC-5.4", "MYC-1.2")
     def test_every_known_key_rejects_wrong_types(self):
         cases = {
             "store": {"address": 1},
@@ -305,7 +296,6 @@ evaluation = "evaluation/search.toml"
                     snapshot = self.load(f"[{table}]\n{key} = {toml_value(value)}\n", store=table != "store")
                     self.assert_fault(snapshot, f"{table}.{key}")
 
-    @proves("MYC-5.2", "MYC-1.2")
     def test_tables_and_shared_document_members_have_exact_shapes(self):
         for table in ("store", "embedding", "scan", "search", "drifts", "summaries", "organizations", "repos"):
             with self.subTest(table=table):
@@ -319,7 +309,6 @@ evaluation = "evaluation/search.toml"
                           "organizations.Orchard.root")
         self.assert_fault(self.load('[repos]\ncellar = "fixture-secret"\n'), "repos.cellar")
 
-    @proves("MYC-5.2", "MYC-5.13")
     def test_integer_limits_exclude_booleans_and_fractional_numbers(self):
         keys = (
             ("embedding", "attempts"), ("drifts", "debounce_seconds"), ("drifts", "candidates"),
@@ -335,7 +324,6 @@ evaluation = "evaluation/search.toml"
                     self.assert_fault(self.load(f"[{table}]\n{key} = 0\n"), f"{table}.{key}")
         self.assertTrue(self.load("[drifts]\ndebounce_seconds = 0\n").valid)
 
-    @proves("MYC-5.2", "MYC-5.13")
     def test_numeric_limits_and_confidence_are_finite_and_within_range(self):
         keys = (("search", "freshness_seconds"), ("drifts", "seconds"),
                 ("drifts", "jev_timeout_seconds"), ("drifts", "review_timeout_seconds"))
@@ -351,7 +339,6 @@ evaluation = "evaluation/search.toml"
             with self.subTest(accepted_floor=value):
                 self.assertTrue(self.load(f"[drifts]\nconfidence_floor = {toml_value(value)}\n").valid)
 
-    @proves("MYC-5.2", "MYC-5.13")
     def test_supported_model_dimension_pairs_are_checked_locally(self):
         for dimensions in (256, 512, 1024, 2048):
             with self.subTest(dimensions=dimensions):
@@ -364,7 +351,6 @@ evaluation = "evaluation/search.toml"
                 self.assertTrue(any(fault.get("key") in {"embedding.model", "embedding.dimensions"}
                                     for fault in snapshot.report()["faults"]))
 
-    @proves("MYC-5.2", "MYC-5.13")
     def test_jev_model_must_be_an_exact_three_part_version(self):
         for model in ("jev", "jev-latest", "jev-1", "jev-1.13", "jev-1.13.0-preview", "other-1.13.0", ""):
             with self.subTest(model=model):
@@ -373,7 +359,6 @@ evaluation = "evaluation/search.toml"
             with self.subTest(model=model):
                 self.load(f"[drifts]\nmodel = {toml_value(model)}\n").require_valid()
 
-    @proves("MYC-5.3", "MYC-5.4", "MYC-1.2")
     def test_unknown_tables_and_nested_keys_all_have_safe_qualified_diagnostics(self):
         secret = "fixture-secret-do-not-report"
         source = f'''unsupported = "{secret}"
@@ -423,7 +408,6 @@ api_key = "{secret}"
         self.assertNotIn(secret, json.dumps(report))
         self.assertNotIn(secret, str(error))
 
-    @proves("MYC-5.3", "MYC-1.2")
     def test_inline_and_dotted_unknown_keys_are_not_hidden_by_table_syntax(self):
         sources = (
             ('repos.cellar = { code_root = "~/repos/cellar", profile = "fixture-secret" }\n', "repos.cellar.profile"),
@@ -445,7 +429,6 @@ api_key = "{secret}"
                 self.assertNotIn("fixture-secret", str(error))
                 self.assertNotIn("fixture-secret", json.dumps(report))
 
-    @proves("MYC-5.3", "MYC-1.2")
     def test_key_lines_ignore_comments_and_text_that_looks_like_toml(self):
         source = '''[store]
 address = "postgresql://mycel@localhost:5432/mycel"
@@ -469,7 +452,6 @@ code_root = "~/repos/cellar"
         report["faults"][0]["message"] = "injected"
         self.assertNotIn("injected", json.dumps(snapshot.report()))
 
-    @proves("MYC-5.4", "MYC-1.2")
     def test_missing_unreadable_and_invalid_toml_have_safe_file_diagnostics(self):
         missing = self.home / "missing.toml"
         snapshot = load_settings(path=missing, home=self.home)
@@ -499,7 +481,6 @@ code_root = "~/repos/cellar"
         self.assertNotIn("fixture-secret", json.dumps(report))
         self.assertNotIn("fixture-secret", str(error))
 
-    @proves("MYC-5.2", "MYC-5.4")
     def test_store_address_is_required_only_for_store_dependent_work(self):
         snapshot = self.load("", store=False)
         snapshot.require_valid(require_store=False)
@@ -509,7 +490,6 @@ code_root = "~/repos/cellar"
             invalid.require_valid(require_store=False)
         self.assertEqual(raised.exception.code, "settings")
 
-    @proves("MYC-5.2", "MYC-5.13")
     def test_store_addresses_cannot_carry_plaintext_passwords_or_malformed_locations(self):
         for address in (
             "postgresql://mycel:fixture-secret@localhost:5432/mycel",
@@ -524,7 +504,6 @@ code_root = "~/repos/cellar"
                 self.assertNotIn("fixture-secret", json.dumps(report))
                 self.assertNotIn("fixture-secret", str(error))
 
-    @proves("MYC-5.6", "MYC-5.2")
     def test_folder_tildes_use_the_invocation_home_and_other_folders_are_absolute(self):
         snapshot = self.load('''[summaries]
 instructions = "~/instructions"
@@ -549,7 +528,6 @@ artifact_root = "~/Artifacts/cellar"
                 with self.subTest(table=table, key=key, value=value):
                     self.assert_fault(self.load(f"[{table}]\n{key} = {toml_value(value)}\n"), f"{table}.{key}")
 
-    @proves("MYC-5.2", "MYC-5.6")
     def test_repository_relative_paths_cannot_escape_their_roots(self):
         for key in ("code_subdirs", "evaluation"):
             for value in ("../outside", "src/../../outside", "/absolute/outside", "~/outside", "bad\x00path"):
@@ -561,7 +539,6 @@ artifact_root = "~/Artifacts/cellar"
                     self.assert_fault(snapshot, f"repos.cellar.{key}")
         self.load('[repos.cellar]\ncode_root = "~/repos/cellar"\ncode_subdirs = []\n').require_valid()
 
-    @proves("MYC-5.13", "MYC-5.15")
     def test_reviewer_command_provider_model_and_revision_are_all_or_none(self):
         entries = {
             "review_command": ["/fixture/reviewer", "--config", "/fixture/review.toml"],
@@ -588,7 +565,6 @@ artifact_root = "~/Artifacts/cellar"
         entries.update(changes)
         return "[drifts]\n" + "\n".join(f"{key} = {toml_value(value)}" for key, value in entries.items())
 
-    @proves("MYC-5.13", "MYC-5.15")
     def test_reviewer_argv_is_nonempty_nul_free_and_has_an_absolute_executable(self):
         for command in ([], [""], ["reviewer"], ["./reviewer"], ["$HOME/reviewer"], ["~another/reviewer"],
                         ["/fixture/reviewer", ""], ["/fixture/reviewer", 1], ["/fixture/reviewer\x00"],
@@ -601,7 +577,6 @@ artifact_root = "~/Artifacts/cellar"
                     self.assert_fault(self.load(self.reviewer_source(**{key: value})), f"drifts.{key}")
         self.assert_fault(self.load(self.reviewer_source(review_model="latest")), "drifts.review_model")
 
-    @proves("MYC-5.15")
     def test_only_the_reviewer_executable_leading_tilde_is_expanded(self):
         argv = ["~/bin/reviewer", "~/literal/config", "$HOME/private", "*.json", "$(literal)", "; literal"]
         snapshot = self.load(self.reviewer_source(review_command=argv))
@@ -609,7 +584,6 @@ artifact_root = "~/Artifacts/cellar"
         self.assertEqual(tuple(snapshot.values["drifts"]["review_command"]),
                          (str(self.home / "bin/reviewer"), *argv[1:]))
 
-    @proves("MYC-5.13", "MYC-5.15")
     def test_reviewer_revision_uses_exact_ascii_syntax_and_length(self):
         for revision in ("a", "Adapter.1_2:3+4-5", "a" * 128):
             with self.subTest(accepted_revision=revision):
@@ -619,7 +593,6 @@ artifact_root = "~/Artifacts/cellar"
             with self.subTest(revision=revision):
                 self.assert_fault(self.load(self.reviewer_source(review_revision=revision)), "drifts.review_revision")
 
-    @proves("MYC-0.5", "MYC-5.1", "MYC-5.3", "MYC-5.13", "MYC-5.15")
     def test_validation_never_writes_settings_or_acquires_credentials_or_launches_programs(self):
         valid = self.write_settings(self.reviewer_source(review_command=["~/bin/reviewer", "--probe"]))
         invalid = self.write_settings('[embedding]\nunknown = "fixture-secret"\n')

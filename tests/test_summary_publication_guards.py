@@ -11,7 +11,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import run
-from mycel._coverage import proves
 from mycel._locks import operation_guard
 from mycel._settings import load_settings
 from mycel._store import TABLES
@@ -23,6 +22,8 @@ except ImportError:
 
 
 class SummaryPublicationGuardsStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = summaries.SummaryBuildStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -105,7 +106,6 @@ class SummaryPublicationGuardsStoreTests(unittest.TestCase):
             self.assertEqual(self.disjoint_state(connection), before)
         return reply
 
-    @proves('MYC-8.13', 'MYC-8.14', 'MYC-8.15', 'MYC-8.26', 'MYC-8.29', kind='store')
     def test_build_regenerate_and_memberless_delete_guard_affected_owners_only_after_services(self):
         with self.base.connect() as connection, ExitStack() as services:
             writer = self.service_callback('writer')

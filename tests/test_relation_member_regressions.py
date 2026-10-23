@@ -3,7 +3,6 @@ from dataclasses import replace
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._dependency_application import RetainedDependencyResolver
 from mycel._evidence import CaptureLocation, EvidenceStore, capture_baseline
 from mycel._resolver import SourceResolver
@@ -43,7 +42,6 @@ class RelationMemberUnitTests(unittest.TestCase):
                 SourceAddress('source', 'code', 'code.py', 'Worker'), 'related')
         return current.selection, reasons
 
-    @proves('MYC-2.17')
     def test_family_baseline_reports_removed_method_when_current_selection_is_one_chunk(self):
         original = values.code('class Worker:\n    def first(self):\n        return 1\n')
         baseline = self.baseline(original)
@@ -55,7 +53,6 @@ class RelationMemberUnitTests(unittest.TestCase):
              ('source_removed', 'source:@code/code.py#Worker.first', 'related')])
         self.assertEqual(len(baseline['members']), 2)
 
-    @proves('MYC-2.17')
     def test_current_family_does_not_invent_removed_members_for_chunk_or_file_baselines(self):
         old_chunk = values.code('def Worker():\n    return 1\n')
         new_family = values.code('class Worker:\n    def first(self):\n        return 2\n')
@@ -69,7 +66,6 @@ class RelationMemberUnitTests(unittest.TestCase):
         self.assertEqual((baseline['selection'], current.kind), ('file', 'file'))
         self.assertEqual([(reason.kind, reason.edge) for reason in reasons], [('related_changed', 'related')])
 
-    @proves('MYC-2.17')
     def test_recognized_family_moves_keep_members_but_moving_method_out_reports_removal(self):
         original = values.code('class Worker:\n    def first(self):\n        return 1\n')
         baseline = self.baseline(original)
@@ -99,6 +95,8 @@ class RelationMemberUnitTests(unittest.TestCase):
 
 
 class RelationMemberStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.helper = fixtures.RelationStalenessStoreTests()
         self.helper.store_fixture = self.store_fixture
@@ -131,7 +129,6 @@ class RelationMemberStoreTests(unittest.TestCase):
         self.assertEqual(self.fixture.edges(connection), [])
         return reasons
 
-    @proves('MYC-7.16', 'MYC-7.17', 'MYC-7.26', kind='store')
     def test_source_only_family_to_chunk_publication_preserves_pin_and_direct_removed_method(self):
         original = b'class Worker:\n    def first(self):\n        return 1\n'
         with self.base.connect() as connection:
@@ -152,7 +149,6 @@ class RelationMemberStoreTests(unittest.TestCase):
             self.assertEqual(self.helper.reasons(connection), [])
             self.assertEqual(self.baseline_unchanged(connection, identifier, baseline_id, baseline), original_row)
 
-    @proves('MYC-7.16', 'MYC-7.17', 'MYC-7.26', kind='store')
     def test_retained_observation_reports_old_family_removal_without_repinning_or_propagation(self):
         with self.base.connect() as connection:
             identifier, baseline_id, baseline = self.seed(connection,
@@ -174,7 +170,6 @@ class RelationMemberStoreTests(unittest.TestCase):
             self.assertFalse(repeated.changed)
             self.assertEqual(self.helper.helper.relation(connection, identifier), stable)
 
-    @proves('MYC-7.16', 'MYC-7.17', 'MYC-7.26', kind='store')
     def test_source_only_chunk_to_family_and_retained_observation_do_not_invent_removal(self):
         with self.base.connect() as connection:
             identifier, baseline_id, baseline = self.seed(connection, b'def Worker():\n    return 1\n')

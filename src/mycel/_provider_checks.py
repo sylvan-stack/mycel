@@ -1,19 +1,19 @@
 """Explicit genuine on-demand operations, kept outside automatic discovery.
 
 No serialized report is accepted as a proof. The caller retains the returned
-live OnDemandProofs object in this process for the exact immutable Build and
-registry. Component profile reports remain separately reviewable provenance.
+live OnDemandProofs object in this process for the exact immutable Build.
+Component profile reports remain separately reviewable provenance.
 """
 from __future__ import annotations
 
 import unittest
 
-from ._coverage import proves, run_on_demand_checks
+from ._coverage import run_on_demand_checks
 from ._errors import MycelError
 
 
 def run_provider_checks(settings, suite, *, repository, build, implementation_identity,
-                        live=False, registry=None):
+                        live=False):
     """Execute only after explicit approval of this concrete suite and budgets.
 
     This helper itself asks for no approval and performs no operation on import.
@@ -49,14 +49,12 @@ def run_provider_checks(settings, suite, *, repository, build, implementation_id
         raise MycelError('refused', 'Jev credential readiness is required before any paid acceptance check.') from None
     reports = {}
     class ProviderAcceptance(unittest.TestCase):
-        @proves('MYC-13.9', kind='live')
         def test_fixed_embedding_compatibility(self):
             from ._embedding_live import run_embedding_live_check
             report = run_embedding_live_check(settings, build=build, live=True)
             reports['embedding'] = report
             self.assertTrue(report['passed'], 'Actual fixed embedding compatibility did not pass.')
 
-        @proves('MYC-13.19', kind='live')
         def test_configured_drift_live_pipeline(self):
             self.assertTrue(reports.get('embedding', {}).get('passed'), 'Embedding compatibility did not pass; no Drift qualification calls were sent.')
             from ._evaluation_live import run_live_drift_evaluation
@@ -67,7 +65,6 @@ def run_provider_checks(settings, suite, *, repository, build, implementation_id
             self.assertEqual(report['cases'], len(suite.drifts))
             self.assertTrue(report['qualified'], 'Actual configured provider-profile qualification did not pass.')
 
-        @proves('MYC-13.20', kind='eval')
         def test_same_run_finite_profile_qualification(self):
             report = reports.get('drift')
             self.assertIsNotNone(report, 'The same process did not complete its real live Drift evaluation.')
@@ -75,9 +72,8 @@ def run_provider_checks(settings, suite, *, repository, build, implementation_id
             self.assertEqual(report['fileHash'], suite.file_hash)
             self.assertEqual(report['build'], build)
             self.assertFalse(report['profileQualificationIsSameBuildProof'])
-    checks = unittest.TestSuite([ProviderAcceptance('test_fixed_embedding_compatibility'),
-        ProviderAcceptance('test_configured_drift_live_pipeline'),
-        ProviderAcceptance('test_same_run_finite_profile_qualification')])
-    proofs = run_on_demand_checks(checks, kinds=frozenset({'live', 'eval'}),
-        implementation_identity=implementation_identity, registry=registry)
+    checks = ((ProviderAcceptance('test_fixed_embedding_compatibility'), 'live', ('MYC-13.9',)),
+              (ProviderAcceptance('test_configured_drift_live_pipeline'), 'live', ('MYC-13.19',)),
+              (ProviderAcceptance('test_same_run_finite_profile_qualification'), 'eval', ('MYC-13.20',)))
+    proofs = run_on_demand_checks(checks, implementation_identity=implementation_identity)
     return proofs, reports

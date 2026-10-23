@@ -8,7 +8,6 @@ from uuid import uuid4
 
 from psycopg.types.json import Jsonb
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceError
 from mycel._generated import GeneratedPublicationStore, generated_capture
@@ -31,6 +30,8 @@ METADATA = SummarySetMetadata('2026-10-12T12:00:00Z', 'mycel-summary-v1', None, 
 
 
 class GeneratedStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.DependencySourceRefreshStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -85,7 +86,6 @@ class GeneratedStoreTests(unittest.TestCase):
         return connection.execute('SELECT reason FROM public.mycel_stale_reasons WHERE chunk_version=%s '
             'ORDER BY reason::text', (result.chunk_version,)).fetchall()
 
-    @proves('MYC-7.21', 'MYC-7.22', 'MYC-7.29', kind='store')
     def test_success_publishes_complete_response_and_separate_generated_pins_with_permanent_exact_evidence(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -127,7 +127,6 @@ class GeneratedStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT invocation FROM public.mycel_evidence_owners WHERE id=%s',
                 (result.evidence_owner,)).fetchone(), (None,))
 
-    @proves('MYC-7.21', 'MYC-7.22', kind='store')
     def test_file_and_command_cannot_create_generated_edges_and_generated_confirm_is_refused(self):
         self.fixture.answer.write_bytes(b'---\ngenerated: true\n---\n# Answer\nExternal generated file.\n')
         with self.base.connect() as connection:
@@ -149,7 +148,6 @@ class GeneratedStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, 'invalid_input')
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.22', 'MYC-7.29', kind='store')
     def test_unfinished_cancelled_inactive_forged_and_failed_publications_leave_no_live_text_or_pins(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -180,7 +178,6 @@ class GeneratedStoreTests(unittest.TestCase):
                 self.publish(connection, invocation, lease)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.22', 'MYC-7.29', kind='store')
     def test_changed_disk_or_ingested_member_and_late_settings_or_source_changes_roll_back_publication(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -215,7 +212,6 @@ class GeneratedStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.status, 'inputs_changed')
                 self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.22', 'MYC-7.29', kind='store')
     def test_corrupt_request_response_or_final_owner_and_member_rows_cannot_publish_partial_text(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -245,7 +241,6 @@ class GeneratedStoreTests(unittest.TestCase):
                     self.publish(connection, invocation, lease, callback=missing_member)
                 self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.23', 'MYC-7.29', kind='store')
     def test_mechanical_generated_levels_propagate_and_report_regeneration_with_zero_semantic_work(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -280,7 +275,6 @@ class GeneratedStoreTests(unittest.TestCase):
             self.assertEqual(self.reasons(connection, upper), [])
             self.assertEqual(self.rows(connection), before)
 
-    @proves('MYC-7.23', 'MYC-7.29', kind='store')
     def test_direct_generated_body_comparison_removal_rejoin_and_summary_of_summaries_are_coherent(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -314,7 +308,6 @@ class GeneratedStoreTests(unittest.TestCase):
             self.assertEqual(self.reasons(connection, upper), [])
             self.assertEqual(self.rows(connection), pins)
 
-    @proves('MYC-7.22', 'MYC-7.23', 'MYC-7.29', kind='store')
     def test_stale_generated_member_blocks_new_parent_and_corrupt_pin_keeps_existing_marks_pending(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -339,7 +332,6 @@ class GeneratedStoreTests(unittest.TestCase):
             self.assertIn('snapshot_corrupt', json.dumps(dict(result.counts)))
             self.assertEqual(self.work(connection)[0]['levels'][0]['stale'], 1)
 
-    @proves('MYC-7.21', 'MYC-7.22', 'MYC-7.29', kind='store')
     def test_invalid_places_cross_owner_requests_and_final_output_location_changes_are_atomic_refusals(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -368,7 +360,6 @@ class GeneratedStoreTests(unittest.TestCase):
                         self.publish(connection, invocation, lease, callback=lambda publisher, result: mutation(result))
                     self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.23', 'MYC-7.29', kind='store')
     def test_final_secondary_request_evidence_change_rolls_back_detection_and_source_publication(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -387,7 +378,6 @@ class GeneratedStoreTests(unittest.TestCase):
                 self.fixture.publish(connection)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.22', 'MYC-7.29', kind='store')
     def test_same_response_regeneration_repins_only_generated_rows_and_releases_unreferenced_previous_owner(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -409,7 +399,6 @@ class GeneratedStoreTests(unittest.TestCase):
                     (sibling,)).fetchone(), ('asserted',))
                 self.assertEqual(self.reasons(connection, second), [])
 
-    @proves('MYC-7.23', 'MYC-7.29', kind='store')
     def test_busy_generated_owner_is_pending_without_partial_marks_and_retry_propagates(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -436,7 +425,6 @@ class GeneratedStoreTests(unittest.TestCase):
             self.fixture.publish(connection)
             self.assertEqual(self.reasons(connection, lower)[0][0]['kind'], 'upstream_stale')
 
-    @proves('MYC-7.22', 'MYC-7.23', 'MYC-7.29', kind='store')
     def test_one_transaction_composes_multiple_outputs_and_regeneration_repropagates_same_or_changed_response(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -477,7 +465,6 @@ class GeneratedStoreTests(unittest.TestCase):
                 self.assertEqual(self.reasons(connection, upper)[0][0]['kind'], 'source_changed')
                 self.assertEqual(self.reasons(connection, upper)[0][0]['edge'], 'generated')
 
-    @proves('MYC-7.22', 'MYC-7.29', kind='store')
     def test_corrupt_or_missing_lower_generated_state_blocks_parent_without_a_stored_stale_mark(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -502,7 +489,6 @@ class GeneratedStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, 'store_format')
                 self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.23', 'MYC-7.29', kind='store')
     def test_generated_state_membership_corruption_refuses_reports_and_final_state_change_rolls_back_detection(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)

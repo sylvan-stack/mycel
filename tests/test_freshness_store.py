@@ -9,7 +9,6 @@ import psycopg
 
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import LocationId, _Capture
-from mycel._coverage import proves
 from mycel._deadline import DeadlineConnection, deadline_guard
 from mycel._dependency_application import DependencyApplicationStore
 from mycel._dependency_inputs import DependencyCaptureInputs
@@ -43,6 +42,8 @@ class _RecordingConnection:
 
 
 class FreshnessStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.base = fixtures.LocatedReconciliationStoreTests()
         self.base.store_fixture = self.store_fixture
@@ -138,7 +139,6 @@ class FreshnessStoreTests(unittest.TestCase):
                     reread=inputs.rereader(LocationId('disk', None, 'disk'), 'fixture', None),
                     guarded_repositories=guards)
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_transitive_glossary_change_reaches_driver_without_repin_or_unrelated_scan(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -188,7 +188,6 @@ class FreshnessStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_embedding_plans').fetchone(), (0,))
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_vectors').fetchone(), (0,))
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_code_only_asserted_governance_checks_documents_outside_shared_selection(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -207,7 +206,6 @@ class FreshnessStoreTests(unittest.TestCase):
                 for chunk in chunks:
                     self.assertTrue(result.complete_for_chunk('fixture', chunk.key))
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_no_fresh_reads_known_recursive_sources_and_changes_no_store_row(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -225,7 +223,6 @@ class FreshnessStoreTests(unittest.TestCase):
                                  for sql in recording.statements))
             self.assertFalse(result.complete_for_chunk('fixture', self.key(connection, 'fixture:@artifact/driver.md#Driver')))
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_busy_downstream_update_is_pending_without_scanning_or_changing_its_files(self):
         with self.base.connect() as connection, self.base.connect() as blocker:
             self.prepare(connection)
@@ -249,7 +246,6 @@ class FreshnessStoreTests(unittest.TestCase):
             # this dependency-only owner to make the status look complete.
             self.assertEqual(self.owned(connection, 'consumer'), before)
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_newly_captured_ref_extends_same_frontier_before_publication(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -274,7 +270,6 @@ class FreshnessStoreTests(unittest.TestCase):
             with StoreCandidates(connection, self.settings).snapshot(('fixture',)) as snapshot:
                 self.assertEqual({chunk.repository for chunk in snapshot.candidates('New', only='docs')[0].chunks}, {'fixture'})
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_new_unindexed_upstream_file_recursively_exposes_its_own_unindexed_source(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -304,7 +299,6 @@ class FreshnessStoreTests(unittest.TestCase):
             with StoreCandidates(connection, self.settings).snapshot(('fixture',)) as snapshot:
                 self.assertEqual({chunk.repository for chunk in snapshot.candidates('Deep', only='docs')[0].chunks}, {'fixture'})
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_new_unindexed_section_in_existing_source_file_exposes_its_own_upstream(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -334,7 +328,6 @@ class FreshnessStoreTests(unittest.TestCase):
             requirement = next(item for item in result.chunk_requirements if item.chunk == key)
             self.assertEqual(set(requirement.repositories), {'fixture', 'contract', 'glossary', 'later', 'outside'})
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_retained_heading_anchor_exposes_new_sources_before_renamed_chunk_publication(self):
         with self.base.connect() as connection:
             path = self.folders['later'] / 'renamed.md'
@@ -370,7 +363,6 @@ class FreshnessStoreTests(unittest.TestCase):
             requirement = next(item for item in result.chunk_requirements if item.chunk == key)
             self.assertEqual(set(requirement.repositories), {'fixture', 'contract', 'glossary', 'later', 'outside'})
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_valid_unresolved_disabled_and_malformed_refs_have_exact_chunk_faults(self):
         broken = self.folders['fixture'] / 'broken.md'
         broken.write_bytes(self.document('Broken', 'later:@artifact/missing.md#Missing',
@@ -389,7 +381,6 @@ class FreshnessStoreTests(unittest.TestCase):
             self.assertEqual({fault.reason for fault in result.faults if fault.chunk == key},
                              {'missing_file', 'disabled_repository', 'not_a_ref'})
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_retained_deleted_source_still_requires_its_repository_and_restores_its_pin(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -407,7 +398,6 @@ class FreshnessStoreTests(unittest.TestCase):
             self.assertEqual(self.pins(connection), pins)
             self.assertEqual(result.faults, ())
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_selected_shared_supplier_is_checked_even_before_new_document_is_indexed(self):
         with self.base.config.open('a') as config:
             config.write('\n[search]\nshared_documents=[{repo="shared",paths=["selected"]}]\n')
@@ -427,7 +417,6 @@ class FreshnessStoreTests(unittest.TestCase):
                 self.assertEqual({chunk.repository for chunk in chunks}, {'fixture', 'shared'})
                 self.assertNotIn('glossary', {chunk.repository for chunk in chunks})
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_deadline_at_final_verification_rolls_back_and_releases_locks_for_reads(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -452,7 +441,6 @@ class FreshnessStoreTests(unittest.TestCase):
             with StoreCandidates(connection, self.settings).snapshot(('fixture',)) as snapshot:
                 self.assertTrue(snapshot.candidates('dependant')[0].chunks)
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_cumulative_sql_uses_remaining_deadline_and_timeout_cleanup_is_readable(self):
         with self.base.connect() as connection:
             proxy = DeadlineConnection(connection)
@@ -466,7 +454,6 @@ class FreshnessStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SHOW statement_timeout').fetchone(), before)
             self.assertEqual(connection.execute('SELECT 1').fetchone(), (1,))
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_expired_startup_keeps_known_shared_suppliers_and_committed_store_readable(self):
         with self.base.config.open('a') as config:
             config.write('\n[search]\nshared_documents=[{repo="shared",paths=["selected.md"]}]\n')
@@ -483,7 +470,6 @@ class FreshnessStoreTests(unittest.TestCase):
             with StoreCandidates(connection, self.settings).snapshot(('fixture',)) as snapshot:
                 self.assertTrue(snapshot.candidates('dependant')[0].chunks)
 
-    @proves('MYC-4.18', 'MYC-4.21', kind='store')
     def test_activity_finalization_refusal_preserves_committed_prefix_and_reports_pending(self):
         with self.base.connect() as connection:
             self.prepare(connection)

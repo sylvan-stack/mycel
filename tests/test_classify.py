@@ -18,7 +18,6 @@ from mycel._classification_payload import ReviewerRequest
 from mycel._classification_runner import (ClassifyDependencies, preview_classification,
                                            run_classification)
 from mycel._classification_store import ClassificationPreparation, ClassificationStore
-from mycel._coverage import proves
 from mycel._drift_store import DriftStore
 from mycel._errors import MycelError
 from mycel._jev import JevFailure, JevOutcome, JevRequest, route_response, validate_response
@@ -97,7 +96,6 @@ class _DryStore:
 
 
 class ClassifyDryRunTests(unittest.TestCase):
-    @proves('MYC-14.21')
     def test_exact_bytes_readiness_and_maximum_calls_without_any_execution_or_mutation(self):
         decision = reviewed(fixture()[2])
         preparation = ClassificationPreparation('drift-1', 'reason-1', 'owner', 'a' * 64,
@@ -132,7 +130,6 @@ class ClassifyDryRunTests(unittest.TestCase):
         self.assertEqual(pending['maxCalls'], {'jev': 0, 'review': 0})
         self.assertEqual(pending['pendingDebounce'], 1)
 
-    @proves('MYC-14.21', 'MYC-0.10')
     def test_public_argument_validation_preserves_explicit_positive_cap_and_dry_run(self):
         self.assertEqual(classify_arguments(('--k', '2', '--dry-run')), (2, True))
         self.assertEqual(classify_arguments(()), (None, False))
@@ -143,6 +140,8 @@ class ClassifyDryRunTests(unittest.TestCase):
 
 
 class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
+    check_kind = "store"
+
     def setup_three(self, connection):
         (self.fixture.fixture.downstream / 'keep.md').write_bytes(b'# Keep\nIndependent surviving document.\n')
         self.fixture.prepare(connection)
@@ -168,7 +167,6 @@ class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
         return ClassifyDependencies(utc_now=lambda: AT,
             jev_factory=lambda *args: _ScriptedJev(callback), **kwargs)
 
-    @proves('MYC-14.8', 'MYC-14.18', 'MYC-13.18', kind='store')
     def test_deterministic_caps_concurrency_live_leases_and_no_pass_locks_during_calls(self):
         with self.base.connect() as connection:
             initial = self.setup_three(connection)
@@ -225,7 +223,6 @@ class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
                 dry_run=True, dependencies=self.dependencies(lambda *a: self.fail('Dry cache called a provider.')))
             self.assertEqual((dry['completed'], dry['maxCalls']), (3, {'jev': 0, 'review': 0}), dry)
 
-    @proves('MYC-14.8', 'MYC-14.18', 'MYC-13.18', kind='store')
     def test_read_only_dry_run_preserves_all_rows_then_nonblocking_busy_refuses_execution(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -243,7 +240,6 @@ class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
                 self.assertEqual((blocked['status'], blocked['error']['code'], blocked['jevCalls']), (1, 'busy', 0), blocked)
                 self.assertEqual(self.fixture.state(connection), before)
 
-    @proves('MYC-6.3', 'MYC-14.8', 'MYC-14.18', kind='store')
     def test_public_dry_run_reaches_the_store_as_every_command_and_reads_only_its_password(self):
         from io import StringIO
         from mycel._classify import handle_classify
@@ -279,7 +275,6 @@ class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
         with self.base.connect() as connection:
             self.assertEqual(self.fixture.state(connection), before)
 
-    @proves('MYC-13.18', 'MYC-14.18', 'MYC-14.25', kind='store')
     def test_unconfigured_reviewer_keeps_low_confidence_and_insufficient_work_open_without_repinning(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -312,7 +307,6 @@ class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
                 self.assertEqual(self.fixture.immutable(connection), immutable)
                 self.assertEqual({tuple(row[:3]) for row in self.fixture.stale(connection)}, stale)
 
-    @proves('MYC-14.8', 'MYC-14.18', 'MYC-13.18', kind='store')
     def test_transient_retries_honor_retry_after_and_terminal_failures_have_exact_stage_caps(self):
         self.write_reviewer()
         with self.base.connect() as connection:
@@ -362,7 +356,6 @@ class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
             self.assertEqual([attempt['stage'] for attempt in routed['pairs'][0]['classification']['evidence']['attempts']],
                              ['jev', 'review', 'review'])
 
-    @proves('MYC-14.8', 'MYC-14.18', kind='store')
     def test_deadline_and_sigint_join_attempts_and_preserve_committed_prefix_and_inactive_exclusion(self):
         self.options(at_once=1, seconds=30)
         with self.base.connect() as connection:
@@ -425,7 +418,6 @@ class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
                 dependencies=self.dependencies(lambda *a: self.fail('Off-disk work called a provider.')))
             self.assertEqual((inactive['selected'], inactive['jevCalls']), (0, 0), inactive)
 
-    @proves('MYC-14.8', 'MYC-14.18', kind='store')
     def test_oversize_review_and_changed_support_policy_with_atomic_activity_rollback(self):
         self.write_reviewer()
         with self.base.connect() as connection:
@@ -476,7 +468,6 @@ class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_activity WHERE build=38").fetchone()[0], 0)
 
 
-    @proves('MYC-14.18', kind='store')
     def test_dry_run_empty_enabled_repository_preserves_rows_sequences_and_all_known_guards(self):
         from contextlib import ExitStack
         from psycopg import sql

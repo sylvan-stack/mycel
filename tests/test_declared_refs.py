@@ -10,7 +10,6 @@ from uuid import uuid4
 from psycopg.types.json import Jsonb
 
 from mycel._capture import CapturedFile, FileAlias
-from mycel._coverage import proves
 from mycel._code import chunk_code
 from mycel._declared_refs import DeclaredRefStore
 from mycel._errors import MycelError
@@ -70,7 +69,8 @@ def retain(connection, snapshot, location, source):
 
 
 class DeclaredRefStoreTests(unittest.TestCase):
-    @proves('MYC-2.6', kind='store')
+    check_kind = "store"
+
     def test_every_fault_and_exact_malformed_spelling_survives_reply_and_listing(self):
         source = ('---\nsources: ["malformed\\0ref"]\n---\n# Answer\n<!-- sources:\n'
                   'not a ref\nunknown:path\ndisabled:path\nsource:missing.md\n'
@@ -95,7 +95,6 @@ class DeclaredRefStoreTests(unittest.TestCase):
             self.assertEqual(c.execute('SELECT count(*) FROM public.mycel_edges').fetchone()[0], 0)
             self.assertEqual(c.execute('SELECT count(*) FROM public.mycel_ref_faults').fetchone()[0], 7)
 
-    @proves('MYC-2.7', 'MYC-2.8', kind='store')
     def test_origin_target_and_settings_passes_retry_and_deactivate_without_repin(self):
         source = '# Answer\n<!-- sources:\nsource:guide.md#Source\n-->\n'
         snapshot = settings(owner=True, source=True)
@@ -126,7 +125,6 @@ class DeclaredRefStoreTests(unittest.TestCase):
             self.assertEqual((missing.refs[0].fault, missing.refs[0].source_state), ('missing_file', 'source_removed'))
             self.assertIsNone(c.execute('SELECT baseline_owner FROM public.mycel_dependencies WHERE id=%s', (identifier,)).fetchone()[0])
 
-    @proves('MYC-2.7', 'MYC-2.8', kind='store')
     def test_settings_registration_and_new_colliding_file_recheck_previous_selections(self):
         source = '# Answer\n<!-- sources:\nnew:guide.md#Source\n-->\n'
         with self.store_fixture.backend.connection(self.store_fixture.database) as c:
@@ -142,7 +140,6 @@ class DeclaredRefStoreTests(unittest.TestCase):
             self.assertEqual(reply.refs[0].fault, 'ambiguous_path')
             self.assertEqual(c.execute('SELECT count(*) FROM public.mycel_edges').fetchone()[0], 0)
 
-    @proves('MYC-2.6', 'MYC-2.8', kind='store')
     def test_shared_exact_version_has_independent_location_declarations_and_missing_owner_fault(self):
         disk = '---\nsources: ["source:disk.md"]\n---\n# Answer\nSame body.\n'
         branch = '---\nsources: ["source:branch.md"]\n---\n# Answer\nSame body.\n'
@@ -163,7 +160,6 @@ class DeclaredRefStoreTests(unittest.TestCase):
             self.assertEqual(missing.fault, 'owner_location_missing')
             self.assertEqual(len(DeclaredRefStore(c).list()), 2)
 
-    @proves('MYC-2.6', kind='store')
     def test_retention_removes_only_own_declared_record_and_preserves_history_owned_evidence(self):
         source = '# Answer\n<!-- sources:\nsource:guide.md\n-->\n'
         snapshot = settings(owner=True, source=True)
@@ -188,6 +184,8 @@ class DeclaredRefStoreTests(unittest.TestCase):
 
 
 class PhysicalBindingStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setup_disk(self, *, equal=False):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -203,7 +201,6 @@ class PhysicalBindingStoreTests(unittest.TestCase):
         path.write_bytes(raw)
         return CapturedFile(aliases[0], tuple(aliases), 'documents', raw, sha256(raw).hexdigest(), split_markdown(raw))
 
-    @proves('MYC-1.33', 'MYC-16.2', kind='store')
     def test_overlapping_and_equal_roots_use_one_identity_and_stable_primary(self):
         code, artifact, snapshot = self.setup_disk()
         with self.store_fixture.backend.connection(self.store_fixture.database) as c:
@@ -232,7 +229,6 @@ class PhysicalBindingStoreTests(unittest.TestCase):
             binding = bind_disk_file(c, snapshot, 'fixture', captured)
             self.assertEqual(binding.primary.address, 'fixture:@artifact/equal.md')
 
-    @proves('MYC-1.33', 'MYC-16.2', kind='store')
     def test_distinct_equal_content_files_stay_distinct_and_atomic_replacement_refuses_safely(self):
         code, artifact, snapshot = self.setup_disk()
         with self.store_fixture.backend.connection(self.store_fixture.database) as c:
@@ -252,7 +248,6 @@ class PhysicalBindingStoreTests(unittest.TestCase):
             self.assertEqual(c.execute('SELECT count(*) FROM public.mycel_files').fetchone()[0], 2)
             self.assertEqual(SourceResolver.from_store(c, snapshot).resolve('fixture:@artifact/same.md').selection.file.source, b'# Exact\n')
 
-    @proves('MYC-16.2', kind='store')
     def test_legacy_global_alias_occupancy_refuses_unproved_identity_replacement(self):
         code, artifact, snapshot = self.setup_disk()
         with self.store_fixture.backend.connection(self.store_fixture.database) as c:
@@ -264,7 +259,6 @@ class PhysicalBindingStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.code.value, 'invalid_input')
             self.assertEqual(c.execute('SELECT count(*) FROM public.mycel_files').fetchone()[0], 1)
 
-    @proves('MYC-1.19', 'MYC-1.33', 'MYC-16.2', kind='store')
     def test_recognized_move_keeps_file_and_chunk_identity_and_never_overrides_reused_path(self):
         code, artifact, snapshot = self.setup_disk()
         with self.store_fixture.backend.connection(self.store_fixture.database) as c:
@@ -309,6 +303,8 @@ class PhysicalBindingStoreTests(unittest.TestCase):
 
 
 class TypedMutationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setup_disk(self, owner_text, source_text, source_path='source.md'):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -325,7 +321,6 @@ class TypedMutationStoreTests(unittest.TestCase):
             + (f'code_root={json.dumps(str(source))}\n' if source_path.endswith('.py') else ''))
         return load_settings(path=config, home=home), owner, source
 
-    @proves('MYC-16.3', kind='store')
     def test_file_pin_uses_current_disk_complete_bytes_and_one_dependant_without_silent_retry_repin(self):
         owner_text = '# Answer\n<!-- sources:\nsource:source.md\n-->\n'
         source_text = '---\nrole: authored\n---\n# Source\r\nComplete\0source.\r\n'
@@ -360,7 +355,6 @@ class TypedMutationStoreTests(unittest.TestCase):
             with self.assertRaises(EvidenceError):
                 DiskPinObservation(c, snapshot, 'owner:answer.md', 'source:source.md').observe()
 
-    @proves('MYC-16.3', kind='store')
     def test_class_pin_has_ordered_membership_and_endpoint_selects_one_header(self):
         owner_text = '# Answer\nComplete answer.\n'
         source_text = 'class Policy:\n def z(self): pass\n def a(self): pass\n'

@@ -3,7 +3,6 @@ from dataclasses import replace
 from itertools import permutations
 import unittest
 
-from mycel._coverage import proves
 from mycel._declared_refs import _raw
 from mycel._dependency_application import RetainedDependencyResolver, _anchor, _match_declarations
 from mycel._evidence import CaptureLocation, capture_baseline
@@ -18,7 +17,6 @@ except ImportError:
 
 
 class RelationOccurrenceAliasTests(unittest.TestCase):
-    @proves('MYC-16.1')
     def test_malformed_alias_keeps_its_fault_and_valid_selection_keeps_prior_pin_in_either_order(self):
         legacy = 'source:source.md#Source'
         qualified = 'source:@artifact/source.md#Source'

@@ -8,7 +8,6 @@ import tempfile
 import unittest
 from uuid import uuid4
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._freshness import (ChunkRequirement, DependencyFault, FreshnessResult,
                              FreshnessScope, RepositoryStatus)
@@ -50,7 +49,6 @@ class ReadTests(unittest.TestCase):
     def resolver(self, *files, index=()):
         return SourceResolver(self.settings, tuple(files), index=tuple(index))
 
-    @proves("MYC-11.2")
     def test_qualified_and_legacy_places_and_result_identifier_select_one_exact_chunk(self):
         method = chunk("Policy.allow", "    def allow(self):\n        return True\n",
                        kind="method", family="Policy")
@@ -77,7 +75,6 @@ class ReadTests(unittest.TestCase):
                 select_chunk(resolver, **options)
             self.assertEqual(error.exception.code, "invalid_input")
 
-    @proves("MYC-11.7")
     def test_reply_keeps_checkout_markdown_document_origin_exact_lines_and_canonical_root(self):
         prefix = "# Intro\nIntro text.\n"
         text = "## Limits > Backoff\n雪 and a complete body.\n"
@@ -100,7 +97,6 @@ class ReadTests(unittest.TestCase):
         self.assertFalse(reply["freshness"]["checked"])
         self.assertFalse(reply["freshness"]["finished"])
 
-    @proves("MYC-11.7")
     def test_original_source_and_intermediate_paths_faults_and_heartwood_survive_reply(self):
         text = "---\nstatus: heartwood\nimplemented: true\n---\n# Stable\nBody.\n"
         member = chunk("Stable", text, kind="document", title="Stable")
@@ -121,7 +117,6 @@ class ReadTests(unittest.TestCase):
         inferred = read_chunk(self.resolver(retained), identifier=member.identifier)
         self.assertTrue(inferred["heartwood"])
 
-    @proves("MYC-11.7")
     def test_pending_source_or_ref_fault_cannot_make_an_unmarked_chunk_verified_current(self):
         member = chunk("step", "def step(): pass\n")
         retained = file("step.py", member.source.decode(), (member,))
@@ -148,7 +143,6 @@ class ReadTests(unittest.TestCase):
         self.assertFalse(reply["dependencyCheck"]["complete"])
         self.assertTrue(reply["dependencyCheck"]["faults"])
 
-    @proves("MYC-11.8")
     def test_context_comes_from_the_file_while_the_chunk_text_stays_exactly_indexed(self):
         before = [f"# before {number}\n" for number in range(60)]
         body = "def selected():\n    return 'indexed version'\n"
@@ -176,7 +170,6 @@ class ReadTests(unittest.TestCase):
                 read_chunk(resolver, identifier=member.identifier, context=value)
             self.assertEqual(error.exception.code, "invalid_input")
 
-    @proves("MYC-11.8")
     def test_context_stops_at_file_boundaries(self):
         body = "def first():\n    return 1\n"
         after = "# only one following line\n"
@@ -186,7 +179,6 @@ class ReadTests(unittest.TestCase):
         reply = read_chunk(self.resolver(retained), identifier=member.identifier, context=50)
         self.assertEqual(reply["context"], {"before": "", "after": after})
 
-    @proves("MYC-11.7", "MYC-11.8")
     def test_context_does_not_read_a_symlink_that_escapes_the_selected_configured_root(self):
         body = "def selected():\n    return 'indexed'\n"
         original = "# retained prefix\n" + body + "# retained suffix\n"
@@ -203,7 +195,6 @@ class ReadTests(unittest.TestCase):
         self.assertTrue(reply["unreadable"])
         self.assertNotIn("outside secret", json.dumps(reply))
 
-    @proves("MYC-11.9")
     def test_five_mib_cut_is_measured_in_utf8_bytes_without_a_partial_character(self):
         limit = 5 * 1024 * 1024
         for text, expected, cut in (("a" * limit, "a" * limit, False),
@@ -217,7 +208,6 @@ class ReadTests(unittest.TestCase):
                 self.assertEqual(reply["cut"], cut)
                 self.assertLessEqual(len(reply["text"].encode("utf-8")), limit)
 
-    @proves("MYC-11.2")
     def test_identifier_and_qualified_alias_use_the_actual_primary_binding(self):
         member = chunk("Section", "# Section\nBody.\n", kind="document", title="Section")
         shared = file("guide.md", member.source.decode(), (member,), root="artifact",

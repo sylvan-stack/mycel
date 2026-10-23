@@ -3,7 +3,6 @@ from dataclasses import replace
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._source_refs import format_entity_uri
 try:
@@ -13,7 +12,6 @@ except ImportError:
 
 
 class OriginsInputTests(unittest.TestCase):
-    @proves('MYC-0.6')
     def test_report_and_requirement_mark_syntax_is_finite(self):
         from mycel._cli import parse
         for arguments in (('origins','x','y'),('origins','--repo','a','--repo','b'),
@@ -28,6 +26,8 @@ class OriginsInputTests(unittest.TestCase):
 
 
 class OriginsStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     setUp=fixtures.UriMutationStoreTests.setUp
     ingest=fixtures.UriMutationStoreTests.ingest
     invoke=fixtures.UriMutationStoreTests.invoke
@@ -39,7 +39,6 @@ class OriginsStoreTests(unittest.TestCase):
         with self.base.connect() as connection,checked_store(connection),snapshot_transaction(connection):
             return origins_in_transaction(connection,settings or self.secondary,repository,**options)
 
-    @proves('MYC-17.11','MYC-17.10',kind='store')
     def test_links_missing_paths_single_chunk_and_readonly_cli_use_the_calling_clone(self):
         from mycel._justify import JustifyStore
         initial=self.report(missing=True)
@@ -62,7 +61,6 @@ class OriginsStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_activity").fetchone(),before)
 
-    @proves('MYC-17.11',kind='store')
     def test_default_runs_one_scoped_ingest_then_one_report_and_empty_list_still_succeeds(self):
         from mycel._ingest import ingest
         with patch('mycel._ingest.ingest',wraps=ingest) as run_ingest:
@@ -74,7 +72,6 @@ class OriginsStoreTests(unittest.TestCase):
         self.assertEqual(invocation.repositories,('fixture',))
         self.assertFalse(invocation.arguments)
 
-    @proves('MYC-17.11','MYC-1.39',kind='store')
     def test_changes_compare_retained_main_versions_without_git_and_keep_other_clone_unchanged(self):
         with patch('mycel._capture.run_git',side_effect=AssertionError('Changes query invoked Git')):
             self.assertEqual(self.report(changes=True)['chunks'],[])
@@ -90,7 +87,6 @@ class OriginsStoreTests(unittest.TestCase):
         with self.assertRaises(MycelError):
             self.report(changes=True)
 
-    @proves('MYC-17.12',kind='store')
     def test_unresting_and_reasoned_requirement_marks_never_invent_edges_or_proofs(self):
         from mycel._origins import mark_needs_nothing
         from mycel._justify import JustifyStore

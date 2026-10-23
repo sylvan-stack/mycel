@@ -450,22 +450,34 @@ class DriftStore:
         return descriptor, blobs, retained, fault
 
     def sync_in_transaction(self, settings, repositories, *, at=None, versions=None,
-                            pending=(), closure=None, verification=None, _candidate_pairs=None):
+                            pending=(), closure=None, verification=None, _candidate_pairs=None,
+                            captures=None, catalogs=None):
         """Project guarded current reasons, joining the producer's transaction.
 
         ``versions`` limits Detection's affected closure. Pending faults supply
         unresolved work even when mechanical detection cannot create a mark.
         ``closure`` may map exact version IDs to an owner-authorized event.
+        A guarded justification batch passes its ``captures`` and ``catalogs``
+        so that each repository is captured and catalogued once per batch.
         """
         settings.require_valid(require_store=False)
         repositories = tuple(sorted(set(repositories)))
         require_transaction_guards(self.connection, repositories)
         at = _time(at)
-        catalog = SourceResolver.from_observation_transaction(self.connection, settings,
-            guarded_repositories=repositories)
+        catalog = (SourceResolver.from_observation_transaction(self.connection, settings,
+            guarded_repositories=repositories) if catalogs is None else
+            SourceResolver.from_transaction(self.connection, settings, guarded_repositories=repositories,
+                                            catalogs=catalogs))
         files = {chunk.version: (file, member) for file in catalog.files
                  for member in catalog._members(file, file.chunks) for chunk in (member.chunk,)}
-        located = self.connection.execute(_NODES, (_eligible(settings), _eligible(settings))).fetchall()
+        eligible = _eligible(settings)
+        # Located file metadata is index data: a batch's guards keep it fixed.
+        nodes_key = ('drift-nodes', tuple(eligible))
+        located = None if catalogs is None else catalogs.get(nodes_key)
+        if located is None:
+            located = self.connection.execute(_NODES, (eligible, eligible)).fetchall()
+            if catalogs is not None:
+                catalogs[nodes_key] = located
         metadata = {version: file_meta for _, _, version, _, _, file_meta in located}
         generated = {str(row[0]) for row in self.connection.execute('SELECT chunk_id FROM public.mycel_generated_state').fetchall()}
         inactive = inactive_policy_links(self.connection, settings)
@@ -483,7 +495,8 @@ class DriftStore:
         pending_links = {item.get('dependency'): item.get('reason') for item in pending if item.get('dependency')}
         pending_places = {item.get('chunk', {}).get('address'): item.get('reason') for item in pending
                           if not item.get('dependency')}
-        candidates, bundles, captures = defaultdict(dict), defaultdict(lambda: ([], [])), {}
+        candidates, bundles = defaultdict(dict), defaultdict(lambda: ([], []))
+        captures = {} if captures is None else captures
         exemptions = {}
         for version, (file, member) in files.items():
             declarations = metadata.get(version, {}).get('documentDeclarations', {}).get('metadata', {})

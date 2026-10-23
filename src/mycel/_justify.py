@@ -114,6 +114,22 @@ class JustifyStore:
         return self.apply_pairs(settings, ((chunk, origin),), **options)[0]
 
     def apply_pairs(self, settings, pairs, *, by=None, captured_at=None, build=None, settings_home=None):
+        return self._apply_pairs(settings, pairs, by=by, captured_at=captured_at,
+            build=build, settings_home=settings_home)
+
+    def import_proven_pairs(self, settings, pairs, *, by, captured_at, validate_inputs, settings_home=None):
+        """Internal one-time migration; no product flag can choose proof metadata.
+
+        Replays require the identical statement. A later review or human statement
+        is refused rather than overwritten or promoted back to the proof band.
+        """
+        if not callable(validate_inputs):
+            raise MycelError('invalid_input', 'The legacy import requires a frozen-input validator.')
+        return self._apply_pairs(settings, pairs, by=by, captured_at=captured_at,
+            settings_home=settings_home, proven=True, validate_inputs=validate_inputs)
+
+    def _apply_pairs(self, settings, pairs, *, by=None, captured_at=None, build=None,
+                     settings_home=None, proven=False, validate_inputs=None):
         settings.require_valid(require_store=False)
         pairs = _pairs(pairs)
         by = _identity(by)
@@ -129,6 +145,8 @@ class JustifyStore:
             stack.enter_context(nullcontext() if audit is None else audit.session())
             try:
                 with atomic_transaction(self.connection):
+                    if validate_inputs is not None:
+                        validate_inputs()
                     catalog = SourceResolver.from_transaction(self.connection, settings)
                     planned, files = [], {}
                     # Resolve every pair and its complete selected inputs before
@@ -170,7 +188,10 @@ class JustifyStore:
                                 file = resolved.selection.file
                                 files[(file.repository, file.identifier)] = file
                         planned.append((raw_chunk, raw_origin, selection, source.selection, location))
-                    inputs = DependencyCaptureInputs(self.connection, settings, settings_home=settings_home)
+                    # One capture per repository for the whole batch; the final
+                    # verify() below compares it with a fresh capture.
+                    inputs = DependencyCaptureInputs(self.connection, settings, settings_home=settings_home,
+                        guarded_repositories=guarded, batch=True)
                     for file in files.values():
                         manifest = inputs.observe(file.repository)
                         aliases = {(place.root, place.path) for place in file.aliases}
@@ -182,7 +203,7 @@ class JustifyStore:
                         member = selection.members[0]
                         owner = member.place.repository
                         DeriveStore(self.connection).apply_in_transaction(settings, raw_chunk, raw_origin,
-                            remove=False, captured_at=captured_at, settings_home=settings_home)
+                            remove=False, captured_at=captured_at, settings_home=settings_home, inputs=inputs)
                         rows = self.connection.execute("""SELECT id,state FROM public.mycel_dependencies
                             WHERE repository=%s AND dependant_version=%s AND kind='asserted'
                               AND source_place=%s AND state->'declarationLocation'->>'file'=%s
@@ -199,10 +220,14 @@ class JustifyStore:
                             (owner,member.chunk.version,origin.place.address,
                              origin.members[0].chunk.identifier if len(origin.members)==1 and origin.members[0].chunk.kind in {'req','dec'} else None,location))
                         link = {'chunk': public_reference(selection), 'origin': public_reference(origin),
-                            'method': 'stated', 'confidenceScore': 1.0, 'confidence': 'asserted',
+                            'method': 'proven' if proven else 'stated',
+                            'confidenceScore': 0.8 if proven else 1.0,
+                            'confidence': confidence_band(0.8 if proven else 1.0),
                             'who': by, 'when': captured_at}
                         if state.get('originLink') is not None:
                             previous = checked_link(state['originLink'])
+                            if proven and previous != link:
+                                raise MycelError('refused', 'The legacy import would replace an existing Origin statement or review.')
                             if 'review' in previous:
                                 link['review'] = previous['review']
                         state = {**state, 'originLink': link,
@@ -212,6 +237,13 @@ class JustifyStore:
                                                 (Jsonb(state), identifier))
                         replies.append({'chunk': public_reference(selection), 'chunkVersion': member.chunk.version,
                             'origin': public_reference(origin), 'link': link})
+                    # One Drift sync for every derived dependant, with the batch's
+                    # captures and catalogs, before the verifications below.
+                    from ._drift_store import DriftStore
+                    DriftStore(self.connection).sync_in_transaction(settings,
+                        tuple(sorted({pair[2].place.repository for pair in planned})),
+                        versions=tuple(sorted({pair[2].members[0].chunk.version for pair in planned})),
+                        at=captured_at, captures=inputs.captures, catalogs=inputs.catalogs)
                     # State the entire batch before verifying a chunk. Several
                     # Origins for one dependant share its complete final policy,
                     # avoiding competing same-time partial verification records.
@@ -221,8 +253,9 @@ class JustifyStore:
                         key = (member.chunk.identifier,member.chunk.version,location)
                         if key not in verified:
                             verified[key] = ConfirmationStore(self.connection).apply_in_transaction(settings, raw_chunk,
-                                by=by, how='read', captured_at=captured_at, settings_home=settings_home,
-                                guarded_repositories=guarded, expected_identifier=member.chunk.identifier)
+                                by=by, how='check' if proven else 'read', captured_at=captured_at, settings_home=settings_home,
+                                guarded_repositories=guarded, expected_identifier=member.chunk.identifier,
+                                inputs=inputs)
                         reply['verification'] = verified[key]
                     for owner in sorted({pair[2].place.repository for pair in planned}):
                         current = [reply for reply, pair in zip(replies, planned)
@@ -231,6 +264,8 @@ class JustifyStore:
                         if audit is not None:
                             audit.record_in_transaction(owner, 'justify', AppliedMutation(True, counts[owner, 'justify']))
                     inputs.verify()
+                    if validate_inputs is not None:
+                        validate_inputs()
             except EvidenceError as error:
                 raise MycelError('invalid_input', 'Justify refused: '+error.status+'; '+', '.join(error.addresses or ()) + '.') from None
             except ReconciliationError as error:

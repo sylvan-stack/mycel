@@ -2,7 +2,6 @@
 from dataclasses import FrozenInstanceError, replace
 import unittest
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._freshness import (ChunkRequirement, Deadline, DeadlineExceeded,
     DependencyFault, FreshnessDiscovery, FreshnessScope, RefreshResult,
@@ -73,7 +72,6 @@ class FreshnessTests(unittest.TestCase):
         return run_freshness(scope or FreshnessScope(('driver',)), adapter,
             deadline=Deadline.after(seconds, clock=adapter.clock), no_fresh=no_fresh)
 
-    @proves('MYC-4.19', kind='unit')
     def test_one_deadline_all_incomplete_states_and_exact_result_checks_keep_current_index_usable(self):
         requirement = ChunkRequirement('driver', ('go', 1), ('driver', 'contract', 'glossary'))
         known = discovery('driver', 'contract', 'glossary',
@@ -137,7 +135,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertFalse(partial.finished)
         self.assertEqual(adapter.read_index(partial)[1], adapter.current_index)
 
-    @proves('MYC-4.19', kind='unit')
     def test_upstream_leaves_first_and_every_reread_keeps_original_scope(self):
         known = discovery('driver', 'contract', 'glossary',
             edges=(('driver', 'contract'), ('contract', 'glossary')),
@@ -153,7 +150,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertTrue(result.complete_for_chunk('driver', ('go', 1)))
         self.assertFalse(result.complete_for_chunk('driver', ('absent', 1)))
 
-    @proves('MYC-4.19', kind='unit')
     def test_new_captured_sources_extend_recursively_before_retrying_the_owner(self):
         adapter = Adapter(discovery('driver'), {
             'driver': [RefreshResult('pending', 'New upstream sources require checks.',
@@ -171,7 +167,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertEqual(set(statuses(result)), {'driver', 'contract', 'glossary'})
         self.assertTrue(all(row.scan_required for row in result.repositories))
 
-    @proves('MYC-4.19', kind='unit')
     def test_a_removed_ref_stops_requiring_its_previously_busy_source(self):
         adapter = Adapter(discovery('driver', 'contract', edges=(('driver', 'contract'),)),
                           {'contract': [MycelError('busy', 'The old upstream is busy.')]})
@@ -182,7 +177,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertEqual(set(statuses(result)), {'driver'})
         self.assertTrue(result.finished)
 
-    @proves('MYC-4.19', kind='unit')
     def test_deferred_owner_retries_only_after_its_own_sources_made_progress(self):
         adapter = Adapter(discovery('driver', 'contract'), {
             'driver': [RefreshResult('pending', 'Waiting for its explicit source.',
@@ -205,7 +199,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertEqual([name for name, _ in cycle.events if name != 'discover'], ['driver', 'contract'])
         self.assertFalse(cyclic.finished)
 
-    @proves('MYC-4.19', kind='unit')
     def test_no_fresh_reports_all_known_recursive_and_shared_suppliers_without_writes(self):
         adapter = Adapter(discovery('driver', 'contract', 'glossary', 'shared',
             edges=(('driver', 'contract'), ('contract', 'glossary')),
@@ -218,7 +211,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertFalse(result.finished)
         self.assertFalse(result.complete_for_chunk('driver', ('go', 1)))
 
-    @proves('MYC-4.19', kind='unit')
     def test_expired_initial_discovery_still_reports_configured_shared_supplier_seeds(self):
         adapter = Adapter(discovery('driver', 'shared'))
         scope = FreshnessScope(('driver',), 'docs', ('shared',))
@@ -230,7 +222,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertFalse(result.finished)
         self.assertEqual(result.scope.repositories, ('driver',))
 
-    @proves('MYC-4.19', kind='unit')
     def test_faults_make_only_their_exact_result_closure_incomplete_after_finished_work(self):
         fault = DependencyFault('contract', 'glossary:missing.md#Term', 'missing_file', ('contract', 2))
         broken = ChunkRequirement('driver', ('go', 1), ('driver', 'contract'), (fault,))
@@ -245,7 +236,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertTrue(result.complete_for_chunk('driver', ('independent', 1)))
         self.assertEqual(result.faults, (fault,))
 
-    @proves('MYC-4.19', kind='unit')
     def test_recovery_of_dependency_updates_clears_pending_without_scanning_the_dependant(self):
         adapter = Adapter(discovery('driver', 'contract', edges=(('driver', 'contract'),)), {
             'contract': [RefreshResult(dependency_updates=(
@@ -257,7 +247,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertEqual(statuses(result)['outside'], ('done', None, False))
         self.assertEqual([name for name, _ in adapter.events if name != 'discover'], ['contract', 'driver'])
 
-    @proves('MYC-4.19', kind='unit')
     def test_owner_pass_clears_earlier_pending_update_and_preserves_its_current_pending_work(self):
         requirement = ChunkRequirement('driver', ('go', 1), ('driver', 'contract'))
         for current_pending in (False, True):
@@ -279,7 +268,6 @@ class FreshnessTests(unittest.TestCase):
                 self.assertEqual(result.finished, not current_pending)
                 self.assertEqual(result.complete_for_chunk('driver', ('go', 1)), not current_pending)
 
-    @proves('MYC-4.19', kind='unit')
     def test_partial_discovery_keeps_new_known_sources_and_never_claims_completion(self):
         adapter = Adapter(discovery('driver', 'unresolved', complete=False,
                                     reason='The invocation freshness time limit was reached.'))
@@ -290,7 +278,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertFalse(result.complete_for('driver'))
         self.assertEqual([name for name, _ in adapter.events], ['discover'])
 
-    @proves('MYC-4.19', kind='unit')
     def test_discovery_failure_and_caller_interruption_preserve_current_index_fallback(self):
         for error in (RuntimeError('sensitive diagnostic'), MycelError('store_unavailable', 'Store read failed.'),
                       KeyboardInterrupt()):
@@ -307,7 +294,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertEqual([name for name, _ in adapter.events if name != 'discover'], ['driver'])
         self.assertEqual({row.status for row in result.repositories}, {'pending'})
 
-    @proves('MYC-4.19', kind='unit')
     def test_invalid_adapter_output_cannot_escape_into_a_successful_reply(self):
         adapter = Adapter(discovery('driver'), {'driver': [RefreshResult('failed')]})
         result = self.run_check(adapter)
@@ -322,7 +308,6 @@ class FreshnessTests(unittest.TestCase):
         self.assertFalse(result.discovery_complete)
         self.assertEqual(statuses(result)['driver'][0], 'pending')
 
-    @proves('MYC-4.19', kind='unit')
     def test_scope_and_deadline_are_immutable_and_expiration_is_never_restarted(self):
         scope = FreshnessScope(('driver',), 'docs')
         with self.assertRaises(FrozenInstanceError):

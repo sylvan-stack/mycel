@@ -5,7 +5,6 @@ from uuid import uuid4
 
 from psycopg.types.json import Jsonb
 
-from mycel._coverage import proves
 from mycel._declared_refs import DeclaredRefStore
 from mycel._freshness import Deadline
 from mycel._read_store import read_from_store
@@ -22,6 +21,8 @@ except ImportError:
 
 
 class DocumentLinksStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.ranking = ranking_fixtures.RankingStoreTests()
         self.ranking.store_fixture = self.store_fixture
@@ -56,7 +57,6 @@ class DocumentLinksStoreTests(unittest.TestCase):
         connection.execute("UPDATE public.mycel_file_locations SET kind='branch',location='old' "
             'WHERE file_version IN (SELECT id FROM public.mycel_file_versions WHERE file_id=%s)', (file_id,))
 
-    @proves('MYC-11.12', kind='store')
     def test_read_lists_both_directions_and_edge_kinds_completely_without_vectors(self):
         with self.base.connection() as connection:
             code = self.seed(connection, path='work.py', name='Work', source='needle work\n')
@@ -89,7 +89,6 @@ class DocumentLinksStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_vectors').fetchone(), (0,))
             self.assertEqual(self.base.contents(connection), before)
 
-    @proves('MYC-11.12', kind='store')
     def test_actual_declared_whole_file_and_class_family_describe_each_selected_code_chunk(self):
         header = 'class Worker:\n    flag = True\n'
         method = '    def run(self):\n        return self.flag\n'
@@ -114,7 +113,6 @@ class DocumentLinksStoreTests(unittest.TestCase):
                     self.assertEqual(self.signatures(self.read(connection, member[0])), expected)
             self.assertEqual(self.base.contents(connection), before)
 
-    @proves('MYC-11.12', kind='store')
     def test_current_anchored_versions_replace_old_pins_and_stale_marks_do_not_hide_links(self):
         with self.base.connection() as connection:
             old_code = self.seed(connection, path='work.py', name='OldWork', source='old work\n')
@@ -154,7 +152,6 @@ class DocumentLinksStoreTests(unittest.TestCase):
             self.make_historical(connection, document[0])
             self.assertEqual(self.read(connection, code[1])['documents'], [])
 
-    @proves('MYC-11.12', 'MYC-4.29', kind='store')
     def test_relations_generated_edges_other_code_transitive_and_branch_only_sections_do_not_describe(self):
         with self.base.connection() as connection:
             code = self.seed(connection, path='work.py', name='Work', source='needle\n')
@@ -196,7 +193,6 @@ class DocumentLinksStoreTests(unittest.TestCase):
             self.assertFalse(next(row for row in reply['results'] if row['id'] == str(code[1]))['described'])
             self.assertEqual(self.base.contents(connection), before)
 
-    @proves('MYC-4.29', kind='store')
     def test_search_described_is_query_independent_and_uses_unembedded_unselected_documents(self):
         with self.base.connection() as connection:
             described = self.seed(connection, path='work.py', name='Policy', source='needle Policy\n')

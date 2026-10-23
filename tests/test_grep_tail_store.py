@@ -15,7 +15,6 @@ from psycopg import pq
 from psycopg.types.json import Jsonb
 
 from mycel._cli import Invocation
-from mycel._coverage import proves
 from mycel._freshness import Deadline
 from mycel._grep import append_tail, render_tail, search_tail
 from mycel._safeguards import InvocationPolicy
@@ -73,6 +72,8 @@ def _forbid_mutations_and_paid_work():
 
 
 class GrepTailStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.ranking = ranking_fixtures.RankingStoreTests()
         self.ranking.store_fixture = self.store_fixture
@@ -131,7 +132,6 @@ class GrepTailStoreTests(unittest.TestCase):
         with patch('mycel._cli.invocation_store', store):
             yield
 
-    @proves('MYC-10.7', 'MYC-10.13', kind='store')
     def test_actual_default_tail_matches_normal_combined_top_five_with_shared_documents_and_no_freshness_or_writes(self):
         with self.base.connection() as raw:
             _, document, shared = self.populated(raw)
@@ -178,7 +178,6 @@ class GrepTailStoreTests(unittest.TestCase):
                     ('INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'TRUNCATE'))
                     for sql in connection.statements))
 
-    @proves('MYC-10.7', 'MYC-10.13', kind='store')
     def test_actual_append_uses_normal_wording_fallback_and_retains_every_row_xmin_sequence_and_cited_mark(self):
         with self.base.connection() as raw:
             _, _, _ = self.populated(raw)

@@ -14,14 +14,13 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import run
-from mycel._coverage import CoverageError, proves, require_check_database
+from mycel._coverage import CoverageError, require_check_database
 from mycel._safeguards import run_git
 from mycel._settings import load_settings
 from fixtures import EmbeddingFixtureFailure, EmbeddingStandIn, repository_fixture
 
 
 class ServiceFixtureTests(unittest.TestCase):
-    @proves("MYC-13.7")
     def test_packaged_prompt_counts_enforce_limits_while_usage_counts_submitted_text(self):
         from mycel._embedding_plan import load_tokenizer
         tokenizer = load_tokenizer()
@@ -38,7 +37,6 @@ class ServiceFixtureTests(unittest.TestCase):
                          (tokenizer.catalog.input_token_cap, tokenizer.catalog.batch_token_cap,
                           tokenizer.catalog.batch_input_cap))
 
-    @proves("MYC-13.7")
     def test_deterministic_vectors_keep_word_similarity_and_exact_request_counts(self):
         calls = []
 
@@ -63,7 +61,6 @@ class ServiceFixtureTests(unittest.TestCase):
         self.assertTrue(all(len(vector) == 1024 for vector in vectors))
         self.assertEqual(service.vector("", 256), service.vector("", 256))
 
-    @proves("MYC-13.7")
     def test_stand_in_enforces_input_batch_count_and_explicit_request_contract(self):
         counter = lambda text, kind: {"small": 2, "large": 5}[text]
         for inputs, caps in ((["large"], {"input_cap": 4}),
@@ -86,7 +83,6 @@ class ServiceFixtureTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             service.request({key: value for key, value in body.items() if key != "truncation"})
 
-    @proves("MYC-13.7")
     def test_each_service_failure_is_controllable_and_attempts_remain_counted(self):
         for kind in sorted(EmbeddingStandIn.FAILURES):
             with self.subTest(kind=kind):
@@ -110,7 +106,6 @@ class ServiceFixtureTests(unittest.TestCase):
         self.assertEqual(service.embed(["good"], model="voyage-code-4", dimensions=256,
                                       input_type="document")["data"], [])
 
-    @proves("MYC-13.8")
     def test_installed_settings_and_cli_reject_provider_endpoint_substitution(self):
         from io import StringIO
         with tempfile.TemporaryDirectory() as directory:
@@ -149,35 +144,26 @@ class RunnerFixtureTests(unittest.TestCase):
             finally:
                 sys.modules.pop(name, None)
 
-    @proves("MYC-13.15")
     def test_runner_preflight_fails_every_store_check_once_without_repeating_provider_attempts(self):
         with tempfile.TemporaryDirectory() as directory, self.source_runner() as runner:
             root = Path(directory)
             (root / "test_runner_preflight.py").write_text('''import unittest
-from mycel._coverage import proves
-class CliChecks(unittest.TestCase):
-    @proves("MYC-13.4", kind="store")
+class CliStoreChecks(unittest.TestCase):
+    check_kind = "store"
     def test_first(self):
         self.fail("unavailable store body unexpectedly executed")
-    @proves("MYC-13.4", kind="store")
     def test_second(self):
         self.fail("unavailable store body unexpectedly executed")
-    @proves("MYC-13.3")
+class CliChecks(unittest.TestCase):
     def test_unit(self):
         pass
 ''')
             config = root / "config.toml"
             config.write_text('[store]\naddress="postgresql://private-user@host%0aheader:6543/private-owner?sslmode=require"\n')
-            claims = root / "claims.json"
-            prefix = "test_runner_preflight.CliChecks."
-            claims.write_text(json.dumps({"schema_version": 1, "implemented": {
-                "MYC-13.4": [prefix + "test_first", prefix + "test_second"],
-                "MYC-13.3": [prefix + "test_unit"],
-            }}))
+            prefix = "test_runner_preflight."
             report = root / "report.json"
             arguments = ["run_checks.py", "--tests", str(root), "--select", "test_runner_preflight",
-                         "--workers", "1", "--claims", str(claims), "--store-settings", str(config),
-                         "--report", str(report)]
+                         "--workers", "1", "--store-settings", str(config), "--report", str(report)]
             try:
                 for connected, expected_attempts in ((False, 1), (True, 4)):
                     with self.subTest(connected=connected):
@@ -204,37 +190,30 @@ class CliChecks(unittest.TestCase):
                         data = json.loads(report.read_text())
                         self.assertFalse(data["passed"])
                         self.assertEqual([(check["name"], check["status"]) for check in data["checks"]],
-                                         [(prefix + "test_first", "failed"), (prefix + "test_second", "failed"),
-                                          (prefix + "test_unit", "passed")])
+                                         [(prefix + "CliChecks.test_unit", "passed"),
+                                          (prefix + "CliStoreChecks.test_first", "failed"),
+                                          (prefix + "CliStoreChecks.test_second", "failed")])
                         reason = "store checks unavailable at host?0aheader:6543: cannot connect or create a disposable database"
                         self.assertEqual(errors.getvalue().splitlines().count(reason), 1)
-                        for check in data["checks"][:2]:
+                        for check in data["checks"][1:]:
                             self.assertEqual(check["detail"], "RuntimeError: " + reason)
-                        self.assertEqual(data["requirements"]["MYC-13.4"]["status"], "pending")
-                        self.assertEqual(data["requirements"]["MYC-13.4"]["verified_by"], [])
-                        self.assertEqual(data["requirements"]["MYC-13.3"]["status"], "implemented")
                         self.assertIn("1 passed, 2 failed, 0 skipped", output.getvalue())
                         for private in ("private-user", "private-owner", "private-provider", "private-auth", "postgresql://"):
                             self.assertNotIn(private, output.getvalue() + errors.getvalue() + report.read_text())
             finally:
                 sys.modules.pop("test_runner_preflight", None)
 
-    @proves("MYC-13.15")
     def test_runner_retains_private_ownership_record_and_reports_path_when_recovery_fails(self):
         journals = []
         with tempfile.TemporaryDirectory() as directory, self.source_runner() as runner:
             root = Path(directory)
             (root / "test_runner_recovery.py").write_text('''import unittest
-from mycel._coverage import proves
 class CliChecks(unittest.TestCase):
-    @proves("MYC-13.3")
     def test_unit(self):
         pass
 ''')
             config = root / "config.toml"
             config.write_text('[store]\naddress="postgresql://fixture@localhost/fixture-owner"\n')
-            claims = root / "claims.json"
-            claims.write_text('{"schema_version": 1, "implemented": {}}')
 
             def fail_recovery(backend):
                 journal = backend._ownership_journal
@@ -247,7 +226,7 @@ class CliChecks(unittest.TestCase):
 
             output, errors = StringIO(), StringIO()
             arguments = ["run_checks.py", "--tests", str(root), "--select", "test_runner_recovery",
-                         "--workers", "1", "--claims", str(claims), "--store-settings", str(config)]
+                         "--workers", "1", "--store-settings", str(config)]
             try:
                 with patch.object(sys, "argv", arguments), \
                         patch.object(runner.NativePostgresBackend, "recover_owned_databases", autospec=True,
@@ -276,7 +255,8 @@ class RepositoryFixtureTests(unittest.TestCase):
     # The backend runs actual product init for this fixture. These checks remain
     # store-backed and cannot qualify against an in-memory substitute.
 
-    @proves("MYC-13.6", kind="store")
+    check_kind = "store"
+
     def test_real_git_locations_are_read_without_touching_the_generated_checkout(self):
         self.assertTrue(self.store_fixture.backend.real_store)
         with repository_fixture() as fixture:
@@ -300,7 +280,6 @@ class RepositoryFixtureTests(unittest.TestCase):
             root = fixture.root
         self.assertFalse(root.exists())
 
-    @proves("MYC-13.4", "MYC-13.5", kind="store")
     def test_private_store_fixture_has_safe_name_private_settings_and_real_database(self):
         fixture = self.store_fixture
         self.assertEqual(require_check_database(fixture.database), fixture.database)

@@ -3,7 +3,6 @@ from dataclasses import replace
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._embedding_plan import document_place_line, plan_chunk
 from mycel._evidence import EvidenceError
 from mycel._generated import generated_capture
@@ -22,6 +21,8 @@ except ImportError:
 
 
 class SummaryPublicationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.GeneratedStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -66,7 +67,6 @@ class SummaryPublicationStoreTests(unittest.TestCase):
             "JOIN public.mycel_chunk_versions v ON v.chunk_id=c.id JOIN public.mycel_locations l ON l.chunk_version=v.id "
             "WHERE c.repository='fixture' AND c.kind='summary' AND l.kind='index' ORDER BY c.id").fetchall()
 
-    @proves('MYC-8.13', 'MYC-8.14', 'MYC-8.15', 'MYC-8.26', 'MYC-8.29', kind='store')
     def test_private_levels_remain_invisible_then_publish_exact_reserved_versions_and_owned_pins_together(self):
         with self.base.connect() as connection, self.base.connect() as reader:
             self.fixture.fixture.prepare(connection)
@@ -106,7 +106,6 @@ class SummaryPublicationStoreTests(unittest.TestCase):
                                                                  {'level': 2, 'summaries': 1, 'stale': 0}])
                     self.assertEqual(snapshot.status()['builtAt'], fixtures.METADATA.built_at)
 
-    @proves('MYC-8.15', 'MYC-8.26', kind='store')
     def test_empty_replacement_retains_set_metadata_and_removes_old_vectors_pins_and_permanent_owners_atomically(self):
         with self.base.connect() as connection, self.base.connect() as reader:
             self.fixture.fixture.prepare(connection)
@@ -131,7 +130,6 @@ class SummaryPublicationStoreTests(unittest.TestCase):
                     self.assertEqual(snapshot.status()['levels'], [])
                     self.assertEqual(snapshot.status()['numericalVersions'], dict(metadata.numerical_versions))
 
-    @proves('MYC-8.15', 'MYC-8.26', 'MYC-8.29', kind='store')
     def test_changed_disk_inputs_and_late_audit_failure_keep_complete_old_set_and_discard_private_evidence(self):
         with self.base.connect() as connection:
             self.fixture.fixture.prepare(connection)
@@ -162,7 +160,6 @@ class SummaryPublicationStoreTests(unittest.TestCase):
                         self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners "
                             "WHERE kind='summary_generation'").fetchone(), (0,))
 
-    @proves('MYC-8.26', 'MYC-8.29', kind='store')
     def test_private_higher_request_requires_exact_same_invocation_response_and_never_accepts_foreign_stage(self):
         with self.base.connect() as connection:
             self.fixture.fixture.prepare(connection)
@@ -178,7 +175,6 @@ class SummaryPublicationStoreTests(unittest.TestCase):
                 self.assertEqual(self.current(connection), [])
                 publisher.discard()
 
-    @proves('MYC-8.13', 'MYC-8.15', 'MYC-8.26', 'MYC-8.29', kind='store')
     def test_identical_requests_have_distinct_actual_command_leases_and_publish_distinct_response_evidence(self):
         with self.base.connect() as connection:
             self.fixture.fixture.prepare(connection)
@@ -197,7 +193,6 @@ class SummaryPublicationStoreTests(unittest.TestCase):
                 self.assertEqual(responses, {stage.member.chunk.snapshot_hash for stage in stages})
                 publisher.release()
 
-    @proves('MYC-8.15', 'MYC-8.26', 'MYC-8.29', kind='store')
     def test_ingest_pass_contention_cannot_prevent_exact_private_lease_cleanup_or_replace_success_with_busy(self):
         with self.base.connect() as connection, self.base.connect() as ingester:
             self.fixture.fixture.prepare(connection)
@@ -219,7 +214,6 @@ class SummaryPublicationStoreTests(unittest.TestCase):
                 self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners "
                     "WHERE kind='summary_generation'").fetchone(), (0,))
 
-    @proves('MYC-8.15', 'MYC-8.26', 'MYC-8.29', kind='store')
     def test_private_owner_transfer_rolls_back_with_publication_and_confirmed_commit_cleanup_needs_no_sql(self):
         with self.base.connect() as connection:
             self.fixture.fixture.prepare(connection)

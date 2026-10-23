@@ -11,7 +11,6 @@ from unittest.mock import patch
 
 from psycopg import pq
 from mycel._cli import run
-from mycel._coverage import proves
 from mycel._embed import retained_contexts
 from mycel._embedding_plan import load_tokenizer
 from mycel._embedding_store import EmbeddingStore
@@ -31,7 +30,6 @@ except ImportError:
 
 
 class RepositoryStatusUnitTests(unittest.TestCase):
-    @proves('MYC-13.15')
     def test_snapshot_methods_refuse_idle_connections_before_reading_inventory(self):
         connection = SimpleNamespace(autocommit=True,
             info=SimpleNamespace(transaction_status=pq.TransactionStatus.IDLE))
@@ -48,6 +46,8 @@ class RepositoryStatusUnitTests(unittest.TestCase):
 
 
 class RepositoryStatusStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     state = provenance_fixtures.ProvenanceReportStoreTests.state
     no_work = provenance_fixtures.ProvenanceReportStoreTests.no_work
 
@@ -68,7 +68,6 @@ class RepositoryStatusStoreTests(unittest.TestCase):
         self.assertEqual(stderr.getvalue(), '')
         return status, json.loads(stdout.getvalue())
 
-    @proves('MYC-1.26', 'MYC-1.28', 'MYC-3.12', kind='store')
     def test_public_status_counts_disk_branch_stash_and_provisional_parts_without_writes(self):
         self.base.initialize()
         branch = self.base.artifact / 'branch.md'
@@ -97,7 +96,6 @@ class RepositoryStatusStoreTests(unittest.TestCase):
             self.assertEqual((result['known'], result['enabled']), (True, True))
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.26', 'MYC-1.28', 'MYC-3.12', 'MYC-6.15', 'MYC-6.16', kind='store')
     def test_all_lists_disabled_orphan_and_enabled_empty_without_requiring_available_folders(self):
         self.base.initialize()
         with self.base.connect() as connection:
@@ -169,7 +167,6 @@ class RepositoryStatusStoreTests(unittest.TestCase):
                             deadline=Deadline.after(1), no_fresh=True)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.26', 'MYC-1.28', 'MYC-3.12', kind='store')
     def test_coverage_counts_whole_current_model_versions_and_failed_pending_parts_apart(self):
         self.base.initialize(b'# Guide\n' + b'Guide body words. ' * 30 + b'\n')
         for name in ('complete', 'failed', 'old'):
@@ -227,7 +224,6 @@ class RepositoryStatusStoreTests(unittest.TestCase):
                 self.assertEqual(deferred['parts']['deferred'], len(staged))
                 self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.26', kind='store')
     def test_inventory_provenance_and_last_pass_share_one_repeatable_read_snapshot(self):
         self.base.initialize()
         with self.base.connect() as connection, self.base.connect() as writer:

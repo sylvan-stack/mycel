@@ -131,14 +131,19 @@ class DeriveStore:
             return reply
 
     def apply_in_transaction(self, settings, dependant, source, *, remove, captured_at,
-                             settings_home=None, activity=None):
-        """Apply on the caller's exact guarded connection, with a final reread."""
+                             settings_home=None, activity=None, inputs=None):
+        """Apply on the caller's exact guarded connection, with a final reread.
+
+        A caller that passes its batch `inputs` performs that final reread and
+        the Drift sync of the dependant itself, once for the whole batch.
+        """
         settings.require_valid(require_store=False)
         _validate_ref_syntax((dependant, source))
         if type(remove) is not bool:
             raise MycelError('invalid_input', 'Derive removal must be an explicit boolean.')
         require_transaction_guards(self.connection, tuple(settings.values['repos']))
-        catalog = SourceResolver.from_transaction(self.connection, settings, kind='disk', location='disk')
+        catalog = SourceResolver.from_transaction(self.connection, settings, kind='disk', location='disk',
+            catalogs=None if inputs is None else inputs.catalogs)
         raw_source = source
         dependant, source = _canonical_refs(self.connection, settings, (dependant, source),
             ('endpoint', 'source'), catalog=catalog)
@@ -206,7 +211,9 @@ class DeriveStore:
             _fault(resolution)
         else:
             natural = resolution.selection.place
-        inputs = DependencyCaptureInputs(self.connection, settings, settings_home=settings_home)
+        shared = inputs is not None
+        if not shared:
+            inputs = DependencyCaptureInputs(self.connection, settings, settings_home=settings_home)
         reread = inputs.rereader(LocationId('disk', None, 'disk'), owner, None)
         # A release decision has no active source resolution. Guard the user's
         # complete selected source/explicit absence before releasing its owner.
@@ -222,12 +229,14 @@ class DeriveStore:
                     'members': len(resolution.selection.members) if resolution.selection else 0}
                 if resolution.selection is None:
                     reply['sourceRef'] = source
-                inputs.verify()
+                if not shared:
+                    inputs.verify()
                 return reply
             applied = store.apply_in_transaction(settings, str(location), member.chunk.version,
                 mode='observe', captured_at=captured_at, reread=reread,
                 assertions=() if remove else (source,), remove_assertions=(removal,) if remove else (),
-                assertions_only=True, assertion_dependencies=() if match is None else (str(match[0]),))
+                assertions_only=True, assertion_dependencies=() if match is None else (str(match[0]),),
+                catalogs=inputs.catalogs if shared else None)
         decision = next((item for item in applied.plan.decisions if item.kind == 'asserted' and
             (item.identifier == str(match[0]) if match else item.natural_place == natural)), None)
         baseline = None if decision is None else decision.baseline
@@ -246,7 +255,7 @@ class DeriveStore:
                         len(baseline.payload['members']) if baseline else 0)}
         if baseline_id is not None:
             reply['baselineManifest'] = baseline_id
-        if applied.mutated:
+        if applied.mutated and not shared:
             from ._drift_store import DriftStore
             DriftStore(self.connection).sync_in_transaction(settings, (owner,),
                 versions=(member.chunk.version,), at=captured_at)
@@ -256,7 +265,8 @@ class DeriveStore:
             activity.record_in_transaction(owner, 'derive', AppliedMutation(applied.mutated, reply))
         # Audit is in the same rollback boundary. Changes after any producer or
         # audit callback still invalidate the entire assertion/release.
-        inputs.verify()
+        if not shared:
+            inputs.verify()
         return reply
 
 

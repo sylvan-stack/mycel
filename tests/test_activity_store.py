@@ -10,7 +10,6 @@ import psycopg
 from psycopg.types.json import Jsonb
 from mycel import _activity as activity
 from mycel import _locks as locks
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._source_refs import SourceAddress
 from mycel._declared_refs import DeclaredRefStore
@@ -21,6 +20,8 @@ from mycel._store import search_text
 
 
 class ActivityStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def connect(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)
 
@@ -36,7 +37,6 @@ class ActivityStoreTests(unittest.TestCase):
     def entries(self, c):
         return c.execute('SELECT id,repository,kind,outcome,counts FROM public.mycel_activity ORDER BY id').fetchall()
 
-    @proves('MYC-12.1','MYC-12.2','MYC-12.3','MYC-12.4',kind='store')
     def test_lazy_entries_scoped_downstream_counts_and_final_reply_are_exact(self):
         with self.connect() as c:
             self.seed(c)
@@ -63,7 +63,6 @@ class ActivityStoreTests(unittest.TestCase):
                 self.assertEqual(detail['files'],[])
                 self.assertEqual(detail['decisions'],[])
 
-    @proves('MYC-12.5','MYC-12.6','MYC-12.7',kind='store')
     def test_file_and_all_code_document_decisions_rollback_with_the_file_and_retry(self):
         with self.connect() as c:
             self.seed(c)
@@ -86,7 +85,6 @@ class ActivityStoreTests(unittest.TestCase):
             self.assertEqual([r['decision'] for r in detail['decisions']],['new','renamed','unchanged'])
             self.assertEqual(detail['decisions'][1]['previousName'],'old')
 
-    @proves('MYC-12.6','MYC-12.7','MYC-12.4',kind='store')
     def test_later_file_failure_retains_only_applied_prefix_and_sanitized_failure(self):
         with self.connect() as c:
             self.seed(c)
@@ -105,7 +103,6 @@ class ActivityStoreTests(unittest.TestCase):
             self.assertNotIn('private-native-sentinel',str(detail))
             self.assertEqual(c.execute("SELECT read_locations FROM public.mycel_repository_state WHERE repository='fixture'").fetchone()[0],{'files':1})
 
-    @proves('MYC-12.8',kind='store')
     def test_audit_insert_detail_and_close_failures_are_internal_and_atomic(self):
         for point in ('INSERT INTO public.mycel_activity\n','INSERT INTO public.mycel_activity_files','UPDATE public.mycel_activity SET ended_at'):
             with self.connect() as c:
@@ -137,7 +134,6 @@ class ActivityStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.code,'internal')
                 self.assertNotIn('private',str(error.exception))
 
-    @proves('MYC-12.7','MYC-12.14',kind='store')
     def test_exact_session_loss_and_recycled_pid_or_other_lock_never_protect_open_work(self):
         with self.connect() as owner, self.connect() as observer:
             self.seed(owner)
@@ -164,7 +160,6 @@ class ActivityStoreTests(unittest.TestCase):
                 try: session.__exit__(RuntimeError,RuntimeError('ended session'),None)
                 except MycelError: pass
 
-    @proves('MYC-12.7','MYC-12.14',kind='store')
     def test_live_invocation_cannot_be_adopted_by_another_connection(self):
         with self.connect() as owner, self.connect() as other:
             self.seed(owner)
@@ -176,7 +171,6 @@ class ActivityStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.code,'internal')
                 self.assertEqual(self.entries(other),[])
 
-    @proves('MYC-12.1','MYC-12.2','MYC-12.3',kind='store')
     def test_global_init_remove_and_noop_reports_leave_only_applied_entries(self):
         with self.connect() as c:
             self.seed(c)
@@ -188,7 +182,6 @@ class ActivityStoreTests(unittest.TestCase):
                 audit.apply('fixture','embed',lambda _:activity.AppliedMutation(False,{'parts':0}))
             self.assertEqual([(r[1],r[2],r[4]) for r in self.entries(c)],[(None,'init',{'changed':True}),(None,'remove',{'removed':'fixture'})])
 
-    @proves('MYC-12.1', 'MYC-12.4', 'MYC-12.6', 'MYC-12.7', kind='store')
     def test_caller_transaction_publishes_multiple_repository_audits_together(self):
         with self.connect() as c, self.connect() as observer:
             self.seed(c)
@@ -222,7 +215,6 @@ class ActivityStoreTests(unittest.TestCase):
             self.assertEqual(len(activity.activity_state(observer, rows[0][0])['decisions']), 1)
             self.assertEqual(activity.activity_state(observer, rows[1][0])['files'], [])
 
-    @proves('MYC-12.1', 'MYC-12.6', 'MYC-12.7', 'MYC-12.8', kind='store')
     def test_caller_transaction_late_audit_failure_rolls_back_all_scopes_and_retry(self):
         with self.connect() as c:
             self.seed(c)
@@ -262,7 +254,6 @@ class ActivityStoreTests(unittest.TestCase):
                              [('fixture', 'ingest', 'done'), ('downstream', 'ingest', 'done')])
             self.assertEqual(c.execute('SELECT count(*) FROM public.mycel_identity_decisions').fetchone()[0], 1)
 
-    @proves('MYC-12.7', 'MYC-12.14', kind='store')
     def test_caller_transaction_requires_own_guarded_live_connection(self):
         with self.connect() as owner, self.connect() as other:
             self.seed(owner)
@@ -290,7 +281,6 @@ class ActivityStoreTests(unittest.TestCase):
                 self.assertEqual(self.entries(owner), [])
                 self.assertEqual(owner.execute("SELECT read_locations FROM public.mycel_repository_state WHERE repository='fixture'").fetchone()[0], {})
 
-    @proves('MYC-12.13','MYC-12.4',kind='store')
     def test_classify_bundle_references_counts_and_mechanical_ingest_are_separate(self):
         with self.connect() as c:
             self.seed(c)
@@ -307,7 +297,6 @@ class ActivityStoreTests(unittest.TestCase):
             self.assertEqual(detail['classifications'][0]['dependant'],{'repository':'fixture','root':'artifact','path':'note.md','name':'section','address':place.address})
             self.assertEqual(detail['classifications'][0]['bundle'],'bundle-1')
 
-    @proves('MYC-12.3','MYC-12.7',kind='store')
     def test_cancellation_closes_applied_work_before_releasing_liveness(self):
         with self.connect() as c:
             self.seed(c)
@@ -324,6 +313,8 @@ class ActivityStoreTests(unittest.TestCase):
 
 class ActivityDeclaredRefStoreTests(unittest.TestCase):
     """Audit actual retained-reference writes; fixture Builds are test inputs."""
+    check_kind = "store"
+
 
     def connect(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)
@@ -374,7 +365,6 @@ class ActivityDeclaredRefStoreTests(unittest.TestCase):
             'SELECT dependency,source_version FROM public.mycel_edges ORDER BY dependency,source_version',
             'SELECT id,fault FROM public.mycel_ref_faults ORDER BY id'))
 
-    @proves('MYC-12.1', 'MYC-12.2', 'MYC-12.4', 'MYC-12.7', kind='store')
     def test_real_reference_pass_scopes_downstream_audit_and_unchanged_retry_has_no_entry(self):
         with self.connect() as c:
             settings, store = self.seed(c)
@@ -402,7 +392,6 @@ class ActivityDeclaredRefStoreTests(unittest.TestCase):
             self.assertEqual(self.dependency_snapshot(c), before)
             self.assertEqual(c.execute('SELECT count(*) FROM public.mycel_evidence_owners').fetchone()[0], 0)
 
-    @proves('MYC-12.1', 'MYC-12.4', kind='store')
     def test_settings_only_reference_fault_changes_audit_each_unchanged_owner(self):
         with self.connect() as c:
             settings, store = self.seed(c)
@@ -421,7 +410,6 @@ class ActivityDeclaredRefStoreTests(unittest.TestCase):
                 self.assertEqual((detail['files'], detail['decisions']), ([], []))
             self.assertEqual(c.execute('SELECT count(*) FROM public.mycel_evidence_owners').fetchone()[0], 0)
 
-    @proves('MYC-12.7', 'MYC-12.8', kind='store')
     def test_real_reference_writes_rollback_on_native_audit_insert_failure(self):
         with self.connect() as c:
             settings, store = self.seed(c)
@@ -442,7 +430,6 @@ class ActivityDeclaredRefStoreTests(unittest.TestCase):
             self.assertEqual(self.entries(c), [])
             self.assertEqual(self.dependency_snapshot(c), before)
 
-    @proves('MYC-12.4', 'MYC-12.7', 'MYC-12.8', kind='store')
     def test_later_owner_audit_failure_preserves_real_applied_prefix_and_retry(self):
         with self.connect() as c:
             settings, store = self.seed(c)
@@ -472,7 +459,6 @@ class ActivityDeclaredRefStoreTests(unittest.TestCase):
             self.assertEqual([row[1:4] for row in self.entries(c)],
                              [('downstream', 'ingest', 'failed'), ('fixture', 'ingest', 'done')])
 
-    @proves('MYC-12.2', 'MYC-12.4', kind='store')
     def test_repeated_reference_passes_use_producer_cumulative_and_final_noop_counts(self):
         with self.connect() as c:
             settings, store = self.seed(c)

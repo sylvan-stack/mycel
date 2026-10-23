@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 from psycopg import pq
 
-from mycel._coverage import proves
 from mycel._deadline import (DeadlineConnection, check_deadline, current_deadline,
     deadline_guard, deadline_seconds, deadline_suspended)
 from mycel._freshness import Deadline, DeadlineExceeded
@@ -42,7 +41,6 @@ class Connection:
 
 
 class DeadlineBoundaryTests(unittest.TestCase):
-    @proves('MYC-4.19', kind='unit')
     def test_one_active_budget_bounds_nested_git_and_child_work_then_restores_current_index_reads(self):
         clock = Clock()
         deadline = Deadline.after(0.5, clock=clock)
@@ -94,7 +92,6 @@ class DeadlineBoundaryTests(unittest.TestCase):
         self.assertEqual(raw.queries, [('SELECT existing indexed results', None, {})])
         self.assertEqual(deadline_seconds(10), 10)
 
-    @proves('MYC-4.19', kind='unit')
     def test_nested_deadline_context_and_cleanup_restore_the_original_allowance(self):
         clock = Clock()
         outer, inner = Deadline.after(0.5, clock=clock), Deadline.after(0.1, clock=clock)
@@ -114,7 +111,6 @@ class DeadlineBoundaryTests(unittest.TestCase):
                 check_deadline()
         self.assertIsNone(current_deadline())
 
-    @proves('MYC-4.19', kind='unit')
     def test_every_sql_read_uses_remaining_allowance_and_restores_autocommit_settings_on_failure(self):
         clock = Clock()
         raw = Connection()
@@ -176,7 +172,6 @@ class DeadlineBoundaryTests(unittest.TestCase):
             DeadlineConnection(raw).execute('SELECT remaining work')
         self.assertIn(raw.queries[1][1][0], {'99ms', '100ms'})
 
-    @proves('MYC-4.19', kind='unit')
     def test_transaction_timeout_does_not_take_a_snapshot_before_read_only_is_selected(self):
         raw = Connection(in_transaction=True)
         with deadline_guard(Deadline.after(0.5, clock=Clock())):

@@ -5,7 +5,6 @@ keep immutable observation pins distinct from accepted edits and confirmations.
 """
 import unittest
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceStore
 from mycel._resolver import SourceResolver
@@ -22,6 +21,8 @@ SOURCE = 'fixture:@code/policy.py#Policy'
 
 
 class RelationSelectionRegressionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.harness = fixtures.RelateStoreTests()
         self.harness.store_fixture = self.store_fixture
@@ -94,7 +95,6 @@ class RelationSelectionRegressionStoreTests(unittest.TestCase):
         self.assertEqual(EvidenceStore(connection).read_baseline('fixture', restored[5]).manifest.canonical_bytes,
                          baseline.manifest.canonical_bytes)
 
-    @proves('MYC-7.14', 'MYC-7.16', 'MYC-7.26', kind='store')
     def test_family_to_chunk_publication_keeps_pin_reports_removed_member_and_restores(self):
         self.declare()
         with self.base.connect() as connection:
@@ -111,7 +111,6 @@ class RelationSelectionRegressionStoreTests(unittest.TestCase):
             self.fixture.publish(connection)
             self.assert_restored(connection, original, baseline)
 
-    @proves('MYC-7.14', 'MYC-7.16', 'MYC-7.26', kind='store')
     def test_chunk_to_family_publication_keeps_pin_and_restores_without_removed_member(self):
         self.declare(original=CHUNK)
         with self.base.connect() as connection:
@@ -160,17 +159,14 @@ class RelationSelectionRegressionStoreTests(unittest.TestCase):
             self.fixture.publish(connection)
             self.assert_restored(connection, original, baseline)
 
-    @proves('MYC-7.16', 'MYC-7.26', kind='store')
     def test_substantive_edit_repins_family_to_chunk_and_dependant_restoration_recovers_original_pin(self):
         self.accepted_edit_and_restoration(original_source=FAMILY, changed_source=CHUNK,
             changed_kind='chunk', removed=True)
 
-    @proves('MYC-7.16', 'MYC-7.26', kind='store')
     def test_substantive_edit_repins_chunk_to_family_and_dependant_restoration_recovers_original_pin(self):
         self.accepted_edit_and_restoration(original_source=CHUNK, changed_source=FAMILY,
             changed_kind='family', removed=False)
 
-    @proves('MYC-7.16', 'MYC-7.26', kind='store')
     def test_confirmation_accepts_both_new_selection_kinds_without_changing_dependant(self):
         original_guide = self.declare()
         with self.base.connect() as connection:
@@ -193,7 +189,6 @@ class RelationSelectionRegressionStoreTests(unittest.TestCase):
                 self.assertEqual(self.reasons(connection, self.current(connection)), ())
                 previous = self.current(connection)
 
-    @proves('MYC-7.26', kind='store')
     def test_same_literal_short_method_ref_cannot_redirect_existing_pin_to_unrelated_place(self):
         self.declare(source='fixture:@code/policy.py#apply')
         with self.base.connect() as connection:

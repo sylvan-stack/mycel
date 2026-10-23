@@ -26,7 +26,7 @@ from psycopg import pq
 from psycopg.types.json import Jsonb
 
 from mycel import _locks as locks
-from mycel._coverage import declaration, proves, require_check_database
+from mycel._coverage import require_check_database
 from mycel._errors import MycelError
 from mycel._store import require_store
 
@@ -116,7 +116,6 @@ class ScriptedConnection:
 
 class LockProtocolTests(unittest.TestCase):
     # These are check-declaration/protocol fixtures, never store acceptance.
-    @proves("MYC-13.3")
     def test_nonblocking_structure_protocol_and_balanced_cleanup(self):
         connection = ScriptedConnection()
         for exclusive in (False, True):
@@ -132,7 +131,6 @@ class LockProtocolTests(unittest.TestCase):
                 self.fail("busy lock was entered")
         self.assertEqual(raised.exception.code, "busy")
 
-    @proves("MYC-13.3")
     def test_registry_allocates_distinct_exact_identities_and_reuses_committed_key(self):
         connection = ScriptedConnection()
         identities = ["fixture", "Fixture", "é", "e\u0301", "fixture\nother"]
@@ -145,7 +143,6 @@ class LockProtocolTests(unittest.TestCase):
         self.assertTrue(all("hash" not in sql for sql, _ in connection.statements))
         self.assertNotEqual(locks.ALLOCATOR_LOCK, locks.STRUCTURE_LOCK)
 
-    @proves("MYC-13.3")
     def test_allocator_busy_and_failed_allocation_are_bounded_and_release_guard(self):
         connection = ScriptedConnection()
         connection.busy.add(locks.ALLOCATOR_LOCK)
@@ -163,7 +160,6 @@ class LockProtocolTests(unittest.TestCase):
         self.assertIn(("SET LOCAL lock_timeout = '1ms'", None), connection.statements)
         self.assertEqual(connection.transactions[-1], "rollback")
 
-    @proves("MYC-13.3")
     def test_operations_share_removal_protection_but_use_separate_exclusive_keys(self):
         connection = ScriptedConnection()
         for operation in ("pass", "embed", "classify", "summaries"):
@@ -179,7 +175,6 @@ class LockProtocolTests(unittest.TestCase):
         with locks.removal_guard(connection, "fixture"):
             self.assertEqual(connection.held[((removal,), "exclusive")], 1)
 
-    @proves("MYC-13.3")
     def test_failed_last_acquisition_releases_prior_guards_and_interrupt_releases_all(self):
         connection = ScriptedConnection()
         key = locks.allocate_key(connection, locks.LockNamespace.CLASSIFY, "fixture")
@@ -195,7 +190,6 @@ class LockProtocolTests(unittest.TestCase):
                 raise KeyboardInterrupt()
         self.assertEqual(sum(connection.held.values()), 0)
 
-    @proves("MYC-0.7")
     def test_store_failures_name_the_postgres_error_class_and_state_without_native_text(self):
         error = psycopg.errors.QueryCanceled("canceling statement: public private-looking fixture URI/password")
         message = locks._database_failure(error).message
@@ -206,7 +200,6 @@ class LockProtocolTests(unittest.TestCase):
                          "The index store could not complete the lock or transaction operation.")
         self.assertEqual(locks.postgres_detail(RuntimeError("not a database fault")), "")
 
-    @proves("MYC-13.3")
     def test_unlock_failure_closes_session_without_masking_primary_failure_or_native_text(self):
         connection = ScriptedConnection()
         original_execute = connection.execute
@@ -232,7 +225,6 @@ class LockProtocolTests(unittest.TestCase):
         self.assertNotIn("URI/password", str(raised.exception))
         self.assertTrue(connection.closed)
 
-    @proves("MYC-13.3")
     def test_invocation_guard_records_exact_session_and_balances_failure_cleanup(self):
         connection = ScriptedConnection()
         identifier = uuid4()
@@ -249,7 +241,6 @@ class LockProtocolTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, "invalid_input")
         self.assertEqual(sum(connection.held.values()), 0)
 
-    @proves("MYC-13.3")
     def test_snapshot_and_atomic_helpers_require_idle_autocommit_and_rollback_interrupts(self):
         connection = ScriptedConnection()
         with locks.read_snapshot(connection):
@@ -269,7 +260,6 @@ class LockProtocolTests(unittest.TestCase):
             with locks.atomic_transaction(connection):
                 self.fail("implicit transaction accepted")
 
-    @proves("MYC-13.3")
     def test_invalid_identifiers_and_operation_fail_before_sql_or_store_writes(self):
         connection = ScriptedConnection()
         for namespace, identity in (("unknown", "fixture"), (locks.LockNamespace.PASS, ""),
@@ -284,12 +274,9 @@ class LockProtocolTests(unittest.TestCase):
                 pass
         self.assertFalse(connection.statements)
 
-    @proves("MYC-13.3", "MYC-13.15")
     def test_real_store_declarations_cannot_be_replaced_by_protocol_proofs(self):
-        for name in unittest.defaultTestLoader.getTestCaseNames(LockStoreTests):
-            proof = declaration(LockStoreTests(name))
-            self.assertIsNotNone(proof)
-            self.assertEqual(proof.kind, "store")
+        self.assertTrue(unittest.defaultTestLoader.getTestCaseNames(LockStoreTests))
+        self.assertEqual(LockStoreTests.check_kind, "store")
         connection = ScriptedConnection()
         self.assertTrue(locks.invocation_is_live(connection, uuid4()))
         sql = connection.statements[-1][0]
@@ -301,6 +288,8 @@ class LockProtocolTests(unittest.TestCase):
 
 class LockStoreTests(unittest.TestCase):
     # No initialize_store override: the gate calls the product initializer.
+    check_kind = "store"
+
     def setUp(self):
         if not hasattr(self, "store_fixture"):
             self.fail("This acceptance check requires a genuine disposable store fixture.")
@@ -323,7 +312,6 @@ class LockStoreTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, "busy")
         self.assertLess(time.monotonic() - started, 0.5)
 
-    @proves("MYC-1.25", "MYC-6.10", "MYC-6.11", kind="store")
     def test_pass_embed_and_distinct_repositories_follow_conflict_matrix(self):
         with self.connect() as first, self.connect() as second:
             with locks.operation_guard(first, "fixture", "pass"):
@@ -338,7 +326,6 @@ class LockStoreTests(unittest.TestCase):
                 with locks.operation_guard(first, "fixture", operation):
                     self.busy(locks.operation_guard(second, "fixture", operation))
 
-    @proves("MYC-6.11", "MYC-6.13", "MYC-6.20", kind="store")
     def test_structure_removal_and_every_mutation_guard_refuse_conflicts(self):
         with self.connect() as first, self.connect() as second:
             for operation in ("pass", "embed", "classify", "summaries"):
@@ -355,7 +342,6 @@ class LockStoreTests(unittest.TestCase):
                 self.busy(locks.operation_guard(second, "fixture", "pass"))
                 self.busy(locks.read_snapshot(second))
 
-    @proves("MYC-6.11", "MYC-6.20", kind="store")
     def test_paid_model_interval_retains_operation_liveness_and_releases_pass_lock(self):
         with self.connect() as owner, self.connect() as other:
             for operation in ("classify", "summaries"):
@@ -371,7 +357,6 @@ class LockStoreTests(unittest.TestCase):
                         owner.execute("SELECT 1")  # Guarded publication transaction.
                 self.assertFalse(locks.invocation_is_live(other, invocation))
 
-    @proves("MYC-6.9", kind="store")
     def test_atomic_change_rolls_back_all_rows_and_commits_complete_changes(self):
         with self.connect() as connection:
             with self.assertRaises(RuntimeError):
@@ -387,7 +372,6 @@ class LockStoreTests(unittest.TestCase):
                                        (repository, Jsonb({"value": 0})))
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_repository_state").fetchone()[0], 2)
 
-    @proves("MYC-6.9", kind="store")
     def test_snapshot_keeps_first_committed_state_and_rejects_writes(self):
         with self.connect() as reader, self.connect() as writer:
             with locks.atomic_transaction(writer):
@@ -406,7 +390,6 @@ class LockStoreTests(unittest.TestCase):
                     reader.execute("DELETE FROM public.mycel_repository_state")
             self.assertEqual(reader.execute("SELECT count(*) FROM public.mycel_repository_state").fetchone()[0], 1)
 
-    @proves("MYC-6.11", "MYC-6.20", kind="store")
     def test_allocator_guard_and_uncommitted_unique_conflict_refuse_without_waiting(self):
         with self.connect() as first, self.connect() as second:
             existing = locks.allocate_key(first, locks.LockNamespace.PASS, "existing")
@@ -438,7 +421,6 @@ class LockStoreTests(unittest.TestCase):
             self.assertEqual(locks.allocate_key(second, locks.LockNamespace.PASS, "raced"),
                              locks.allocate_key(first, locks.LockNamespace.PASS, "raced"))
 
-    @proves("MYC-6.12", "MYC-6.20", kind="store")
     def test_exact_liveness_uses_full_bigint_session_start_and_not_other_lock_holders(self):
         with self.connect() as owner, self.connect() as other:
             owner.execute("SELECT pg_catalog.setval('public.mycel_lock_keys_key_seq', 4294967311, false)")
@@ -458,7 +440,6 @@ class LockStoreTests(unittest.TestCase):
             with locks.operation_guard(other, "fixture", "pass"):
                 self.assertFalse(locks.invocation_is_live(other, invocation))
 
-    @proves("MYC-6.12", "MYC-6.20", kind="store")
     def test_killed_owning_process_releases_every_lock_without_cleanup_files(self):
         fixture = self.store_fixture
         def files():

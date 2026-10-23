@@ -2,7 +2,6 @@
 import unittest
 
 from mycel._capture import LocationId
-from mycel._coverage import proves
 from mycel._dependency_inputs import DependencyCaptureInputs
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceStore
@@ -23,6 +22,8 @@ DEPENDANT = 'fixture:@artifact/guide.md#Guide'
 
 
 class RelationOccurrenceRegressionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.DeriveStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -85,7 +86,6 @@ class RelationOccurrenceRegressionStoreTests(unittest.TestCase):
         self.assertEqual([(ref['parsedRef'], ref['line'], ref['fault']) for ref in unresolved],
                          [(SOURCE, 8, 'not_a_ref')])
 
-    @proves('MYC-7.14', 'MYC-7.26', kind='store')
     def test_mixed_closed_and_unclosed_same_ref_pins_valid_occurrence_and_reports_only_invalid_fault(self):
         self.guide.write_bytes(self.mixed())
         self.base.commit()
@@ -104,7 +104,6 @@ class RelationOccurrenceRegressionStoreTests(unittest.TestCase):
             self.assertEqual(self.fixture.role(connection), 'authored')
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_edges').fetchone(), (0,))
 
-    @proves('MYC-7.14', 'MYC-7.26', kind='store')
     def test_confirmation_refuses_malformed_occurrence_without_renewing_valid_pin(self):
         self.guide.write_bytes(self.mixed())
         self.base.commit()
@@ -132,7 +131,6 @@ class RelationOccurrenceRegressionStoreTests(unittest.TestCase):
             self.assert_mixed_reports()
             self.assertEqual(self.pin_identities(self.current_pins(connection)), self.pin_identities(original))
 
-    @proves('MYC-7.14', 'MYC-7.26', kind='store')
     def test_valid_duplicates_share_one_pin_and_invalid_only_duplicates_have_no_pin(self):
         valid = ('---\nrole: authored\n---\n# Guide\nBody.\n<!-- related:\n' + SOURCE + '\n  ' +
                  SOURCE + '  \n-->\n').encode()
@@ -167,7 +165,6 @@ class RelationOccurrenceRegressionStoreTests(unittest.TestCase):
             self.assertIn(self.fixture.source_bytes,
                           [blob.source for blob in self.baseline(connection, first['declared']).snapshots])
 
-    @proves('MYC-7.14', 'MYC-7.15', 'MYC-7.16', 'MYC-7.26', kind='store')
     def test_mixed_occurrences_preserve_independent_pins_through_edit_inheritance_and_known_restore(self):
         original = self.mixed()
         self.guide.write_bytes(original)

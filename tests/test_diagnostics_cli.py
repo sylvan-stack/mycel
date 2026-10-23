@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 from mycel._cli import for_repositories, run
 from mycel._build_identity import current_build
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._settings import load_settings
 
@@ -23,7 +22,6 @@ class DiagnosticsCliTests(unittest.TestCase):
         self.assertEqual(diagnostics.getvalue(), '')
         return status, json.loads(output.getvalue())
 
-    @proves('MYC-5.5')
     def test_info_reports_all_settings_faults_without_echoing_values_or_accessing_services(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -50,7 +48,6 @@ class DiagnosticsCliTests(unittest.TestCase):
                     for boundary in (database, embedding, jev, child):
                         boundary.assert_not_called()
 
-    @proves('MYC-5.5')
     def test_info_includes_configured_models_when_store_is_unavailable_without_model_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / 'config.toml'
@@ -77,7 +74,6 @@ class DiagnosticsCliTests(unittest.TestCase):
             for boundary in (embedding, jev, child):
                 boundary.assert_not_called()
 
-    @proves('MYC-6.14')
     def test_mixed_and_entirely_refused_scopes_keep_exact_individual_results(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / 'config.toml'
@@ -106,7 +102,6 @@ class DiagnosticsCliTests(unittest.TestCase):
                     self.assertEqual(entries['good']['result'], {'done': True})
             self.assertEqual(touched, ['busy', 'good'])
 
-    @proves('MYC-6.14')
     def test_removal_runs_each_literal_name_once_and_preserves_a_refused_member(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / 'config.toml'
@@ -132,7 +127,6 @@ class DiagnosticsCliTests(unittest.TestCase):
             self.assertEqual(reply['repositories'][0]['result']['repository'], 'orphan space')
             self.assertEqual(reply['repositories'][1]['error']['code'], 'busy')
 
-    @proves('MYC-6.14')
     def test_removal_connection_close_failure_keeps_all_acknowledged_member_counts(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / 'config.toml'
@@ -152,7 +146,6 @@ class DiagnosticsCliTests(unittest.TestCase):
                 self.assertEqual(reply['countsState'], 'committed_prefix')
                 self.assertEqual([row['result']['removed']['chunks'] for row in reply['repositories']], [7, 7])
 
-    @proves('MYC-6.14')
     def test_interrupted_removal_keeps_committed_result_and_never_starts_later_names(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / 'config.toml'

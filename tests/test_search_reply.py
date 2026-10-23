@@ -4,7 +4,6 @@ from dataclasses import replace
 import json
 import unittest
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._freshness import (ChunkRequirement, DependencyFault, FreshnessResult,
                              FreshnessScope, RepositoryStatus)
@@ -44,7 +43,6 @@ def freshness(*members, states=None, finished=True):
 
 
 class SearchReplyTests(unittest.TestCase):
-    @proves("MYC-4.14")
     def test_results_and_citations_share_original_source_paths_marks_and_faults(self):
         method = chunk("method")
         guide = chunk("guide", root="artifact", path="guide.md", name="Contract > Limits",
@@ -70,7 +68,6 @@ class SearchReplyTests(unittest.TestCase):
         self.assertEqual(first["staleReasons"][0]["source"]["name"], "Term")
         self.assertEqual(first["staleReasons"][0]["via"], [intermediate])
 
-    @proves("MYC-4.14")
     def test_reply_annotations_are_independent_copies_of_each_result_and_citation(self):
         method = chunk("method")
         guide = chunk("guide", root="artifact", path="guide.md", name="Guide", origin="documents")
@@ -93,7 +90,6 @@ class SearchReplyTests(unittest.TestCase):
         self.assertEqual(observation["staleReasons"][0]["source"]["name"], "Original")
         self.assertEqual(observation["lines"]["start"], 2)
 
-    @proves("MYC-4.14")
     def test_no_check_or_missing_exact_version_requirement_never_certifies_an_unmarked_chunk(self):
         method, old = chunk("method", version=2), chunk("method", version=1)
         for current in (None, freshness(old)):
@@ -103,7 +99,6 @@ class SearchReplyTests(unittest.TestCase):
                 self.assertFalse(reply["results"][0]["dependencyCheck"]["complete"])
         self.assertFalse(search_reply(ranking(entry(method)), candidates(method))["freshness"]["checked"])
 
-    @proves("MYC-4.14")
     def test_pending_upstream_or_reachable_fault_keeps_only_affected_exact_checks_incomplete(self):
         governed, independent = chunk("governed"), chunk("independent", name="Other.step")
         guide = chunk("guide", root="artifact", path="guide.md", name="Guide", origin="documents")
@@ -138,7 +133,6 @@ class SearchReplyTests(unittest.TestCase):
         self.assertFalse(reply["results"][0]["dependencyCheck"]["complete"])
         self.assertEqual(reply["results"][0]["via"]["dependencyCheck"]["faults"], [public])
 
-    @proves("MYC-4.14")
     def test_no_fresh_overrides_prior_done_statuses_for_results_and_citations(self):
         method = chunk("method")
         guide = chunk("guide", root="artifact", path="guide.md", name="Guide", origin="documents")
@@ -152,7 +146,6 @@ class SearchReplyTests(unittest.TestCase):
             self.assertFalse(record["stale"])
             self.assertFalse(record["dependencyCheck"]["complete"])
 
-    @proves("MYC-4.15", "MYC-4.16")
     def test_identifier_and_question_wording_fallbacks_explain_meaning_failure(self):
         method = chunk("method", text="雪" * 300)
         for route, reason in (("identifier", "No embedding credentials are configured."),
@@ -169,7 +162,6 @@ class SearchReplyTests(unittest.TestCase):
         missing_reason = search_reply(ranking(entry(method), meaning=False), candidates(method, meaning=False))
         self.assertTrue(missing_reason["meaning"]["reason"])
 
-    @proves("MYC-4.15")
     def test_meaning_participation_and_distinct_candidate_counts_are_explicit(self):
         method, second = chunk("method"), chunk("other", name="Other.step")
         duplicate = Candidate(method, .7)
@@ -186,7 +178,6 @@ class SearchReplyTests(unittest.TestCase):
         self.assertEqual(reply["freshness"]["repositories"], [{"repository": "fixture", "state": "done",
                                                                "ingested": 2}])
 
-    @proves("MYC-4.23", "MYC-4.28")
     def test_checkout_and_artifact_markdown_keep_actual_roots_canonical_places_and_stable_ids(self):
         checkout = chunk("checkout", root="code", path="README.md", name="Limits > 雪",
                          origin="documents", kind="document")
@@ -210,7 +201,6 @@ class SearchReplyTests(unittest.TestCase):
             self.assertEqual(citation["address"], second["address"])
             self.assertEqual(citation["document"], artifact.name)
 
-    @proves("MYC-4.23")
     def test_unreadable_results_explain_missing_or_escaping_files_without_inventing_paths(self):
         member = chunk("method")
         for reason in ("The chunk file cannot be read.",
@@ -226,7 +216,6 @@ class SearchReplyTests(unittest.TestCase):
                 if reason is not None:
                     self.assertEqual(result["unreadable"], reason)
 
-    @proves("MYC-4.28")
     def test_index_only_namespace_is_canonical_and_never_gains_a_file_from_metadata(self):
         generated = chunk("unchanged-id", root="index", path="summaries", name="1/7", kind="summary",
                           origin="documents", text="Summary.")
@@ -239,7 +228,6 @@ class SearchReplyTests(unittest.TestCase):
         self.assertIn("generated in the index", result["unreadable"])
         self.assertEqual(json.loads(json.dumps(reply)), reply)
 
-    @proves("MYC-4.15")
     def test_incompatible_scope_and_invalid_options_are_refused(self):
         member = chunk("method")
         for options in ({"checked": 1}, {"meaning_reason": ""}, {"meaning_reason": {"kind": "failed"}}):

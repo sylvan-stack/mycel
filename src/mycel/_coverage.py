@@ -1,15 +1,14 @@
-"""Internal requirement proofs and automatic Build checks.
+"""Automatic Build checks and explicitly requested on-demand checks.
 
-Specification acceptance is deliberately separate from runtime acceptance. A
-claim names checks; only checks executed successfully in this run prove it.
+A check's kind is its class's `check_kind`: `unit` unless the class says
+`store`, `eval` or `live`. Which requirement a check rests on is an Origin Link
+in the Index Store (MYC-17), not a declaration on the test.
 """
 
 from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
-from hashlib import sha256
-from importlib.resources import files
 import json
 import multiprocessing
 import os
@@ -25,7 +24,7 @@ import tempfile
 import threading
 import time
 import tomllib
-from typing import Callable, Iterator, Mapping, Protocol, Sequence
+from typing import Callable, Iterator, Protocol, Sequence
 import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qsl, unquote, urlsplit, urlunsplit
@@ -35,130 +34,19 @@ from uuid import uuid4
 KINDS = frozenset({"unit", "store", "eval", "live"})
 AUTOMATIC_KINDS = frozenset({"unit", "store"})
 REQUIREMENT_ID = re.compile(r"MYC-(?:[0-9]|1[0-7])\.[1-9][0-9]*\Z")
-# The eighteen chapters MYC-0 to MYC-17 and their active requirement rows, as
-# the registry was extracted on 19 October 2026 (SYL-259) and MYC-1.37 was
-# appended on 20 October 2026 (SYL-232); nine clone and justification rows
-# were appended on 21 October 2026 (SYL-260). MYC-17 remains a draft.
-SPECIFICATION_COUNT = 18
-ACTIVE_REQUIREMENTS = 366
-SPECIFICATION_STATUSES = frozenset({"accepted", "draft"})
 CHECK_DATABASE = re.compile(r"mycel_check_[a-z0-9_]+\Z")
 _WORKER_CANCEL_GRACE = 30
 _WORKER_TERMINATE_GRACE = 5
 
 
 class CoverageError(ValueError):
-    """A registry, claim or check declaration cannot be trusted."""
-
-
-@dataclass(frozen=True)
-class Requirement:
-    id: str
-    text: str
-    origin: str
-    kind: str
-    specification: str
-    source: str
-    specification_status: str = "accepted"
-
-
-def load_registry(path: Path | str | None = None) -> dict[str, Requirement]:
-    """Load the complete active contract, including negative requirements."""
-    raw = (Path(path).read_text(encoding="utf-8") if path is not None else
-           files("mycel").joinpath("data/requirements.json").read_text(encoding="utf-8"))
-    data = json.loads(raw)
-    if type(data) is not dict or type(data.get("schema_version")) is not int or data["schema_version"] != 1:
-        raise CoverageError("unsupported requirement registry schema")
-    sources = data.get("specifications")
-    if not isinstance(sources, dict) or len(sources) != SPECIFICATION_COUNT:
-        raise CoverageError(f"registry must record the {SPECIFICATION_COUNT} authoritative specification snapshots")
-    for filename, source in sources.items():
-        if (not isinstance(filename, str) or not re.fullmatch(r"(?:0[0-9]|1[0-7])-[a-z-]+\.md", filename)
-                or not isinstance(source, dict) or source.get("specification_status") not in SPECIFICATION_STATUSES
-                or not isinstance(source.get("sha256"), str) or not re.fullmatch(r"[a-f0-9]{64}", source["sha256"])):
-            raise CoverageError("invalid accepted specification snapshot")
-    rows = data.get("requirements")
-    if not isinstance(rows, list):
-        raise CoverageError("requirements must be an array")
-    registry: dict[str, Requirement] = {}
-    for row in rows:
-        try:
-            requirement = Requirement(**row, specification_status=sources[row['source']]['specification_status'])
-        except (KeyError, TypeError, ValueError) as error:
-            raise CoverageError("invalid requirement row") from error
-        if not all(isinstance(value, str) and value for value in asdict(requirement).values()):
-            raise CoverageError("requirement fields must be nonempty strings")
-        if not REQUIREMENT_ID.fullmatch(requirement.id) or requirement.kind not in KINDS:
-            raise CoverageError(f"invalid requirement identifier or kind: {requirement.id}")
-        if requirement.specification != requirement.id.split(".", 1)[0]:
-            raise CoverageError(f"wrong specification for {requirement.id}")
-        if (requirement.origin not in {"New", "Kept", "Changed", "Dropped"}
-                or requirement.source not in sources
-                or int(requirement.source[:2]) != int(requirement.specification.removeprefix("MYC-"))):
-            raise CoverageError(f"invalid requirement origin or source: {requirement.id}")
-        if requirement.id in registry:
-            raise CoverageError(f"duplicate requirement: {requirement.id}")
-        registry[requirement.id] = requirement
-    if len(registry) != ACTIVE_REQUIREMENTS or {row.specification for row in registry.values()} != {
-        f"MYC-{number}" for number in range(SPECIFICATION_COUNT)
-    }:
-        raise CoverageError(f"registry must contain all {ACTIVE_REQUIREMENTS} active MYC-0 through "
-                            f"MYC-{SPECIFICATION_COUNT - 1} requirements")
-    if "MYC-9.10" not in registry:
-        raise CoverageError("the negative requirement MYC-9.10 remains active")
-    return registry
-
-
-def verify_specification_snapshot(specifications: Path | str, registry_path: Path | str | None = None) -> None:
-    """Detect contract changes; no source checkout is needed for a normal gate."""
-    raw = (Path(registry_path).read_text(encoding="utf-8") if registry_path else
-           files("mycel").joinpath("data/requirements.json").read_text(encoding="utf-8"))
-    data = json.loads(raw)
-    load_registry(registry_path)
-    for filename, source in data["specifications"].items():
-        path = Path(specifications) / filename
-        if sha256(path.read_bytes()).hexdigest() != source["sha256"]:
-            raise CoverageError(f"specification changed since registry extraction: {filename}")
-
-
-def load_claims(path: Path | str) -> dict[str, tuple[str, ...]]:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if (type(data) is not dict or set(data) != {"schema_version", "implemented"}
-            or type(data["schema_version"]) is not int or data["schema_version"] != 1):
-        raise CoverageError("claims require schema_version 1 and an implemented object")
-    if type(data["implemented"]) is not dict:
-        raise CoverageError("implemented claims must be an object")
-    claims = {}
-    for identifier, checks in data["implemented"].items():
-        if not isinstance(checks, list) or not checks or not all(isinstance(item, str) and item for item in checks):
-            raise CoverageError(f"{identifier} must name at least one check")
-        if len(set(checks)) != len(checks):
-            raise CoverageError(f"{identifier} repeats a proof check")
-        claims[identifier] = tuple(checks)
-    return claims
+    """A check, its kind or the check run cannot be trusted."""
 
 
 @dataclass(frozen=True)
 class CheckDeclaration:
     requirements: tuple[str, ...]
     kind: str
-
-
-def proves(*requirements: str, kind: str = "unit"):
-    """Name the accepted requirements an executable unittest check proves."""
-    if kind not in KINDS:
-        raise CoverageError(f"unknown check kind: {kind}")
-    if not requirements or len(set(requirements)) != len(requirements):
-        raise CoverageError("a check must name distinct requirement identifiers")
-    if any(not isinstance(identifier, str) or not REQUIREMENT_ID.fullmatch(identifier) for identifier in requirements):
-        raise CoverageError("invalid requirement identifier in check declaration")
-
-    def decorate(function):
-        if hasattr(function, "__mycel_check__"):
-            raise CoverageError("declare a check's requirements once")
-        function.__mycel_check__ = CheckDeclaration(tuple(requirements), kind)
-        return function
-    return decorate
 
 
 def iter_checks(suite: unittest.TestSuite) -> Iterator[unittest.TestCase]:
@@ -171,9 +59,12 @@ def iter_checks(suite: unittest.TestSuite) -> Iterator[unittest.TestCase]:
             raise CoverageError("check suite contains an unsupported callable")
 
 
-def declaration(check: unittest.TestCase) -> CheckDeclaration | None:
-    method = getattr(check, check._testMethodName, None)
-    return getattr(method, "__mycel_check__", None)
+def check_kind(check: unittest.TestCase) -> str:
+    """The class's `check_kind`, `unit` when the class names none."""
+    kind = getattr(check, "check_kind", "unit")
+    if kind not in KINDS:
+        raise CoverageError(f"unknown check kind: {check.id()}")
+    return kind
 
 
 @dataclass(frozen=True)
@@ -185,55 +76,26 @@ class CheckResult:
     detail: str | None = None
 
 
-def _registry_fingerprint(registry: Mapping[str, Requirement]) -> str:
-    rows = {identifier: asdict(requirement) for identifier, requirement in registry.items()}
-    return sha256(json.dumps(rows, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-
-
-def _validated_registry(registry: Mapping[str, Requirement] | None) -> dict[str, Requirement]:
-    active = load_registry()
-    if registry is None:
-        return active
-    supplied = dict(registry)
-    if set(supplied) != set(active) or any(identifier != row.id for identifier, row in supplied.items()):
-        raise CoverageError("a gate requires the complete active requirement registry")
-    return supplied
-
-
 @dataclass(frozen=True)
 class OnDemandProofs:
-    """Executed acceptance bound to an immutable Build and contract snapshot."""
+    """Executed acceptance bound to one immutable Build."""
 
     implementation_identity: str
-    registry_fingerprint: str
     checks: tuple[CheckResult, ...]
 
 
 @dataclass(frozen=True)
 class CoverageReport:
     checks: tuple[CheckResult, ...]
-    requirements: dict[str, dict]
     errors: tuple[str, ...]
-    release: bool
-    on_demand_checks: tuple[CheckResult, ...] = ()
 
     @property
     def passed(self) -> bool:
         return not self.errors and all(check.status == "passed" for check in self.checks)
 
     def to_dict(self) -> dict:
-        implemented = sum(row["status"] == "implemented" for row in self.requirements.values())
-        return {
-            "schema_version": 1,
-            "passed": self.passed,
-            "release": self.release,
-            "summary": {"active": len(self.requirements), "implemented": implemented,
-                        "pending": len(self.requirements) - implemented},
-            "checks": [asdict(check) for check in self.checks],
-            "on_demand_checks": [asdict(check) for check in self.on_demand_checks],
-            "requirements": self.requirements,
-            "errors": list(self.errors),
-        }
+        return {"schema_version": 2, "passed": self.passed,
+                "checks": [asdict(check) for check in self.checks], "errors": list(self.errors)}
 
 
 @contextmanager
@@ -569,7 +431,7 @@ def _check_worker(jobs, replies, canceled, directory: str, backend: StoreBackend
             index, name, proof = task
             try:
                 loaded = list(iter_checks(unittest.TestLoader().loadTestsFromName(name)))
-                if len(loaded) != 1 or loaded[0].id() != name or declaration(loaded[0]) != proof:
+                if len(loaded) != 1 or loaded[0].id() != name or check_kind(loaded[0]) != proof.kind:
                     raise CoverageError("worker did not load the declared check")
                 result = _execute_check(loaded[0], proof, backend)
             except KeyboardInterrupt:
@@ -649,53 +511,41 @@ def _parallel_checks(selected, backend, workers: int, directory: Path | str):
     return tuple(results[index] for index in range(len(selected)))
 
 
-def run_on_demand_checks(suite: unittest.TestSuite, *, kinds: frozenset[str],
-                         implementation_identity: str,
-                         registry: Mapping[str, Requirement] | None = None) -> OnDemandProofs:
+def run_on_demand_checks(checks: Sequence[tuple[unittest.TestCase, str, Sequence[str]]], *,
+                         implementation_identity: str) -> OnDemandProofs:
     """Explicitly execute eval/live checks; never called by the Build gate.
 
-    The caller supplies the immutable Build manifest identity. These proofs can
-    satisfy contract completion only for that same Build and registry snapshot.
+    Each check is given with its kind and the requirements it proves. The caller
+    supplies the immutable Build manifest identity; the proofs count only for
+    that same Build.
     """
-    if not kinds or not kinds <= {"eval", "live"}:
-        raise CoverageError("on-demand acceptance explicitly selects eval or live checks")
     if not isinstance(implementation_identity, str) or not implementation_identity:
         raise CoverageError("on-demand acceptance requires an immutable implementation identity")
-    registry = _validated_registry(registry)
-    checks = []
+    results = []
     seen = set()
-    for check in iter_checks(suite):
-        proof = declaration(check)
-        if proof is None:
-            raise CoverageError(f"check names no requirements: {check.id()}")
-        if proof.kind not in kinds:
-            continue
+    for check, kind, requirements in checks:
+        requirements = tuple(requirements)
+        if (kind not in {"eval", "live"} or not requirements or len(set(requirements)) != len(requirements)
+                or any(not isinstance(identifier, str) or not REQUIREMENT_ID.fullmatch(identifier)
+                       for identifier in requirements)):
+            raise CoverageError(f"an on-demand check needs an eval or live kind and distinct requirements: {check.id()}")
         if check.id() in seen:
             raise CoverageError(f"duplicate check: {check.id()}")
         seen.add(check.id())
-        if any(identifier not in registry or registry[identifier].kind != proof.kind for identifier in proof.requirements):
-            raise CoverageError(f"on-demand check declares an unknown requirement or wrong kind: {check.id()}")
-        checks.append(_execute_check(check, proof, None))
-    if not checks:
+        results.append(_execute_check(check, CheckDeclaration(requirements, kind), None))
+    if not results:
         raise CoverageError("no requested on-demand acceptance checks executed")
-    return OnDemandProofs(implementation_identity, _registry_fingerprint(registry), tuple(checks))
+    return OnDemandProofs(implementation_identity, tuple(results))
 
 
-def run_checks(suite: unittest.TestSuite, *, registry: Mapping[str, Requirement] | None = None,
-               claims: Mapping[str, Sequence[str]] | None = None, release: bool = False,
-               store_backend: StoreBackend | None = None, kinds: frozenset[str] = AUTOMATIC_KINDS,
-               on_demand_proofs: Sequence[OnDemandProofs] = (),
-               implementation_identity: str | None = None, workers: int = 1,
+def run_checks(suite: unittest.TestSuite, *, store_backend: StoreBackend | None = None,
+               kinds: frozenset[str] = AUTOMATIC_KINDS, workers: int = 1,
                tests_directory: Path | str | None = None) -> CoverageReport:
-    """Execute automatic checks and validate explicitly named proof claims.
+    """Execute every discovered unit and store check by its class kind.
 
-    The automatic gate never selects eval/live checks. Previously executed
-    on-demand acceptance can prove those requirements for the same immutable
-    Build. A release gate additionally requires every active requirement; the
-    normal staged working-Build gate permits unclaimed pending requirements.
+    The automatic gate never selects eval/live checks; those run only when
+    explicitly requested through `run_on_demand_checks`.
     """
-    registry = _validated_registry(registry)
-    claims = {} if claims is None else dict(claims)
     if kinds != AUTOMATIC_KINDS:
         raise CoverageError("the Build gate must select every unit and store check, and no eval/live checks")
     if type(workers) is not int or workers < 1:
@@ -711,67 +561,16 @@ def run_checks(suite: unittest.TestSuite, *, registry: Mapping[str, Requirement]
             errors.append(f"duplicate check: {name}")
             continue
         seen.add(name)
-        proof = declaration(check)
-        if proof is None:
-            errors.append(f"check names no requirements: {name}")
+        try:
+            kind = check_kind(check)
+        except CoverageError as error:
+            errors.append(str(error))
             continue
-        invalid = False
-        for identifier in proof.requirements:
-            if identifier not in registry:
-                errors.append(f"{name} names unknown requirement {identifier}")
-                invalid = True
-            elif registry[identifier].kind != proof.kind:
-                errors.append(f"{name} kind {proof.kind} does not prove {identifier} kind {registry[identifier].kind}")
-                invalid = True
-        if proof.kind in kinds and not invalid:
-            selected.append((check, proof))
+        if kind in kinds:
+            selected.append((check, CheckDeclaration((), kind)))
     results = (_parallel_checks(selected, store_backend, workers, tests_directory)
                if workers > 1 and selected else
                tuple(_execute_check(check, proof, store_backend) for check, proof in selected))
-    by_name = {result.name: result for result in results}
-    accepted = []
-    for evidence in on_demand_proofs:
-        if (not implementation_identity or evidence.implementation_identity != implementation_identity
-                or evidence.registry_fingerprint != _registry_fingerprint(registry)):
-            errors.append("on-demand proofs belong to a different implementation or requirement registry")
-            continue
-        for result in evidence.checks:
-            if (result.kind not in {"eval", "live"} or result.name in by_name
-                    or not result.requirements
-                    or any(identifier not in registry or registry[identifier].kind != result.kind for identifier in result.requirements)):
-                errors.append(f"invalid or repeated on-demand proof: {result.name}")
-                continue
-            accepted.append(result)
-            by_name[result.name] = result
     if not results:
         errors.append("no automatic checks executed")
-    requirements = {}
-    for identifier, requirement in registry.items():
-        names = claims.get(identifier, ())
-        valid = isinstance(names, (list, tuple)) and bool(names) and all(isinstance(name, str) and name for name in names)
-        if identifier in claims and not valid:
-            errors.append(f"{identifier} must name at least one proof check")
-        proven = valid
-        if valid:
-            if len(set(names)) != len(names):
-                errors.append(f"{identifier} repeats a proof check")
-                proven = False
-            for name in names:
-                result = by_name.get(name)
-                if result is None or result.status != "passed" or identifier not in result.requirements or result.kind != requirement.kind:
-                    errors.append(f"{identifier} has no passing executed {requirement.kind} proof named {name}")
-                    proven = False
-        requirements[identifier] = {
-            "specification": requirement.specification,
-            "specification_status": requirement.specification_status,
-            "kind": requirement.kind,
-            "status": "implemented" if proven else "pending",
-            "verified_by": list(names) if proven else [],
-        }
-    for identifier in claims.keys() - registry.keys():
-        errors.append(f"unknown implemented requirement: {identifier}")
-    if release:
-        pending = [identifier for identifier, row in requirements.items() if row["status"] != "implemented"]
-        if pending:
-            errors.append("full release has pending requirements: " + ", ".join(pending))
-    return CoverageReport(results, requirements, tuple(errors), release, tuple(accepted))
+    return CoverageReport(results, tuple(errors))

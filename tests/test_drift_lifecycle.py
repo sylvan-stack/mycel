@@ -11,7 +11,6 @@ from unittest.mock import patch
 
 from psycopg.types.json import Jsonb
 
-from mycel._coverage import proves
 from mycel._drift_store import DriftStore
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceStore
@@ -50,6 +49,8 @@ class _FailAfterWrite:
 
 
 class DriftLifecycleStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.DependencySourceRefreshStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -127,7 +128,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
         return connection.execute("SELECT id,chunk_version,dependency,reason FROM public.mycel_stale_reasons "
             "WHERE repository='downstream' ORDER BY id").fetchall()
 
-    @proves('MYC-14.4', 'MYC-14.7', kind='store')
     def test_three_changed_sources_are_one_exact_version_drift_and_repeat_observation_is_stable(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -147,7 +147,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(self.one(connection), drift)
             self.assertEqual(self.state(connection), stable)
 
-    @proves('MYC-14.4', 'MYC-14.5', 'MYC-14.11', kind='store')
     def test_pending_uncertain_error_and_review_states_keep_work_and_jev_evidence(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -184,7 +183,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
                               for row in self.stale(connection)],
                              [(row[:3], {k: v for k, v in row[3].items() if k != 'classification'}) for row in stale])
 
-    @proves('MYC-14.7', 'MYC-14.9', 'MYC-14.11', 'MYC-13.18', kind='store')
     def test_still_supported_closes_only_exact_pairs_and_preserves_staleness_pins_and_verifications(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -207,7 +205,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertTrue(all(row[3]['classification']['judgement'] == 'still_supported'
                                 for row in self.stale(connection)))
 
-    @proves('MYC-14.4', 'MYC-14.6', kind='store')
     def test_away_then_deleted_source_are_distinct_and_keep_complete_pinned_before_evidence(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -232,7 +229,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(retained, baseline)
             self.assertIn(self.fixture.source_bytes, [snapshot.source for snapshot in retained.snapshots])
 
-    @proves('MYC-14.4', 'MYC-14.5', 'MYC-14.6', kind='store')
     def test_live_read_failure_keeps_error_work_and_cannot_be_treated_as_removal_or_support(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -253,7 +249,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(self.one(connection)['state'], 'open')
             self.assertEqual(self.immutable(connection), immutable)
 
-    @proves('MYC-14.5', 'MYC-14.9', 'MYC-14.11', kind='store')
     def test_new_source_input_invalidates_prior_support_and_retains_attempt_history(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -290,7 +285,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertTrue(formatted['active'])
             self.assertEqual(formatted['classification']['status'], 'pending_jev')
 
-    @proves('MYC-14.4', 'MYC-14.5', 'MYC-14.11', kind='store')
     def test_error_and_pending_results_cannot_supply_support_and_listing_is_read_only(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -309,7 +303,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertTrue(self.reason(pending)['active'])
             self.assertEqual(pending['state'], 'open')
 
-    @proves('MYC-14.6', kind='store')
     def test_malformed_standalone_declarations_open_ref_fault_without_a_guessed_link(self):
         self.fixture.answer.write_bytes(b'---\nrole: authored\nsources: ["not a ref"]\n---\n'
                                        b'# Answer\nUnchanged dependant.\n')
@@ -334,7 +327,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
                                 for source in inactive))
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_edges').fetchone(), (0,))
 
-    @proves('MYC-14.6', 'MYC-14.7', 'MYC-14.9', 'MYC-14.11', kind='store')
     def test_related_pair_support_preserves_same_source_authority_work_and_independent_pin(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -356,7 +348,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(EvidenceStore(connection).read_baseline('downstream', relation['baselineManifest'])
                 .manifest.payload['kind'], 'related')
 
-    @proves('MYC-14.6', 'MYC-14.7', 'MYC-14.9', kind='store')
     def test_malformed_duplicate_occurrence_cannot_hide_behind_valid_pair_support(self):
         # Valid and malformed related occurrences remain distinct diagnostics
         # even when both name the same natural source selection.
@@ -374,7 +365,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(supported['state'], 'open')
             self.assertTrue(any(source['kind'] == 'ref_fault' and source['active'] for source in supported['sources']))
 
-    @proves('MYC-14.6', 'MYC-14.9', kind='store')
     def test_supported_direct_pair_cannot_suppress_ref_fault_or_upstream_stale_reason(self):
         guide = self.base.artifact / 'guide.md'
         self.fixture.source.write_bytes(b'---\nsources: ["fixture:@artifact/guide.md#Guide"]\n---\n'
@@ -402,7 +392,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
                 self.assertNotIn('judgement', saved['classification'])
             self.assertEqual(self.one(connection)['state'], 'open')
 
-    @proves('MYC-14.9', kind='store')
     def test_source_restoration_ref_withdrawal_and_dependant_edit_close_only_answered_work(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -433,7 +422,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertTrue(any(drift['id'] == opened['id'] and drift['closed']['because'] == 'edited'
                 for drift in self.report(connection, closed=True, all_versions=True)['drifts']))
 
-    @proves('MYC-14.9', kind='store')
     def test_explicit_confirmation_closes_answered_work_and_links_its_exact_verification(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -446,7 +434,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(closed['closed']['verification'], record)
             self.assertEqual(self.stale(connection), [])
 
-    @proves('MYC-14.6', 'MYC-14.9', kind='store')
     def test_heartwood_and_external_generated_declarations_close_exempt_work(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -473,7 +460,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
                                 for drift in history))
             self.assertEqual(self.report(connection)['drifts'], [])
 
-    @proves('MYC-14.4', 'MYC-14.9', kind='store')
     def test_off_disk_version_is_inactive_and_last_location_removal_keeps_closed_evidence_history(self):
         (self.fixture.downstream / 'keep.md').write_bytes(b'# Keep\nIndependent surviving document.\n')
         self.base.git('init', '--initial-branch=dependant-main', cwd=self.fixture.downstream)
@@ -506,7 +492,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_chunks WHERE id=%s',
                 (removed['chunkId'],)).fetchone(), (0,))
 
-    @proves('MYC-14.7', kind='store')
     def test_busy_peer_cannot_duplicate_open_work_and_failure_rolls_back_classification(self):
         with self.base.connect() as connection, self.base.connect() as peer:
             self.prepare(connection)
@@ -589,7 +574,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 'invalid_input')
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-14.9', kind='store')
     def test_normalized_formatting_and_recognized_rename_carry_unresolved_work_without_confirmation(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -619,7 +603,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_verifications").fetchone(), (0,))
             self.assertTrue(self.stale(connection))
 
-    @proves('MYC-14.6', kind='store')
     def test_generated_summary_is_regeneration_work_with_no_semantic_drift(self):
         helper = generated.GeneratedStoreTests()
         helper.fixture, helper.base = self.fixture, self.base
@@ -639,7 +622,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_classification_work w '
                 'JOIN public.mycel_dependencies d ON d.id=w.dependency WHERE d.kind=\'generated\'').fetchone(), (0,))
 
-    @proves('MYC-14.6', kind='store')
     def test_external_generated_disk_source_still_opens_its_authored_dependants_work(self):
         self.fixture.source.write_bytes(b'---\ngenerated: true\n---\n' + self.fixture.source_bytes)
         self.base.commit()
@@ -652,7 +634,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertTrue(first['active'])
             self.assertEqual(DriftStore(connection).list('fixture')['drifts'], [])
 
-    @proves('MYC-14.7', kind='store')
     def test_malformed_open_work_is_refused_without_duplicate_or_partial_mutation(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -668,7 +649,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_drifts WHERE closed_at IS NULL")
                 .fetchone(), (1,))
 
-    @proves('MYC-14.7', kind='store')
     def test_recognized_schema_corrupt_source_state_is_refused_without_suppressing_or_duplicating_work(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -692,7 +672,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
                 self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_drifts WHERE closed_at IS NULL')
                     .fetchone(), (1,))
 
-    @proves('MYC-14.4', 'MYC-14.7', 'MYC-14.9', kind='store')
     def test_family_changed_pair_support_leaves_removed_member_work_active(self):
         worker = self.base.code / 'worker.py'
         worker.write_bytes(b'class Worker:\n    def old(self):\n        return 1\n'

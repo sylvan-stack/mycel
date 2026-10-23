@@ -5,7 +5,6 @@ from pathlib import Path
 import re
 import tempfile
 import unittest
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._scope import RepositoryLocations
 from mycel._settings import load_settings
@@ -13,7 +12,6 @@ from mycel._settings import load_settings
 ROOT=Path(__file__).resolve().parents[1]
 
 class NamedExceptionTests(unittest.TestCase):
-    @proves('MYC-0.3','MYC-1.5')
     def test_only_prescribed_names_are_packaged_data_and_runtime_has_no_product_coupling(self):
         defaults=json.loads((ROOT/'src/mycel/data/settings-defaults.json').read_text())
         self.assertEqual(defaults['search']['shared_documents'],[{'repo':'mycel','paths':['.']},{'repo':'arbol','paths':['GLOSSARY.md']}])
@@ -25,7 +23,6 @@ class NamedExceptionTests(unittest.TestCase):
                 if isinstance(node,ast.Constant) and isinstance(node.value,str):
                     self.assertIsNone(forbidden.search(node.value),f'{path.name}:{node.lineno}')
 
-    @proves('MYC-0.3','MYC-1.5')
     def test_shared_defaults_create_no_repository_alias_or_folder_fallback_and_are_overridable(self):
         with tempfile.TemporaryDirectory() as directory:
             home=Path(directory); config=home/'config.toml';config.write_text('[store]\naddress="postgresql://fixture@localhost/fixture"\n')

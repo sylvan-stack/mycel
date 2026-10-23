@@ -16,7 +16,6 @@ from unittest.mock import patch
 from mycel._classification_payload import (DecisionText, OriginDecisionPayload, ORIGIN_LABELS,
     ReviewerRequest, ReviewCommandIdentity)
 from mycel._classification_runner import ClassifyDependencies
-from mycel._coverage import proves
 from mycel._credentials import Credentials
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceError, snapshot
@@ -42,7 +41,6 @@ def origin_decision(review=None):
 
 
 class RecoveryProtocolTests(unittest.TestCase):
-    @proves('MYC-0.10','MYC-14.12')
     def test_distinct_question_exact_text_hash_and_policy_boundary(self):
         decision = origin_decision()
         body = json.loads(JevRequest(decision).body)
@@ -59,7 +57,6 @@ class RecoveryProtocolTests(unittest.TestCase):
             self.assertFalse(model_call_allowed(InvocationPolicy('recovery',dry_run=True),purpose))
         self.assertFalse(model_call_allowed(InvocationPolicy('recovery'),'embedding'))
 
-    @proves('MYC-14.24')
     def test_origin_review_requires_score_and_matching_labels_and_citations(self):
         with tempfile.TemporaryDirectory() as directory:
             command=ReviewCommandIdentity.inspect(('/usr/bin/true',),'fixture-v1',Path(directory))
@@ -81,7 +78,6 @@ class RecoveryProtocolTests(unittest.TestCase):
                 value=deepcopy(valid);mutation(value)
                 with self.subTest(value=value),self.assertRaises(ReviewerFailure):validate(value)
 
-    @proves('MYC-0.6')
     def test_cli_scope_and_options_are_exact(self):
         from mycel._cli import parse
         self.assertEqual(parse(('recovery','fixture:@code/value.py#value','--dry-run','--k','3')).arguments,
@@ -94,6 +90,8 @@ class RecoveryProtocolTests(unittest.TestCase):
 
 
 class RecoveryStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         from test_located_reconciliation import LocatedReconciliationStoreTests
         self.base=LocatedReconciliationStoreTests();self.base.store_fixture=self.store_fixture
@@ -168,7 +166,6 @@ class RecoveryStoreTests(unittest.TestCase):
             return {table.name:connection.execute('SELECT to_jsonb(t),xmin::text FROM public.'+table.name+
                 ' t ORDER BY to_jsonb(t)::text').fetchall() for table in TABLES}
 
-    @proves('MYC-17.13',kind='store')
     def test_dry_run_lists_each_local_source_without_writes_or_model_credentials(self):
         before=self.state()
         with patch('mycel._credentials.Credentials.require_jev_key',side_effect=AssertionError('no model key')), \
@@ -188,7 +185,6 @@ class RecoveryStoreTests(unittest.TestCase):
         self.assertEqual(before,self.state())
         self.assertEqual({call.args[0][0] for call in git.call_args_list},{'rev-parse','log'})
 
-    @proves('MYC-17.13',kind='store')
     def test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri(self):
         from mycel._resolver import SourceResolver
         from test_retrieval_store import RetrievalStoreTests
@@ -208,7 +204,6 @@ class RecoveryStoreTests(unittest.TestCase):
         self.assertIn(':req:'+REQ+':',entity['origin'])
         self.assertEqual((reply['jevCalls'],reply['reviewCalls']),(0,0))
 
-    @proves('MYC-17.14','MYC-14.28',kind='store')
     def test_complete_judgements_write_exact_scores_and_methods_without_verification(self):
         reply=self.run_recovery(dependencies=self.dependencies())
         self.assertEqual(reply['status'],0,reply)
@@ -227,7 +222,6 @@ class RecoveryStoreTests(unittest.TestCase):
                 self.assertEqual(metadata['record']['status'],'complete')
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_recovery' AND invocation IS NOT NULL").fetchone(),(0,))
 
-    @proves('MYC-17.14','MYC-14.28',kind='store')
     def test_changed_inputs_after_call_have_no_link_or_verification_effect(self):
         def changed(request):self.source.write_text('def value():\n    return 2\n')
         reply=self.run_recovery(k=1,dependencies=self.dependencies(changed=changed))
@@ -253,7 +247,6 @@ print(json.dumps(v))
             '\nreview_provider="fixture"\nreview_model="fixture-review-1"\nreview_revision="fixture-v1"\n')
         return load_settings(path=self.base.config,home=self.base.base)
 
-    @proves('MYC-17.14','MYC-14.28',kind='store')
     def test_real_isolated_standin_review_raises_and_lowers_scores_and_bands(self):
         self.settings=self.reviewer_settings()
         first=self.run_recovery(dependencies=self.dependencies())
@@ -270,7 +263,6 @@ print(json.dumps(v))
         self.assertTrue(all(link['review']['outcome']=='governs' for link in links))
         self.assertTrue(all(link['review']['who']=='fixture-review-1' for link in links))
 
-    @proves('MYC-17.15',kind='store')
     def test_third_party_snapshots_recover_without_linear_or_remote_reads(self):
         before={str(path):path.read_bytes() for path in self.artifact.glob('*.md')}
         with patch('urllib.request.urlopen',side_effect=AssertionError('no remote read')):
@@ -283,7 +275,6 @@ print(json.dumps(v))
         self.assertFalse(any('linear.app' in json.dumps(call) for call in self.calls))
         self.assertEqual(before,{str(path):path.read_bytes() for path in self.artifact.glob('*.md')})
 
-    @proves('MYC-17.13','MYC-14.28',kind='store')
     def test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect(self):
         os.utime(self.source,None)
         pending=self.run_recovery(k=1,dependencies=self.dependencies())
@@ -306,7 +297,6 @@ print(json.dumps(v))
         self.assertEqual((uncertain['jevCalls'],uncertain['reviewCalls']),(1,0))
         self.assertEqual(self.origins(),[])
 
-    @proves('MYC-17.13',kind='store')
     def test_path_repository_and_public_chunk_commands_use_same_candidates(self):
         from mycel._cli import run
         with self.base.connect() as connection:
@@ -322,7 +312,6 @@ print(json.dumps(v))
         self.assertEqual(diagnostic.getvalue(),'')
         self.assertEqual(json.loads(output.getvalue())['repository'],'fixture')
 
-    @proves('MYC-17.14',kind='store')
     def test_model_claims_survive_ingest_without_source_cycles_and_statement_supersedes(self):
         from mycel._justify import JustifyStore
         reply=self.run_recovery(dependencies=self.dependencies())
@@ -339,7 +328,6 @@ print(json.dumps(v))
         reviewed=self.run_recovery(review=True,dry_run=True)
         self.assertFalse(any('symbol.md' in pair['origin'] for pair in reviewed['pairs']))
 
-    @proves('MYC-17.13','MYC-17.14','MYC-14.28',kind='store')
     def test_clone_clock_and_equal_version_links_belong_only_to_calling_location(self):
         clone=self.base.base/'blue'
         self.base.git('clone','--no-hardlinks',str(self.code),str(clone),cwd=self.base.base)
@@ -362,7 +350,6 @@ print(json.dumps(v))
         self.settings=secondary
         self.assertEqual(len(self.origins()),4)
 
-    @proves('MYC-14.28',kind='store')
     def test_byte_budget_and_terminal_fault_never_write_a_link(self):
         oversized=self.run_recovery(k=1,dependencies=self.dependencies(limits=JevLimits(max_input_bytes=1)))
         self.assertEqual(oversized['status'],0,oversized)
@@ -374,7 +361,6 @@ print(json.dumps(v))
         self.assertEqual(len(failed['pairs'][0]['attempts']),1)
         self.assertEqual(self.origins(),[])
 
-    @proves('MYC-14.28',kind='store')
     def test_interrupt_preserves_completed_prefix_and_releases_evidence_leases(self):
         def interrupt(request):
             if len(self.calls)==2:raise KeyboardInterrupt()
@@ -386,7 +372,6 @@ print(json.dumps(v))
         with self.base.connect() as connection:
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_recovery' AND invocation IS NOT NULL").fetchone(),(0,))
 
-    @proves('MYC-17.14','MYC-14.28',kind='store')
     def test_edit_during_final_audit_rolls_back_the_origin_claim_and_edge(self):
         source=self.source
         class EditingAudit:
@@ -399,7 +384,6 @@ print(json.dumps(v))
         with self.base.connect() as connection:
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_dependencies WHERE kind='origin'").fetchone(),(0,))
 
-    @proves('MYC-17.14','MYC-14.28',kind='store')
     def test_validated_result_reuse_and_corrupt_cache_refusal(self):
         from psycopg.types.json import Jsonb
         first=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
@@ -420,7 +404,6 @@ print(json.dumps(v))
         self.assertEqual(corrupt['pairs'][0]['reason'],'snapshot_corrupt')
         self.assertEqual(self.origins(),[])
 
-    @proves('MYC-17.14','MYC-14.28',kind='store')
     def test_unrelated_review_withdraws_only_model_claims(self):
         from mycel._activity import MutationActivity
         self.settings=self.reviewer_settings(unrelated=True)
@@ -437,7 +420,6 @@ print(json.dumps(v))
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_activity WHERE kind='recovery'").fetchone(),(1,))
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
 
-    @proves('MYC-17.14','MYC-14.28',kind='store')
     def test_numbered_public_command_records_committed_origin_mutations(self):
         from mycel._cli import run
         output,diagnostic=StringIO(),StringIO()
@@ -454,7 +436,6 @@ print(json.dumps(v))
             self.assertEqual(counts['completed'],5)
         self.assertEqual(len(self.origins()),4)
 
-    @proves('MYC-14.28',kind='store')
     def test_busy_and_expired_deadline_make_no_model_call(self):
         from mycel._locks import operation_guard
         from mycel._freshness import Deadline
@@ -468,7 +449,6 @@ print(json.dumps(v))
         self.assertEqual(expired['jevCalls'],0)
         self.assertEqual(self.origins(),[])
 
-    @proves('MYC-14.28',kind='store')
     def test_transient_attempts_stop_at_configured_cap(self):
         reply=self.run_recovery(k=1,dependencies=self.dependencies(failure=JevFailure('connection')))
         self.assertEqual(reply['status'],1,reply)
@@ -476,7 +456,6 @@ print(json.dumps(v))
         self.assertEqual(len(reply['pairs'][0]['attempts']),2)
         self.assertEqual(self.origins(),[])
 
-    @proves('MYC-17.13','MYC-17.14',kind='store')
     def test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link(self):
         from mycel._resolver import SourceResolver
         from mycel._origins import origins_in_transaction
@@ -506,7 +485,6 @@ print(json.dumps(v))
         self.assertEqual(entities[0]['confidenceScore'],.95)
         self.assertIn('review',entities[0])
 
-    @proves('MYC-17.14',kind='store')
     def test_statement_supersedes_moved_uuid_proposal_without_duplicate(self):
         from mycel._resolver import SourceResolver
         from mycel._justify import JustifyStore
@@ -528,7 +506,6 @@ print(json.dumps(v))
         self.assertEqual(len(entities),1,entities)
         self.assertEqual(entities[0]['method'],'stated')
 
-    @proves('MYC-17.13','MYC-14.28',kind='store')
     def test_pair_cap_bounds_exact_preparation_and_repo_skips_authored_roots(self):
         original=RecoveryStore.prepare_pair;calls=[]
         def counted(*args,**kwargs):
@@ -544,7 +521,6 @@ print(json.dumps(v))
         for row in repository['chunks']:
             self.assertFalse(any(path in row['chunk'] for path in ('ref.md','symbol.md','spec.md')),row)
 
-    @proves('MYC-1.38','MYC-14.15',kind='store')
     def test_foreign_clone_ref_fault_does_not_make_unchanged_pass_mutate(self):
         from mycel._cli import Invocation
         from mycel._ingest import ingest

@@ -5,7 +5,6 @@ import tempfile
 import unittest
 import io
 
-from mycel._coverage import proves
 from mycel._cli import run
 from mycel._errors import MycelError
 from mycel._resolver import ResolvedChunk, SelectionMember
@@ -32,7 +31,6 @@ class SummaryRequestTests(unittest.TestCase):
         self.settings = load_settings(path=self.config)
         self.prompts = load_summary_prompts(self.settings)
 
-    @proves('MYC-8.9', 'MYC-8.12')
     def test_packaged_legacy_wording_and_complete_canonical_path_position_order(self):
         members = (section('z.md', 'Last', 'full z\r\ntext 雪'),
                    section('a.md', 'Later', '# Later\n' + 'x' * 3000, 70),
@@ -49,7 +47,6 @@ class SummaryRequestTests(unittest.TestCase):
         self.assertEqual(request.hash, sha256(expected.encode()).hexdigest())
         self.assertEqual(request.cut, ())
 
-    @proves('MYC-8.10')
     def test_recursive_halves_cover_every_member_with_complete_unicode_budgets(self):
         sections = tuple(section(f'{i:02}.md', 'Section', f'{i}: ' + '🙂e\u0301' * 6000) for i in range(9))
         requests = plan_summary_requests(tuple(reversed(sections)), self.prompts)
@@ -63,7 +60,6 @@ class SummaryRequestTests(unittest.TestCase):
                 self.assertIn(s.place_line.encode() + b'\n' + sent, request.request)
         self.assertEqual(plan_summary_requests((), self.prompts), ())
 
-    @proves('MYC-8.11')
     def test_single_oversized_section_retains_unicode_prefix_notice_and_disclosed_place(self):
         s = section('large.md', 'Huge', '雪🙂' * 30000)
         request, = plan_summary_requests((s,), self.prompts)
@@ -75,7 +71,6 @@ class SummaryRequestTests(unittest.TestCase):
         self.assertEqual(request.report()['cut'], list(request.cut))
         self.assertEqual(s.member.chunk.source, ('雪🙂' * 30000).encode())
 
-    @proves('MYC-8.9', 'MYC-8.11')
     def test_exact_limit_is_not_cut_and_one_character_over_is_reported(self):
         framing = self.prompts.render('same.md › Exact\n')
         room = REQUEST_LIMIT - len(framing)
@@ -88,7 +83,6 @@ class SummaryRequestTests(unittest.TestCase):
         self.assertEqual(request.cut, (oversized.member.place.address,))
         self.assertEqual(len(request.request.decode()), REQUEST_LIMIT)
 
-    @proves('MYC-8.12')
     def test_override_files_are_read_once_exactly_and_replace_single_marker(self):
         instruction = b'  custom instruction\r\n'
         task = ' before 雪\n$sections\nafter  '.encode()
@@ -103,7 +97,6 @@ class SummaryRequestTests(unittest.TestCase):
         self.assertEqual(request.request, 'custom instruction\n\nbefore 雪\na.md › One\ncomplete\nafter'.encode())
         self.assertEqual(prompts.hashes['task'], sha256(task).hexdigest())
 
-    @proves('MYC-8.8', 'MYC-8.12')
     def test_missing_writer_refuses_generation_but_report_and_dry_run_plan_need_no_command(self):
         for operation in ('build', 'regenerate'):
             with self.assertRaises(MycelError) as caught:
@@ -117,7 +110,6 @@ class SummaryRequestTests(unittest.TestCase):
             'summaries': {'command': ['/literal/writer', '$(literal)', '~literal'], 'at_once': 2}}))
         self.assertEqual(summary_command(settings, operation='build'), ('/literal/writer', '$(literal)', '~literal'))
 
-    @proves('MYC-8.8')
     def test_cli_missing_command_checks_generation_before_pending_handler(self):
         from unittest.mock import patch
         self.config.write_text('[store]\naddress="postgresql://fixture@localhost/disposable"\n'
@@ -132,7 +124,6 @@ class SummaryRequestTests(unittest.TestCase):
                 import json
                 self.assertEqual(json.loads(out.getvalue())['error']['code'], code)
 
-    @proves('MYC-8.8', 'MYC-8.12')
     def test_invalid_argv_and_overrides_refuse_before_requests_with_redacted_settings(self):
         for command in ((), ('',), ('  ',), ('writer', '\0private-sentinel')):
             values = {**self.settings.values, 'summaries': {'command': command, 'at_once': 1}}
@@ -154,7 +145,6 @@ class SummaryRequestTests(unittest.TestCase):
                 summary_command(settings, operation='regenerate')
             self.assertEqual(caught.exception.code, 'settings')
 
-    @proves('MYC-8.10', 'MYC-8.11')
     def test_framing_and_place_line_leave_room_for_cut_notice_or_refuse(self):
         for instruction in ('x' * (REQUEST_LIMIT - 2), 'x' * REQUEST_LIMIT):
             with self.assertRaises(MycelError) as caught:
@@ -165,7 +155,6 @@ class SummaryRequestTests(unittest.TestCase):
             plan_summary_requests((section('a.md', 'One', 'z' * 200),), prompts)
         self.assertEqual(caught.exception.code, 'settings')
 
-    @proves('MYC-8.9', 'MYC-8.10')
     def test_duplicate_or_cross_repository_members_and_corrupt_source_are_refused(self):
         one = section('a.md', 'One', 'text')
         for members in ((one, one), (one, section('b.md', 'Two', 'text', repository='other'))):

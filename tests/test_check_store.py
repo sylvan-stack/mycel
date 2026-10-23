@@ -12,7 +12,7 @@ from unittest.mock import patch
 from psycopg.errors import ObjectInUse
 
 from mycel._check_store import NativePostgresBackend
-from mycel._coverage import CoverageError, PostgresBackend, disposable_store, proves
+from mycel._coverage import CoverageError, PostgresBackend, disposable_store
 
 
 class NativeCheckRunnerTests(unittest.TestCase):
@@ -21,7 +21,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
         address = "postgresql://fixture@localhost/" + owner
         return (NativePostgresBackend(address), PostgresBackend(address, psql="/fictional/psql"))
 
-    @proves("MYC-13.15")
     def test_owner_database_never_reaches_native_boundary_and_unsafe_names_refuse_first(self):
         for owner, admin in (("owner", "postgres"), ("postgres", "template1"), ("%70ostgres", "template1")):
             backend = NativePostgresBackend("postgresql://fixture@localhost/" + owner)
@@ -58,7 +57,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                             pass
                 connection.assert_not_called()
 
-    @proves("MYC-13.15")
     def test_native_failure_bodies_and_credentials_never_enter_check_reports(self):
         backend = NativePostgresBackend("postgresql://fixture@localhost/owner")
         with patch.object(backend, "_execute", side_effect=["f", ""]):
@@ -72,7 +70,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
             with self.assertRaises(CoverageError):
                 NativePostgresBackend(address)
 
-    @proves("MYC-13.15")
     def test_prefix_valid_and_percent_encoded_owner_targets_refuse_before_every_boundary(self):
         for spelling in ("mycel_check_owner", "mycel_check_%6fwner"):
             for backend in self.backends(spelling):
@@ -108,7 +105,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                         native.assert_not_called()
                         child.assert_not_called()
 
-    @proves("MYC-13.15")
     def test_unowned_prefix_valid_databases_cannot_be_queried_connected_or_dropped(self):
         for backend in self.backends():
             with patch("mycel._check_store.store_connection") as native, patch("subprocess.run") as child:
@@ -123,7 +119,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                 native.assert_not_called()
                 child.assert_not_called()
 
-    @proves("MYC-13.15")
     def test_preexisting_or_previously_owned_collision_is_never_removed_by_failed_creation(self):
         for already_owned in (False, True):
             for backend in self.backends():
@@ -153,7 +148,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                     self.assertTrue(exists)
                     self.assertTrue(all(statement.startswith("SELECT EXISTS") for statement in calls))
 
-    @proves("MYC-13.15")
     def test_failed_unacknowledged_create_never_deletes_a_database_that_appears_afterward(self):
         for server_created in (False, True):
             for backend in self.backends():
@@ -176,7 +170,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                     self.assertIn("ownership is unconfirmed", str(error.exception))
                     self.assertTrue(exists)
 
-    @proves("MYC-13.15")
     def test_acknowledged_creation_is_cleaned_after_body_init_and_immediate_cancellation(self):
         for failure in (RuntimeError("body failed"), KeyboardInterrupt()):
             for backend in self.backends():
@@ -202,7 +195,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                 self.assertFalse(databases)
                 self.assertEqual(sum(statement.startswith("DROP") for statement in calls), 1)
 
-    @proves("MYC-13.15")
     def test_cancellation_before_create_acknowledgement_retains_no_cleanup_permission(self):
         for backend in self.backends():
             calls = []
@@ -218,7 +210,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
             self.assertTrue(any("no unowned database was removed" in note for note in error.exception.__notes__))
             self.assertFalse(any(statement.startswith("DROP") for statement in calls))
 
-    @proves("MYC-13.15")
     def test_native_acknowledgement_survives_interrupt_while_closing_admin_session(self):
         backend = NativePostgresBackend("postgresql://fixture@localhost/owner")
         databases, calls = set(), []
@@ -253,7 +244,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
         self.assertFalse(databases)
         self.assertEqual(sum(statement.startswith("DROP") for statement in calls), 1)
 
-    @proves("MYC-13.15")
     def test_native_cleanup_refusal_keeps_owned_fixture_and_failure_bodies_private(self):
         backend = NativePostgresBackend("postgresql://fixture@localhost/owner")
         exists, occupied = True, True
@@ -292,7 +282,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                 backend.drop_database("mycel_check_busy")
             self.assertEqual(len(calls), before)
 
-    @proves("MYC-13.15")
     def test_native_cleanup_cancellation_after_removal_preserves_safe_retry_permission(self):
         backend = NativePostgresBackend("postgresql://fixture@localhost/owner")
         backend._begin_creation("mycel_check_cancel")
@@ -327,7 +316,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
             self.assertFalse(backend.database_exists("mycel_check_cancel"))
         self.assertEqual(sum(statement.startswith("DROP") for statement in calls), 2)
 
-    @proves("MYC-13.15")
     def test_parent_recovers_exact_acknowledged_worker_database_after_admin_close_interrupt(self):
         with tempfile.TemporaryDirectory() as directory:
             journal = Path(directory)
@@ -370,7 +358,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
             self.assertEqual(databases, {"owner", "mycel_check_unrelated"})
             self.assertEqual(list(journal.iterdir()), [])
 
-    @proves("MYC-13.15")
     def test_failed_collision_and_unacknowledged_create_grant_parent_no_cleanup_permission(self):
         for collision in (False, True):
             with self.subTest(collision=collision), tempfile.TemporaryDirectory() as directory:
@@ -396,7 +383,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                     self.assertEqual(parent.recover_owned_databases(), ())
                     boundary.assert_not_called()
 
-    @proves("MYC-13.15")
     def test_cleanup_failure_retains_record_and_parent_continues_other_exact_drops(self):
         with tempfile.TemporaryDirectory() as directory:
             address = "postgresql://fixture@localhost/owner"
@@ -423,7 +409,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                 self.assertEqual(parent.recover_owned_databases(), (names[0],))
             self.assertEqual(list(journal.iterdir()), [])
 
-    @proves("MYC-13.15")
     def test_recovery_rejects_owner_foreign_server_invalid_and_nonprivate_records(self):
         for fault in ("owner", "server", "filename", "invalid", "public", "symlink"):
             with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
@@ -459,7 +444,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                     boundary.assert_not_called()
                 self.assertTrue(record.exists())
 
-    @proves("MYC-13.15")
     def test_ownership_records_publish_atomically_and_failed_writes_grant_parent_no_permission(self):
         with tempfile.TemporaryDirectory() as directory:
             journal = Path(directory)
@@ -488,7 +472,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                 self.assertEqual(parent.recover_owned_databases(), ())
                 boundary.assert_not_called()
 
-    @proves("MYC-13.15")
     def test_ownership_journal_requires_existing_private_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -502,7 +485,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
                         NativePostgresBackend("postgresql://fixture@localhost/owner", _ownership_journal=journal)
                     boundary.assert_not_called()
 
-    @proves("MYC-13.15")
     def test_preflight_really_creates_journals_and_drops_probe_before_returning_safe_label(self):
         with tempfile.TemporaryDirectory() as directory:
             journal = Path(directory)
@@ -525,7 +507,6 @@ class NativeCheckRunnerTests(unittest.TestCase):
             self.assertEqual(sum(statement.startswith("DROP") for statement in statements), 1)
             self.assertEqual(list(journal.iterdir()), [])
 
-    @proves("MYC-13.15")
     def test_preflight_connect_and_create_failures_report_only_safe_one_line_server_label(self):
         for connected in (False, True):
             backend = NativePostgresBackend("postgresql://private-user@host%0aheader:6543/private-owner?sslmode=require")

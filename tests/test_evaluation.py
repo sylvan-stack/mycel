@@ -12,7 +12,6 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._evaluation import (EvaluationSet, PreparedQueryVector, RetrievalPlace,
                                RetrievalQuery, RetrievalReply, comparison_failures,
@@ -46,7 +45,6 @@ class EvaluationFileTests(unittest.TestCase):
         self.assertIn(field, error.exception.message)
         return error.exception
 
-    @proves('MYC-13.10')
     def test_optional_sections_version_compatibility_exact_bytes_and_frozen_values(self):
         for source in ('', 'schema_version=1\n', 'query=[]\ndrift=[]\n'):
             suite = self.load(source)
@@ -60,7 +58,6 @@ class EvaluationFileTests(unittest.TestCase):
         self.assertEqual(self.load(QUERY).drifts, ())
         self.assertEqual(self.load(DRIFT).queries, ())
 
-    @proves('MYC-13.10')
     def test_unknown_fields_dotted_quoted_inline_and_multiline_have_exact_locations(self):
         cases = [
             ('unexpected=1\n', 'unexpected', 1),
@@ -75,7 +72,6 @@ class EvaluationFileTests(unittest.TestCase):
                 error = self.invalid(source, field)
                 self.assertIn(f'line {line}', error.message)
 
-    @proves('MYC-13.10')
     def test_wrong_version_and_section_shapes_refuse_before_calls(self):
         for source, field in [('schema_version=true\n', 'schema_version'),
                               ('schema_version=2\n', 'schema_version'),
@@ -87,7 +83,6 @@ class EvaluationFileTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.invalid(source, field)
 
-    @proves('MYC-13.10')
     def test_retrieval_requires_nonempty_text_expectations_and_exact_only(self):
         for source, field in [('[[query]]\nexpect=["fixture:f#x"]\n', 'query[0].text'),
                               ('[[query]]\ntext=1\nexpect=["fixture:f#x"]\n', 'query[0].text'),
@@ -108,7 +103,6 @@ class EvaluationFileTests(unittest.TestCase):
         self.assertEqual(self.load(QUERY.replace('fixture:policy.py#Policy', 'not a ref')).queries[0].expect,
                          ('not a ref',))
 
-    @proves('MYC-13.10')
     def test_drift_required_strings_deletion_and_empty_present_source(self):
         for field in ('id', 'before', 'current', 'dependant', 'expect'):
             lines = [line for line in DRIFT.splitlines() if not line.startswith(field + '=')]
@@ -124,7 +118,6 @@ class EvaluationFileTests(unittest.TestCase):
         self.invalid(DRIFT + 'source_state="unknown"\n', 'drift[0].source_state')
         self.invalid(DRIFT + DRIFT, 'drift[1].id')
 
-    @proves('MYC-13.10')
     def test_drift_context_availability_and_label_consistency(self):
         source = DRIFT + 'context=["first", "", "last"]\ncritical=["permission", "negation"]\n'
         case = self.load(source).drifts[0]
@@ -146,7 +139,6 @@ class EvaluationFileTests(unittest.TestCase):
                         .drifts[0].unchanged)
         self.invalid(DRIFT.replace('needs_review', 'unsupported'), 'drift[0].expect')
 
-    @proves('MYC-13.10')
     def test_both_sections_are_validated_and_input_failures_have_file_details(self):
         self.invalid(QUERY + DRIFT + 'unknown=true\n', 'drift[0].unknown')
         self.invalid(DRIFT + QUERY + 'only="all"\n', 'query[0].only')
@@ -249,7 +241,6 @@ class RetrievalEvaluationUnitTests(unittest.TestCase):
                     retrieval=Adapter(events, snapshot))
         return report, events
 
-    @proves('MYC-13.15')
     def test_exact_positions_header_alias_and_duplicate_expectations_account_once(self):
         """MYC-13.12/.17 core: read class header, aliases and duplicate scoring."""
         query = RetrievalQuery('  How does Policy decide?  ', (
@@ -268,7 +259,6 @@ class RetrievalEvaluationUnitTests(unittest.TestCase):
         self.assertEqual(search[1], query)
         self.assertEqual(search[3:], (10, False))
 
-    @proves('MYC-13.15')
     def test_vectors_all_precede_one_snapshot_and_wording_only_is_counted(self):
         """MYC-13.11/.14/.17: exact vector preparation ordering and fallback."""
         queries = (RetrievalQuery('Policy', ('fixture:policy.py#Policy',)),
@@ -284,7 +274,6 @@ class RetrievalEvaluationUnitTests(unittest.TestCase):
                                             for route in ('identifier', 'question')})
         self.assertEqual(len(report['queryVectorsHash']), 64)
 
-    @proves('MYC-13.15')
     def test_position_ten_absence_and_whole_faulted_query_exclusion(self):
         """MYC-13.12/.13/.17: exact kth positions and entire invalid-query exclusion."""
         queries = (RetrievalQuery('valid?', ('fixture:policy.py#Policy', 'fixture:guide.md#Guide')),
@@ -300,7 +289,6 @@ class RetrievalEvaluationUnitTests(unittest.TestCase):
         self.assertEqual(report['results'][1]['expected'][1]['fault'], 'not_in_index')
         self.assertEqual(report['faultsOfTheSet'], 1)
 
-    @proves('MYC-13.15')
     def test_every_resolver_fault_file_selection_and_eligibility_are_visible(self):
         """MYC-13.13/.17: resolution fault mapping and zero denominators."""
         cases = [('not a ref', 'malformed'), ('fixture:missing.py#Missing', 'not_in_index'),
@@ -317,7 +305,6 @@ class RetrievalEvaluationUnitTests(unittest.TestCase):
         self.assertEqual(report['recall'], {'at3': None, 'at10': None})
         self.assertFalse(report['results'][0]['included'])
 
-    @proves('MYC-13.15')
     def test_generated_index_chunk_is_a_read_result_and_wrong_version_does_not_hit(self):
         """MYC-13.17: read-role index chunks and exact on-disk version matching."""
         query = RetrievalQuery('Area', ('fixture:@index/overview#Area',))
@@ -327,7 +314,6 @@ class RetrievalEvaluationUnitTests(unittest.TestCase):
         self.assertNotIn('position', report['results'][0]['expected'][0])
         self.assertEqual(report['recall'], {'at3': 0.0, 'at10': 0.0})
 
-    @proves('MYC-13.15')
     def test_empty_selected_section_has_null_shares_and_no_query_calls(self):
         """MYC-13.10/.17: empty set retains measured snapshot identities."""
         report, events = self.run_evaluation((), {})
@@ -347,7 +333,6 @@ class RetrievalEvaluationUnitTests(unittest.TestCase):
                 query_vectors=Vectors(events), retrieval=Adapter(events, snapshot))
         self.assertEqual(events, [('open', 'fixture'), ('close', 'fixture')])
 
-    @proves('MYC-13.15')
     def test_comparisons_require_same_file_vectors_settings_model_reply_and_index(self):
         """MYC-13.17: Build-only changes are comparable; frozen inputs must match."""
         query = RetrievalQuery('Policy', ('fixture:policy.py#Policy',))
@@ -363,7 +348,6 @@ class RetrievalEvaluationUnitTests(unittest.TestCase):
                                          fallbacks=(query.text,))
         self.assertNotEqual(report['queryVectorsHash'], changed['queryVectorsHash'])
 
-    @proves('MYC-13.15')
     def test_search_contract_violations_fail_without_rewriting_ranks(self):
         """MYC-13.11/.17: search collapse/top-ten/route contracts fail closed."""
         query = RetrievalQuery('Policy', ('fixture:policy.py#Policy',))
@@ -380,7 +364,6 @@ class RetrievalEvaluationUnitTests(unittest.TestCase):
         with self.assertRaises(MycelError):
             self.run_evaluation((query,), {query.text: RetrievalReply('identifier', True, ())}, fallbacks=(query.text,))
 
-    @proves('MYC-13.15')
     def test_vectors_are_finite_exact_sequences_and_fallback_has_reason(self):
         """MYC-13.17 input fingerprints never hash nonfinite or unspecified inputs."""
         for vector, reason in (((), None), ([1.0], None), ((True,), None), ((float('nan'),), None),

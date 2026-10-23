@@ -37,7 +37,6 @@ if str(SOURCE_ROOT / 'src') not in sys.path:
 
 from mycel._classification_payload import ReviewCommandIdentity
 from mycel._classification_runner import _bytes
-from mycel._coverage import _registry_fingerprint, load_registry
 from mycel._errors import MycelError
 from mycel._evaluation import load_evaluation_file
 from mycel._evaluation_drift import _prepare
@@ -165,17 +164,11 @@ def prepare_operation(*, settings_path, suite_path, repository,
     settings.require_valid(require_store=False)
     settings.require_current()
     suite = load_evaluation_file(suite_path)
-    registry = load_registry()
     blockers = []
     if (repository not in settings.values['repos']
             or repository in settings.values['organizations']
             or not settings.values['repos'][repository]['enabled']):
         blockers.append('Select one enabled configured repository, not an organization.')
-    registry_raw = frozen.get('src/mycel/data/requirements.json')
-    from importlib.resources import files
-    active_registry_raw = files('mycel').joinpath('data/requirements.json').read_bytes()
-    if registry_raw != active_registry_raw:
-        blockers.append('The imported requirement registry differs from the source snapshot.')
     groups = {}
     for case in suite.drifts:
         groups.setdefault(semantic_fingerprint(case), []).append(case)
@@ -248,8 +241,6 @@ def prepare_operation(*, settings_path, suite_path, repository,
         _refuse('Settings or evaluation bytes changed during provider preflight.')
     report = {'schema': SCHEMA, 'repository': repository,
         'source': {'root': str(SOURCE_ROOT), **source, 'inputs': len(frozen)},
-        'registryFingerprint': _registry_fingerprint(registry),
-        'registrySha256': sha256(active_registry_raw).hexdigest(),
         'settings': {'path': str(settings_path), 'sha256': sha256(settings_raw).hexdigest(),
                      'home': str(settings._home)},
         'suite': {'path': str(suite.file), 'sha256': suite.file_hash, 'cases': len(suite.drifts),
@@ -311,11 +302,6 @@ class _BoundSettings:
         source, _ = source_inputs(SOURCE_ROOT)
         if any(source[key] != report['source'][key] for key in ('commit', 'dirty', 'inputsSha256')):
             _refuse('Reviewed source inputs changed before another provider boundary.')
-        from importlib.resources import files
-        raw = files('mycel').joinpath('data/requirements.json').read_bytes()
-        if (sha256(raw).hexdigest() != report['registrySha256']
-                or _registry_fingerprint(load_registry()) != report['registryFingerprint']):
-            _refuse('The requirement registry changed before another provider boundary.')
         options = self.values['drifts']
         command = ReviewCommandIdentity.inspect(options['review_command'],
             options['review_revision'], self._home or Path.home())
@@ -362,7 +348,6 @@ def run_operation(plan, *, expected_plan_sha256, output_dir):
         receipt = {'schema': SCHEMA, 'recordedAt': datetime.now(timezone.utc).isoformat(),
             'planSha256': expected_plan_sha256, 'build': plan.build,
             'implementationIdentity': current.report['source']['inputsSha256'],
-            'registryFingerprint': current.report['registryFingerprint'],
             'providerGroupInvocations': 0, 'deploymentConsumerInvocations': 0,
             'passed': False, 'savedRecordsAreProofObjects': False,
             'automaticBuildQualification': False, 'checks': []}
@@ -373,13 +358,13 @@ def run_operation(plan, *, expected_plan_sha256, output_dir):
             bound_settings.require_current()
             provider_proofs, reports = run_provider_checks(bound_settings, current.suite,
                 repository=plan.repository, build=plan.build,
-                implementation_identity=identity, live=True, registry=load_registry())
+                implementation_identity=identity, live=True)
             proofs = (provider_proofs,)
             _recheck(plan, expected_plan_sha256)
             receipt['deploymentConsumerInvocations'] = 1
             proofs, reports = run_provider_deployment_checks(bound_settings, current.suite,
                 provider_proofs, reports, repository=plan.repository, build=plan.build,
-                implementation_identity=identity, live=True, registry=load_registry())
+                implementation_identity=identity, live=True)
             _recheck(plan, expected_plan_sha256)
             receipt['passed'] = (len(proofs) == 2 and all(proof.checks for proof in proofs)
                 and all(check.status == 'passed' for proof in proofs for check in proof.checks)

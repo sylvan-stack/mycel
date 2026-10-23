@@ -9,7 +9,6 @@ import unittest
 from psycopg.types.json import Jsonb
 
 from mycel._classification_store import ClassificationStore
-from mycel._coverage import proves
 from mycel._relate import RelateStore
 from mycel._resolver import SourceResolver
 
@@ -20,7 +19,8 @@ except ImportError:
 
 
 class ClassificationGuardEdgeStoreTests(ClassificationStoreFixture):
-    @proves('MYC-14.2', 'MYC-14.14', 'MYC-14.15', 'MYC-16.8', kind='store')
+    check_kind = "store"
+
     def test_two_related_inputs_retain_independent_evidence_and_observation_maps(self):
         self.fixture.write_answer()
         with self.base.connect() as connection:
@@ -63,7 +63,6 @@ class ClassificationGuardEdgeStoreTests(ClassificationStoreFixture):
             self.assertTrue(self.stage_check(connection, repeated, at=first.eligible_at)['allowed'])
             self.assertTrue(self.stage_check(connection, second, at=second.eligible_at)['allowed'])
 
-    @proves('MYC-14.2', 'MYC-14.14', 'MYC-14.15', 'MYC-16.8', kind='store')
     def test_removed_section_keeps_live_file_and_tombstone_timers_and_outside_edit_restarts_file(self):
         with self.base.connect() as connection:
             initial = self.prepare(connection)
@@ -115,7 +114,6 @@ class ClassificationGuardEdgeStoreTests(ClassificationStoreFixture):
             self.assertFalse(self.stage_check(connection, removed, at=later.isoformat())['allowed'])
             self.assertTrue(self.stage_check(connection, changed, at=changed.eligible_at)['allowed'])
 
-    @proves('MYC-14.2', 'MYC-14.15', kind='store')
     def test_standalone_ref_fault_is_required_missing_context_without_silent_omission(self):
         self.fixture.write_answer(*self.fixture.addresses, 'not a ref')
         with self.base.connect() as connection:
@@ -140,7 +138,6 @@ class ClassificationGuardEdgeStoreTests(ClassificationStoreFixture):
             state = connection.execute('SELECT state FROM public.mycel_drifts WHERE id=%s', (drift['id'],)).fetchone()[0]
             self.assertEqual(state.get('classificationRequests', {}), {})
 
-    @proves('MYC-14.2', 'MYC-14.15', 'MYC-16.8', kind='store')
     def test_code_family_and_whole_file_preserve_complete_exact_membership_and_bytes(self):
         code = self.base.code / 'policy.py'
         original = (b'# exact file preface\nclass Policy:\n    def apply(self):\n        return 1\n'
@@ -187,7 +184,6 @@ class ClassificationGuardEdgeStoreTests(ClassificationStoreFixture):
                     ('downstream', prepared.input_hash)).fetchone()[0]
                 self.assertEqual(bytes(retained), prepared.decision.canonical_bytes)
 
-    @proves('MYC-14.14', 'MYC-14.15', 'MYC-16.8', kind='store')
     def test_unchanged_preparation_sixty_seconds_later_preserves_request_bundle_and_cache(self):
         with self.base.connect() as connection:
             first = self.prepare(connection)

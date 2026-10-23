@@ -12,7 +12,6 @@ from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
 
 from psycopg.types.json import Jsonb
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceError, canonical_json, document_comparisons
 from mycel._locks import invocation_guard
@@ -63,7 +62,6 @@ def blob(capture, descriptor):
 
 
 class SummaryEvidenceTests(unittest.TestCase):
-    @proves('MYC-8.9', 'MYC-8.12')
     def test_capture_keeps_raw_prompts_literal_argv_full_sources_and_canonical_immutable_manifest(self):
         file = document()
         requests, captures = planned(file)
@@ -90,7 +88,6 @@ class SummaryEvidenceTests(unittest.TestCase):
         raw['members'][0]['comparison']['body']['hash'] = '0' * 64
         self.assertEqual(independent, capture.manifest)
 
-    @proves('MYC-8.11')
     def test_cut_keeps_complete_unicode_source_and_exact_sent_prefix_notice_without_omitted_members(self):
         file = document('# Source\n' + '🙂雪' * 30_000)
         requests, captures = planned(file)
@@ -109,7 +106,6 @@ class SummaryEvidenceTests(unittest.TestCase):
         self.assertNotEqual(completed.manifest.identifier, capture.manifest.identifier)
         self.assertNotIn('response', capture.manifest.payload)
 
-    @proves('MYC-8.9', 'MYC-8.12')
     def test_changed_framing_corrupt_descriptors_order_and_unsupported_comparison_are_refused(self):
         file = document('# First\nOne.\n# Second\nTwo.\n')
         _, captures = planned(file)
@@ -141,7 +137,6 @@ class SummaryEvidenceTests(unittest.TestCase):
         with self.assertRaises(EvidenceError):
             capture_generation('owner', (GenerationMember(member, member.chunk.source),), **kwargs)
 
-    @proves('MYC-8.9')
     def test_fileless_higher_level_summary_has_exact_member_identity_and_no_mutable_source_pointer(self):
         source = b'Complete lower-level summary.'
         chunk = ResolvedChunk(str(uuid4()), 7, '1/2', 'summary', source, sha256(source).hexdigest())
@@ -154,6 +149,8 @@ class SummaryEvidenceTests(unittest.TestCase):
 
 
 class SummaryEvidenceStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def seed(self, connection, file=None):
         file = file or document()
         for repository in ('owner', file.repository):
@@ -193,7 +190,6 @@ class SummaryEvidenceStoreTests(unittest.TestCase):
             '(SELECT count(*) FROM public.mycel_chunk_versions),(SELECT count(*) FROM public.mycel_locations),'
             '(SELECT count(*) FROM public.mycel_vectors),(SELECT count(*) FROM public.mycel_activity)').fetchone()
 
-    @proves('MYC-8.25', 'MYC-16.5', 'MYC-16.6', kind='store')
     def test_real_request_lease_response_roundtrip_is_owner_scoped_private_and_survives_source_removal(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             file = self.seed(connection)
@@ -223,7 +219,6 @@ class SummaryEvidenceStoreTests(unittest.TestCase):
                 store.read('source', completed_lease.manifest_hash)
             self.assertEqual(fault.exception.status, 'baseline_missing')
 
-    @proves('MYC-8.25', 'MYC-16.6', kind='store')
     def test_real_cut_evidence_retains_uncut_source_and_exact_sent_utf8_prefix_and_notice(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             file = self.seed(connection, document('# Source\n' + '🙂雪' * 30_000))
@@ -239,7 +234,6 @@ class SummaryEvidenceStoreTests(unittest.TestCase):
                 self.assertNotEqual(member['source']['hash'], member['sent']['hash'])
                 self.assertEqual(len(blob(retained, retained.manifest.payload['request']).decode()), 48_000)
 
-    @proves('MYC-8.25', 'MYC-16.9', kind='store')
     def test_real_corrupt_snapshot_or_manifest_metadata_refuses_read_and_response_without_partial_writes(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             file = self.seed(connection)
@@ -267,7 +261,6 @@ class SummaryEvidenceStoreTests(unittest.TestCase):
                     store.read('owner', lease.manifest_hash)
                 self.assertEqual(fault.exception.status, 'snapshot_corrupt')
 
-    @proves('MYC-8.25', 'MYC-16.13', kind='store')
     def test_real_foreign_nonactive_and_forged_invocations_or_changed_member_addresses_cannot_retain(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             file = self.seed(connection)
@@ -295,7 +288,6 @@ class SummaryEvidenceStoreTests(unittest.TestCase):
             self.assertEqual(fault.exception.status, 'invalid_input')
             self.assertEqual(self.evidence_counts(connection), (0, 0, 0, 0))
 
-    @proves('MYC-8.25', 'MYC-16.13', kind='store')
     def test_real_mid_write_failure_rolls_back_entire_request_and_response_capture(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             file = self.seed(connection)
@@ -317,7 +309,6 @@ class SummaryEvidenceStoreTests(unittest.TestCase):
                 self.assertEqual(self.evidence_counts(connection), counts)
                 self.assertEqual(store.read('owner', lease.manifest_hash), capture)
 
-    @proves('MYC-8.25', 'MYC-16.6', kind='store')
     def test_real_generation_caller_retains_exact_stdin_cut_source_and_stdout_with_live_private_lease(self):
         from mycel._summaries import generate_summary_requests
 

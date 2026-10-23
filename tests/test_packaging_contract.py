@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel_build._core import (BuildError, atomic_json, digest,
                                json_bytes, read_json, seal_program, validate_manifest)
 from mycel_build._registry import allocate, read_record, update_staging
@@ -19,7 +18,6 @@ except ImportError:
 
 
 class PackagingContractTests(unittest.TestCase):
-    @proves('MYC-15.2', 'MYC-15.4')
     def test_successful_stage_retains_complete_record_and_manifests_without_publication(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -42,7 +40,6 @@ class PackagingContractTests(unittest.TestCase):
                 b'requires-python=">=3.13"\ndependencies=["fixturedep==1.0"]\n')
             frozen['packaging/build-lock.json'] = json_bytes(lock)
             frozen['tests/test_fixture.py'] = b'# retained automatic input\n'
-            frozen['checks/claims.json'] = b'{"implemented": {}}\n'
             for name, raw in frozen.items():
                 path = source / name
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -109,7 +106,6 @@ class PackagingContractTests(unittest.TestCase):
                 {'name': 'packaged_selector_and_cli_two_path_probe', **packaged}])
             self.assertEqual(checks['pending'], ['packaged_release', 'publication'])
 
-    @proves('MYC-15.4')
     def test_terminal_or_pruned_records_refuse_staging_without_changing_any_retained_byte_or_mode(self):
         for status, pruned in (('working', False), ('withdrawn', False), ('failed', False),
                                ('building', True), ('withdrawn', True)):

@@ -7,7 +7,6 @@ from unittest.mock import patch
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import LocationId
 from mycel._cli import Invocation, parse, run
-from mycel._coverage import proves
 from mycel._dependency_inputs import DependencyCaptureInputs
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceStore
@@ -22,7 +21,6 @@ except ImportError:
 
 
 class RelateCliTests(unittest.TestCase):
-    @proves('MYC-0.6', 'MYC-0.7')
     def test_exact_two_chunk_grammar_and_closed_option_failures(self):
         dependant = 'fixture:@artifact/guide.md#Guide'
         source = 'fixture:@artifact/source.md#Source'
@@ -40,6 +38,8 @@ class RelateCliTests(unittest.TestCase):
 
 
 class RelateStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.DeriveStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -74,7 +74,6 @@ class RelateStoreTests(unittest.TestCase):
             inputs.verify()
         return result
 
-    @proves('MYC-7.17', 'MYC-7.26', kind='store')
     def test_one_way_exact_header_endpoint_cycles_roles_and_authority_exclusion(self):
         with self.base.connect() as connection:
             self.fixture.publish(connection)
@@ -95,7 +94,6 @@ class RelateStoreTests(unittest.TestCase):
             self.assertTrue(self.relate(connection, self.dependant)['changed'])
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_edges').fetchone(), (0,))
 
-    @proves('MYC-7.15', 'MYC-7.26', kind='store')
     def test_declared_asserted_independence_alias_noops_and_exact_removed_selection(self):
         self.guide.write_bytes(self.guide.read_bytes().replace(b'Original dependant.',
             b'Original dependant.\n<!-- related:\nfixture:source.md#Source\n-->'))
@@ -117,7 +115,6 @@ class RelateStoreTests(unittest.TestCase):
             self.assertFalse(self.relate(connection, remove=True)['changed'])
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.14', 'MYC-7.26', kind='store')
     def test_complete_file_family_declarations_atomic_snapshots_and_separate_header_assertion(self):
         self.guide.write_bytes(self.guide.read_bytes().replace(b'Original dependant.',
             b'Original dependant.\n<!-- related:\nfixture:@artifact/source.md\nfixture:@code/policy.py#Policy\n-->'))
@@ -140,7 +137,6 @@ class RelateStoreTests(unittest.TestCase):
             header = next(row for row in current if row[3]['ownership'] == 'asserted')
             self.assertEqual(len(EvidenceStore(connection).read_baseline('fixture', header[5]).manifest.payload['members']), 1)
 
-    @proves('MYC-7.14', 'MYC-7.17', kind='store')
     def test_malformed_missing_unknown_disabled_ambiguous_related_faults_without_authority(self):
         self.guide.write_bytes(self.guide.read_bytes().replace(b'Original dependant.',
             b'Original dependant.\n<!-- related:\nnot a ref\nunknown:source.md#Source\nfixture:no.md#Absent\n'
@@ -156,7 +152,6 @@ class RelateStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_edges').fetchone(), (0,))
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_ref_faults').fetchone(), (4,))
 
-    @proves('MYC-7.16', 'MYC-7.26', kind='store')
     def test_sibling_edit_preserves_pin_substantive_edit_and_confirmation_renew_direct_reasons(self):
         with self.base.connect() as connection:
             self.fixture.publish(connection)
@@ -184,7 +179,6 @@ class RelateStoreTests(unittest.TestCase):
             self.assertEqual(edited[3]['reasons'], [])
             self.assertNotEqual(edited[5], current[5])
 
-    @proves('MYC-7.15', 'MYC-7.26', kind='store')
     def test_retained_missing_removal_is_exact_and_absent_removal_does_not_collect(self):
         with self.base.connect() as connection:
             self.fixture.publish(connection)
@@ -210,7 +204,6 @@ class RelateStoreTests(unittest.TestCase):
             self.assertFalse(absent_name['changed'])
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.26', kind='store')
     def test_exact_disk_source_and_dependant_guards_and_late_audit_rollback(self):
         with self.base.connect() as connection:
             self.fixture.publish(connection)
@@ -231,7 +224,6 @@ class RelateStoreTests(unittest.TestCase):
                     self.relate(connection)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.26', kind='store')
     def test_public_dispatch_exact_committed_relation_reply_and_noop_activity(self):
         with self.base.connect() as connection:
             self.fixture.publish(connection)

@@ -6,7 +6,6 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from mycel._coverage import proves
 from mycel_build._core import BuildError, atomic_json, digest
 from mycel_build import _keychain_probe as probe
 from mycel_build._credential_contract import (PROVENANCE, TRUE_FIELDS, FALSE_FIELDS, HELPERS,
@@ -32,7 +31,6 @@ def protocol():
 
 
 class PrivateCredentialContractTests(unittest.TestCase):
-    @proves('MYC-15.8')
     def test_scoped_protocol_requires_current_source_program_helpers_and_real_cleanup_shape(self):
         row,inputs=protocol()
         def accepted(value):return credential_probe_passed(value,number='2',target='macos-arm64',source_sha256='a'*64,program_sha256='b'*64,check_inputs=inputs)
@@ -50,7 +48,6 @@ class PrivateCredentialContractTests(unittest.TestCase):
             with self.subTest(mutate=mutate):self.assertFalse(accepted(value))
         self.assertFalse(credential_probe_passed(row,number='2',target='macos-arm64',source_sha256='a'*64,program_sha256='b'*64,check_inputs=[]))
 
-    @proves('MYC-15.8')
     def test_both_publication_receivers_refuse_global_preference_claim_over_profile_view(self):
         try:from .test_working_publication import PublicationFixture
         except ImportError:from test_working_publication import PublicationFixture
@@ -65,7 +62,6 @@ class PrivateCredentialContractTests(unittest.TestCase):
                 target='macos-arm64',runtime=fixture.record['runtime'],results=fixture.checks['results'],publication=True))
             with self.assertRaises(BuildError):publication._verify(fixture.folder,fixture.record,fixture.frozen,fixture.identity)
 
-    @proves('MYC-15.8')
     def test_public_fixture_is_offline_exact_licensed_source_and_rejects_tampering(self):
         frozen={p:(ROOT/p).read_bytes() for p in (FIXTURE_SOURCE,FIXTURE_LICENSE,FIXTURE_PROVENANCE)}
         raw=public_fixture(frozen);self.assertEqual(len(raw),45864);self.assertEqual(digest(raw),PROVENANCE['sha256'])
@@ -73,7 +69,6 @@ class PrivateCredentialContractTests(unittest.TestCase):
             changed=dict(frozen);changed[path]=b'changed'
             with self.subTest(path=path),self.assertRaises(BuildError):public_fixture(changed)
 
-    @proves('MYC-15.8')
     def test_missing_current_build_provenance_refuses_before_native_child_or_fixture_allocation(self):
         with patch.object(probe.sys,'platform','darwin'),patch.object(probe,'owned_process',side_effect=AssertionError('no child')) as child,\
              patch.object(probe.tempfile,'mkdtemp',side_effect=AssertionError('no fixture')) as allocate:
@@ -82,7 +77,6 @@ class PrivateCredentialContractTests(unittest.TestCase):
         self.assertFalse(result['globalOwnerPreferencesAssessed'] or result['nativeItemCreated'])
         child.assert_not_called();allocate.assert_not_called()
 
-    @proves('MYC-15.8')
     def test_reader_group_cleanup_rejects_unlinked_nonpositive_or_parent_group_without_signals(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)
@@ -94,7 +88,6 @@ class PrivateCredentialContractTests(unittest.TestCase):
                     with self.assertRaises(BuildError):probe._reader_cleanup(root,client_pid=7,reader_sha='a'*64)
                 absent.assert_not_called();kill.assert_not_called()
 
-    @proves('MYC-15.8')
     def test_unknown_reader_attempt_remains_unknown_without_group_adoption(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);(root/'reader-launch-attempt.json').write_text('{}')
@@ -102,7 +95,6 @@ class PrivateCredentialContractTests(unittest.TestCase):
                 self.assertEqual(probe._reader_cleanup(root,client_pid=7,reader_sha='a'*64),(None,True))
             kill.assert_not_called()
 
-    @proves('MYC-15.8')
     def test_invalid_client_admission_never_loads_native_library_or_writes_foreign_root(self):
         from mycel_build import _credential_probe_client as client
         with tempfile.TemporaryDirectory() as temporary:

@@ -13,7 +13,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import run
-from mycel._coverage import proves
 from mycel._credentials import (
     CREDENTIAL_STDERR_LIMIT, CREDENTIAL_STDOUT_LIMIT, SECURITY,
     CredentialUnavailable, Credentials, Secret, StoreTarget,
@@ -52,7 +51,6 @@ class CredentialsTests(unittest.TestCase):
         path.chmod(0o700)
         return path
 
-    @proves("MYC-5.8", "MYC-6.2")
     def test_store_address_is_only_the_password_free_setting_not_parent_environment(self):
         snapshot = self.settings()
         with patch.dict(os.environ, {
@@ -72,7 +70,6 @@ class CredentialsTests(unittest.TestCase):
         self.assertEqual(error.exception.code, "settings")
         self.assertNotIn(ADDRESS, error.exception.message)
 
-    @proves("MYC-5.8", "MYC-6.2", "MYC-5.11")
     def test_password_bearing_addresses_are_refused_before_any_acquisition(self):
         bad_addresses = (
             "postgresql://fixture:" + SENTINEL + "@localhost/fixture",
@@ -94,7 +91,6 @@ class CredentialsTests(unittest.TestCase):
                     self.assertNotIn(SENTINEL, json.dumps(snapshot.report()))
             child.assert_not_called()
 
-    @proves("MYC-5.8", "MYC-5.10", "MYC-5.14")
     def test_keychain_reads_use_fixed_program_service_accounts_and_login_keychain(self):
         calls = []
         def child(argv, **kwargs):
@@ -118,7 +114,6 @@ class CredentialsTests(unittest.TestCase):
         # No create/update/delete command or ACL rewrite belongs to this reader.
         self.assertTrue(all("find-generic-password" in argv for argv, _ in calls))
 
-    @proves("MYC-5.8", "MYC-5.9", "MYC-5.11")
     def test_configured_credential_command_is_literal_argv_with_empty_stdin_and_no_shell(self):
         marker = self.root / "shell-was-started"
         body = ("import json,os,sys\n"
@@ -147,7 +142,6 @@ class CredentialsTests(unittest.TestCase):
         self.assertNotIn(SENTINEL, json.dumps(spawn.call_args.kwargs["env"]))
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["config.toml", "credential-command"])
 
-    @proves("MYC-5.9")
     def test_output_removes_one_final_line_break_without_trimming_any_other_text(self):
         snapshot = self.settings()
         for output, expected in (
@@ -161,7 +155,6 @@ class CredentialsTests(unittest.TestCase):
                                          _runner=lambda *args, **kwargs: completed(output))
                 self.assertEqual(credential.require_embedding_key().reveal(), expected)
 
-    @proves("MYC-5.8", "MYC-5.9", "MYC-5.10", "MYC-5.11", "MYC-5.14")
     def test_failed_access_has_no_secret_or_fallback_and_has_only_sanitized_faults(self):
         for result in (
             completed(SENTINEL.encode(), returncode=1, stderr=SENTINEL.encode()),
@@ -188,7 +181,6 @@ class CredentialsTests(unittest.TestCase):
             self.assertIsNone(Credentials(snapshot, InvocationPolicy("embed")).embedding_key())
             keychain.assert_not_called()
 
-    @proves("MYC-5.9", "MYC-5.11")
     def test_credential_command_deadline_and_output_limits_are_private_failures(self):
         programs = (
             "import time\ntime.sleep(10)\n",
@@ -206,7 +198,6 @@ class CredentialsTests(unittest.TestCase):
                 self.assertNotIn(SENTINEL, error.exception.message)
         self.assertEqual(out.getvalue() + err.getvalue(), "")
 
-    @proves("MYC-5.9", "MYC-5.10", "MYC-5.11")
     def test_unavailable_programs_do_not_expose_paths_outputs_or_environment_fallbacks(self):
         snapshot = self.settings("[embedding]\nkey_command = " + json.dumps([str(self.root / SENTINEL)]) + "\n")
         with patch.dict(os.environ, {"VOYAGE_API_KEY": SENTINEL}), \
@@ -220,7 +211,6 @@ class CredentialsTests(unittest.TestCase):
             credential = Credentials(snapshot, InvocationPolicy("embed"), _runner=fail)
             self.assertIsNone(credential.embedding_key())
 
-    @proves("MYC-5.14", "MYC-5.8")
     def test_reporting_ordinary_commands_and_all_dry_runs_acquire_no_model_credentials(self):
         snapshot = self.settings()
         commands = ("ingest", "read", "status", "repos", "stale", "refs", "drifts",
@@ -248,7 +238,6 @@ class CredentialsTests(unittest.TestCase):
             child.assert_not_called()
             resolve.assert_not_called()
 
-    @proves("MYC-5.14")
     def test_jev_key_requires_explicit_classification_or_live_drift_qualification(self):
         snapshot = self.settings()
         with patch("mycel._credentials.run_child", return_value=completed()) as child:
@@ -260,7 +249,6 @@ class CredentialsTests(unittest.TestCase):
                     Credentials(snapshot, policy).require_jev_key()
             self.assertEqual(child.call_count, 2)
 
-    @proves("MYC-5.8", "MYC-5.10", "MYC-5.14")
     def test_each_invocation_reads_each_needed_credential_only_once_even_when_access_fails(self):
         snapshot = self.settings()
         for result in (completed(), completed(returncode=1, stderr=SENTINEL.encode())):
@@ -280,7 +268,6 @@ class CredentialsTests(unittest.TestCase):
                 Credentials(snapshot, InvocationPolicy("embed")).embedding_key()
                 self.assertEqual(child.call_count, 4)
 
-    @proves("MYC-5.10", "MYC-5.11", "MYC-6.2")
     def test_store_challenge_acquisition_shares_the_callers_remaining_deadline(self):
         calls = []
         def child(argv, **kwargs):
@@ -303,7 +290,6 @@ class CredentialsTests(unittest.TestCase):
                              timeout_seconds=remaining).password)
         self.assertEqual(len(calls), 2)
 
-    @proves("MYC-5.10", "MYC-5.11")
     def test_store_challenge_acquisition_interrupts_and_reaps_its_private_child(self):
         stopped = threading.Event()
         executable = self.script("import time\ntime.sleep(10)\n")
@@ -321,7 +307,6 @@ class CredentialsTests(unittest.TestCase):
                                      timeout_seconds=2, cancelled=stopped.is_set)
         self.assertLess(time.monotonic() - start, 0.75)
 
-    @proves("MYC-5.11", "MYC-6.4", "MYC-5.14")
     def test_secret_and_store_target_formatting_is_redacted_and_children_receive_neither(self):
         secret = Secret(SENTINEL)
         target = StoreTarget(ADDRESS, secret)
@@ -352,7 +337,6 @@ class CredentialsTests(unittest.TestCase):
                 self.assertNotIn(ADDRESS, json.dumps(transport.call_args.kwargs["environment"]))
                 self.assertFalse(set(parent).intersection(transport.call_args.kwargs["environment"]))
 
-    @proves("MYC-5.11", "MYC-6.4")
     def test_plain_grep_receives_neither_store_target_nor_parent_credentials(self):
         grep = self.root / "grep"
         grep.write_text("#!" + sys.executable + "\nimport json,os\nprint(json.dumps(dict(os.environ)))\n")
@@ -371,7 +355,6 @@ class CredentialsTests(unittest.TestCase):
         self.assertNotIn(ADDRESS.encode(), result.stdout + result.stderr)
         self.assertFalse(set(parent).difference({"PATH", "HOME", "LC_ALL"}).intersection(json.loads(result.stdout)))
 
-    @proves("MYC-5.11", "MYC-5.14")
     def test_cli_fault_conversion_does_not_disclose_credential_command_output(self):
         executable = self.script("import sys\nprint('" + SENTINEL + "')\nsys.stderr.write('" + SENTINEL + "')\nsys.exit(4)\n")
         snapshot = self.settings("[embedding]\nkey_command = " + json.dumps([str(executable)]) + "\n")
@@ -399,7 +382,6 @@ class ApiKeyTests(unittest.TestCase):
         self.config = self.root / "config.toml"
         self.config.write_text("[store]\naddress = 'postgresql://fixture@localhost/fixture'\n")
 
-    @proves("MYC-5.16", "MYC-5.11")
     def test_both_api_keys_use_private_pipe_and_explicit_trusted_reader(self):
         from mycel._credentials import store_api_key
         secret = Secret(' public "key" \\ ascii ')
@@ -423,7 +405,6 @@ class ApiKeyTests(unittest.TestCase):
             self.assertGreater(limits["timeout_seconds"], 0)
             self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["config.toml"])
 
-    @proves("MYC-5.16")
     def test_replacement_only_follows_duplicate_without_reading_old_secret(self):
         from mycel._credentials import store_api_key
         calls = []
@@ -438,7 +419,6 @@ class ApiKeyTests(unittest.TestCase):
         self.assertTrue(all(b"find-generic-password" not in request for request in calls))
         self.assertTrue(all(request.count(b"\n") == 1 for request in calls))
 
-    @proves("MYC-5.16", "MYC-5.11")
     def test_write_refusals_are_sanitized_and_do_not_retry_other_faults(self):
         from mycel._credentials import store_api_key
         for codes in ((1,), (36,), (45, 1), (45, 36)):
@@ -458,7 +438,6 @@ class ApiKeyTests(unittest.TestCase):
             store_api_key("jev", Secret(SENTINEL), home=self.root, _runner=fail)
         self.assertEqual(error.exception.code, "refused")
 
-    @proves("MYC-5.16")
     def test_invalid_or_overlong_keys_and_metadata_never_start_security(self):
         from mycel._credentials import store_api_key
         with patch("mycel._credentials.run_child") as child:
@@ -472,7 +451,6 @@ class ApiKeyTests(unittest.TestCase):
                 store_api_key("jev", Secret(SENTINEL), home=self.root / "bad\npath")
             child.assert_not_called()
 
-    @proves("MYC-5.16")
     def test_native_parser_path_quoting_is_not_shell_quoting(self):
         from mycel._credentials import store_api_key
         home = self.root / "space ' quote\" back\\slash"
@@ -485,7 +463,6 @@ class ApiKeyTests(unittest.TestCase):
         expected = '"' + expected.replace('\\', '\\\\').replace('"', '\\"') + '"'
         self.assertTrue(calls[0].endswith((expected + "\n").encode()))
 
-    @proves("MYC-5.16")
     def test_prompt_requires_hidden_terminal_and_nonempty_complete_line(self):
         from mycel._credentials import prompt_api_key
         import getpass
@@ -509,7 +486,6 @@ class ApiKeyTests(unittest.TestCase):
                 patch("mycel._credentials.getpass.getpass", return_value=" exact "):
             self.assertEqual(prompt_api_key("voyage").reveal(), " exact ")
 
-    @proves("MYC-5.16", "MYC-0.6")
     def test_cli_returns_only_item_identity_and_replacement_result(self):
         for provider in ("voyage", "jev"):
             expected = {"stored": provider, "item": {"service": "mycel", "account": provider + "-api-key"}, "replaced": True}
@@ -527,7 +503,6 @@ class ApiKeyTests(unittest.TestCase):
             self.assertEqual(writer.call_args.args[1].reveal(), SENTINEL)
             store.assert_not_called()
 
-    @proves("MYC-5.16", "MYC-0.6")
     def test_cli_invalid_syntax_stops_before_prompt_or_write(self):
         for arguments in ([], ["other"], ["voyage", SENTINEL], ["--repo", "x", "jev"], ["--all", "jev"]):
             out = io.StringIO()
@@ -538,7 +513,6 @@ class ApiKeyTests(unittest.TestCase):
                 writer.assert_not_called()
             self.assertNotIn(SENTINEL, out.getvalue())
 
-    @proves("MYC-5.16")
     def test_hidden_input_in_real_pseudoterminal_and_echo_restoration(self):
         import errno
         import hashlib
@@ -607,7 +581,6 @@ class ApiKeyTests(unittest.TestCase):
                     process.wait(timeout=5)
                 os.close(master)
 
-    @proves("MYC-5.16", "MYC-5.11")
     def test_real_pipe_child_never_receives_key_in_argv_environment_or_files(self):
         import uuid
         from mycel._credentials import store_api_key
@@ -639,7 +612,6 @@ class ApiKeyTests(unittest.TestCase):
                 self.assertNotIn(value.encode(), path.read_bytes())
                 self.assertNotIn(value.encode().hex().encode(), path.read_bytes())
 
-    @proves("MYC-5.16", "MYC-0.6")
     def test_real_cli_without_controlling_terminal_refuses_before_keychain(self):
         environment = {"PATH": os.defpath, "HOME": str(self.root), "MYCEL_CONFIG": str(self.config),
                        "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"), "PYTHONDONTWRITEBYTECODE": "1"}
@@ -650,7 +622,6 @@ class ApiKeyTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["error"]["code"], "invalid_input")
         self.assertNotIn(b"ignored-pipe-input", result.stdout + result.stderr)
 
-    @proves("MYC-5.16")
     def test_help_and_info_name_api_key_and_invalid_settings_prevent_prompt(self):
         out = io.StringIO()
         self.assertEqual(run(["api-key", "--help"], stdout=out), 0)

@@ -14,7 +14,6 @@ import sys
 import unittest
 
 import mycel
-from mycel._coverage import proves
 
 try:
     from . import test_located_reconciliation as fixtures
@@ -23,6 +22,8 @@ except ImportError:
 
 
 class PublicIngestActivityStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.base = fixtures.LocatedReconciliationStoreTests()
         self.base.store_fixture = self.store_fixture
@@ -55,8 +56,6 @@ class PublicIngestActivityStoreTests(unittest.TestCase):
     def history(self):
         return self.invoke('activity', '--repo', 'fixture', '--kind', 'ingest')['entries']
 
-    @proves('MYC-12.1', 'MYC-12.2', 'MYC-12.3', 'MYC-12.4', 'MYC-12.5',
-            'MYC-12.6', 'MYC-12.11', 'MYC-12.12', kind='store')
     def test_public_ingest_history_and_detail_match_exact_reply_and_quiet_pass_is_silent(self):
         code = self.base.code / 'answer.py'
         code.write_bytes(b'def answer():\n    return 42\n')
@@ -93,7 +92,6 @@ class PublicIngestActivityStoreTests(unittest.TestCase):
                       edit_detail['files'])
         self.assertIn('edited', {d['decision'] for d in edit_detail['decisions']})
 
-    @proves('MYC-12.8', 'MYC-1.22', kind='store')
     def test_public_audit_failure_rolls_back_publication_and_missing_identity_never_downgrades(self):
         self.identity.unlink()
         missing = self.invoke('ingest', '--repo', 'fixture', status=1)

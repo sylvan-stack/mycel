@@ -11,14 +11,12 @@ from unittest.mock import patch
 from mycel import _activity as activity, _store as store
 from mycel._build_identity import current_build
 from mycel._cli import run
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._locks import bootstrap_invocation_guard, invocation_is_live
 from mycel._settings import load_settings
 
 
 class BuildIdentityTests(unittest.TestCase):
-    @proves('MYC-15.2', 'MYC-0.9')
     def test_development_has_no_number_and_exact_package_identity_ignores_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -32,7 +30,6 @@ class BuildIdentityTests(unittest.TestCase):
                 with patch.dict('os.environ', {'MYCEL_BUILD': '99', 'BUILD_NUMBER': '99'}):
                     self.assertEqual(current_build(), 26)
 
-    @proves('MYC-15.2', 'MYC-0.7')
     def test_damaged_identity_never_falls_back_to_a_number(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -52,7 +49,6 @@ class BuildIdentityTests(unittest.TestCase):
                     self.assertEqual(error.exception.code, 'internal')
                     self.assertNotIn('private-sentinel', str(error.exception))
 
-    @proves('MYC-15.2', 'MYC-0.7')
     def test_missing_installed_identity_and_isolated_development_marker_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -68,6 +64,8 @@ class BuildIdentityTests(unittest.TestCase):
 
 
 class InitActivityStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     initialize_store = staticmethod(lambda backend, settings_file: None)
 
     def connect(self):
@@ -96,7 +94,6 @@ class InitActivityStoreTests(unittest.TestCase):
     def entries(self, connection):
         return connection.execute('SELECT id FROM public.mycel_activity ORDER BY id').fetchall()
 
-    @proves('MYC-12.1', 'MYC-12.3', 'MYC-12.4', 'MYC-12.7', 'MYC-12.14', kind='store')
     def test_actual_empty_init_commits_global_exact_reply_audit_with_liveness_until_commit(self):
         original = activity._execute
         witnessed = []
@@ -127,7 +124,6 @@ class InitActivityStoreTests(unittest.TestCase):
             self.assertEqual(run(['info'], stdout=out, stderr=io.StringIO()), 0)
         self.assertEqual(json.loads(out.getvalue())['build'], '1a')
 
-    @proves('MYC-12.2', 'MYC-12.4', kind='store')
     def test_actual_compatible_init_is_noop_and_dimensions_audit_uses_its_reply(self):
         with self.package():
             self.assertEqual(self.invoke()[0], 0)
@@ -148,7 +144,6 @@ class InitActivityStoreTests(unittest.TestCase):
             self.assertEqual(len(rows), 2)
             self.assertEqual(activity.activity_state(connection, rows[-1][0])['counts'], reply)
 
-    @proves('MYC-12.7', 'MYC-12.8', kind='store')
     def test_native_audit_failure_rolls_back_entire_empty_bootstrap_and_releases_locks(self):
         original = activity._execute
         def fail(connection, sql, parameters=None):
@@ -165,7 +160,6 @@ class InitActivityStoreTests(unittest.TestCase):
         with self.package():
             self.assertEqual(self.invoke()[0], 0)
 
-    @proves('MYC-12.7', 'MYC-12.8', kind='store')
     def test_native_audit_close_failure_rolls_back_dimension_and_keeps_prior_entry(self):
         with self.package():
             self.assertEqual(self.invoke()[0], 0)
@@ -182,7 +176,6 @@ class InitActivityStoreTests(unittest.TestCase):
             self.assertEqual(len(self.entries(connection)), 1)
             self.assertEqual(activity.activity_state(connection, self.entries(connection)[0][0])['outcome'], 'done')
 
-    @proves('MYC-12.8', kind='store')
     def test_bad_packaged_identity_refuses_before_schema_change_and_bootstrap_requires_guard(self):
         with self.package('{"schemaVersion":1,"build":true}'):
             status, reply = self.invoke()
@@ -196,7 +189,6 @@ class InitActivityStoreTests(unittest.TestCase):
                         self.fail('No exclusive guard was held')
                 self.assertEqual(error.exception.code, 'internal')
 
-    @proves('MYC-12.8', kind='store')
     def test_native_invocation_bootstrap_failure_is_internal_and_leaves_empty_store(self):
         def fail(connection, identifier, key):
             connection.execute('INSERT INTO public.mycel_missing_invocations VALUES (%s)', (identifier,))
@@ -206,7 +198,6 @@ class InitActivityStoreTests(unittest.TestCase):
         with self.connect() as connection:
             self.assertEqual(store.inspect_store(connection).state, 'empty')
 
-    @proves('MYC-12.8', kind='store')
     def test_missing_installed_identity_cannot_silently_initialize_without_audit(self):
         with self.package():
             (self.store_fixture.root / 'fictional-package/data/build-identity.json').unlink()

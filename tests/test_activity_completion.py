@@ -8,12 +8,13 @@ from psycopg.types.json import Jsonb
 
 from mycel import _activity as activity
 from mycel import _locks as locks
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._source_refs import SourceAddress
 
 
 class ActivityCompletionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def connect(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)
 
@@ -32,7 +33,6 @@ class ActivityCompletionStoreTests(unittest.TestCase):
         return connection.execute('SELECT id,repository,kind,outcome,counts '
                                   'FROM public.mycel_activity ORDER BY id').fetchall()
 
-    @proves('MYC-12.1', 'MYC-12.2', 'MYC-12.3', 'MYC-12.4', 'MYC-12.13', kind='store')
     def test_every_kind_keeps_one_changed_scope_and_exact_complete_final_reply(self):
         with self.connect() as connection, self.connect() as observer:
             self.seed(connection)
@@ -76,7 +76,6 @@ class ActivityCompletionStoreTests(unittest.TestCase):
                 self.assertEqual(row[4]['reply']['items'], [row[2], None, True])
                 self.assertEqual((row[1] is None), row[2] in {'init', 'remove'})
 
-    @proves('MYC-12.3', 'MYC-12.4', 'MYC-12.7', kind='store')
     def test_refusal_closes_applied_prefix_with_command_error_and_exact_counts(self):
         with self.connect() as connection:
             self.seed(connection)
@@ -95,7 +94,6 @@ class ActivityCompletionStoreTests(unittest.TestCase):
             self.assertIsNotNone(detail['endedAt'])
             self.assertFalse(locks.invocation_is_live(connection, invocation))
 
-    @proves('MYC-12.4', 'MYC-12.7', 'MYC-12.8', kind='store')
     def test_final_replies_validate_before_write_and_late_native_close_rolls_back_all_scopes(self):
         with self.connect() as connection, self.connect() as observer:
             self.seed(connection)
@@ -135,7 +133,6 @@ class ActivityCompletionStoreTests(unittest.TestCase):
             for row in self.rows(observer):
                 self.assertEqual(row[3:], ('done', final[(row[1], row[2])]))
 
-    @proves('MYC-12.4', 'MYC-12.7', 'MYC-12.8', 'MYC-12.13', kind='store')
     def test_classification_references_rollback_with_native_detail_fault_and_keep_only_summaries(self):
         with self.connect() as connection:
             self.seed(connection)
@@ -178,7 +175,6 @@ class ActivityCompletionStoreTests(unittest.TestCase):
             self.assertEqual((detail['files'], detail['decisions']), ([], []))
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_evidence_owners').fetchone()[0], 0)
 
-    @proves('MYC-12.5', 'MYC-12.6', 'MYC-12.7', kind='store')
     def test_added_changed_removed_files_and_all_identity_decisions_keep_exact_locations(self):
         with self.connect() as connection:
             self.seed(connection)
@@ -204,7 +200,6 @@ class ActivityCompletionStoreTests(unittest.TestCase):
             self.assertEqual(detail['decisions'][3]['previousName'], 'Before')
             self.assertEqual(detail['decisions'][-2]['location'], 'stash-commit')
 
-    @proves('MYC-12.7', 'MYC-12.14', kind='store')
     def test_running_and_unfinished_diagnostics_execute_read_only_without_changing_rows(self):
         with self.connect() as connection, self.connect() as observer:
             self.seed(connection)

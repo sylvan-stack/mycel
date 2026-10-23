@@ -10,7 +10,6 @@ import warnings
 
 import numpy as np
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._resolver import ResolvedChunk, SelectionMember
 from mycel._source_refs import SourceAddress
@@ -55,7 +54,6 @@ class _Mixture:
 
 
 class SummaryGroupingTests(unittest.TestCase):
-    @proves("MYC-8.3", "MYC-8.24")
     def test_zero_one_two_and_multipart_means_keep_canonical_members(self):
         self.assertEqual(group_summary_nodes(()), ())
         first = node(1, path="same.md", position=10)
@@ -67,7 +65,6 @@ class SummaryGroupingTests(unittest.TestCase):
         self.assertEqual(GROUPING_PROFILE, "mycel-summary-v1")
         self.assertEqual(set(numerical_versions()), {"numpy", "scipy", "scikit-learn"})
 
-    @proves("MYC-8.3", "MYC-8.24")
     def test_real_pca_mixture_is_repeatable_and_input_order_independent(self):
         nodes = tuple(node(number, tuple((40.0 if column == number // 8 else 0.0)
                     + ((number % 8) - 3.5) * (column + 1) / 100
@@ -80,7 +77,6 @@ class SummaryGroupingTests(unittest.TestCase):
         self.assertEqual({frozenset(member.key for member in group) for group in first},
                          {frozenset(str(number) for number in range(start, start + 8)) for start in (0, 8, 16)})
 
-    @proves("MYC-8.24")
     def test_uncached_real_numerical_fit_starts_no_child_and_restores_openmp_environment(self):
         import joblib.externals.loky.backend.context as cpu_context
         nodes = tuple(node(number, (number / 10, 1.0)) for number in range(11))
@@ -112,7 +108,6 @@ class SummaryGroupingTests(unittest.TestCase):
                 group_summary_nodes(nodes)
             self.assertEqual(os.environ["OMP_NUM_THREADS"], "7")
 
-    @proves("MYC-8.24")
     def test_duplicate_constant_vectors_use_valid_finite_fit_without_warning_output(self):
         nodes = tuple(node(number, (1, 1)) for number in range(11))
         with warnings.catch_warnings(record=True) as seen:
@@ -120,7 +115,6 @@ class SummaryGroupingTests(unittest.TestCase):
             self.assertEqual(group_summary_nodes(nodes), (nodes,))
         self.assertEqual(seen, [])
 
-    @proves("MYC-8.24")
     def test_exact_profile_pca_dimensions_candidate_range_and_smaller_bic_tie(self):
         nodes = tuple(node(number, tuple(float(number + column) for column in range(12))) for number in range(24))
         mixtures, reductions = [], []
@@ -149,7 +143,6 @@ class SummaryGroupingTests(unittest.TestCase):
             group_summary_nodes(nodes[:3])
         self.assertEqual(reductions[-1], {"n_components": 2, "random_state": 0})
 
-    @proves("MYC-8.24")
     def test_overlap_inclusive_threshold_argmax_tie_and_empty_components(self):
         nodes = tuple(node(number) for number in range(89))
         probability = np.zeros((89, 11))
@@ -169,7 +162,6 @@ class SummaryGroupingTests(unittest.TestCase):
         self.assertEqual(choices, list(range(1, 13)))
         self.assertEqual(groups, ((nodes[0], nodes[1]), (nodes[0],), nodes[2:]))
 
-    @proves("MYC-8.24")
     def test_candidate_component_cap_is_150(self):
         nodes = tuple(node(number) for number in range(1201))
         calls = []
@@ -182,7 +174,6 @@ class SummaryGroupingTests(unittest.TestCase):
             self.assertEqual(group_summary_nodes(nodes), (nodes,))
         self.assertEqual(calls, list(range(1, 151)))
 
-    @proves("MYC-8.24")
     def test_invalid_vectors_and_fit_failure_are_reported_without_fallback(self):
         for value in ((math.inf,), (math.nan,), (), (True,), ("1",)):
             with self.assertRaises(MycelError) as caught:
@@ -205,7 +196,6 @@ class SummaryGroupingTests(unittest.TestCase):
                 with self.assertRaises(MycelError):
                     group_summary_nodes(tuple(node(number) for number in range(3)))
 
-    @proves("MYC-8.4")
     def test_top_target_singleton_promotion_and_no_summary_stop(self):
         nodes = tuple(node(number) for number in range(11))
         with patch("mycel._summary_grouping.group_summary_nodes") as grouping:
@@ -226,7 +216,6 @@ class SummaryGroupingTests(unittest.TestCase):
         self.assertEqual(no_summaries.requests, 0)
         self.assertEqual(no_summaries.levels[0].moved_up, nodes)
 
-    @proves("MYC-8.4")
     def test_five_level_limit_and_estimated_mean_nodes(self):
         nodes = tuple(node(number, (number + 1, -number)) for number in range(11))
         seen = []
@@ -246,7 +235,6 @@ class SummaryGroupingTests(unittest.TestCase):
         self.assertEqual(plan.report()["groupingProfile"], GROUPING_PROFILE)
         self.assertEqual(plan.report()["numericalVersions"], numerical_versions())
 
-    @proves("MYC-8.4", "MYC-8.24")
     def test_numbering_sorts_complete_member_lists_after_component_order_and_splitting(self):
         nodes = tuple(node(number) for number in range(11))
         # Overlapping groups have component order unrelated to source order.
@@ -262,7 +250,6 @@ class SummaryGroupingTests(unittest.TestCase):
                          (nodes[:2], nodes[2:6], nodes[4:6], nodes[6:]))
         self.assertEqual([group.summary.place.name for group in level.groups], ["1/1", "1/2", "1/3", "1/4"])
 
-    @proves("MYC-8.4", "MYC-8.10")
     def test_real_request_splits_count_each_part_without_promoting_cut_parts(self):
         nodes = tuple(node(number, text=f"# Section{number}\n" + "雪🙂" * 12000) for number in range(11))
         prompts = SummaryPrompts(b"instruction", b"task\n$sections", "fixture")
@@ -283,7 +270,6 @@ class SummaryGroupingTests(unittest.TestCase):
         self.assertEqual(tuple(member for group in plan.levels[0].groups for member in group.members), nodes)
         self.assertTrue(all(group.summary.section is None for group in plan.levels[0].groups))
 
-    @proves("MYC-8.4")
     def test_invalid_split_cannot_omit_duplicate_reorder_or_substitute_members(self):
         nodes = tuple(node(number) for number in range(11))
         splits = ((), (nodes[:-1],), (nodes, nodes[:1]), (tuple(reversed(nodes)),),

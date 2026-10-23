@@ -13,7 +13,6 @@ from uuid import uuid4
 from psycopg.types.json import Jsonb
 
 from mycel._capture import capture_repository
-from mycel._coverage import proves
 from mycel._dependency_application import DependencyApplicationStore, RetainedDependencyResolver
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceError, PinInputs
@@ -33,7 +32,6 @@ except ImportError:
 
 
 class RetainedResolverUnitTests(unittest.TestCase):
-    @proves('MYC-13.15')
     def test_policy_wrappers_reuse_validated_catalog_bytes_and_keep_selection_rules(self):
         from mycel import _resolver
         try:
@@ -63,6 +61,8 @@ class RetainedResolverUnitTests(unittest.TestCase):
 
 
 class DependencyApplicationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.LocatedReconciliationStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -130,7 +130,6 @@ class DependencyApplicationStoreTests(unittest.TestCase):
         return connection.execute('SELECT id,dependant_version,declaration,source_place,state,baseline_owner '
             'FROM public.mycel_dependencies ORDER BY id').fetchall()
 
-    @proves('MYC-2.9', 'MYC-2.6', 'MYC-16.5', 'MYC-16.11', kind='store')
     def test_aliases_and_duplicates_keep_one_location_baseline_and_removal_releases_only_disk(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -153,7 +152,6 @@ class DependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual(surviving[0][4]['declarationLocation']['kind'], 'branch')
             self.assertEqual(released.counts['dependenciesReleased'], 1)
 
-    @proves('MYC-2.6', 'MYC-16.5', 'MYC-16.11', kind='store')
     def test_assertions_match_alias_and_remove_only_the_requested_selection(self):
         self.prepare(declared=False)
         with self.fixture.connect() as connection:
@@ -175,7 +173,6 @@ class DependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual(remaining[0][3], 'fixture:@artifact/source.md')
             self.assertIn((remaining[0][0], remaining[0][5]), {(row[0], row[5]) for row in before})
 
-    @proves('MYC-16.7', 'MYC-16.13', kind='store')
     def test_file_selection_absent_on_disk_is_away_while_branch_file_survives(self):
         self.prepare(file_selection=True)
         with self.fixture.connect() as connection:
@@ -191,7 +188,6 @@ class DependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual([(row[0], row[5]) for row in self.rows(connection)],
                              [(row[0], row[5]) for row in before])
 
-    @proves('MYC-2.6', 'MYC-16.9', kind='store')
     def test_incomplete_baseline_owner_graph_refuses_without_fresh_capture(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -205,7 +201,6 @@ class DependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.status, 'baseline_missing')
             self.assertEqual(self.rows(connection), before)
 
-    @proves('MYC-2.11', 'MYC-2.6', 'MYC-16.13', kind='store')
     def test_generated_authority_is_included_in_the_complete_cycle_check(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -225,7 +220,6 @@ class DependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.cycle[0], error.exception.cycle[-1])
             self.assertEqual(self.rows(connection), before)
 
-    @proves('MYC-2.11', 'MYC-2.6', 'MYC-16.13', kind='store')
     def test_index_generation_edges_cannot_hide_a_cycle_from_an_unrelated_document(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -254,7 +248,6 @@ class DependencyApplicationStoreTests(unittest.TestCase):
             self.assertIn(str(index_id), error.exception.cycle)
             self.assertEqual(self.rows(connection), before)
 
-    @proves('MYC-16.13', kind='store')
     def test_incomplete_and_expired_batch_tokens_cannot_hide_pending_authority(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -281,7 +274,6 @@ class DependencyApplicationStoreTests(unittest.TestCase):
                     self.apply(connection, batch=batch)
             self.assertEqual(self.rows(connection), before)
 
-    @proves('MYC-16.13', kind='store')
     def test_no_transaction_no_guards_and_foreign_version_refuse_before_mutation(self):
         self.prepare()
         with self.fixture.connect() as connection:

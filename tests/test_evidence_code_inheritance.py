@@ -11,7 +11,6 @@ from psycopg.types.json import Jsonb
 
 from mycel import _evidence as evidence
 from mycel._code import chunk_code
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._locks import atomic_transaction
 from mycel._resolver import ResolvedChunk, ResolvedFile, SourceResolver
@@ -54,7 +53,6 @@ def pair(old, new, old_name='old', new_name='new', *, path='answer.py'):
 
 
 class CodeInheritanceUnitTests(unittest.TestCase):
-    @proves('MYC-13.15')
     def test_invalid_pin_options_refuse_before_guard_or_reread(self):
         inputs = fixtures.inputs()
         writer = evidence.EvidenceStore(object())
@@ -67,7 +65,6 @@ class CodeInheritanceUnitTests(unittest.TestCase):
                     side_effect=AssertionError('invalid options reached the guard')), self.assertRaises(evidence.EvidenceError):
                 writer.pin(inputs, lambda: self.fail('invalid options reached reread'), **{**valid, **changed})
 
-    @proves('MYC-13.15')
     def test_function_and_method_renames_keep_source_pin_and_exact_new_comparison(self):
         examples = (
             ('# prefix\ndef old(x):\n    return x + 1\n', '# prefix\ndef new(x):\n    return x + 1\n', 'old', 'new', 'answer.py'),
@@ -93,7 +90,6 @@ class CodeInheritanceUnitTests(unittest.TestCase):
                                  current.dependant.chunk.comparison)
                 self.assertEqual(inherited.manifest.payload['dependantVersion'], str(current.dependant.chunk.version))
 
-    @proves('MYC-13.15')
     def test_changed_signature_body_comment_or_line_endings_never_inherit(self):
         old = '# prefix\ndef old(x):\n    return x + 1\n'
         changes = ('# prefix\ndef new(y):\n    return x + 1\n',
@@ -115,7 +111,6 @@ class CodeInheritanceUnitTests(unittest.TestCase):
                 evidence.inherit_baseline(fixtures.capture(previous), current.dependant, current.dependant_file,
                     authorization='recognized_rename', previous_file_source=previous.dependant_file.source)
 
-    @proves('MYC-13.15')
     def test_code_rename_requires_authorization_complete_old_file_and_fresh_parse_spans(self):
         previous, current = pair('# prefix\ndef old(x):\n    return x\n', '# prefix\ndef new(x):\n    return x\n')
         baseline = fixtures.capture(previous)
@@ -135,6 +130,8 @@ class CodeInheritanceUnitTests(unittest.TestCase):
 
 
 class CodeInheritanceStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def connect(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)
 
@@ -180,7 +177,6 @@ class CodeInheritanceStoreTests(unittest.TestCase):
         current = self.seed(connection, current)
         return writer, dependency, baseline, previous, current
 
-    @proves('MYC-1.34', 'MYC-2.26', 'MYC-16.5', kind='store')
     def test_both_wrappers_preserve_code_rename_pin_with_new_exact_version(self):
         with self.connect() as connection:
             writer, previous, original, old, current = self.prepare(connection,
@@ -207,7 +203,6 @@ class CodeInheritanceStoreTests(unittest.TestCase):
                 self.assertEqual(result.manifest.payload['dependantVersion'], str(current.dependant.chunk.version))
                 self.assertNotEqual(result.manifest.payload['dependant']['hash'], baseline.manifest.payload['dependant']['hash'])
 
-    @proves('MYC-2.26', 'MYC-16.5', kind='store')
     def test_changed_code_refuses_without_writing_or_renewing_owner(self):
         with self.connect() as connection:
             writer, previous, original, _, current = self.prepare(connection, new='def new(x):\n    return x + 1\n')
@@ -225,7 +220,6 @@ class CodeInheritanceStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT baseline_owner FROM public.mycel_dependencies WHERE id=%s', (previous,)).fetchone(), before)
             self.assertEqual(writer.read_baseline('owner', original).manifest.identifier, original)
 
-    @proves('MYC-16.5', kind='store')
     def test_prior_complete_file_lock_is_nonblocking_and_missing_file_is_not_substituted(self):
         with self.connect() as connection, self.connect() as blocker:
             writer, previous, original, old, current = self.prepare(connection)

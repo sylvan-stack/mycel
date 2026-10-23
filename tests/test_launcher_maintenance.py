@@ -12,7 +12,6 @@ import time
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel_build import _launcher_runtime as launcher
 from mycel_build import _maintenance as maintenance_api
 from mycel_build._core import BuildError, atomic_json
@@ -58,7 +57,6 @@ def peer_prune(fixture, number):
 
 
 class LauncherMaintenanceTests(unittest.TestCase):
-    @proves('MYC-15.9', kind='unit')
     def test_uncertain_lock_or_unrecorded_bootstrap_ownership_refuses_before_marking_or_deleting(self):
         for damage in ('missing-lock', 'linked-lock', 'hardlinked-lock', 'unrecorded-bundle'):
             with self.subTest(damage=damage), tempfile.TemporaryDirectory() as directory:
@@ -83,7 +81,6 @@ class LauncherMaintenanceTests(unittest.TestCase):
                 self.assertEqual(tree_state(fixture.base), before)
                 self.assertNotIn('prunedAt', json.loads((folder / 'build.json').read_bytes()))
 
-    @proves('MYC-15.9', kind='unit')
     def test_second_program_tree_partial_prune_retries_without_removing_installed_independent_bundle_or_metadata(self):
         try:
             from .test_launcher_installation import bundle_fixture
@@ -129,7 +126,6 @@ class LauncherMaintenanceTests(unittest.TestCase):
             self.assertEqual(tree_state(fixture.registry / '2'), sibling_before)
             self.assertTrue(Path(installed['bundle']).is_dir())
 
-    @proves('MYC-15.9', kind='unit')
     def test_late_withdrawal_failure_or_interrupt_reports_actual_persisted_record_without_hiding_cutover(self):
         for failure in (OSError, KeyboardInterrupt):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
@@ -165,7 +161,6 @@ class LauncherMaintenanceTests(unittest.TestCase):
                 finally:
                     os.close(selected.run_fd)
 
-    @proves('MYC-15.6', 'MYC-15.9', kind='unit')
     def test_registry_maintenance_makes_selection_and_other_release_mutations_immediately_busy(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -187,7 +182,6 @@ class LauncherMaintenanceTests(unittest.TestCase):
                     self.assertLess(time.monotonic() - start, 1)
             self.assertEqual(tree_state(fixture.registry), before)
 
-    @proves('MYC-15.6', 'MYC-15.9', kind='unit')
     def test_registry_shared_lock_covers_selection_until_actual_run_lock_is_acquired(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -223,7 +217,6 @@ class LauncherMaintenanceTests(unittest.TestCase):
                 os.close(selected.run_fd)
             self.assertTrue(maintenance_api.prune(fixture.registry, '1')['pruneComplete'])
 
-    @proves('MYC-15.7', 'MYC-15.9', kind='unit')
     def test_real_exec_retains_readonly_run_lock_through_withdrawal_until_process_exit(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -258,7 +251,6 @@ class LauncherMaintenanceTests(unittest.TestCase):
             self.assertEqual({name: (folder / name).read_bytes() for name in retained}, retained)
             self.assertTrue((fixture.registry / '1/program').is_dir())
 
-    @proves('MYC-15.9', kind='unit')
     def test_only_explicit_failed_or_withdrawn_program_is_removed_without_touching_siblings_or_link_targets(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -297,7 +289,6 @@ class LauncherMaintenanceTests(unittest.TestCase):
                     self.assertEqual((fixture.registry / '3' / name).read_bytes(), raw)
             self.assertEqual(read_record(fixture.registry, '3')['build'], '3')
 
-    @proves('MYC-15.6', 'MYC-15.9', kind='unit')
     def test_partial_prune_stays_unavailable_and_explicit_retry_preserves_original_time_and_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)

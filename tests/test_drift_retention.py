@@ -12,7 +12,6 @@ from mycel._activity import AppliedMutation, ClassificationReference, MutationAc
 from mycel._classification_payload import DecisionPayload, EvidenceBundle
 from mycel._classification_store import ClassificationStore
 from mycel._collection import CollectionStore
-from mycel._coverage import proves
 from mycel._drift_retention import DriftHistoryStore
 from mycel._drift_store import DriftStore
 from mycel._derive import DeriveStore
@@ -29,6 +28,8 @@ except ImportError:
 
 
 class DriftRetentionStoreTests(ClassificationStoreFixture):
+    check_kind = "store"
+
     def guarded(self, connection):
         stack = ExitStack()
         for name in sorted(self.base.settings.values['repos']):
@@ -83,7 +84,6 @@ class DriftRetentionStoreTests(ClassificationStoreFixture):
         DriftHistoryStore(connection).retain_live_references_in_transaction(row, row[5])
         return histories
 
-    @proves('MYC-14.10', 'MYC-16.10', 'MYC-16.11', kind='store')
     def test_public_writers_deduplicate_returning_inputs_and_remove_collected_metadata(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -120,7 +120,6 @@ class DriftRetentionStoreTests(ClassificationStoreFixture):
                                 if item.get('bundle')))
             self.assertFalse(any(item.get('inputHash') == hashes[1] for item in current['history']))
 
-    @proves('MYC-14.10', 'MYC-16.10', 'MYC-16.11', kind='store')
     def test_restored_reason_reappearance_reuses_its_complete_owning_archive(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -152,7 +151,6 @@ class DriftRetentionStoreTests(ClassificationStoreFixture):
             self.assertIsNotNone(EvidenceStore(connection).read_snapshot('downstream',
                 snapshot(prepared.decision.canonical_bytes).evidence))
 
-    @proves('MYC-14.10', 'MYC-16.10', 'MYC-16.11', kind='store')
     def test_located_ended_work_without_live_suppression_obeys_closed_history_bound(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -175,7 +173,6 @@ class DriftRetentionStoreTests(ClassificationStoreFixture):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_drifts WHERE closed_at IS NOT NULL').fetchone(), (1,))
             self.assertEqual(EvidenceStore(connection).read_baseline('downstream', baseline_id), baseline)
 
-    @proves('MYC-14.10', 'MYC-16.10', 'MYC-16.11', kind='store')
     def test_owner_withdrawal_retires_supported_pair_and_bounds_open_work_history(self):
         paths = [self.base.artifact / ('asserted-' + name + '.md') for name in ('a', 'b')]
         refs = ['fixture:@artifact/' + path.name + '#Asserted' for path in paths]
@@ -240,7 +237,6 @@ class DriftRetentionStoreTests(ClassificationStoreFixture):
             self.assertIsNone(connection.execute('SELECT 1 FROM public.mycel_snapshots WHERE repository=%s AND hash=%s',
                                                 ('downstream', prepared[0].input_hash)).fetchone())
 
-    @proves('MYC-14.10', 'MYC-16.10', 'MYC-16.11', 'MYC-13.18', kind='store')
     def test_1001_closed_bundles_use_closure_time_full_id_and_keep_live_owners(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -282,7 +278,6 @@ class DriftRetentionStoreTests(ClassificationStoreFixture):
             self.assertEqual(removed['records'], 1)
             self.assertIsNone(self.row(connection, oldest))
 
-    @proves('MYC-14.10', 'MYC-16.10', 'MYC-16.11', 'MYC-13.18', kind='store')
     def test_live_stage_protects_old_bundle_late_result_and_collects_after_lease_ends(self):
         with self.base.connect() as connection, self.base.connect() as writer:
             prepared = self.prepare(connection)
@@ -314,7 +309,6 @@ class DriftRetentionStoreTests(ClassificationStoreFixture):
                                             ('downstream', prepared.input_hash)).fetchone())
             self.assertEqual(writer.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='classification_lease'").fetchone(), (0,))
 
-    @proves('MYC-14.10', 'MYC-16.10', kind='store')
     def test_current_closed_suppression_report_and_activity_pruning_preserve_evidence(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -343,7 +337,6 @@ class DriftRetentionStoreTests(ClassificationStoreFixture):
             self.assertIsNotNone(connection.execute('SELECT 1 FROM public.mycel_snapshots WHERE repository=%s AND hash=%s',
                                                    ('downstream', prepared.input_hash)).fetchone())
 
-    @proves('MYC-14.10', 'MYC-16.11', kind='store')
     def test_archive_prune_release_and_collection_are_guarded_and_roll_back_together(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -359,7 +352,6 @@ class DriftRetentionStoreTests(ClassificationStoreFixture):
             self.assertEqual(self.fixture.state(connection), before)
             self.assertEqual(self.row(connection, row[0]), row)
 
-    @proves('MYC-14.10', 'MYC-16.11', kind='store')
     def test_repository_removal_requires_ended_mutations_and_preserves_foreign_dependant_bytes(self):
         with self.base.connect() as connection, self.base.connect() as peer:
             prepared = self.prepare(connection)

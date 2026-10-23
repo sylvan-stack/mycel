@@ -12,7 +12,6 @@ from unittest.mock import patch
 from psycopg.types.json import Jsonb
 
 from mycel._cli import run
-from mycel._coverage import proves
 from mycel._declared_refs import DeclaredRefStore
 from mycel._errors import MycelError
 from mycel._settings import load_settings
@@ -43,7 +42,6 @@ def store_state(connection):
 
 
 class RefsCliTests(unittest.TestCase):
-    @proves("MYC-0.6", "MYC-0.7", "MYC-0.10")
     def test_invalid_args_help_and_unknown_scope_stop_before_store_or_provider_access(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.toml"
@@ -70,7 +68,6 @@ class RefsCliTests(unittest.TestCase):
                 classifier.assert_not_called()
                 child.assert_not_called()
 
-    @proves("MYC-0.6", "MYC-0.7")
     def test_preflight_failures_have_one_closed_error_and_stops_have_status_two(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.toml"
@@ -88,6 +85,8 @@ class RefsCliTests(unittest.TestCase):
 
 
 class RefsStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def configured(self, root, repositories, *, organizations=""):
         original = load_settings(path=self.store_fixture.settings_file)
         config = root / "report.toml"
@@ -100,7 +99,6 @@ class RefsStoreTests(unittest.TestCase):
         config.write_text(text + organizations)
         return config, load_settings(path=config)
 
-    @proves("MYC-2.6", "MYC-1.28", kind="store")
     def test_public_report_preserves_every_occurrence_fault_and_canonical_candidate_without_writes(self):
         text = ('---\nsources: ["malformed\\0ref", "source:@artifact/found.md#Found"]\n---\n'
                 '# Answer\n<!-- sources:\n  not a ref  \nunknown:path\ndisabled:path\n'
@@ -162,7 +160,6 @@ class RefsStoreTests(unittest.TestCase):
                 self.assertEqual(store_state(connection), before)
                 self.assertEqual(config.read_bytes(), config_before)
 
-    @proves("MYC-2.6", "MYC-1.28", kind="store")
     def test_scope_preserves_partial_errors_expands_organizations_and_reads_absent_folders(self):
         text = "# Answer\n<!-- sources:\nunknown:path\n-->\n"
         with tempfile.TemporaryDirectory() as directory:
@@ -196,7 +193,6 @@ class RefsStoreTests(unittest.TestCase):
                 self.assertEqual([row["repository"] for row in implicit["repositories"]], ["one", "two"])
                 self.assertEqual(store_state(connection), before)
 
-    @proves("MYC-2.6", "MYC-1.28", kind="store")
     def test_unchecked_and_missing_owner_are_reported_without_fabricating_locations_or_retrying(self):
         text = "# Answer\n<!-- sources:\nunknown:path\n-->\n"
         with tempfile.TemporaryDirectory() as directory:
@@ -221,7 +217,6 @@ class RefsStoreTests(unittest.TestCase):
                 self.assertEqual(missing["location"], {"id": location, "kind": "disk", "name": "disk"})
                 self.assertEqual(store_state(connection), before)
 
-    @proves("MYC-0.8", "MYC-1.28", kind="store")
     def test_wrong_format_and_structure_contention_refuse_without_repair_or_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -237,7 +232,6 @@ class RefsStoreTests(unittest.TestCase):
                 self.assertEqual((status, reply["error"]["code"], stderr), (1, "store_format", ""))
                 self.assertEqual(store_state(connection), before)
 
-    @proves("MYC-2.6", "MYC-1.28", kind="store")
     def test_each_retained_location_reports_its_own_name_and_binding_for_a_shared_exact_version(self):
         text = "# Answer\n<!-- sources:\nunknown:path\n-->\n"
         with tempfile.TemporaryDirectory() as directory:
@@ -263,7 +257,6 @@ class RefsStoreTests(unittest.TestCase):
                 self.assertEqual(refs[branch]["location"]["kind"], "branch")
                 self.assertEqual(store_state(connection), before)
 
-    @proves("MYC-1.28", kind="store")
     def test_all_repository_reports_share_one_database_enforced_readonly_snapshot(self):
         text = "# Answer\n<!-- sources:\nunknown:path\n-->\n"
         with tempfile.TemporaryDirectory() as directory:
@@ -305,6 +298,8 @@ class RefsStoreTests(unittest.TestCase):
 
 
 class RefsProducerStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = producer_fixtures.LocatedDeclarationTransactionStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -313,7 +308,6 @@ class RefsProducerStoreTests(unittest.TestCase):
         self.fixture.prepare()
         self.base = self.fixture.fixture
 
-    @proves("MYC-2.6", "MYC-1.28", kind="store")
     def test_complete_producer_reports_all_equivalent_and_malformed_occurrences_per_location(self):
         text = (b'---\nsources: ["fixture:@artifact/source.md#Source", "fixture:@artifact/source.md#Source", '
                 b'"malformed\\0ref", "not a ref"]\n---\n# Guide\nPlain body.\n'

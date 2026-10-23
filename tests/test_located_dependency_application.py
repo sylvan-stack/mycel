@@ -4,7 +4,6 @@ import unittest
 
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import capture_repository
-from mycel._coverage import proves
 from mycel._declared_refs import _text
 from mycel._evidence import EvidenceStore
 from mycel._located_dependencies import LocatedDependencyProducer
@@ -19,6 +18,8 @@ except ImportError:
 
 
 class LocatedDependencyApplicationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.LocatedDeclarationTransactionStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -45,7 +46,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
     def manifest(self, connection, row):
         return EvidenceStore(connection).read_baseline('fixture', row[6]).manifest.payload
 
-    @proves('MYC-2.9', 'MYC-16.5', 'MYC-16.13', 'MYC-12.4', kind='store')
     def test_real_producer_initial_pins_and_exact_activity_commit_and_noop_is_quiet(self):
         with self.base.connect() as connection:
             with MutationActivity(connection, build=1).session() as activity:
@@ -65,7 +65,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual(self.base.state(connection), before)
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_activity').fetchone()[0], 1)
 
-    @proves('MYC-2.19', 'MYC-1.34', 'MYC-16.5', 'MYC-16.13', kind='store')
     def test_normalized_edit_inherits_own_pin_and_substantive_edit_captures_current_source(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -88,7 +87,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
             self.assertNotEqual(self.manifest(connection, rows['disk'])['pinnedHash'], old_manifest['pinnedHash'])
             self.assertEqual(rows['branch'], original['branch'])
 
-    @proves('MYC-16.5', 'MYC-2.5', kind='store')
     def test_qualified_alias_change_keeps_baseline_and_immutable_audit_spelling(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -103,7 +101,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual((result.counts['pinsCaptured'], result.counts['pinsInherited']), (0, 0))
             self.assertEqual(rows['branch'], original['branch'])
 
-    @proves('MYC-2.22', 'MYC-2.19', 'MYC-1.34', 'MYC-16.5', 'MYC-16.13', kind='store')
     def test_restored_exact_disk_version_uses_its_own_old_pin_after_newer_edit(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -123,7 +120,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual((result.counts['pinsCaptured'], result.counts['pinsInherited']), (0, 0))
             self.assertEqual(restored['branch'], original['branch'])
 
-    @proves('MYC-1.34', 'MYC-16.2', 'MYC-16.5', 'MYC-16.13', kind='store')
     def test_recognized_source_move_updates_current_binding_without_renewing_audit_pin(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -137,7 +133,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual(self.manifest(connection, moved['disk'])['source']['path'], 'source.md')
             self.assertEqual((result.counts['pinsCaptured'], result.counts['pinsInherited']), (0, 0))
 
-    @proves('MYC-7.24', 'MYC-2.19', 'MYC-16.5', kind='store')
     def test_missing_source_retains_pin_until_substantive_dependant_edit_withdraws_it(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -155,7 +150,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual(current['disk'][3]['resolution']['fault'], 'missing_file')
             self.assertEqual(current['branch'], original['branch'])
 
-    @proves('MYC-2.13', 'MYC-16.13', 'MYC-12.8', kind='store')
     def test_cycle_and_late_audit_failure_roll_back_all_policy_and_capture_rows(self):
         with self.base.connect() as connection:
             before = self.base.state(connection)
@@ -172,7 +166,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.status, 'dependency_cycle')
             self.assertEqual(self.base.state(connection), before)
 
-    @proves('MYC-16.5', 'MYC-16.11', 'MYC-16.13', kind='store')
     def test_collect_dead_exact_version_after_policy_preserves_other_locations_and_current_pins(self):
         with self.base.connect() as connection:
             self.publish(connection, collect=True)
@@ -193,7 +186,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
             self.assertIsNotNone(current['disk'][4])
             self.assertEqual(self.manifest(connection, current['disk'])['dependantVersion'], str(current['disk'][1]))
 
-    @proves('MYC-2.13', 'MYC-16.5', 'MYC-16.13', kind='store')
     def test_complete_acyclic_declaration_reversal_does_not_depend_on_file_order(self):
         (self.base.artifact / 'a.md').write_bytes(b'# A\nAlpha.\n')
         (self.base.artifact / 'z.md').write_bytes(
@@ -214,7 +206,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
             self.assertTrue(any(name=='A' and declaration=='fixture:@artifact/z.md#Z' for name,declaration,_ in rows))
             self.assertFalse(any(name=='Z' and declaration=='fixture:@artifact/a.md#A' for name,declaration,_ in rows))
 
-    @proves('MYC-16.13', kind='store')
     def test_stale_foreign_source_or_recreated_missing_path_refuses_complete_owner_change(self):
         foreign = self.base.base / 'foreign'
         foreign.mkdir()
@@ -249,7 +240,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.status, 'changed_since_ingest')
             self.assertEqual(self.base.state(connection), before)
 
-    @proves('MYC-16.13', 'MYC-16.2', kind='store')
     def test_recreated_unindexed_foreign_raw_path_cannot_hide_behind_a_retained_move(self):
         foreign = self.base.base / 'foreign-move'
         foreign.mkdir()
@@ -281,7 +271,6 @@ class LocatedDependencyApplicationStoreTests(unittest.TestCase):
                 self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_activity').fetchone()[0], 0)
                 activity.finish('failed', error={'code': 'invalid_input', 'message': 'Source changed.'})
 
-    @proves('MYC-16.13', 'MYC-2.5', kind='store')
     def test_unindexed_foreign_legacy_path_collision_refuses_repin_and_complete_owner_publication(self):
         foreign = self.base.base / 'foreign-collision'
         code, artifact = foreign / 'code', foreign / 'artifact'

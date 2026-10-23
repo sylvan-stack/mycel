@@ -15,7 +15,6 @@ from mycel import _pin_observation as observation
 from mycel import _resolver as resolver
 from mycel._capture import capture_repository
 from mycel._code import chunk_code
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._resolver import ResolvedChunk, ResolvedFile, SourceResolver
 from mycel._safeguards import CompletedChild
@@ -164,7 +163,6 @@ class PinObservationTests(unittest.TestCase):
         self.assertFalse(self.connection.snapshots)
         self.assertFalse(self.connection.dependencies)
 
-    @proves('MYC-13.15')
     def test_fresh_disk_and_sql_observations_supply_real_callback_inside_pin_locks(self):
         adapter = self.adapter()
         expected = adapter.observe()
@@ -185,7 +183,6 @@ class PinObservationTests(unittest.TestCase):
         self.assertEqual(self.capture_calls,['owner','source']*3)
         self.assertEqual(sum(sql == resolver._CATALOG_SQL for sql,_ in self.connection.sql),3)
 
-    @proves('MYC-13.15')
     def test_changed_source_even_normalized_equal_never_pins_stale_exact_text(self):
         adapter = self.adapter()
         expected = adapter.observe()
@@ -193,7 +190,6 @@ class PinObservationTests(unittest.TestCase):
         self.assert_refused_without_write(adapter,expected)
 
 
-    @proves('MYC-13.15')
     def test_frontmatter_and_other_dependant_sections_are_complete_file_guards(self):
         for selected in ('source','owner'):
             with self.subTest(selected=selected):
@@ -205,21 +201,18 @@ class PinObservationTests(unittest.TestCase):
                 self.assert_refused_without_write(adapter,expected)
                 path.write_bytes(original)
 
-    @proves('MYC-13.15')
     def test_deleted_required_disk_file_never_substitutes_stored_or_branch_text(self):
         adapter = self.adapter()
         expected = adapter.observe()
         (self.source_artifact/'source.md').unlink()
         self.assert_refused_without_write(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_unindexed_new_file_collision_invalidates_original_legacy_declaration(self):
         adapter = self.adapter()
         expected = adapter.observe()
         (self.source_code/'source.md').write_text('# Source\nUnindexed collision\n')
         self.assert_refused_without_write(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_new_collision_after_scan_but_before_observation_finishes_is_detected(self):
         adapter = self.adapter()
         expected = adapter.observe()
@@ -232,7 +225,6 @@ class PinObservationTests(unittest.TestCase):
         with patch.object(observation,'capture_repository',create_collision_after_capture):
             self.assert_refused_without_write(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_qualified_source_remains_valid_when_a_different_file_shares_bare_path(self):
         adapter = self.adapter(declaration='source:@artifact/source.md#Source')
         expected = adapter.observe()
@@ -240,14 +232,12 @@ class PinObservationTests(unittest.TestCase):
         self.assertEqual(adapter.reread().identity,expected.identity)
         self.pin(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_new_gitignore_exclusion_refuses_before_baseline_write(self):
         adapter = self.adapter()
         expected = adapter.observe()
         (self.source_artifact/'.gitignore').write_text('source.md\n')
         self.assert_refused_without_write(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_alias_and_same_byte_root_rebinding_are_detected_after_observation(self):
         self.source_code.rmdir()
         self.source_code.symlink_to(self.source_artifact,target_is_directory=True)
@@ -263,7 +253,6 @@ class PinObservationTests(unittest.TestCase):
         self.source_code.symlink_to(other,target_is_directory=True)
         self.assert_refused_without_write(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_new_required_symlink_never_reads_outside_capture_roots(self):
         adapter = self.adapter()
         expected = adapter.observe()
@@ -274,7 +263,6 @@ class PinObservationTests(unittest.TestCase):
         path.symlink_to(outside)
         self.assert_refused_without_write(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_new_indexed_exact_version_invalidates_old_guard_even_with_same_bytes(self):
         adapter = self.adapter()
         expected = adapter.observe()
@@ -283,7 +271,6 @@ class PinObservationTests(unittest.TestCase):
         self.connection.catalog_files[source_file.identifier] = updated
         self.assert_refused_without_write(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_exact_body_and_full_file_spans_must_match_current_parser_projection(self):
         adapter = self.adapter()
         expected = adapter.observe()
@@ -292,7 +279,6 @@ class PinObservationTests(unittest.TestCase):
         self.connection.catalog_files[source_file.identifier] = replace(source_file,chunks=(bad_chunk,))
         self.assert_refused_without_write(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_exact_nul_document_and_non_utf8_file_selection_remain_complete_bytes(self):
         source_file = next(file for file in self.connection.catalog_files.values() if file.repository == 'source')
         raw = '# Source\nExact\x00body.\n'
@@ -314,7 +300,6 @@ class PinObservationTests(unittest.TestCase):
         self.assertEqual(expected.selection.file.source,binary)
         self.assertEqual(whole.reread().identity,expected.identity)
 
-    @proves('MYC-13.15')
     def test_one_invocation_settings_snapshot_is_reused_without_reloading_changed_settings_file(self):
         adapter = self.adapter()
         expected = adapter.observe()
@@ -325,7 +310,6 @@ class PinObservationTests(unittest.TestCase):
         self.assertEqual(observed.identity,expected.identity)
         self.pin(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_non_disk_and_invalid_or_ineligible_references_refuse_before_store_read(self):
         for kwargs in ({'kind':'branch'},{'kind':'stash'},{'kind':'generated'},
                        {'declaration':'not a ref'},{'declaration':'disabled:path#Name'},
@@ -335,7 +319,6 @@ class PinObservationTests(unittest.TestCase):
         self.assertFalse(self.connection.sql)
         self.assertFalse(self.capture_calls)
 
-    @proves('MYC-13.15')
     def test_cancellation_refuses_before_read_and_releases_guard_without_write(self):
         with self.assertRaises(KeyboardInterrupt):
             self.adapter(cancelled=lambda:True).observe()
@@ -347,7 +330,6 @@ class PinObservationTests(unittest.TestCase):
         self.assertFalse(self.connection.guards)
         self.assertFalse(self.connection.snapshots)
 
-    @proves('MYC-13.15')
     def test_cancellation_after_last_required_read_prevents_pin_and_releases_locks(self):
         state = {'cancelled':False}
         adapter = self.adapter(cancelled=lambda:state['cancelled'])
@@ -365,7 +347,6 @@ class PinObservationTests(unittest.TestCase):
         self.assertFalse(self.connection.guards)
         self.assertNotIn('begin',self.connection.events)
 
-    @proves('MYC-13.15')
     def test_complete_class_family_cannot_omit_a_current_method_from_membership(self):
         raw = 'class Policy:\n def a(self): pass\n def z(self): pass\n'
         (self.source_code/'policy.py').write_text(raw)
@@ -385,7 +366,6 @@ class PinObservationTests(unittest.TestCase):
         self.connection.catalog_files[code_file.identifier] = omitted
         self.assert_refused_without_write(adapter,expected)
 
-    @proves('MYC-13.15')
     def test_nested_class_source_includes_inner_methods_and_parent_continuations_remain_single(self):
         raw = 'class Policy:\n class Inner:\n  def a(self): pass\n  field = 1\n'
         (self.source_code/'nested.py').write_text(raw)
@@ -430,7 +410,6 @@ class PinObservationTests(unittest.TestCase):
             changed.chunks[0].snapshot_hash,changed.chunks[0].source,dict(changed.chunks[0].comparison))
         return current
 
-    @proves('MYC-13.15')
     def test_deleted_source_inheritance_checks_only_dependant_and_keeps_owned_original_source(self):
         adapter = self.adapter()
         expected = adapter.observe()
@@ -453,7 +432,6 @@ class PinObservationTests(unittest.TestCase):
         self.assertEqual(new.manifest.payload['pinnedHash'],old.manifest.payload['pinnedHash'])
         self.assertEqual(new.manifest.payload['dependantVersion'],'2')
 
-    @proves('MYC-13.15')
     def test_changed_dependant_during_deleted_source_inheritance_writes_nothing_new(self):
         adapter = self.adapter()
         expected = adapter.observe()
@@ -472,7 +450,6 @@ class PinObservationTests(unittest.TestCase):
         self.assertEqual((len(self.connection.snapshots),len(self.connection.manifests),len(self.connection.dependencies)),before)
         self.assertFalse(self.connection.guards)
 
-    @proves('MYC-13.15')
     def test_inheritance_observes_disabled_or_invalid_source_fault_without_source_capture(self):
         values = dict(self.settings.values)
         repositories = {name:dict(repo) for name,repo in self.settings.values['repos'].items()}
@@ -490,7 +467,8 @@ class PinObservationTests(unittest.TestCase):
 
 
 class PinObservationStoreTests(unittest.TestCase):
-    @proves('MYC-16.13',kind='store')
+    check_kind = "store"
+
     def test_real_disk_callback_pins_exact_inputs_and_changed_full_file_writes_no_new_baseline(self):
         # The gate supplies its real disposable backend/default product init.
         # No credential, provider or simulated SQL boundary participates here.

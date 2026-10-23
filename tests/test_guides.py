@@ -4,13 +4,11 @@ import tempfile
 import unittest
 
 from mycel._commands import help_reply
-from mycel._coverage import proves
 from mycel._errors import ErrorCode
 from mycel._settings import load_settings
 
 
 class GuideTests(unittest.TestCase):
-    @proves("MYC-0.12")
     def test_command_and_reply_guide_matches_program(self):
         guide = (Path(__file__).resolve().parents[1] / "docs" / "command-line.md").read_text()
         start = "<!-- command-contract:start -->\n```json\n"
@@ -21,7 +19,6 @@ class GuideTests(unittest.TestCase):
         self.assertEqual(contract, {"help": help_reply(), "errors": [c.value for c in ErrorCode],
                                     "exitStatuses": {"done": 0, "failed": 1, "stopped": 2}})
 
-    @proves("MYC-0.12", "MYC-5.15")
     def test_settings_guide_contract_and_fictional_examples_match_validation(self):
         root = Path(__file__).resolve().parents[1]
         guide = (root / "docs/settings.md").read_text()

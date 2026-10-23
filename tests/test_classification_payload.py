@@ -11,7 +11,6 @@ from unittest.mock import patch
 
 from mycel import _classification_payload as payload
 from mycel import _evidence as evidence
-from mycel._coverage import proves
 from mycel._markdown import COMPARISON_REVISION, UNICODE_VERSION, comparison_hash
 from mycel._source_refs import SourceAddress
 
@@ -74,7 +73,6 @@ class ClassificationPayloadTests(unittest.TestCase):
                       'subprocess.Popen', 'subprocess.run'):
             blocked.enter_context(patch(entry, side_effect=AssertionError('preparation must not call or spawn')))
 
-    @proves('MYC-0.10')
     def test_fixed_instruction_choices_and_command_hash_match_accepted_vector(self):
         self.assertEqual(payload.LABELS, ('needs_review', 'insufficient_evidence', 'still_supported'))
         self.assertEqual(payload.CRITERIA, payload.INSTRUCTION + '\n\n' +
@@ -85,7 +83,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         self.assertEqual(reviewer_identity().command_hash,
                          '16c0bf93cef288f7672f295ff1281a3de720822efb052e3cd81646ac3b9afdc3')
 
-    @proves('MYC-0.10')
     def test_canonical_payload_fixed_vector_and_utf8_are_not_normalized(self):
         _, _, decision = fixture()
         self.assertEqual(decision.input_hash, 'f45c21bd582b4f06be949fe61dd532a3b28bc105d2bce093ba621975c5c69ea2')
@@ -99,7 +96,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         self.assertIn('Å'.encode(), composed.canonical_bytes)
         self.assertIn(b'\\u0000\\t\\n', composed.canonical_bytes)
 
-    @proves('MYC-0.10')
     def test_semantic_projection_omits_all_capture_and_full_file_guards(self):
         manifest, blobs, decision = fixture()
         later, later_blobs, later_decision = fixture(capture_time='2026-10-12T00:00:00Z', padding=b'# outside section\n')
@@ -126,7 +122,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         with self.assertRaises(evidence.EvidenceError):
             payload.semantic_baseline(full)
 
-    @proves('MYC-0.10')
     def test_document_comparison_span_is_retained_and_verified(self):
         raw, body = b'# Heading\nExact body.\n', b'Exact body.\n'
         comparison = evidence.ComparisonRecord('document_body', COMPARISON_REVISION,
@@ -140,7 +135,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         with self.assertRaises(evidence.EvidenceError):
             payload.DecisionText(bad)
 
-    @proves('MYC-0.10')
     def test_complete_text_refuses_changed_length_hash_lossy_text_and_unsupported_comparison(self):
         _, blobs, _ = fixture()
         original = blobs[0]
@@ -158,7 +152,6 @@ class ClassificationPayloadTests(unittest.TestCase):
             payload.DecisionText.create(record, original.source)
         self.assertEqual(raised.exception.status, 'unsupported_comparison')
 
-    @proves('MYC-0.10')
     def test_payload_rejects_changed_fixed_protocol_and_unhashed_unknown_semantics(self):
         _, _, decision = fixture()
         changes = [('protocol', True), ('questionVersion', 'next-question'), ('criteria', payload.CRITERIA + '\n'),
@@ -178,7 +171,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         with self.assertRaises(evidence.EvidenceError):
             payload.DecisionPayload(bad)
 
-    @proves('MYC-0.10')
     def test_noncanonical_or_duplicate_bytes_are_refused_even_when_digest_matches(self):
         _, _, decision = fixture()
         for raw in (json.dumps(decision.as_dict()).encode(), decision.canonical_bytes + b'\n',
@@ -187,7 +179,6 @@ class ClassificationPayloadTests(unittest.TestCase):
             with self.subTest(raw=raw[:30]), self.assertRaises(evidence.EvidenceError):
                 payload.DecisionPayload.from_bytes(raw, sha256(raw).hexdigest())
 
-    @proves('MYC-0.10')
     def test_frozen_copy_prevents_post_capture_input_or_hash_mutation(self):
         _, _, original = fixture()
         mutable = original.as_dict()
@@ -203,7 +194,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         copied['before'][0]['text'] = 'new'
         self.assertEqual(frozen.input_hash, original.input_hash)
 
-    @proves('MYC-0.10')
     def test_decimal_fraction_is_canonical_without_float_in_semantic_payload(self):
         for value, expected in ((0.7, '0.7'), ('0.7000', '0.7'), ('7e-1', '0.7'), ('-0.00', '0'), (1, '1')):
             self.assertEqual(payload.canonical_decimal(value), expected)
@@ -217,7 +207,6 @@ class ClassificationPayloadTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(evidence.EvidenceError):
                 payload.DecisionPayload(bad)
 
-    @proves('MYC-0.10')
     def test_source_absence_has_no_members_and_never_substitutes_empty_before(self):
         manifest, _, decision = fixture()
         hashes = {decision.input_hash}
@@ -239,7 +228,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         with self.assertRaises(evidence.EvidenceError):
             payload.CurrentSelection.create('present', manifest.payload['source'], 'chunk')
 
-    @proves('MYC-0.10')
     def test_before_is_complete_exact_baseline_membership_and_dependant_identity(self):
         _, _, decision = fixture()
         for key in ('before', 'dependant'):
@@ -252,7 +240,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         with self.assertRaises(evidence.EvidenceError):
             payload.DecisionPayload(bad)
 
-    @proves('MYC-0.10')
     def test_family_membership_and_order_are_complete_semantic_inputs(self):
         manifest, blobs, _ = fixture()
         family_place = SourceAddress('source', 'code', 'family.py', 'C')
@@ -292,7 +279,6 @@ class ClassificationPayloadTests(unittest.TestCase):
             with self.subTest(incomplete=incomplete), self.assertRaises(evidence.EvidenceError):
                 payload.CurrentSelection.create('present', family_place, 'family', incomplete)
 
-    @proves('MYC-0.10')
     def test_context_is_ordered_complete_and_changes_input_identity_and_citations(self):
         manifest, blobs, decision = fixture()
         ancestors = []
@@ -318,7 +304,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         value['context'][2]['freshness'] = 'fresh'
         self.assertNotEqual(payload.DecisionPayload(value).input_hash, complete.input_hash)
 
-    @proves('MYC-0.10')
     def test_model_routing_revision_command_revision_and_literal_arguments_bind_identity(self):
         _, _, initial = fixture()
         decision = reviewed(initial)
@@ -335,7 +320,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         changed['argv'].append('$TOKEN; *.md $(exit 1)')
         self.assertNotEqual(payload.ReviewCommandIdentity(changed).command_hash, reviewer_identity().command_hash)
 
-    @proves('MYC-0.10')
     def test_default_routing_revision_is_shared_with_store_and_explicit_legacy_identity_is_preserved(self):
         from mycel import _classification_store as store
         _, _, decision = fixture()
@@ -348,7 +332,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         self.assertEqual(retained.payload['routing']['revision'], 'mycel-drift-routing-v1')
         self.assertNotEqual(retained.input_hash, decision.input_hash)
 
-    @proves('MYC-0.10')
     def test_reviewer_request_derives_identities_locators_and_exact_lf_count(self):
         _, _, initial = fixture()
         decision = reviewed(initial)
@@ -372,7 +355,6 @@ class ClassificationPayloadTests(unittest.TestCase):
             payload.ReviewerRequest(initial, 10)
         self.assertEqual(raised.exception.status, 'reviewer_unconfigured')
 
-    @proves('MYC-0.10')
     def test_command_inspection_expands_only_first_argument_resolves_and_never_executes(self):
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder)
@@ -394,7 +376,6 @@ class ClassificationPayloadTests(unittest.TestCase):
             self.assertNotEqual(replacement.command_hash, frozen_hash)
             self.assertEqual(command.command_hash, frozen_hash)
 
-    @proves('MYC-0.10')
     def test_unavailable_executable_has_null_digest_and_structural_faults_do_not_search_path(self):
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder)
@@ -414,7 +395,6 @@ class ClassificationPayloadTests(unittest.TestCase):
                 with self.subTest(argv=argv), self.assertRaises(evidence.EvidenceError):
                     payload.ReviewCommandIdentity.inspect(argv, 'adapter-v1', home)
 
-    @proves('MYC-0.10')
     def test_bundle_full_manifest_guard_identity_is_separate_from_payload_cache_identity(self):
         manifest, blobs, decision = fixture()
         bundle = payload.EvidenceBundle.create(owner_repository='owner', baseline_id=manifest.identifier,
@@ -431,7 +411,6 @@ class ClassificationPayloadTests(unittest.TestCase):
         self.assertTrue(any('fileHash' in descriptor and 'span' in descriptor for descriptor in bundle.payload['evidence']))
         self.assertNotIn('guards', decision.payload)
 
-    @proves('MYC-0.10')
     def test_bundle_refuses_missing_text_evidence_wrong_owner_and_invalid_guards(self):
         manifest, blobs, decision = fixture()
         with self.assertRaises(evidence.EvidenceError) as raised:

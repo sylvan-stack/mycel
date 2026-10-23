@@ -20,7 +20,6 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from mycel._coverage import proves
 from mycel_build.__main__ import main
 from mycel_build._core import (BuildError, atomic_json, digest, extract_runtime,
                               file_manifest, install_wheel, json_bytes, load_lock,
@@ -78,7 +77,6 @@ def _wheel_fixture(path, members, *, modes=None, extra_record=None):
 
 
 class BuildInputsTests(unittest.TestCase):
-    @proves('MYC-15.1')
     def test_creation_refuses_free_threaded_and_non_cpython_before_allocation(self):
         with tempfile.TemporaryDirectory() as directory:
             registry = Path(directory) / "unused-registry"
@@ -104,7 +102,6 @@ class BuildInputsTests(unittest.TestCase):
                 allocate_build.assert_not_called()
                 self.assertFalse(registry.exists())
 
-    @proves('MYC-15.1', 'MYC-15.2')
     def test_checked_in_target_pins_and_licence_digests(self):
         lock_path = ROOT / "packaging/build-lock.json"
         lock, row = load_lock(lock_path, "macos-arm64")
@@ -149,7 +146,6 @@ class BuildInputsTests(unittest.TestCase):
                         load_lock(copied_lock, "macos-arm64")
                     self.assertEqual(caught.exception.code, "refused")
 
-    @proves('MYC-15.1', 'MYC-15.2')
     def test_runtime_pin_validation_is_not_disabled_by_optimization(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -164,7 +160,6 @@ class BuildInputsTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(b"release lock", result.stderr)
 
-    @proves('MYC-15.2', 'MYC-15.4')
     def test_json_duplicate_keys_and_nonfinite_numbers_are_damaged(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "record.json"
@@ -173,7 +168,6 @@ class BuildInputsTests(unittest.TestCase):
                 with self.assertRaises(BuildError):
                     read_json(path)
 
-    @proves('MYC-15.2')
     def test_source_inputs_include_dirty_untracked_and_gate_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -193,7 +187,6 @@ class BuildInputsTests(unittest.TestCase):
             second, _ = source_inputs(root)
             self.assertNotEqual(first["inputsSha256"], second["inputsSha256"])
 
-    @proves('MYC-15.2')
     def test_source_identity_ignores_generated_egg_info_and_tool_caches(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -210,7 +203,6 @@ class BuildInputsTests(unittest.TestCase):
             self.assertEqual(after["inputsSha256"], before["inputsSha256"])
             self.assertEqual(captured, frozen)
 
-    @proves('MYC-15.1', 'MYC-15.2')
     def test_source_capture_refuses_directory_and_dangling_links_without_reading_external_inputs(self):
         for kind in ("root-directory", "nested-directory", "dangling-file", "metadata"):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
@@ -236,7 +228,6 @@ class BuildInputsTests(unittest.TestCase):
                     source_inputs(root)
                 self.assertEqual(caught.exception.code, "refused")
 
-    @proves('MYC-15.1', 'MYC-15.2')
     def test_verified_asset_refuses_wrong_hash_and_link(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -252,7 +243,6 @@ class BuildInputsTests(unittest.TestCase):
             with self.assertRaises(BuildError):
                 verify_asset(asset, root)
 
-    @proves('MYC-15.1', 'MYC-15.2')
     def test_private_asset_snapshot_keeps_exact_bytes_and_refuses_cache_races(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -282,8 +272,8 @@ class BuildSourceBindingTests(unittest.TestCase):
     def stage_fixture(self, base):
         source = base / "source"
         for name, raw in {**_frozen_fixture(), "packaging/build-lock.json": b"{}\n",
-                          "tests/test_fixture.py": b"pass\n", "checks/claims.json": b"{}\n",
-                          "scripts/check_coverage.py": b"pass\n", "Makefile": b"check:\n",
+                          "tests/test_fixture.py": b"pass\n",
+                          "scripts/run_checks.py": b"pass\n", "Makefile": b"check:\n",
                           "docs/builds.md": b"Guide\n"}.items():
             path = source / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -300,16 +290,14 @@ class BuildSourceBindingTests(unittest.TestCase):
                        "lockSha256": digest(frozen["packaging/build-lock.json"])})
         return source, registry, rows
 
-    @proves('MYC-15.2')
     def test_gate_input_identity_covers_runner_imports_scripts_metadata_and_entrypoint(self):
         frozen = {name: b"input" for name in ("src/mycel/_coverage.py", "src/mycel_build/_staging.py",
-                  "tests/test_fixture.py", "checks/claims.json", "scripts/check_coverage.py",
+                  "tests/test_fixture.py", "scripts/run_checks.py",
                   "pyproject.toml", "Makefile", "docs/builds.md", "packaging/build-lock.json")}
         captured = check_input_manifest(input_manifest(frozen))
         self.assertEqual({row["path"] for row in captured}, set(frozen) - {
             "docs/builds.md", "packaging/build-lock.json"})
 
-    @proves('MYC-15.2')
     def test_source_binding_distinguishes_exact_current_inputs_from_historical_evidence_without_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             source, registry, _ = self.stage_fixture(Path(directory))
@@ -317,7 +305,7 @@ class BuildSourceBindingTests(unittest.TestCase):
             match = verify_source(source, registry, "1")
             self.assertTrue(match["matches"])
             self.assertFalse(match["automaticQualification"])
-            for name in ("docs/builds.md", "src/mycel/cli.py", "scripts/check_coverage.py"):
+            for name in ("docs/builds.md", "src/mycel/cli.py", "scripts/run_checks.py"):
                 with self.subTest(name=name):
                     path = source / name
                     original = path.read_bytes()
@@ -335,7 +323,6 @@ class BuildSourceBindingTests(unittest.TestCase):
             self.assertEqual(stale["differences"]["removed"], ["docs/builds.md"])
             self.assertEqual(file_manifest(registry), before)
 
-    @proves('MYC-15.2')
     def test_source_binding_refuses_damaged_manifests_and_reports_legacy_gate_scope_incomplete(self):
         with tempfile.TemporaryDirectory() as directory:
             source, registry, rows = self.stage_fixture(Path(directory))
@@ -355,7 +342,6 @@ class BuildSourceBindingTests(unittest.TestCase):
                         verify_source(source, registry, "1")
                     self.assertEqual(file_manifest(registry), before)
 
-    @proves('MYC-15.2', 'MYC-15.4')
     def test_source_binding_cli_has_json_status_and_nonwaiting_read_lock(self):
         with tempfile.TemporaryDirectory() as directory:
             source, registry, _ = self.stage_fixture(Path(directory))
@@ -375,7 +361,6 @@ class BuildSourceBindingTests(unittest.TestCase):
 
 
 class BuildWheelTests(unittest.TestCase):
-    @proves('MYC-15.1', 'MYC-15.2', 'MYC-15.4')
     def test_installed_identity_is_allocated_numeric_sealed_data_only(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -407,7 +392,6 @@ class BuildWheelTests(unittest.TestCase):
                     path.chmod(0o700)
             (root / "program").chmod(0o700)
 
-    @proves('MYC-15.1')
     def test_wheel_full_record_preflight_rejects_without_partial_installation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -421,7 +405,6 @@ class BuildWheelTests(unittest.TestCase):
                 install_wheel(wheel, site)
             self.assertEqual(file_manifest(site), before)
 
-    @proves('MYC-15.1')
     def test_wheel_special_files_bytecode_and_portable_collisions_fail_before_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -440,7 +423,6 @@ class BuildWheelTests(unittest.TestCase):
                         install_wheel(wheel, site)
                     self.assertFalse(site.exists())
 
-    @proves('MYC-15.1')
     def test_product_only_noneditable_wheel_installs_exact_recorded_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -453,7 +435,6 @@ class BuildWheelTests(unittest.TestCase):
             self.assertEqual((root / "site/mycel/cli.py").read_bytes(), _frozen_fixture()["src/mycel/cli.py"])
             self.assertFalse((root / "site/mycel_build").exists())
 
-    @proves('MYC-15.1', 'MYC-15.2')
     def test_wheel_record_tampering_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -465,7 +446,6 @@ class BuildWheelTests(unittest.TestCase):
             with self.assertRaises(BuildError):
                 install_wheel(tampered, root / "site")
 
-    @proves('MYC-15.1')
     def test_wheel_escape_editable_hooks_and_collisions_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -485,7 +465,6 @@ class BuildWheelTests(unittest.TestCase):
                 install_wheel(escaping, root / "second-site")
             self.assertFalse((root / "outside").exists())
 
-    @proves('MYC-15.1')
     def test_runtime_tar_rejects_escaping_and_special_members(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -499,7 +478,6 @@ class BuildWheelTests(unittest.TestCase):
                 with self.assertRaises(BuildError):
                     extract_runtime(archive, root / f"runtime-{number}")
 
-    @proves('MYC-15.1')
     def test_runtime_preflight_refuses_late_bad_member_links_and_collisions_before_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -525,7 +503,6 @@ class BuildWheelTests(unittest.TestCase):
                         extract_runtime(archive, destination)
                     self.assertFalse(destination.exists())
 
-    @proves('MYC-15.1')
     def test_runtime_directory_ancestors_refuse_case_and_unicode_file_collisions_before_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -545,7 +522,6 @@ class BuildWheelTests(unittest.TestCase):
                         extract_runtime(archive, destination)
                     self.assertFalse(destination.exists())
 
-    @proves('MYC-15.1', 'MYC-15.3')
     def test_runtime_relative_interpreter_link_remains_inside_relocated_folder(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -567,7 +543,6 @@ class BuildWheelTests(unittest.TestCase):
 
 
 class BuildManifestTests(unittest.TestCase):
-    @proves('MYC-15.1', 'MYC-15.2')
     def test_failed_native_probe_returns_sanitized_executed_result(self):
         with tempfile.TemporaryDirectory() as directory:
             program = Path(directory) / "program"
@@ -585,7 +560,6 @@ class BuildManifestTests(unittest.TestCase):
             self.assertIn("native/data/dependency probe failed", result["reason"])
             self.assertNotIn("private-", json.dumps(result))
 
-    @proves('MYC-15.2', 'MYC-15.4')
     def test_stage_retains_named_native_failure_results_and_exact_source_manifest(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -637,7 +611,6 @@ class BuildManifestTests(unittest.TestCase):
             self.assertEqual({row["path"]: row["sha256"] for row in rows}, {name: digest(raw) for name, raw in frozen.items()})
             self.assertEqual(read_record(registry, record["build"])["source"]["inputsSha256"], digest(json_bytes(rows)))
 
-    @proves('MYC-15.2', 'MYC-15.4')
     def test_sealed_file_directory_root_and_link_integrity(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "program"
@@ -662,7 +635,6 @@ class BuildManifestTests(unittest.TestCase):
             root.chmod(0o700)
             (root / "nested").chmod(0o700)
 
-    @proves('MYC-15.2', 'MYC-15.4')
     def test_manifest_refuses_external_symlink(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "program"
@@ -671,7 +643,6 @@ class BuildManifestTests(unittest.TestCase):
             with self.assertRaises(BuildError):
                 file_manifest(root)
 
-    @proves('MYC-15.1', 'MYC-15.2', 'MYC-15.4')
     def test_manifest_refuses_contained_absolute_links_and_cycles(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "program"
@@ -686,7 +657,6 @@ class BuildManifestTests(unittest.TestCase):
             with self.assertRaises(BuildError):
                 file_manifest(root)
 
-    @proves('MYC-15.3')
     def test_exec_uses_bundled_isolated_python_and_preserves_arguments_cwd(self):
         with tempfile.TemporaryDirectory() as directory:
             program = Path(directory) / "program"
@@ -698,7 +668,6 @@ class BuildManifestTests(unittest.TestCase):
             self.assertEqual(Path.cwd(), before)
             self.assertEqual(execute.call_args.args[1][1:], ["-I", "-B", "-m", "mycel.cli", "grep", "-rn", "literal spaces", "."])
 
-    @proves('MYC-15.1', 'MYC-15.3')
     def test_cross_target_probe_is_an_explicit_failure(self):
         for target, system, machine in (("macos-x86_64", "Darwin", "arm64"),
                                         ("linux-arm64", "Darwin", "arm64"),
@@ -720,7 +689,6 @@ class BuildManifestTests(unittest.TestCase):
 
 
 class BuildRegistryTests(unittest.TestCase):
-    @proves('MYC-15.4')
     def test_canonical_numeric_allocation_retains_failed_and_pruned_records(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -768,7 +736,6 @@ class BuildRegistryTests(unittest.TestCase):
                                                               "reason": "Build record is missing or damaged."}])
                         self.assertEqual(file_manifest(root), damaged)
 
-    @proves('MYC-15.4')
     def test_busy_registry_refuses_without_waiting_or_writing(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -781,7 +748,6 @@ class BuildRegistryTests(unittest.TestCase):
                     self.assertEqual(caught.exception.code, "busy")
             self.assertEqual((root / ".allocations.json").read_bytes(), before)
 
-    @proves('MYC-15.4')
     def test_concurrent_process_allocations_are_unique_and_monotonic(self):
         with tempfile.TemporaryDirectory() as directory:
             context = multiprocessing.get_context("spawn")
@@ -795,7 +761,6 @@ class BuildRegistryTests(unittest.TestCase):
                 self.assertEqual(worker.exitcode, 0)
             self.assertEqual(sorted(build_number(n) for n in numbers), list(range(1, 7)))
 
-    @proves('MYC-15.4')
     def test_interruption_after_journal_reserves_and_recovers_failed_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -806,7 +771,6 @@ class BuildRegistryTests(unittest.TestCase):
             self.assertEqual(record["build"], "2")
             self.assertEqual(read_record(root, "1")["status"], "failed")
 
-    @proves('MYC-15.4')
     def test_partial_record_boundaries_recover_as_failed_without_reuse(self):
         for member in ("build.json", "checks.json", "build.log", "run.lock"):
             with self.subTest(member=member), tempfile.TemporaryDirectory() as directory:
@@ -818,7 +782,6 @@ class BuildRegistryTests(unittest.TestCase):
                 self.assertEqual(allocate(root, target="macos-arm64", version="2.0.0", source=SOURCE)["build"], "2")
                 self.assertEqual(read_record(root, "1")["status"], "failed")
 
-    @proves('MYC-15.4')
     def test_damaged_partial_record_does_not_block_or_change_later_allocation(self):
         for damage in (b"damaged", b"[]", b"null", b"{}", "boolean-schema", "changed-source"):
             for missing in ("checks.json", "build.log", "run.lock"):
@@ -843,7 +806,6 @@ class BuildRegistryTests(unittest.TestCase):
                     self.assertFalse(rows[0]["available"])
                     self.assertEqual(rows[1]["status"], "building")
 
-    @proves('MYC-15.4')
     def test_partial_terminal_or_staged_record_is_preserved_without_recovery(self):
         for state in ("failed", "working", "withdrawn", "pruned", "staged", "missing-staged-record"):
             with self.subTest(state=state), tempfile.TemporaryDirectory() as directory:
@@ -928,7 +890,6 @@ class BuildRegistryTests(unittest.TestCase):
                     self.assertEqual((folder / member).stat().st_nlink, 1)
                 self.assertEqual(list_records(root)[1]["status"], "building")
 
-    @proves('MYC-15.4')
     def test_unsafe_partial_metadata_and_folder_stay_local_without_following_links(self):
         self._assert_hard_linked_retained_metadata_stays_damaged()
         self._assert_recovery_preserves_outside_inodes_linked_after_validation()
@@ -968,7 +929,6 @@ class BuildRegistryTests(unittest.TestCase):
                 self.assertFalse(rows[0]["available"])
                 self.assertEqual(rows[1]["status"], "building")
 
-    @proves('MYC-15.2', 'MYC-15.4')
     def test_damage_is_local_and_staging_cannot_publish_or_escape(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -983,7 +943,6 @@ class BuildRegistryTests(unittest.TestCase):
                     update_staging(root, "2", fields=fields)
             self.assertEqual(read_record(root, "2")["status"], "building")
 
-    @proves('MYC-15.4')
     def test_development_errors_are_one_sanitized_json_and_help_is_json(self):
         for arguments, expected in (([], 1), (["create", "--target", "private-sentinel"], 1), (["--help"], 0)):
             with self.subTest(arguments=arguments), contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(io.StringIO()) as errors:

@@ -10,7 +10,6 @@ from unittest.mock import patch
 from psycopg.types.json import Jsonb
 
 from mycel._classification_store import ClassificationStore
-from mycel._coverage import proves
 from mycel._drift_store import DriftStore
 from mycel._evidence import EvidenceStore
 from mycel._errors import MycelError
@@ -69,7 +68,8 @@ class ClassificationStoreFixture(unittest.TestCase):
 
 
 class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
-    @proves('MYC-14.14', 'MYC-14.15', 'MYC-13.18', kind='store')
+    check_kind = "store"
+
     def test_newest_live_file_quiet_period_is_persisted_and_repeated_reads_do_not_restart(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -93,7 +93,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
             self.assertEqual(persisted['classificationObservations']['fixture:@artifact/source2.md']['changedAt'],
                              (NOW - timedelta(seconds=20)).isoformat(timespec='microseconds'))
 
-    @proves('MYC-14.14', 'MYC-14.3', 'MYC-16.8', 'MYC-13.18', kind='store')
     def test_whole_file_edit_outside_selection_changes_only_guards_and_preserved_time_uses_observation(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -117,7 +116,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
             self.assertEqual(observation['firstObservedAt'], later.isoformat(timespec='microseconds'))
             self.assertFalse(self.stage_check(connection, prepared, at=later.isoformat())['allowed'])
 
-    @proves('MYC-14.14', 'MYC-14.2', 'MYC-13.18', kind='store')
     def test_future_timestamp_falls_back_to_first_read_and_cannot_delay_forever(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -134,7 +132,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
                              ['timestamp_untrusted'])
             self.assertTrue(self.stage_check(connection, prepared, at=(NOW + timedelta(seconds=300)).isoformat())['allowed'])
 
-    @proves('MYC-14.14', 'MYC-14.2', 'MYC-16.8', 'MYC-13.18', kind='store')
     def test_deleted_source_uses_first_tombstone_and_complete_retained_before_text(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -158,7 +155,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
             self.assertEqual(json.loads(tombstone.observations_bytes)['fixture:@artifact/source.md']['kind'], 'deleted')
             self.assertTrue(self.stage_check(connection, tombstone, at=(NOW + timedelta(seconds=301)).isoformat())['allowed'])
 
-    @proves('MYC-14.2', 'MYC-16.8', 'MYC-13.18', kind='store')
     def test_complete_pinned_current_dependant_governors_and_canonical_bytes_are_owned(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -188,7 +184,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
             self.assertNotIn('span', decision['baseline']['dependant'])
             self.assertTrue(self.stage_check(connection, prepared)['allowed'])
 
-    @proves('MYC-14.2', 'MYC-16.8', 'MYC-13.18', kind='store')
     def test_direct_document_ancestors_are_complete_and_address_ordered(self):
         self.fixture.fixture.answer.write_bytes(b'# Parent\nComplete parent claim.\n## Child\nComplete child claim.\n'
             b'### Answer\n<!-- sources:\nfixture:@artifact/source.md#Source\n-->\nUnchanged dependant.\n')
@@ -201,7 +196,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
                 ['# Parent\nComplete parent claim.\n', '## Child\nComplete child claim.\n'])
             self.assertEqual([item['role'] for item in context], ['ancestor', 'ancestor'])
 
-    @proves('MYC-14.2', 'MYC-13.18', kind='store')
     def test_missing_governor_blocks_both_stages_instead_of_silent_context_omission(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -220,7 +214,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
             for stage in ('jev', 'review'):
                 self.assertFalse(self.stage_check(connection, prepared, stage)['allowed'])
 
-    @proves('MYC-14.2', 'MYC-16.8', 'MYC-13.18', kind='store')
     def test_corrupt_pinned_snapshot_and_request_metadata_never_pass_stage_guards(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -228,7 +221,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
                 (Jsonb({'schema': 9}), 'downstream', prepared.input_hash))
             self.assertEqual(self.stage_check(connection, prepared)['reason'], 'snapshot_corrupt')
 
-    @proves('MYC-14.2', 'MYC-16.8', 'MYC-13.18', kind='store')
     def test_missing_retained_current_text_and_bundle_never_start_a_stage(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -245,7 +237,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
                 (Jsonb({'schema': 9}), 'downstream', source_hash))
             self.assertEqual(self.stage_check(connection, prepared)['reason'], 'snapshot_corrupt')
 
-    @proves('MYC-14.3', 'MYC-14.15', 'MYC-16.8', kind='store')
     def test_support_application_preserves_pins_stale_and_confirmations_and_guarded_cache_reuse(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -268,7 +259,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
                 for row in self.fixture.stale(connection)],
                 [(row[:3], {key:value for key,value in row[3].items() if key != 'classification'}) for row in stale])
 
-    @proves('MYC-14.3', 'MYC-14.15', 'MYC-16.8', 'MYC-13.18', kind='store')
     def test_context_file_edit_after_preparation_makes_both_stages_and_result_obsolete(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -284,7 +274,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
             self.assertTrue(result['drift']['history'][-1]['obsolete'])
             self.assertEqual(self.fixture.immutable(connection), original)
 
-    @proves('MYC-14.3', 'MYC-14.15', 'MYC-16.8', 'MYC-13.18', kind='store')
     def test_context_race_after_tentative_result_is_retained_only_as_obsolete_attempt(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -303,7 +292,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
             self.assertTrue(self.fixture.reason(result['drift'])['active'])
             self.assertTrue(result['drift']['history'][-1]['obsolete'])
 
-    @proves('MYC-14.15', 'MYC-16.8', 'MYC-13.18', kind='store')
     def test_context_race_during_final_annotation_rolls_back_every_store_effect(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)
@@ -317,7 +305,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
                     judgement='still_supported', at=AT)
             self.assertEqual(self.fixture.state(connection), before)
 
-    @proves('MYC-14.25', 'MYC-16.14', 'MYC-14.15', kind='store')
     def test_reviewer_revision_literal_arguments_executable_digest_and_fixed_versions_are_bound(self):
         executable = self.write_reviewer()
         with self.base.connect() as connection:
@@ -338,7 +325,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
                 judgement='still_supported', at=AT)
             self.assertTrue(result['obsolete'])
 
-    @proves('MYC-14.25', 'MYC-16.14', 'MYC-13.18', kind='store')
     def test_unavailable_reviewer_has_null_digest_and_jev_remains_independently_eligible(self):
         executable = self.write_reviewer()
         executable.unlink()
@@ -349,7 +335,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
             self.assertTrue(self.stage_check(connection, prepared)['allowed'])
             self.assertEqual(self.stage_check(connection, prepared, 'review')['reason'], 'review_command_unavailable')
 
-    @proves('MYC-14.15', 'MYC-14.25', 'MYC-16.14', kind='store')
     def test_frozen_settings_enablement_model_revision_and_transport_changes_refuse_old_results(self):
         self.write_reviewer()
         with self.base.connect() as connection:
@@ -368,7 +353,6 @@ class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
                 self.assertFalse(result['applied'])
                 self.base.config.write_text(original)
 
-    @proves('MYC-16.8', 'MYC-14.15', kind='store')
     def test_stage_lease_protects_every_request_blob_and_holds_no_pass_lock_during_io(self):
         with self.base.connect() as connection:
             prepared = self.prepare(connection)

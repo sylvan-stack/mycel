@@ -12,7 +12,6 @@ from uuid import uuid4
 import psycopg
 
 from mycel._cli import run
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._settings import load_settings
 from mycel import _store as store
@@ -32,6 +31,8 @@ class RecordingConnection:
 
 
 class ProductStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def connection(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)
 
@@ -40,7 +41,6 @@ class ProductStoreTests(unittest.TestCase):
             action()
         self.assertEqual(error.exception.code.value, code)
 
-    @proves("MYC-0.4", "MYC-6.1", "MYC-6.5", "MYC-6.19", kind="store")
     def test_product_init_has_both_indexes_only_metadata_and_stable_generation(self):
         with self.connection() as connection:
             first = store.require_store(connection)
@@ -64,7 +64,6 @@ class ProductStoreTests(unittest.TestCase):
         self.assertEqual(diagnostic["indexGeneration"], first.index_generation)
         self.assertEqual(diagnostic["location"], self.store_fixture.backend.address(self.store_fixture.database))
 
-    @proves("MYC-0.8", "MYC-6.5", kind="store")
     def test_compatible_init_and_read_guards_issue_no_ddl(self):
         with self.connection() as connection:
             recorded = RecordingConnection(connection)
@@ -75,7 +74,6 @@ class ProductStoreTests(unittest.TestCase):
             self.assertFalse(any(statement.lstrip().upper().startswith(
                 ("CREATE", "ALTER", "DROP", "INSERT", "UPDATE", "DELETE")) for statement in recorded.statements))
 
-    @proves("MYC-0.8", "MYC-6.7", "MYC-6.17", kind="store")
     def test_newer_and_foreign_stores_refuse_without_reading_foreign_or_v1_tables(self):
         with self.connection() as connection:
             connection.execute("UPDATE public.mycel_store SET format=%s", (store.STORE_FORMAT + 1,))
@@ -93,7 +91,6 @@ class ProductStoreTests(unittest.TestCase):
             self.error("store_format", lambda: store.require_store(recorded))
             self.assertFalse(any("FROM public." in statement for statement in recorded.statements))
 
-    @proves("MYC-6.6", "MYC-6.19", kind="store")
     def test_migration_step_rolls_back_ddl_and_format_while_preserving_generation(self):
         with self.connection() as connection:
             before = store.require_store(connection)
@@ -110,7 +107,6 @@ class ProductStoreTests(unittest.TestCase):
             self.assertEqual((after.format, after.index_generation), (store.STORE_FORMAT, before.index_generation))
             self.error("store_format", lambda: store._migrate(connection, store.STORE_FORMAT, store.STORE_FORMAT + 1, before.index_generation, {}))
 
-    @proves("MYC-6.8", "MYC-6.19", kind="store")
     def test_dimension_change_removes_only_vectors_retaining_complete_text_parts_and_failures(self):
         text, chunk, plan = "Public fixture text with 雪.\n", uuid4(), uuid4()
         with self.connection() as connection:
@@ -140,7 +136,6 @@ class ProductStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT failure->>'kind' FROM public.mycel_embedding_plans WHERE id=%s", (plan,)).fetchone(), ("public-fixture",))
             self.assertEqual(store.require_store(connection, dimensions=2048, operation="embed").dimensions, 2048)
 
-    @proves("MYC-6.5", "MYC-6.19", kind="store")
     def test_exact_utf8_nul_bytes_projection_and_hash_guards_roundtrip(self):
         samples = ("before\0after 雪", "\0\0\0", "literal \\000 \\0", "\x10\x01\xa0\0\x10\x01", "\uf00b\0\U000f000b", "")
         with self.connection() as connection:
@@ -173,7 +168,6 @@ class ProductStoreTests(unittest.TestCase):
                             connection.execute(statement,parameters)
                 self.assertEqual(connection.execute("SELECT source_bytes FROM public.mycel_chunk_versions WHERE id=%s",(version,)).fetchone(),(raw,))
 
-    @proves("MYC-6.3", kind="store")
     def test_unreachable_target_refuses_init_but_info_and_plain_grep_remain_available(self):
         # Reserve a loopback port without listening, so no other server can take
         # it and this target cannot authenticate to an unintended database.
@@ -197,9 +191,10 @@ class ProductStoreTests(unittest.TestCase):
 
 
 class EmptyProductStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     initialize_store = staticmethod(lambda backend, settings_file: None)
 
-    @proves("MYC-0.8", "MYC-6.5", "MYC-6.7", kind="store")
     def test_empty_store_is_refused_by_read_and_created_only_by_explicit_product_init(self):
         fixture = self.store_fixture
         with fixture.backend.connection(fixture.database) as connection:

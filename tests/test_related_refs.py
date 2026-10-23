@@ -6,7 +6,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import Invocation
-from mycel._coverage import proves
 from mycel._declared_refs import _raw, _stored
 from mycel._errors import MycelError
 from mycel._settings import _freeze
@@ -53,7 +52,6 @@ class _ReadOnlyRows:
 
 
 class RelatedRefTests(unittest.TestCase):
-    @proves('MYC-16.1')
     def test_malformed_nul_missing_disabled_unknown_and_ambiguous_faults_remain_visible(self):
         for raw, internal, public in (
                 ('bad\0ref', 'not_a_ref', 'not_a_ref'),
@@ -82,7 +80,6 @@ class RelatedRefTests(unittest.TestCase):
                     self.assertEqual(report['candidateCount'], 2)
                     self.assertEqual(report['candidates'][0]['address'], 'fixture:@artifact/other.md#Repeat')
 
-    @proves('MYC-0.6', 'MYC-16.1')
     def test_equivalent_relation_occurrences_keep_each_spelling_physical_line_and_location(self):
         spellings = ('  fixture:source.md#Source  ', 'fixture:@artifact/source.md#Source')
         occurrences = [{'rawDeclared': _raw(raw), 'rawLine': _raw('> ' + raw + '\n'),
@@ -102,7 +99,6 @@ class RelatedRefTests(unittest.TestCase):
         self.assertTrue(all(report['kind'] == 'related' and report['fault'] is None for report in reports))
         self.assertTrue(all(report['location']['kind'] == 'branch' for report in reports))
 
-    @proves('MYC-0.7')
     def test_asserted_unmanaged_and_corrupt_relation_metadata_is_never_reported_as_declaration(self):
         for change in ({'ownership': 'asserted'}, {'managedDeclaration': False},
                        {'rawRefHex': 'not hex'}, {'occurrences': []}):
@@ -113,7 +109,6 @@ class RelatedRefTests(unittest.TestCase):
                     _refs._related_reports(retained)
                 self.assertEqual(failure.exception.code, 'store_format')
 
-    @proves('MYC-0.6')
     def test_missing_owner_preserves_fault_and_does_not_guess_a_live_address(self):
         retained = row(fault='owner_location_missing')
         retained = (*retained[:7], None, *retained[8:13], None)
@@ -123,7 +118,6 @@ class RelatedRefTests(unittest.TestCase):
         self.assertIsNone(report['chunk']['address'])
         self.assertEqual(report['location'], {'id': 'file-location', 'kind': 'disk', 'name': 'disk'})
 
-    @proves('MYC-0.6', 'MYC-0.10')
     def test_public_refs_merges_relations_under_one_readonly_snapshot_without_refresh(self):
         related = row('a-related', raw='bad\0ref', fault='not_a_ref')
         resolved = row('c-related', raw='fixture:source.md#Source', fault=None, state='resolved')

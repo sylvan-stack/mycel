@@ -12,7 +12,6 @@ from psycopg.types.json import Jsonb
 
 from mycel._cli import run
 from mycel._capture import _Capture
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._freshness import Deadline
 from mycel._declared_refs import DeclaredRefStore
@@ -34,6 +33,8 @@ except ImportError:
 
 
 class ReadStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.base = retrieval_fixtures.RetrievalStoreTests()
         self.base.store_fixture = self.store_fixture
@@ -100,7 +101,6 @@ class ReadStoreTests(unittest.TestCase):
                            (uuid4(), version))
         return str(identifier), version, SourceAddress(repository, "index", path, name).address
 
-    @proves("MYC-11.1", "MYC-11.5", kind="store")
     def test_whole_retained_code_document_summary_and_overview_text_need_no_vector_or_file(self):
         with self.connection() as connection:
             code_text = "def perform():\n    return 'full indexed text'\n"
@@ -129,7 +129,6 @@ class ReadStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_vectors").fetchone(), (0,))
             self.assertEqual(self.base.contents(connection), before)
 
-    @proves("MYC-11.3", kind="store")
     def test_exact_name_wins_and_unique_bare_method_heading_and_class_header_match(self):
         with self.connection() as connection:
             header = "class Policy:\n    flag = True\n"
@@ -155,7 +154,6 @@ class ReadStoreTests(unittest.TestCase):
             self.assertEqual(self.read(connection, "fixture:guide.md#Unique")["id"],
                              headings["Parent > Unique"][0])
 
-    @proves("MYC-11.4", kind="store")
     def test_missing_ambiguous_disabled_and_unknown_reads_use_the_closed_refusals(self):
         with self.connection() as connection:
             members = tuple((f"Policy{number:02}.run", "method", f"method {number}\n",
@@ -177,7 +175,6 @@ class ReadStoreTests(unittest.TestCase):
             self.assertTrue(all(row["root"] == "code" and row["path"] == "many.py"
                                 for row in refusal["candidates"]))
 
-    @proves("MYC-11.11", kind="store")
     def test_qualified_roots_percent_names_index_collisions_and_aliases_never_guess_a_file(self):
         with self.connection() as connection:
             code_text, artifact_text = "# Setup\nCheckout document.\n", "# Different\nArtifact document.\n"
@@ -216,7 +213,6 @@ class ReadStoreTests(unittest.TestCase):
             self.assertEqual((reply["id"], reply["root"], reply["address"]),
                 (shared[0], "artifact", "fixture:@artifact/rules.md#Limits%20%3E%20Backoff"))
 
-    @proves("MYC-11.1", "MYC-11.5", kind="store")
     def test_disk_selection_excludes_branch_and_stash_and_current_exact_bytes_override_text_projection(self):
         with self.connection() as connection:
             current = "# Current\nComplete retained text with 雪\0NUL.\n"
@@ -238,7 +234,6 @@ class ReadStoreTests(unittest.TestCase):
                     self.read(connection, identifier=identifier)
                 self.assertEqual(error.exception.code, "invalid_input")
 
-    @proves("MYC-11.1", "MYC-11.4", "MYC-11.5", kind="store")
     def test_public_command_returns_one_schema_one_reply_and_serializes_root_ambiguity(self):
         with self.connection() as connection:
             text = "# Heading\nWhole command body.\n"
@@ -271,7 +266,6 @@ class ReadStoreTests(unittest.TestCase):
             self.assertEqual({row["root"] for row in refusal["candidates"]}, {"code", "artifact"})
             self.assertEqual(errors.getvalue(), "")
 
-    @proves("MYC-11.5", "MYC-11.6", kind="store")
     def test_shared_exact_chunk_version_reports_only_faults_owned_by_its_current_disk_location(self):
         disk = '---\nsources: ["other:@artifact/disk.md"]\n---\n# Answer\nSame complete body.\n'
         branch = '---\nsources: ["other:@artifact/branch.md"]\n---\n# Answer\nSame complete body.\n'
@@ -298,6 +292,8 @@ class ReadStoreTests(unittest.TestCase):
 
 
 class ReadFreshnessStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.base = freshness_fixtures.FreshnessStoreTests()
         self.base.store_fixture = self.store_fixture
@@ -308,7 +304,6 @@ class ReadFreshnessStoreTests(unittest.TestCase):
         options.setdefault("deadline", Deadline.after(30))
         return read_from_store(connection, self.base.settings, place, **options)
 
-    @proves("MYC-11.4", "MYC-11.11", kind="store")
     def test_fresh_discovery_refuses_a_new_physical_root_collision_before_an_old_heading_can_win(self):
         checkout = self.base.base.code / "README.md"
         text = "# Original\nWhole checkout document text.\n"
@@ -333,7 +328,6 @@ class ReadFreshnessStoreTests(unittest.TestCase):
             self.assertEqual((by_id["address"], by_id["text"]),
                              ("fixture:@code/README.md#Original", text))
 
-    @proves("MYC-11.3", "MYC-11.4", kind="store")
     def test_fresh_discovery_refuses_a_new_duplicate_bare_heading_instead_of_the_old_unique_match(self):
         path = self.base.folders["fixture"] / "headings.md"
         original = "# Parent\n## Shared\nOriginal shared section.\n"
@@ -352,7 +346,6 @@ class ReadFreshnessStoreTests(unittest.TestCase):
             exact = self.read(connection, "fixture:@artifact/headings.md#Parent%20%3E%20Shared")
             self.assertEqual((exact["id"], exact["text"]), (old["id"], old["text"]))
 
-    @proves("MYC-11.1", "MYC-11.4", "MYC-11.5", "MYC-11.6", kind="store")
     def test_fresh_retained_identifier_observes_disk_restoration_and_keeps_absent_branch_text_ineligible(self):
         path = self.base.base.code / "restored.md"
         raw = self.base.document("Restored", "contract:@artifact/contract.md#Contract")
@@ -405,7 +398,6 @@ class ReadFreshnessStoreTests(unittest.TestCase):
                                 for name in ("fixture", "contract", "glossary")))
             self.assertTrue(reply["stale"])
 
-    @proves("MYC-11.6", kind="store")
     def test_recursive_upstreams_are_checked_under_one_deadline_without_returning_other_chunks(self):
         with self.base.base.connect() as connection:
             self.base.prepare(connection)
@@ -445,7 +437,6 @@ class ReadFreshnessStoreTests(unittest.TestCase):
                 row["via"][0]["repository"] == "contract" for row in reasons), reasons)
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_vectors").fetchone(), (0,))
 
-    @proves("MYC-11.1", "MYC-11.5", "MYC-11.6", kind="store")
     def test_fresh_read_ingests_changed_exact_text_and_new_qualified_file_before_final_selection(self):
         with self.base.base.connect() as connection:
             self.base.prepare(connection)
@@ -462,7 +453,6 @@ class ReadFreshnessStoreTests(unittest.TestCase):
             self.assertEqual(Path(reply["file"]).resolve(), new_file.resolve())
             self.assertTrue(reply["freshness"]["finished"], reply)
 
-    @proves("MYC-11.6", kind="store")
     def test_no_fresh_preserves_every_store_row_and_reports_recursive_pending_dependencies(self):
         with self.base.base.connect() as connection:
             self.base.prepare(connection)
@@ -482,7 +472,6 @@ class ReadFreshnessStoreTests(unittest.TestCase):
             self.assertTrue(all(states[name]["state"] == "pending" for name in ("fixture", "contract", "glossary")))
             self.assertEqual(self.base.contents(connection), before)
 
-    @proves("MYC-11.6", kind="store")
     def test_expired_one_deadline_reads_committed_index_and_lists_pending_work(self):
         with self.base.base.connect() as connection:
             self.base.prepare(connection)
@@ -499,7 +488,6 @@ class ReadFreshnessStoreTests(unittest.TestCase):
             self.assertTrue(any(row["state"] == "pending" for row in reply["freshness"]["repositories"]))
             self.assertEqual(self.base.contents(connection), before)
 
-    @proves("MYC-11.6", kind="store")
     def test_busy_upstream_keeps_committed_text_and_a_visible_incomplete_dependency_check(self):
         with self.base.base.connect() as connection, self.base.base.connect() as blocker:
             self.base.prepare(connection)

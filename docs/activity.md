@@ -105,8 +105,7 @@ behavior, classification references and cancellation. The five added producer
 checks exercise real reference writes, settings-only edge deactivation and
 faults without text changes, audit failure rollback and an applied owner prefix
 followed by safe retry, and repeated passes with exact cumulative/final reply
-accounting. They create no baseline or evidence owner. Their formal
-claims are recorded only by a passing complete source-bound coverage report.
+accounting. They create no baseline or evidence owner.
 
 Six further configured-store checks cover every supported kind, complete final
 replies including unchanged scopes, refused prefixes, native classification

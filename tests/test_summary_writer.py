@@ -12,7 +12,6 @@ import time
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._safeguards import SYSTEM_PATH
 from mycel import _summary_writer as writer_module
@@ -55,7 +54,6 @@ class SummaryWriterTests(unittest.TestCase):
         executable.write_text(textwrap.dedent(source), encoding="utf-8")
         return (sys.executable, str(executable), *arguments)
 
-    @proves("MYC-8.5")
     def test_literal_arguments_complete_stdin_empty_cwd_and_exact_utf8_output(self):
         marker = self.root / "shell-expanded"
         arguments = (f"$(touch {marker})", "a b", "*; $HOME", "")
@@ -79,7 +77,6 @@ class SummaryWriterTests(unittest.TestCase):
         self.assertFalse(Path(response["cwd"]).exists())
         self.assertFalse(marker.exists())
 
-    @proves("MYC-8.5", "MYC-8.6")
     def test_retry_uses_the_same_request_and_a_new_empty_directory(self):
         trace = self.root / "trace.jsonl"
         command = self.command("""
@@ -107,7 +104,6 @@ class SummaryWriterTests(unittest.TestCase):
             self.assertEqual(bytes(attempt["request"]), request)
             self.assertFalse(Path(attempt["cwd"]).exists())
 
-    @proves("MYC-8.5")
     def test_user_path_resolves_executable_without_forwarding_private_environment(self):
         bin_directory = self.root / "bin"
         bin_directory.mkdir()
@@ -140,7 +136,6 @@ class SummaryWriterTests(unittest.TestCase):
         self.assertEqual(writer.command, literal)
         self.assertNotIn("public-fixture-private", result.response.decode())
 
-    @proves("MYC-8.6")
     def test_failure_reasons_are_fixed_redacted_and_get_exactly_one_retry(self):
         cases = {
             "nonzero_exit": "sys.stderr.write('public-fixture-secret'); sys.exit(5)",
@@ -164,7 +159,6 @@ class SummaryWriterTests(unittest.TestCase):
                 self.assertEqual(trace.read_text().splitlines(), ["attempt", "attempt"])
                 self.assertNotIn("public-fixture-secret", repr(result))
 
-    @proves("MYC-8.6")
     def test_exact_byte_limits_succeed_and_missing_executable_has_safe_reason(self):
         command = self.command(f"""
             import sys
@@ -178,7 +172,6 @@ class SummaryWriterTests(unittest.TestCase):
         self.assertEqual(missing.write(b"request"), WriterResult(None, "start_failed", 2))
         self.assertNotIn("public-fixture-secret", repr(missing.write(b"request")))
 
-    @proves("MYC-8.7")
     def test_parallel_and_direct_calls_share_limit_and_preserve_request_order(self):
         counts = self.root / "counts.json"
         counts.write_text(json.dumps({"active": 0, "peak": 0, "calls": 0}))
@@ -263,7 +256,6 @@ class SummaryWriterTests(unittest.TestCase):
             return process
         return patch.object(writer_module.subprocess, "Popen", side_effect=record)
 
-    @proves("MYC-8.6")
     def test_deadline_and_overflow_kill_process_group_and_reap_each_attempt(self):
         self.assertEqual(WRITER_TIMEOUT_SECONDS, 300)
         for reason, behaviour in (
@@ -281,7 +273,6 @@ class SummaryWriterTests(unittest.TestCase):
                 self.assertEqual(len(processes), 2)
                 self.assert_tree_terminated(trace_directory, processes)
 
-    @proves("MYC-8.6")
     def test_direct_interruption_cleans_up_and_does_not_retry(self):
         command, trace_directory = self.tree_command("pass")
         check = writer_module._check_stopped
@@ -296,7 +287,6 @@ class SummaryWriterTests(unittest.TestCase):
         self.assertEqual(len(processes), 1)
         self.assert_tree_terminated(trace_directory, processes)
 
-    @proves("MYC-8.5")
     def test_success_also_terminates_background_descendants(self):
         trace_directory = self.root / "processes"
         trace_directory.mkdir()
@@ -319,7 +309,6 @@ class SummaryWriterTests(unittest.TestCase):
         self.assertEqual(processes[0].returncode, 0)
         self.assert_tree_terminated(trace_directory, processes)
 
-    @proves("MYC-8.6")
     def test_selector_setup_failure_or_interruption_reaps_already_started_process(self):
         command = self.command("import time; time.sleep(60)")
         for error, attempts in ((OSError("public-fixture-secret"), 2), (KeyboardInterrupt(), 1)):
@@ -337,7 +326,6 @@ class SummaryWriterTests(unittest.TestCase):
                 self.assertEqual(len(processes), attempts)
                 self.assertTrue(all(process.returncode is not None for process in processes))
 
-    @proves("MYC-8.6", "MYC-8.7")
     def test_batch_interruption_terminates_all_running_requests_and_cancels_pending(self):
         command, trace_directory = self.tree_command("pass")
         def interrupt(future, *args, **kwargs):
@@ -354,7 +342,6 @@ class SummaryWriterTests(unittest.TestCase):
         self.assertEqual(len(processes), 2)
         self.assert_tree_terminated(trace_directory, processes)
 
-    @proves("MYC-8.5", "MYC-8.7")
     def test_settings_and_request_validation_happen_before_any_process_starts(self):
         bad_commands = ((), [], ("",), ("   ",), ("python", 2), ("python\0bad",))
         with patch.object(writer_module.subprocess, "Popen") as start:

@@ -11,7 +11,6 @@ from unittest.mock import patch
 
 from mycel._cli import parse, run
 from mycel._commands import help_reply
-from mycel._coverage import proves
 from mycel._credentials import Credentials
 from mycel._embedding_plan import load_tokenizer
 from mycel._errors import MycelError
@@ -58,7 +57,6 @@ class SearchCliTests(unittest.TestCase):
             return VoyageClient(credentials, policy, **options, attempts=1, _transport=transport)
         return create
 
-    @proves('MYC-4.15', 'MYC-4.16')
     def test_complete_query_is_embedded_once_with_query_type_and_no_truncation(self):
         text = 'how does renewal decide 雪 😀\n'
         value = prepare_query(self.settings, text, credentials=self.credentials(), _client_factory=self.factory())
@@ -70,7 +68,6 @@ class SearchCliTests(unittest.TestCase):
         self.assertEqual(self.requests[0]['input_type'], 'query')
         self.assertFalse(self.requests[0]['truncation'])
 
-    @proves('MYC-4.16')
     def test_missing_credential_keeps_wording_available_without_provider_access(self):
         value = prepare_query(self.settings, 'renewal', credentials=self.credentials(present=False),
                               _client_factory=self.factory())
@@ -79,7 +76,6 @@ class SearchCliTests(unittest.TestCase):
         self.assertEqual(len(self.key_reads), 1)
         self.assertFalse(self.requests)
 
-    @proves('MYC-4.16')
     def test_every_provider_failure_and_invalid_response_has_safe_wording_fallback(self):
         for kind in ('connection', 'deadline', 'rate_limit', 'server', 'authentication',
                      'authorization', 'missing_model', 'content', 'invalid_response',
@@ -99,7 +95,6 @@ class SearchCliTests(unittest.TestCase):
         self.assertIsNone(zero.vector)
         self.assertTrue(zero.reason)
 
-    @proves('MYC-4.16')
     def test_overlong_complete_query_refuses_embedding_before_credentials_or_send(self):
         tokenizer = load_tokenizer()
         tokenizer = replace(tokenizer, catalog=replace(tokenizer.catalog, input_token_cap=2))
@@ -111,7 +106,6 @@ class SearchCliTests(unittest.TestCase):
         self.assertFalse(self.key_reads)
         self.assertFalse(self.requests)
 
-    @proves('MYC-4.16')
     def test_query_cancellation_is_not_converted_to_fallback(self):
         def interrupted(*args, **kwargs):
             raise KeyboardInterrupt()
@@ -121,7 +115,6 @@ class SearchCliTests(unittest.TestCase):
             prepare_query(self.settings, 'renewal', credentials=self.credentials(),
                           _client_factory=self.factory(failure='cancelled'))
 
-    @proves('MYC-4.15', 'MYC-4.16')
     def test_public_handler_retains_success_and_reason_when_query_vector_is_unavailable(self):
         called = []
         @contextmanager
@@ -148,7 +141,6 @@ class SearchCliTests(unittest.TestCase):
         self.assertEqual(called[0][2]['only'], 'docs')
         self.assertTrue(called[0][2]['no_fresh'])
 
-    @proves('MYC-4.16')
     def test_dimension_mismatch_uses_wording_without_query_credential_or_provider_access(self):
         @contextmanager
         def store(invocation):
@@ -164,7 +156,6 @@ class SearchCliTests(unittest.TestCase):
         self.assertIn('dimensions', search.call_args.kwargs['meaning_reason'])
         self.assertEqual(json.loads(out.getvalue()), {'schema': 3})
 
-    @proves('MYC-4.15', 'MYC-4.16')
     def test_invalid_or_unknown_scope_stops_before_provider_or_store_access(self):
         for args in (['search'], ['search', ''], ['search', 'x', 'y'], ['search', 'x', '--k', '0'],
                      ['search', 'x', '--k', '101'], ['search', 'x', '--k', '1.5'],
@@ -178,7 +169,6 @@ class SearchCliTests(unittest.TestCase):
                 prepare.assert_not_called()
                 store.assert_not_called()
 
-    @proves('MYC-4.15')
     def test_syntax_keeps_literal_option_shaped_queries_and_advertises_schema3(self):
         invocation = parse(['search', '--repo', 'fixture', '--', '--no-fresh'])
         self.assertEqual(invocation.arguments, ('--k', '10', '--', '--no-fresh'))

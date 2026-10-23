@@ -12,7 +12,6 @@ from psycopg.types.json import Jsonb
 
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import LocationId
-from mycel._coverage import proves
 from mycel._dependency_inputs import DependencyCaptureInputs
 from mycel._evidence import (CaptureLocation, EvidenceError, EvidenceStore, PinInputs,
     capture_baseline, checked_transaction_input_guard)
@@ -27,6 +26,8 @@ except ImportError:
 
 
 class RetainedRelationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.DependencySourceRefreshStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -93,7 +94,6 @@ class RetainedRelationStoreTests(unittest.TestCase):
             checks.verify()
         return reply
 
-    @proves('MYC-7.24', 'MYC-16.7', 'MYC-16.13', kind='store')
     def test_source_publication_retains_relation_away_deleted_and_recreated_pin_without_authority(self):
         with self.base.connect() as connection:
             identifier, baseline_id = self.seed(connection)
@@ -139,7 +139,6 @@ class RetainedRelationStoreTests(unittest.TestCase):
             self.assertEqual(changed[4]['reasons'], ['related_changed'])
             self.assertEqual(changed[5], original[5])
 
-    @proves('MYC-7.24', 'MYC-16.7', kind='store')
     def test_empty_relation_file_is_present_and_deleted_evidence_is_never_empty_substitution(self):
         self.fixture.source.write_bytes(b'')
         self.base.commit()
@@ -163,7 +162,6 @@ class RetainedRelationStoreTests(unittest.TestCase):
             self.assertEqual(self.relation(connection, identifier)[4]['reasons'], [])
             self.assertEqual(self.relation(connection, identifier)[5], original[5])
 
-    @proves('MYC-7.24', 'MYC-16.13', kind='store')
     def test_confirmation_withdraws_missing_relation_baseline_and_keeps_declared_fault(self):
         with self.base.connect() as connection:
             identifier, baseline_id = self.seed(connection)
@@ -183,7 +181,6 @@ class RetainedRelationStoreTests(unittest.TestCase):
                 (owner,)).fetchone(), (0,))
             self.assertEqual(self.fixture.role(connection), 'authored')
 
-    @proves('MYC-7.24', 'MYC-16.13', kind='store')
     def test_substantive_edit_withdraws_missing_current_relation_without_changing_historical_pin(self):
         with self.base.connect() as connection:
             identifier, baseline_id = self.seed(connection)
@@ -204,7 +201,6 @@ class RetainedRelationStoreTests(unittest.TestCase):
             self.assertEqual(result.counts['relationsChanged'], 1)
             self.assertEqual(EvidenceStore(connection).read_baseline('downstream', baseline_id).manifest.identifier, baseline_id)
 
-    @proves('MYC-7.24', 'MYC-16.13', kind='store')
     def test_same_capture_source_deletion_and_dependant_edit_withdraws_previously_present_relation(self):
         local = self.fixture.downstream / 'local.md'
         local.write_bytes(b'# Local\nSame-repository source.\n')
@@ -228,7 +224,6 @@ class RetainedRelationStoreTests(unittest.TestCase):
             self.assertEqual(result.counts['relationsChanged'], 1)
             self.assertEqual(EvidenceStore(connection).read_baseline('downstream', baseline_id).manifest.identifier, baseline_id)
 
-    @proves('MYC-7.24', 'MYC-16.13', kind='store')
     def test_removed_relation_family_member_preserves_complete_pin_and_direct_removed_reason(self):
         code = self.base.code / 'policy.py'
         code.write_bytes(b'class Policy:\n    def apply(self):\n        return 1\n')
@@ -247,7 +242,6 @@ class RetainedRelationStoreTests(unittest.TestCase):
             self.assertEqual(self.fixture.role(connection), 'authored')
             self.assertEqual(self.fixture.edges(connection), [])
 
-    @proves('MYC-7.24', 'MYC-16.13', kind='store')
     def test_selected_relation_removal_and_late_foreign_change_are_guarded_and_atomic(self):
         with self.base.connect() as connection:
             declared, _ = self.seed(connection)

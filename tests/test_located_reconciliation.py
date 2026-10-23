@@ -17,7 +17,7 @@ from psycopg.types.json import Jsonb
 
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import LocationId, capture_repository
-from mycel._coverage import proves, require_check_database
+from mycel._coverage import require_check_database
 from mycel._errors import MycelError
 from mycel._located_reconciliation import LocatedCaptureStore, location_key
 from mycel._resolver import SourceResolver
@@ -25,6 +25,8 @@ from mycel._settings import load_settings
 
 
 class LocatedReconciliationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         if not hasattr(self, 'store_fixture'):
             self.fail('This partial acceptance check requires a configured disposable store.')
@@ -94,7 +96,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
              'fixture:@artifact/source.md#Source', 'asserted', Jsonb({'label': label}), owner))
         return str(owner), str(dependency)
 
-    @proves('MYC-1.7', 'MYC-1.31', 'MYC-1.34', kind='store')
     def test_file_reconciliation_reads_only_its_own_retained_chunk_versions(self):
         from mycel import _located_reconciliation as publication
         self.initialize()
@@ -121,7 +122,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertEqual({(f.binding.primary.address, f.location): f.chunk_versions for f in quiet.files},
                              {(f.binding.primary.address, f.location): f.chunk_versions for f in first.files})
 
-    @proves('MYC-1.30', 'MYC-1.31', kind='store')
     def test_publish_disk_branches_and_untracked_stash_without_changing_checkout(self):
         self.initialize()
         self.git('branch', 'feature')
@@ -151,7 +151,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
         self.assertEqual((self.git('rev-parse', 'HEAD'), self.git('status', '--porcelain=v1'),
                           (self.artifact / 'guide.md').read_bytes()), (head, status, before_bytes))
 
-    @proves('MYC-1.31', 'MYC-1.34', kind='store')
     def test_branch_only_file_restores_its_exact_identity_and_own_pin(self):
         self.initialize()
         path = self.artifact / 'guide.md'
@@ -176,7 +175,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertEqual({version: (str(owner), str(dependency)) for version, owner, dependency in records},
                              {original.chunk_versions[0][1]: old_pin, later.chunk_versions[0][1]: later_pin})
 
-    @proves('MYC-16.2', 'MYC-1.31', 'MYC-1.33', kind='store')
     def test_independent_checkout_anchors_do_not_merge_equal_branch_names_paths_or_bytes(self):
         self.initialize()
         other = self.base / 'artifact-checkout'
@@ -197,7 +195,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             bare = self.resolve(connection, 'fixture:docs/guide.md#Guide', settings=settings)
             self.assertEqual(bare.fault, 'ambiguous_path')
 
-    @proves('MYC-1.31', 'MYC-1.33', kind='store')
     def test_root_retarget_preserves_old_versions_but_creates_new_file_identity(self):
         self.initialize()
         with self.connect() as connection:
@@ -215,7 +212,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_file_versions').fetchone()[0], 2)
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_chunks').fetchone()[0], 2)
 
-    @proves('MYC-1.31', 'MYC-1.34', kind='store')
     def test_removed_git_locations_retire_once_without_collecting_their_own_evidence(self):
         self.initialize()
         self.git('branch', 'feature')
@@ -239,7 +235,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertFalse(self.apply(connection).changed)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.22', 'MYC-1.31', kind='store')
     def test_complete_publication_noop_and_batch_callback_audit_failure_are_atomic(self):
         self.initialize()
         with self.connect() as connection:
@@ -279,7 +274,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             'JOIN public.mycel_locations l ON l.chunk_version=v.id WHERE l.file_location=%s',
             (file.binding.location,)).fetchone()[0])
 
-    @proves('MYC-1.22', 'MYC-1.31', kind='store')
     def test_concurrent_catalog_change_and_failed_complete_parse_publish_no_partial_rows(self):
         self.initialize()
         with self.connect() as connection:
@@ -307,7 +301,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
                 LocatedCaptureStore(connection).apply(self.settings, failed)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.8', 'MYC-1.22', 'MYC-1.31', kind='store')
     def test_changed_local_inventory_incomplete_parse_and_empty_disk_refuse_before_writes(self):
         self.initialize()
         with self.connect() as connection:
@@ -338,7 +331,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertEqual([file.location.kind for file in away.files], ['branch'])
             self.assertEqual(self.resolve(connection).fault, 'missing_file')
 
-    @proves('MYC-1.19', 'MYC-1.31', 'MYC-1.33', kind='store')
     def test_disk_move_and_reused_original_path_preserve_each_retained_branch_binding(self):
         self.initialize()
         path = self.artifact / 'guide.md'
@@ -356,7 +348,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertEqual(retained.members[0].chunk.version, original.chunk_versions[0][1])
             self.assertEqual(len(result.files), 3)
 
-    @proves('MYC-16.2', 'MYC-1.19', 'MYC-1.31', 'MYC-1.33', kind='store')
     def test_existing_disk_handoff_upgrades_into_complete_locations_and_checked_git_move(self):
         self.initialize()
         path = self.artifact / 'guide.md'
@@ -382,7 +373,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
                                   identifier=LocationId('branch', 'code', 'refs/heads/fixture-main')).selection
             self.assertEqual(branch.file.identifier, original.binding.identifier)
 
-    @proves('MYC-1.31', 'MYC-1.34', kind='store')
     def test_same_exact_child_text_keeps_located_names_under_distinct_parent_versions(self):
         self.initialize(b'# Parent\nOriginal.\n## Child\nIdentical child.\n')
         self.git('branch', 'old-parent')
@@ -398,7 +388,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertFalse(self.apply(connection).changed)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-16.2', 'MYC-1.19', 'MYC-1.31', 'MYC-1.33', kind='store')
     def test_first_discovery_maps_checked_git_rename_across_disk_and_local_branches(self):
         self.initialize()
         self.git('branch', 'old-place')
@@ -423,7 +412,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertEqual(self.state(connection), state)
         self.assertEqual((self.git('rev-parse', 'HEAD'), self.git('status', '--porcelain=v1')), (head, status))
 
-    @proves('MYC-16.2', 'MYC-1.19', 'MYC-1.31', 'MYC-1.33', 'MYC-1.34', kind='store')
     def test_committed_inode_changing_move_automatically_preserves_ids_versions_and_own_pin(self):
         self.initialize()
         with self.connect() as connection:
@@ -447,7 +435,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertFalse(self.apply(connection).changed)
             self.assertEqual(self.state(connection), state)
 
-    @proves('MYC-16.2', 'MYC-1.19', 'MYC-1.31', 'MYC-1.33', 'MYC-1.34', kind='store')
     def test_renamed_tracked_stash_keeps_disk_identity_and_exact_stash_version(self):
         self.initialize()
         raw = (self.artifact / 'guide.md').read_bytes()
@@ -465,7 +452,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertEqual(saved.members[0].chunk.identifier, disk.members[0].chunk.identifier)
             self.assertEqual(saved.members[0].chunk.version, disk.members[0].chunk.version)
 
-    @proves('MYC-16.2', 'MYC-1.31', 'MYC-1.34', kind='store')
     def test_edited_git_rename_keeps_identity_but_creates_a_distinct_exact_version(self):
         raw = b'# Guide\n' + b'Original complete paragraph.\n' * 20
         self.initialize(raw)
@@ -487,7 +473,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             owned = connection.execute('SELECT baseline_owner,id FROM public.mycel_dependencies').fetchone()
             self.assertEqual(tuple(map(str, owned)), pin)
 
-    @proves('MYC-16.2', 'MYC-1.22', 'MYC-1.31', kind='store')
     def test_git_correspondence_recheck_failure_rolls_back_every_location(self):
         self.initialize()
         self.git('branch', 'old-place')
@@ -510,7 +495,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             self.assertEqual(calls, 2)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-16.2', 'MYC-1.31', 'MYC-1.33', kind='store')
     def test_copied_paths_and_synthetic_renames_in_unrelated_histories_keep_distinct_ids(self):
         raw = b'# Guide\nExact complete text.\n'
         self.initialize(raw)
@@ -530,7 +514,6 @@ class LocatedReconciliationStoreTests(unittest.TestCase):
             copied = self.resolve(connection, 'fixture:@artifact/copied.md#Guide', identifier=branch).selection
             self.assertEqual(len({disk.file.identifier, original.file.identifier, copied.file.identifier}), 3)
 
-    @proves('MYC-1.22', 'MYC-1.31', kind='store')
     def test_automatic_disk_move_refuses_a_reused_old_physical_path_without_writing(self):
         self.initialize()
         with self.connect() as connection:

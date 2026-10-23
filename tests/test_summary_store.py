@@ -13,7 +13,6 @@ from psycopg.types.json import Jsonb
 
 from mycel._cli import Invocation, run
 from mycel._build_identity import current_build
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._settings import _freeze
 from mycel._source_refs import SourceAddress
@@ -29,6 +28,8 @@ except ImportError:
 
 
 class SummaryStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.RetrievalStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -90,7 +91,6 @@ class SummaryStoreTests(unittest.TestCase):
                        "mycel._capture.capture_repository"):
             stack.enter_context(patch(target, side_effect=AssertionError("a stored report must do no external work")))
 
-    @proves("MYC-8.1", "MYC-8.2", "MYC-8.20", kind="store")
     def test_eligibility_uses_exact_current_disk_sections_and_complete_current_vectors(self):
         with self.connection() as connection:
             full = self.document(connection, path="full.md")
@@ -120,7 +120,6 @@ class SummaryStoreTests(unittest.TestCase):
                 self.assertEqual(snapshot.status()["sections"], {"inSummary": 1, "inNone": 1, "notEmbedded": 4})
                 self.assertEqual(snapshot.status()["levels"], [{"level": 1, "summaries": 1, "stale": 0}])
 
-    @proves("MYC-8.20", "MYC-8.28", kind="store")
     def test_status_reports_disjoint_membership_order_stale_and_historical_build_metadata(self):
         with self.connection() as connection:
             member = self.document(connection, path="member.md")
@@ -153,7 +152,6 @@ class SummaryStoreTests(unittest.TestCase):
                 self.assertEqual(report["builtAt"], "2026-10-08T12:00:00Z")
                 self.assertEqual(report["groupingProfile"], "mycel-summary-v1")
 
-    @proves("MYC-8.16", "MYC-8.28", kind="store")
     def test_build_dry_run_fits_exact_leaf_requests_and_keeps_current_store_unchanged(self):
         with self.connection() as connection, ExitStack() as stack:
             self.no_effects(stack)
@@ -184,7 +182,6 @@ class SummaryStoreTests(unittest.TestCase):
             self.assertFalse(any(statement.lstrip().upper().startswith(
                 ("INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP")) for statement in recorded.statements))
 
-    @proves("MYC-8.16", "MYC-8.28", kind="store")
     def test_regeneration_keeps_exact_logical_members_plans_lower_first_and_blocks_remaining_stale_generated_members(self):
         with self.connection() as connection, ExitStack() as stack:
             self.no_effects(stack)
@@ -229,7 +226,6 @@ class SummaryStoreTests(unittest.TestCase):
                 self.assertEqual(report["work"][4]["conditionalOn"], [report["remove"][0]])
                 self.assertEqual(self.fixture.contents(connection), before)
 
-    @proves("MYC-8.20", "MYC-8.28", kind="store")
     def test_read_snapshot_survives_concurrent_changes_and_refuses_expired_use_and_writes(self):
         with self.connection() as connection, self.connection() as writer:
             member = self.document(connection)
@@ -251,7 +247,6 @@ class SummaryStoreTests(unittest.TestCase):
                 self.assertEqual(after.status()["levels"], [{"level": 1, "summaries": 1, "stale": 1}])
                 self.assertEqual(len(after.regeneration_plan()["remove"]), 1)
 
-    @proves("MYC-8.28", kind="store")
     def test_exact_repository_scope_rejects_organizations_even_one_member_and_empty_reports_succeed(self):
         settings = self.settings(organization=True)
         values = {**settings.values, "repos": {name: {**value, "enabled": name == "fixture"}
@@ -274,7 +269,6 @@ class SummaryStoreTests(unittest.TestCase):
                 self.assertEqual(snapshot.build_plan()["requests"], 0)
                 self.assertEqual(snapshot.regeneration_plan()["work"], [])
 
-    @proves("MYC-8.20", "MYC-8.28", kind="store")
     def test_incompatible_published_state_fails_closed_without_writes(self):
         with self.connection() as connection:
             member = self.document(connection)
@@ -307,7 +301,6 @@ class SummaryStoreTests(unittest.TestCase):
                     self.assertEqual(rejected.exception.code, "store_format")
                     self.assertEqual(self.fixture.contents(connection), before)
 
-    @proves("MYC-8.20", "MYC-8.28", kind="store")
     def test_self_same_and_higher_level_generated_summary_members_are_stale_and_blocked(self):
         with self.connection() as connection:
             section = self.document(connection)
@@ -330,7 +323,6 @@ class SummaryStoreTests(unittest.TestCase):
                                                               {"level": 2, "summaries": 1, "stale": 0}])
                 self.assertEqual(self.fixture.contents(connection), before)
 
-    @proves("MYC-8.20", "MYC-8.28", kind="store")
     def test_unsupported_surviving_member_kinds_are_reported_stale_and_never_planned_for_writing(self):
         with self.connection() as connection:
             code = self.fixture.seed(connection, path="code.py")
@@ -350,7 +342,6 @@ class SummaryStoreTests(unittest.TestCase):
                 self.assertEqual(snapshot.status()["levels"], [{"level": 1, "summaries": 2, "stale": 2}])
                 self.assertEqual(self.fixture.contents(connection), before)
 
-    @proves("MYC-8.20", "MYC-8.28", kind="store")
     def test_public_cli_registration_returns_complete_status_and_dry_run_replies(self):
         with self.connection() as connection, ExitStack() as stack:
             self.no_effects(stack)
@@ -395,7 +386,6 @@ class SummaryStoreTests(unittest.TestCase):
                 self.assertEqual(error.getvalue(), "")
             self.assertEqual(self.fixture.contents(connection), before)
 
-    @proves("MYC-8.28", kind="store")
     def test_handler_reports_are_read_only_and_pending_actual_mutations_refuse_before_store_use(self):
         with self.connection() as connection, ExitStack() as stack:
             self.no_effects(stack)

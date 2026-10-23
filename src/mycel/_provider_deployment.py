@@ -175,7 +175,7 @@ def prepare_deployment(settings, suite, report_path, *, expected_report_sha256):
 
 
 def run_provider_deployment_checks(settings, suite, provider_proofs, reports, *, repository, build,
-                                   implementation_identity, live=False, registry=None):
+                                   implementation_identity, live=False):
     """Consume an explicitly completed146 group without another provider call.
 
     The trusted same-process group caller passes the original OnDemandProofs
@@ -193,13 +193,7 @@ def run_provider_deployment_checks(settings, suite, provider_proofs, reports, *,
             or not isinstance(repository, str) or not repository):
         raise MycelError('invalid_input', 'Provider deployment checks require an immutable Build identity.')
     import unittest
-    from ._coverage import (CheckResult, OnDemandProofs, _registry_fingerprint,
-                            load_registry, proves, run_on_demand_checks)
-    active_registry = load_registry()
-    selected_registry = active_registry if registry is None else dict(registry)
-    if selected_registry != active_registry:
-        raise MycelError('invalid_input', 'Provider deployment checks require the complete unchanged registry.')
-    registry_identity = _registry_fingerprint(selected_registry)
+    from ._coverage import CheckResult, OnDemandProofs, run_on_demand_checks
     expected_checks = (
         ('mycel._provider_checks.run_provider_checks.<locals>.ProviderAcceptance.test_fixed_embedding_compatibility',
          'live', ('MYC-13.9',)),
@@ -209,11 +203,9 @@ def run_provider_deployment_checks(settings, suite, provider_proofs, reports, *,
          'eval', ('MYC-13.20',)))
 
     class ProviderDeploymentAcceptance(unittest.TestCase):
-        @proves('MYC-14.22', kind='live')
         def test_same_run_provider_qualification_required_for_deployment(self):
             self.assertIs(type(provider_proofs), OnDemandProofs)
             self.assertEqual(provider_proofs.implementation_identity, implementation_identity)
-            self.assertEqual(provider_proofs.registry_fingerprint, registry_identity)
             self.assertEqual(len(provider_proofs.checks), len(expected_checks))
             for check, expected in zip(provider_proofs.checks, expected_checks, strict=True):
                 self.assertIs(type(check), CheckResult)
@@ -247,14 +239,12 @@ def run_provider_deployment_checks(settings, suite, provider_proofs, reports, *,
             reports['deployment'] = {**record, 'sameProcessProviderGroupConsumed': True,
                 'reportObjectOrigin': 'trusted-same-process-group-caller',
                 'implementationIdentity': implementation_identity,
-                'registryFingerprint': registry_identity,
                 'providerCheckNames': [row.name for row in provider_proofs.checks],
                 'additionalProviderCallsByConsumer': 0}
 
-    consumer_proofs = run_on_demand_checks(unittest.TestSuite([
-        ProviderDeploymentAcceptance('test_same_run_provider_qualification_required_for_deployment')]),
-        kinds=frozenset({'live'}), implementation_identity=implementation_identity,
-        registry=selected_registry)
+    consumer_proofs = run_on_demand_checks(((ProviderDeploymentAcceptance(
+        'test_same_run_provider_qualification_required_for_deployment'), 'live', ('MYC-14.22',)),),
+        implementation_identity=implementation_identity)
     # Never reconstruct or concatenate proof rows into a manufactured object.
     # run_checks already accepts this sequence of independently executed proofs.
     return (provider_proofs, consumer_proofs), reports

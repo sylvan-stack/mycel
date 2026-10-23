@@ -4,7 +4,6 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
-from mycel._coverage import proves
 from mycel._freshness import Deadline
 from mycel._generated import GeneratedPublicationStore
 from mycel._locks import atomic_transaction, invocation_guard, operation_guard
@@ -23,6 +22,8 @@ except ImportError:
 
 
 class GeneratedReadStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.FreshnessStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -64,7 +65,6 @@ class GeneratedReadStoreTests(unittest.TestCase):
             'FROM public.mycel_dependencies d LEFT JOIN public.mycel_evidence_references r '
             'ON r.owner=d.baseline_owner AND r.ordinal=0 ORDER BY d.id').fetchall()
 
-    @proves('MYC-11.6', kind='store')
     def test_upper_summary_checks_generated_members_and_transitive_external_sources_without_regeneration(self):
         with self.fixture.base.connect() as connection:
             self.fixture.prepare(connection)

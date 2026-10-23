@@ -10,7 +10,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import run
-from mycel._coverage import proves
 from mycel._credentials import Secret
 from mycel._embed import retained_contexts
 from mycel._embedding_plan import load_tokenizer
@@ -36,6 +35,8 @@ except ImportError:
 
 
 class OverviewStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.IngestStoreTests()
         self.fixture.store_fixture = self.store_fixture
@@ -90,7 +91,6 @@ class OverviewStoreTests(unittest.TestCase):
         self.assertTrue(service.attempts)
         return service
 
-    @proves('MYC-9.1', 'MYC-9.5', kind='store')
     def test_complete_ingest_publishes_all_disk_files_without_checkout_writes_or_branch_stash_names(self):
         self.write('base/retained.py', 'def branch_only():\n    pass\n')
         self.base.commit()
@@ -124,7 +124,6 @@ class OverviewStoreTests(unittest.TestCase):
                 "JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version JOIN public.mycel_chunks c ON c.id=v.chunk_id "
                 "WHERE c.kind='overview'").fetchall(), [(None, 'index', 'fixture:@index/overview#disk')])
 
-    @proves('MYC-9.4', 'MYC-9.7', kind='store')
     def test_normal_embedding_is_preserved_on_body_only_edits_and_changed_outline_becomes_pending(self):
         file = self.write('src/work.py', 'def work():\n    return 1\n')
         self.embed()
@@ -154,7 +153,6 @@ class OverviewStoreTests(unittest.TestCase):
             self.assertFalse(connection.execute('SELECT 1 FROM public.mycel_embedding_plans WHERE chunk_version=%s',
                                                 (updated[1],)).fetchone())
 
-    @proves('MYC-9.4', 'MYC-9.12', kind='store')
     def test_order_kind_membership_and_path_changes_update_exact_directories(self):
         file = self.write('src/work.py', 'class A:\n    def first(self):\n        pass\n\ndef z():\n    pass\n\ndef a():\n    pass\n')
         self.write('stable/same.py', 'def unchanged():\n    pass\n')
@@ -176,7 +174,6 @@ class OverviewStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(next(row for row in self.overview_rows(connection) if row[3]['name'] == 'stable'), stable)
 
-    @proves('MYC-9.6', 'MYC-9.12', kind='store')
     def test_missing_sections_rebuild_from_store_and_empty_directory_sections_delete(self):
         file = self.write('src/work.py', 'def work():\n    pass\n')
         self.ingest()
@@ -202,7 +199,6 @@ class OverviewStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_chunks WHERE kind='overview'").fetchone()[0], 0)
 
-    @proves('MYC-9.12', kind='store')
     def test_failed_final_projection_rolls_back_code_and_overview_and_stopped_pass_keeps_committed_prefix(self):
         file = self.write('src/work.py', 'def before():\n    pass\n')
         self.ingest()
@@ -257,7 +253,6 @@ class OverviewStoreTests(unittest.TestCase):
         self.assertFalse(reply['repositories']['later']['ran'])
         self.assertIn('after', self.report()['sections'][0]['text'])
 
-    @proves('MYC-9.6', 'MYC-9.8', 'MYC-9.9', 'MYC-9.10', kind='store')
     def test_search_read_report_origin_no_edges_shared_exclusion_and_document_margin_limit(self):
         for directory in ('a', 'b', 'c'):
             self.write(directory + '/work.py', 'def needle():\n    pass\n')
@@ -312,7 +307,6 @@ class OverviewStoreTests(unittest.TestCase):
         self.assertEqual(len(self.report('--dir', 'b')['sections']), 1)
         self.assertEqual(self.report(repository='other')['sections'], [])
 
-    @proves('MYC-9.4', 'MYC-9.12', kind='store')
     def test_fresh_search_pass_builds_and_reconciles_the_applied_outline(self):
         file = self.write('src/work.py', 'def needle():\n    return 1\n')
         with self.base.connect() as connection:

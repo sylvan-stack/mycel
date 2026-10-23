@@ -196,12 +196,12 @@ Build fails and retains its private workspace as `retainedCheckWorkspace` for
 inspection. A database name alone never grants cleanup permission.
 
 An unavailable required probe or failed check produces `failed` and retains its
-sanitized name and reason. If the suite passes but active unit/store requirements
-still lack passing named proofs, `automatic_requirement_proof_gate` records their
-exact IDs and blocks qualification. `automaticQualification` becomes true only
-when all required groups and all active automatic requirement proofs pass; its
-certificate binds the exact Build, source/check inputs, installed manifests and
-results. Pending eval/live rows remain separate on-demand work.
+sanitized name and reason. `automaticQualification` becomes true only when all
+required groups pass, including every automatic check of the frozen inventory;
+its certificate binds the exact Build, source/check inputs, installed manifests,
+results and that inventory. It records no requirement coverage: which
+requirement a check rests on is an Origin Link in the Index Store (MYC-D56).
+Eval/live checks remain separate on-demand work.
 
 **The internal staging seam never publishes `working`**. Development `create`
 continues through the final private credential check and atomic publication
@@ -214,7 +214,6 @@ target/runtime; they claim no unmeasured startup threshold.
 mycel:@code/src/mycel_build/_automatic.py#run_automatic
 mycel:@code/src/mycel_build/_automatic_backend.py#InstalledFixtureBackend
 mycel:@code/src/mycel_build/_qualification.py#automatic_contract
-mycel:@code/src/mycel_build/_qualification.py#requirement_results
 -->
 
 
@@ -399,7 +398,6 @@ Focused diagnostics do not qualify this Build or publish a working selection.
 Actual full-Build results and independent review remain pending.
 
 <!-- sources:
-mycel:@code/checks/claims.json
-mycel:@code/src/mycel_build/_automatic.py#automatic_contract
+mycel:@code/src/mycel_build/_qualification.py#automatic_contract
 mycel:@code/src/mycel_build/_qualification.py#qualification_certificate
 -->

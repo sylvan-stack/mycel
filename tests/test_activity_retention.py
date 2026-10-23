@@ -11,7 +11,6 @@ from psycopg.types.json import Jsonb
 from mycel import _activity as activity
 from mycel import _locks as locks
 from mycel._activity_retention import ActivityRetentionStore
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._repository_removal import RepositoryRemovalStore
 from mycel._settings import _freeze, load_settings
@@ -103,6 +102,8 @@ class _History:
 
 
 class ActivityRetentionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.history = _History(self.store_fixture)
 
@@ -113,7 +114,6 @@ class ActivityRetentionStoreTests(unittest.TestCase):
             retained.guard_in_transaction(repository)
             return retained.prune_in_transaction(repository)
 
-    @proves('MYC-12.9', kind='store')
     def test_opening_keeps_exact_newest_thousand_independently_for_two_repositories_and_globals(self):
         with self.history.connect() as connection:
             self.history.repositories(connection, 'fixture', 'other')
@@ -141,7 +141,6 @@ class ActivityRetentionStoreTests(unittest.TestCase):
                     self.assertEqual(connection.execute(f'SELECT count(*) FROM public.{table} WHERE activity=%s',
                                                         (identifiers[-1],)).fetchone(), (1,))
 
-    @proves('MYC-12.9', kind='store')
     def test_only_exact_live_invocations_survive_the_limit_and_closed_protection_eventually_expires(self):
         with self.history.connect() as owner, self.history.connect() as writer:
             self.history.repositories(owner, 'fixture')
@@ -168,7 +167,6 @@ class ActivityRetentionStoreTests(unittest.TestCase):
             self.assertNotIn(identifier, survivors)
             self.assertNotIn(recent[0], survivors)
 
-    @proves('MYC-12.9', kind='store')
     def test_pruning_all_attached_detail_leaves_baseline_verification_and_classifier_evidence_exact(self):
         with self.history.connect() as connection:
             self.history.repositories(connection, 'fixture')
@@ -204,7 +202,6 @@ class ActivityRetentionStoreTests(unittest.TestCase):
             for table in ('mycel_activity_files', 'mycel_identity_decisions', 'mycel_activity_classifications'):
                 self.assertEqual(connection.execute(f'SELECT count(*) FROM public.{table}').fetchone(), (0,))
 
-    @proves('MYC-12.9', kind='store')
     def test_late_open_and_close_prune_failures_rollback_feature_rows_audits_and_deletions(self):
         with self.history.connect() as connection:
             self.history.repositories(connection, 'fixture')
@@ -242,7 +239,6 @@ class ActivityRetentionStoreTests(unittest.TestCase):
                 self.assertEqual(activity.activity_state(connection, opened)['counts'], {'applied': 7})
             self.assertNotIn(old[0], self.history.ids(connection, 'fixture'))
 
-    @proves('MYC-12.9', kind='store')
     def test_concurrent_group_writers_refuse_without_partial_feature_or_prune_then_retry(self):
         with self.history.connect() as first, self.history.connect() as second:
             self.history.repositories(first, 'fixture')
@@ -282,7 +278,6 @@ class ActivityRetentionStoreTests(unittest.TestCase):
             self.assertEqual(len(self.history.ids(first, 'fixture')), 1000)
             self.assertIsNotNone(first.execute('SELECT 1 FROM public.mycel_embedding_receipts WHERE id=%s', (receipt,)).fetchone())
 
-    @proves('MYC-12.9', kind='store')
     def test_group_guards_remain_compatible_with_peer_fk_key_share_and_other_groups(self):
         with self.history.connect() as holder, self.history.connect() as writer:
             self.history.repositories(holder, 'fixture', 'other')
@@ -320,7 +315,6 @@ class ActivityRetentionStoreTests(unittest.TestCase):
             self.assertEqual(holder.execute('SELECT * FROM public.mycel_lock_keys ORDER BY key').fetchall(), lock_values)
             self.assertEqual(self.history.state(holder, tables=(), sequences=True), sequence_values)
 
-    @proves('MYC-12.9', kind='store')
     def test_stale_repeatable_snapshot_refuses_after_peer_commit_and_rolls_back_feature_then_fresh_retry(self):
         with self.history.connect() as stale, self.history.connect() as peer:
             self.history.repositories(stale, 'fixture')
@@ -369,7 +363,6 @@ class ActivityRetentionStoreTests(unittest.TestCase):
             self.assertEqual(peer.execute('SELECT payload FROM public.mycel_embedding_receipts WHERE id=%s',
                                           (left_receipt,)).fetchone()[0], b'fresh retry committed feature')
 
-    @proves('MYC-12.9', kind='store')
     def test_actual_numbered_initialization_prunes_global_history_atomically_with_dimension_change(self):
         with self.history.connect() as connection:
             old = self.history.seed(connection, None, 1000)
@@ -399,7 +392,6 @@ class ActivityRetentionStoreTests(unittest.TestCase):
             self.assertNotIn(old[0], identifiers)
             self.assertEqual(activity.activity_state(connection, identifiers[0])['kind'], 'init')
 
-    @proves('MYC-12.9', 'MYC-12.10', kind='store')
     def test_numbered_repository_removal_deletes_its_history_and_retains_foreign_evidence_and_global_limit(self):
         fixture = removal_fixtures.RepositoryRemovalStoreTests()
         fixture.store_fixture = self.store_fixture

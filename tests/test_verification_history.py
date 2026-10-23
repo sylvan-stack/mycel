@@ -9,7 +9,6 @@ from psycopg.types.json import Jsonb
 from mycel import _store as store
 from mycel._capture import capture_repository
 from mycel._collection import CollectionStore
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceError
 from mycel._located_reconciliation import LocatedCaptureStore
@@ -23,6 +22,8 @@ except ImportError:
 
 
 class VerificationHistoryStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         helper = fixtures.LocatedReconciliationStoreTests()
         helper.store_fixture = self.store_fixture
@@ -72,7 +73,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
         connection.execute('ALTER TABLE public.mycel_verifications DROP COLUMN chunk_id')
         connection.execute('UPDATE public.mycel_store SET format=1')
 
-    @proves('MYC-7.19', 'MYC-7.28', 'MYC-16.11', kind='store')
     def test_old_exact_version_collects_but_history_and_owned_evidence_survive_and_exact_text_return_applies(self):
         with self.helper.connect() as connection:
             self.publish(connection)
@@ -93,7 +93,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             self.assertNotEqual(connection.execute('SELECT id FROM public.mycel_chunk_versions WHERE snapshot_hash=%s',
                                                    (original['textHash'],)).fetchone()[0], old)
 
-    @proves('MYC-7.19', 'MYC-7.28', kind='store')
     def test_branch_switch_selects_only_newest_record_for_resulting_exact_dependant_version(self):
         self.helper.initialize(raw=b'# Guide\nOriginal text.\n')
         with self.helper.connect() as connection:
@@ -111,7 +110,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             self.assertEqual(self.report(connection, history=True)['verifications'],
                              [{**second, 'current': False}, first])
 
-    @proves('MYC-7.19', 'MYC-7.27', 'MYC-7.28', kind='store')
     def test_branch_only_dependency_and_relation_faults_do_not_invalidate_shared_current_disk_version(self):
         from io import StringIO
         import os
@@ -153,7 +151,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             self.assertFalse(withdrawn['current'])
             self.assertEqual(self.report(connection)['verifications'], [])
 
-    @proves('MYC-7.19', 'MYC-7.28', kind='store')
     def test_family_selection_member_addition_and_removal_invalidate_unchanged_dependant(self):
         from mycel._relate import RelateStore
         self.path.write_bytes(b'# Guide\nFamily guide.\n\n<!-- sources:\nfixture:@code/worker.py#Worker\n-->\n')
@@ -183,7 +180,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             self.assertEqual(self.report(connection)['verifications'], [])
             self.assertTrue(all(not item['current'] for item in self.report(connection, history=True)['verifications']))
 
-    @proves('MYC-7.19', 'MYC-7.28', kind='store')
     def test_related_source_text_change_ineligible_inputs_and_relation_assertion_are_checked(self):
         from io import StringIO
         import os
@@ -240,7 +236,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             self.assertTrue(all(not item['current'] for item in reply['verifications']))
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.19', 'MYC-7.20', 'MYC-7.30', kind='store')
     def test_default_newest_exact_record_history_deterministic_and_empty_are_read_only(self):
         with self.helper.connect() as connection:
             before = self.state(connection)
@@ -269,7 +264,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
                 [alpha_record, zulu, winner, {**loser, 'current': False}, {**first, 'current': False}, code])
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.19', 'MYC-7.28', 'MYC-7.30', kind='store')
     def test_changed_missing_uningested_and_corrupt_inputs_are_never_current_and_reporting_never_writes(self):
         with self.helper.connect() as connection:
             self.publish(connection)
@@ -289,7 +283,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             self.assertEqual(self.report(connection, history=True)['verifications'], [{**original, 'current': False}])
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.19', 'MYC-7.28', kind='store')
     def test_new_assertion_and_removed_assertion_invalidate_same_dependant_text(self):
         from mycel._derive import DeriveStore
         self.path.write_bytes(b'# Guide\nOriginal text.\n')
@@ -305,7 +298,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             DeriveStore(connection).apply(self.settings, self.ref, source, remove=True, settings_home=self.helper.base)
             self.assertEqual(self.report(connection)['verifications'], [])
 
-    @proves('MYC-7.19', 'MYC-7.24', 'MYC-7.28', kind='store')
     def test_withdrawn_deleted_declared_source_keeps_fault_and_history_noncurrent(self):
         self.path.write_bytes(b'# Guide\nOriginal text.\n\n<!-- sources:\nfixture:@artifact/source.md#Source\n-->\n')
         source = self.artifact / 'source.md'
@@ -320,7 +312,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             self.assertEqual(self.report(connection)['verifications'], [])
             self.assertTrue(all(not item['current'] for item in self.report(connection, history=True)['verifications']))
 
-    @proves('MYC-7.19', 'MYC-7.28', 'MYC-16.11', kind='store')
     def test_logical_chunk_deletion_releases_only_its_verification_and_preserves_shared_source_evidence(self):
         self.path.write_bytes(b'# Guide\nOriginal text.\n\n<!-- sources:\nfixture:@artifact/source.md#Source\n-->\n')
         source = self.artifact / 'source.md'
@@ -342,7 +333,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_snapshots').fetchone(), (0,))
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_evidence_owners').fetchone(), (0,))
 
-    @proves('MYC-7.28', 'MYC-16.11', kind='store')
     def test_late_collection_failure_rolls_back_versions_chunks_history_owners_and_evidence(self):
         with self.helper.connect() as connection:
             self.publish(connection)
@@ -353,7 +343,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
                 self.publish(connection, fail=True)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-6.6', 'MYC-6.19', 'MYC-7.28', kind='store')
     def test_empty_and_valid_predecessors_migrate_preserving_record_evidence_and_generation(self):
         with self.helper.connect() as connection:
             self.predecessor(connection)
@@ -371,7 +360,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             self.assertEqual(self.records(connection), stored)
             self.assertEqual(self.report(connection)['verifications'], [original])
 
-    @proves('MYC-6.6', 'MYC-6.19', 'MYC-7.28', kind='store')
     def test_migration_refuses_unknown_incomplete_cross_repo_hash_and_public_version_without_partial_ddl(self):
         with self.helper.connect() as connection:
             self.publish(connection)
@@ -396,7 +384,6 @@ class VerificationHistoryStoreTests(unittest.TestCase):
             connection.execute('UPDATE public.mycel_verifications SET record=%s', (Jsonb(stored),))
             store.initialize_store(connection, dimensions=1024)
 
-    @proves('MYC-6.6', 'MYC-6.19', 'MYC-12.4', kind='store')
     def test_midstep_and_numbered_build_audit_failure_roll_back_the_complete_migration(self):
         with self.helper.connect() as connection:
             self.publish(connection)

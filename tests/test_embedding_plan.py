@@ -11,7 +11,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._embedding_plan import (
     PlanningError, code_place_line, document_place_line, load_tokenizer,
     plan_batches, plan_chunk, plan_query, validate_plan,
@@ -23,7 +22,6 @@ OWNED = ("MYC-3.2", "MYC-3.3", "MYC-3.16", "MYC-3.18", "MYC-3.19", "MYC-3.20")
 
 
 class EmbeddingPlanTests(unittest.TestCase):
-    @proves("MYC-3.2", "MYC-3.16")
     def test_document_preamble_and_empty_heading_can_be_planned_without_invented_context(self):
         for heading in ((), "", ("",), ("", "Child")):
             place = document_place_line("notes.md", heading)
@@ -32,7 +30,6 @@ class EmbeddingPlanTests(unittest.TestCase):
             self.assert_complete(plan, self.tokenizer)
         self.assertEqual(document_place_line("notes.md", ()), "notes.md › ")
 
-    @proves("MYC-3.19", "MYC-3.18")
     def test_retained_library_counting_context_and_recorded_counts_must_be_verifiable(self):
         plan = self.chunk("complete text\n")
         for mutation in ({"tokenizers_library_sha256": "0" * 64}, {"tokenizers_version": "0.0.0"},
@@ -73,7 +70,6 @@ class EmbeddingPlanTests(unittest.TestCase):
         self.assertEqual(offset, len(raw))
         validate_plan(plan, tokenizer)
 
-    @proves("MYC-3.19")
     def test_packaged_asset_matches_official_revision_digest_and_known_counts(self):
         catalog = self.tokenizer.catalog
         self.assertEqual(catalog.tokenizer_repository, "voyageai/voyage-code-4")
@@ -89,7 +85,6 @@ class EmbeddingPlanTests(unittest.TestCase):
         self.assertEqual(self.tokenizer.counts("hello world", "query"), (2, 10))
         self.assertRegex(self.tokenizer.library_sha256, r"^[0-9a-f]{64}$")
 
-    @proves("MYC-3.19", "MYC-3.18")
     def test_loader_and_counts_work_with_network_and_hub_downloads_forbidden(self):
         with patch.object(socket, "socket", side_effect=AssertionError("No runtime network")), \
                 patch("urllib.request.urlopen", side_effect=AssertionError("No runtime download")), \
@@ -101,7 +96,6 @@ class EmbeddingPlanTests(unittest.TestCase):
             self.assertEqual(plan_batches([plan], tokenizer=local)[0].inputs[0].input_text,
                              plan.parts[0].input_text)
 
-    @proves("MYC-3.19", "MYC-3.18")
     def test_missing_tampered_asset_and_wrong_library_version_fail_locally(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "tokenizer.json"
@@ -117,7 +111,6 @@ class EmbeddingPlanTests(unittest.TestCase):
             load_tokenizer("unknown-model")
         self.assertEqual(failure.exception.code, "settings")
 
-    @proves("MYC-3.19")
     def test_catalog_is_immutable_validated_and_requires_supported_dimensions(self):
         with self.assertRaises(FrozenInstanceError):
             self.tokenizer.catalog.input_token_cap = 1
@@ -133,7 +126,6 @@ class EmbeddingPlanTests(unittest.TestCase):
         for dimensions in (256, 512, 1024, 2048):
             self.assertEqual(plan_query("query", tokenizer=self.tokenizer, dimensions=dimensions).dimensions, dimensions)
 
-    @proves("MYC-3.19", "MYC-3.18")
     def test_counts_never_pad_or_truncate_and_planning_adds_only_the_provider_prompt(self):
         local = self.tokenizer
         self.assertIsNone(local._tokenizer.padding)
@@ -147,7 +139,6 @@ class EmbeddingPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(PlanningError, "cannot be truncated"):
             plan_query(text, tokenizer=local)
 
-    @proves("MYC-3.2", "MYC-3.16")
     def test_code_and_document_place_lines_repeat_without_changing_body(self):
         code = code_place_line("src/雪.py", "charge", "function")
         document = document_place_line("docs/notes.md", ["Notes", "A › B"])
@@ -163,7 +154,6 @@ class EmbeddingPlanTests(unittest.TestCase):
             with self.assertRaises(PlanningError):
                 code_place_line("path", bad, "function")
 
-    @proves("MYC-3.3", "MYC-3.18")
     def test_query_is_exact_complete_and_refused_without_splitting_or_truncation(self):
         text = "exact Query? \t\n"
         plan = plan_query(text, tokenizer=self.tokenizer)
@@ -176,7 +166,6 @@ class EmbeddingPlanTests(unittest.TestCase):
             plan_query(text, tokenizer=too_small)
         self.assertEqual(text, "exact Query? \t\n")
 
-    @proves("MYC-3.16", "MYC-3.20", "MYC-3.2")
     def test_golden_code_ranges_prefer_line_endings_and_keep_final_whitespace(self):
         local = self.small_tokenizer()
         body = "first = 1\nsecond = 2\r\nthird = 3\rfourth = 4\n  tail"
@@ -185,7 +174,6 @@ class EmbeddingPlanTests(unittest.TestCase):
         self.assertEqual([p.planning_tokens for p in plan.parts], [17, 17, 17, 20])
         self.assert_complete(plan, local)
 
-    @proves("MYC-3.16", "MYC-3.20")
     def test_golden_document_ranges_use_original_text_after_normalization(self):
         local = self.small_tokenizer()
         body = "# Head\n\nOne paragraph with snow 雪.\n \t\r\nSecond paragraph e\u0301 😀 tail."
@@ -195,7 +183,6 @@ class EmbeddingPlanTests(unittest.TestCase):
         self.assert_complete(plan, local)
         self.assertIn("e\u0301", "".join(p.text for p in plan.parts))
 
-    @proves("MYC-3.16", "MYC-3.20", "MYC-3.18")
     def test_golden_multibyte_ranges_remeasure_tokens_spanning_unicode_characters(self):
         local = self.small_tokenizer()
         body = "😀雪é" * 20
@@ -205,7 +192,6 @@ class EmbeddingPlanTests(unittest.TestCase):
         self.assert_complete(plan, local)
         self.assertEqual(len({(p.start_byte, p.end_byte) for p in plan.parts}), len(plan.parts))
 
-    @proves("MYC-3.16", "MYC-3.18", "MYC-3.20")
     def test_long_body_uses_real_catalog_caps_and_keeps_the_entire_tail(self):
         body = "x " * 34000 + "FINAL 雪😀\t "
         self.assertGreater(self.tokenizer.count(body), self.tokenizer.catalog.input_token_cap)
@@ -219,7 +205,6 @@ class EmbeddingPlanTests(unittest.TestCase):
             self.assertLessEqual(batch.planning_tokens, 31744)
             self.assertLessEqual(len(batch.inputs), 64)
 
-    @proves("MYC-3.16", "MYC-3.20")
     def test_varied_original_unicode_always_reconstructs_deterministically(self):
         randomizer = random.Random(115)
         alphabet = ["é", "e\u0301", "雪", "😀", "👩\u200d💻", "\t", " ", "\r\n", "\n", "\r", "alpha"]
@@ -234,7 +219,6 @@ class EmbeddingPlanTests(unittest.TestCase):
                     self.assertEqual(plan, repeated)
                     self.assertEqual(plan.plan_sha256, repeated.plan_sha256)
 
-    @proves("MYC-3.2", "MYC-3.16", "MYC-3.18")
     def test_empty_body_has_one_place_only_part_and_impossible_context_fails(self):
         plan = self.chunk("")
         self.assertEqual(len(plan.parts), 1)
@@ -246,7 +230,6 @@ class EmbeddingPlanTests(unittest.TestCase):
             with self.subTest(body=body), self.assertRaisesRegex(PlanningError, "cannot fit"):
                 self.chunk(body, tokenizer=local)
 
-    @proves("MYC-3.19", "MYC-3.20")
     def test_saved_metadata_records_complete_counting_and_version_provenance(self):
         plan = self.chunk("exact source\n")
         data = plan.to_dict()
@@ -268,7 +251,6 @@ class EmbeddingPlanTests(unittest.TestCase):
         self.assertEqual(set(data["parts"][0]), {"order", "start_byte", "end_byte", "submitted_tokens", "planning_tokens"})
         self.assertEqual(json.loads(json.dumps(data)), data)
 
-    @proves("MYC-3.18", "MYC-3.20")
     def test_batches_sort_identity_and_end_before_either_cap_or_repository_changes(self):
         local = self.small_tokenizer(input_cap=20, batch_cap=100, batch_inputs=3)
         plans = [self.chunk("x", tokenizer=local, chunk="b", version="v2"),
@@ -291,7 +273,6 @@ class EmbeddingPlanTests(unittest.TestCase):
             self.assertFalse(batch.truncation)
         self.assertEqual(plan_batches(plans, tokenizer=tight), plan_batches(reversed(plans), tokenizer=tight))
 
-    @proves("MYC-3.18", "MYC-3.20", "MYC-3.19")
     def test_retained_plan_verification_refuses_lost_text_changed_context_unknown_pins(self):
         local = self.small_tokenizer()
         plan = self.chunk("😀雪é" * 20, tokenizer=local)
@@ -310,7 +291,6 @@ class EmbeddingPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(PlanningError, "duplicate"):
             plan_batches([plan, plan], tokenizer=local)
 
-    @proves("MYC-3.18", "MYC-3.20")
     def test_batch_counts_remeasure_exact_saved_inputs_and_empty_batch_is_empty(self):
         plan = self.chunk("source")
         forged_counts = replace(plan, parts=(replace(plan.parts[0], submitted_tokens=0, planning_tokens=0),))
@@ -321,7 +301,6 @@ class EmbeddingPlanTests(unittest.TestCase):
                          self.tokenizer.counts(plan.parts[0].input_text, "document"))
         self.assertEqual(plan_batches([], tokenizer=self.tokenizer), ())
 
-    @proves("MYC-3.16", "MYC-3.18")
     def test_invalid_unicode_and_mismatched_model_fail_without_a_provider(self):
         for text in ("broken\ud800", b"bytes"):
             with self.subTest(text=repr(text)), self.assertRaises(PlanningError):

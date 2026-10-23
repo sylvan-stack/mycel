@@ -628,7 +628,11 @@ def _entity_row(content: str, line: int, position: int, section: str, columns: t
         title = second
         verified = _column(columns, cells, "verified by")
         from_v1 = _column(columns, cells, "from v1", "origin")
-        status = "withdrawn" if "withdrawn" in second.lower() else document_status
+        # A requirement can describe withdrawn objects while still active.
+        # Withdrawal is an explicit row marker, not an arbitrary word in it.
+        withdrawn = re.match(r"^withdrawn(?:$|:|\s+[0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4}\b)",
+                             second.strip(), re.IGNORECASE)
+        status = "withdrawn" if withdrawn else document_status
         decided_by = decided_at = None
         discussion: tuple[str, ...] = ()
     else:

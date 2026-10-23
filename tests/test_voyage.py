@@ -12,7 +12,6 @@ import time
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._credentials import Credentials, Secret
 from mycel._embedding_plan import load_tokenizer, plan_batches, plan_chunk, plan_query
 from mycel._errors import MycelError
@@ -91,7 +90,6 @@ class VoyageTests(unittest.TestCase):
         return client.embed_repository("repo", self.batches() if batches is None else batches,
                                        commit=commit or self.commit, record_failures=self.record)
 
-    @proves("MYC-3.14", "MYC-3.21", "MYC-3.22")
     def test_exact_request_and_lazy_fixed_credential_boundary_with_no_ambient_fallback(self):
         with patch.dict(os.environ, {"VOYAGE_API_KEY": "ambient-wrong-key", "MYCEL_EMBEDDING_ENDPOINT": "wrong"}):
             client = self.client()
@@ -113,7 +111,6 @@ class VoyageTests(unittest.TestCase):
         self.assertEqual(progress.provider_tokens, sum(self.tokenizer.count(text) for text in request["input"]))
         self.assertNotIn(KEY, json.dumps(progress.to_dict()) + repr(client))
 
-    @proves("MYC-3.14", "MYC-3.21")
     def test_query_exact_input_and_dry_run_or_missing_credentials_make_no_service_call(self):
         text = "query with 雪 😀 \t\n"
         response = self.client(policy=InvocationPolicy("search")).query(plan_query(text, dimensions=256, tokenizer=self.tokenizer))
@@ -131,7 +128,6 @@ class VoyageTests(unittest.TestCase):
         self.assertFalse(self.requests)
         self.assertNotIn(KEY, progress.stopping_reason)
 
-    @proves("MYC-3.8", "MYC-3.21")
     def test_transient_retries_grow_and_keep_identical_saved_inputs(self):
         for index, kind in enumerate(("connection", "deadline", "rate_limit", "server"), 1):
             self.service.fail_attempt(index, kind)
@@ -143,7 +139,6 @@ class VoyageTests(unittest.TestCase):
         self.assertEqual(len(self.key_reads), 1)
         self.assertEqual(progress.submitted_inputs, 15)
 
-    @proves("MYC-3.8", "MYC-3.21", "MYC-3.22")
     def test_attempt_limit_leaves_parts_pending_and_stopping_output_is_sanitized(self):
         for attempt in range(1, 9):
             self.service.fail_attempt(attempt, "server")
@@ -157,7 +152,6 @@ class VoyageTests(unittest.TestCase):
         self.assertFalse(self.failures)
         self.assertNotIn(KEY, json.dumps(progress.to_dict()))
 
-    @proves("MYC-3.8", "MYC-3.21")
     def test_retry_after_only_increases_wait_with_sixty_second_cap(self):
         calls = []
         def transport(body, key, **kwargs):
@@ -173,7 +167,6 @@ class VoyageTests(unittest.TestCase):
             self.assertIsNone(_retry_after({"Retry-After": invalid}, 0))
         self.assertEqual(_retry_after({"Retry-After": "9" * 10000}, 0), 60)
 
-    @proves("MYC-3.8", "MYC-3.21", "MYC-3.22")
     def test_cancellation_during_retry_preserves_completed_progress_and_sends_no_later_batch(self):
         batches = self.batches(batch_inputs=1)
         self.service.fail_attempt(2, "server")
@@ -190,7 +183,6 @@ class VoyageTests(unittest.TestCase):
         self.assertEqual(error.exception.kind, "cancelled")
         self.assertLess(time.monotonic() - start, 0.2)
 
-    @proves("MYC-3.21", "MYC-3.22")
     def test_authentication_authorization_and_model_failures_stop_repo_without_part_failures(self):
         for status, body, kind in ((401, KEY.encode(), "authentication"), (403, KEY.encode(), "authorization"),
                                    (404, KEY.encode(), "missing_model"),
@@ -209,7 +201,6 @@ class VoyageTests(unittest.TestCase):
                 self.assertFalse(self.failures)
                 self.assertNotIn(KEY, json.dumps(progress.to_dict()))
 
-    @proves("MYC-3.21", "MYC-3.22")
     def test_malformed_error_metadata_stops_safely_without_misattributing_content(self):
         responses = (
             HTTPResult(400, json.dumps({"error": {"code": [], "message": KEY}}).encode()),
@@ -228,7 +219,6 @@ class VoyageTests(unittest.TestCase):
                 self.assertFalse(self.waits)
                 self.assertNotIn(KEY, json.dumps(progress.to_dict()))
 
-    @proves("MYC-3.9", "MYC-3.21", "MYC-3.22")
     def test_content_isolation_keeps_exact_saved_strings_and_embeds_good_neighbors(self):
         batches = self.batches(("good left", "bad text", "good right", "last"))
         rejected = batches[0].inputs[1].input_text
@@ -243,7 +233,6 @@ class VoyageTests(unittest.TestCase):
         self.assertEqual(sum(len(writes) for writes in self.writes), 3)
         self.assertTrue(all(not json.loads(body)["truncation"] for body, _ in self.requests))
 
-    @proves("MYC-3.22")
     def test_entire_bad_response_writes_nothing_for_duplicate_missing_indices_and_vectors(self):
         mutations = [lambda body: {**body, "data": body["data"][:-1]},
                      lambda body: {**body, "data": [{**row, "index": 0} for row in body["data"]]},
@@ -264,7 +253,6 @@ class VoyageTests(unittest.TestCase):
                 self.assertFalse(self.writes)
                 self.assertFalse(self.failures)
 
-    @proves("MYC-3.22")
     def test_out_of_order_valid_vectors_are_restored_and_race_deleted_vectors_excluded(self):
         self.service.response_mutator = lambda body: {**body, "data": list(reversed(body["data"]))}
         def guarded_commit(writes):
@@ -279,7 +267,6 @@ class VoyageTests(unittest.TestCase):
         self.assertEqual(len(self.writes[0]), 3)
         self.assertEqual(progress.failed_parts, 0)
 
-    @proves("MYC-3.22")
     def test_invalid_response_after_success_retains_only_previously_committed_progress(self):
         calls = []
         def transport(body, key, **kwargs):
@@ -292,7 +279,6 @@ class VoyageTests(unittest.TestCase):
         self.assertEqual(len(self.writes), 1)
         self.assertEqual(progress.stopping_kind, "invalid_response")
 
-    @proves("MYC-3.21", "MYC-3.22")
     def test_local_bad_limits_duplicate_json_oversized_bodies_and_redirects_never_commit(self):
         batches = self.batches()
         bad = replace(batches[0], inputs=(replace(batches[0].inputs[0], input_text="x " * 34000),))
@@ -310,7 +296,6 @@ class VoyageTests(unittest.TestCase):
                 self.assertFalse(self.failures)
                 self.assertNotIn(KEY, json.dumps(progress.to_dict()))
 
-    @proves("MYC-3.21")
     def test_fixed_https_endpoint_and_headers_use_no_process_proxy_or_endpoint_environment(self):
         class Response:
             status = 302
@@ -344,7 +329,6 @@ class VoyageTests(unittest.TestCase):
         self.assertEqual(connection.calls[0][2]["headers"]["Authorization"], "Bearer " + KEY)
         self.assertTrue(connection.closed)
 
-    @proves("MYC-3.21")
     def test_dns_deadline_and_cancellation_close_connections_and_prevent_late_post(self):
         for cancel in (False, True):
             release = threading.Event()
@@ -369,7 +353,6 @@ class VoyageTests(unittest.TestCase):
                 time.sleep(0.02)
                 self.assertFalse(calls)
 
-    @proves("MYC-3.21", "MYC-3.22")
     def test_tls_setup_is_supervised_and_late_completion_never_connects_or_sends(self):
         for cancellation in (False, True):
             setup_started = threading.Event()
@@ -413,7 +396,6 @@ class VoyageTests(unittest.TestCase):
                     self.assertTrue(worker_done.wait(0.5))
                 self.assertFalse(calls)
 
-    @proves("MYC-3.21", "MYC-3.22")
     def test_https_read_limit_is_enforced_with_and_without_content_length(self):
         for advertised in (None, "65", "-1", "invalid"):
             class Response:
@@ -436,7 +418,6 @@ class VoyageTests(unittest.TestCase):
                 self.assertEqual(error.exception.kind, "invalid_response" if advertised == "invalid" else "response_limit")
                 self.assertTrue(Connection.closed)
 
-    @proves("MYC-3.21")
     def test_cancellation_during_response_read_shuts_down_active_socket(self):
         reading = threading.Event()
         released = threading.Event()
@@ -464,7 +445,6 @@ class VoyageTests(unittest.TestCase):
         self.assertEqual(error.exception.kind, "cancelled")
         self.assertTrue(shutdown.is_set())
 
-    @proves("MYC-3.21", "MYC-3.22")
     def test_injected_transport_cannot_exceed_total_deadline_and_receipts_must_account_for_every_part(self):
         clock = [100.0]
         policy = InvocationPolicy("embed")
@@ -483,7 +463,6 @@ class VoyageTests(unittest.TestCase):
                 self.embed(self.client(), commit=lambda writes: receipt)
             self.assertEqual(error.exception.code, "internal")
 
-    @proves("MYC-3.21", "MYC-3.22")
     def test_durable_deferred_results_preserve_paid_usage_and_stop_before_new_sends(self):
         def staged(writes):
             self.writes.append(writes)
@@ -496,7 +475,6 @@ class VoyageTests(unittest.TestCase):
         self.assertEqual(len(self.writes), 1)
         self.assertNotIn(KEY, json.dumps(progress.to_dict()))
 
-    @proves("MYC-3.21", "MYC-3.22")
     def test_publication_failure_keeps_earlier_progress_and_paid_token_accounting(self):
         calls = [0]
         def commit(writes):
@@ -509,7 +487,6 @@ class VoyageTests(unittest.TestCase):
         self.assertEqual(progress.stopping_kind, "store_unavailable")
         self.assertGreater(progress.provider_tokens, self.tokenizer.counts("doc.md › Heading\none", "document")[0])
 
-    @proves("MYC-3.21", "MYC-3.22")
     def test_cancellation_after_validation_keeps_returned_results_before_stopping(self):
         cancelled = [False]
         def commit(writes):

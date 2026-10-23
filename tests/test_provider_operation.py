@@ -16,7 +16,7 @@ import unittest
 from unittest.mock import patch
 
 from mycel._classification_payload import ReviewerRequest
-from mycel._coverage import CheckResult, OnDemandProofs, proves
+from mycel._coverage import CheckResult, OnDemandProofs
 from mycel._errors import MycelError
 from mycel._evaluation_drift import _prepare
 from mycel._jev import JevRequest
@@ -74,8 +74,8 @@ class ProviderOperationTests(unittest.TestCase):
             suite = root / 'synthetic-unit-cases.toml'
             synthetic_suite(suite, unavailable=unavailable)
             source = {'commit': 'synthetic-unit-commit', 'dirty': True, 'inputsSha256': 'a' * 64}
-            frozen = {'src/mycel/data/requirements.json':
-                      (ROOT / 'src/mycel/data/requirements.json').read_bytes()}
+            frozen = {'src/mycel/data/settings-defaults.json':
+                      (ROOT / 'src/mycel/data/settings-defaults.json').read_bytes()}
             staged_shape = {'registry': str(root / 'synthetic-registry'), 'build': '1',
                 'program': str(root / 'synthetic-program'), 'sourceInputsSha256': 'a' * 64,
                 'filesSha256': 'b' * 64, 'programStampSha256': 'synthetic-metadata-stamp'}
@@ -91,7 +91,6 @@ class ProviderOperationTests(unittest.TestCase):
                     patch.object(operation, '_program_stamp', return_value='synthetic-metadata-stamp'):
                 yield root, arguments, reviewer_file, source, staged_shape
 
-    @proves('MYC-13.2', 'MYC-14.12')
     def test_default_and_missing_profile_are_local_and_never_probe_credentials_or_models(self):
         for configured in (False, True):
             with self.subTest(configured=configured), self.fixture(reviewer=configured) as (_, args, _, _, _), \
@@ -113,7 +112,6 @@ class ProviderOperationTests(unittest.TestCase):
                 self.assertEqual(status, 1)
                 self.assertFalse(json.loads(printed.getvalue())['providerExecution'])
 
-    @proves('MYC-13.15', 'MYC-14.20')
     def test_complete_serialized_bytes_lf_and_unavailable_no_call_are_exact(self):
         with self.fixture(staged=True, unavailable=True) as (_, args, _, _, _):
             plan = operation.prepare_operation(**args)
@@ -136,7 +134,6 @@ class ProviderOperationTests(unittest.TestCase):
             self.assertEqual(plan.report['maxCalls'], {'embedding': 2, 'jev': 398, 'review': 398})
             self.assertNotIn('Synthetic unit fixture before', plan._report_bytes.decode())
 
-    @proves('MYC-13.15', 'MYC-14.20')
     def test_direct_review_and_unfit_review_block_unmeasurable_comparison_without_dispatch(self):
         for limits, direct, unfit in (('max_input_bytes=1\n', 200, 0),
                                       ('review_max_input_bytes=1\n', 0, 200)):
@@ -152,36 +149,30 @@ class ProviderOperationTests(unittest.TestCase):
                                             output_dir=root / 'must-not-exist')
                 self.assertFalse((root / 'must-not-exist').exists())
 
-    @proves('MYC-13.2', 'MYC-13.15')
     def test_changed_bound_inputs_refuse_before_any_provider_or_retention_write(self):
-        for change in ('settings', 'suite', 'command', 'source', 'registry', 'program', 'expected'):
+        for change in ('settings', 'suite', 'command', 'source', 'program', 'expected'):
             with self.subTest(change=change), self.fixture(staged=True) as (root, args, command, source, stage), \
                     patch.object(operation, '_hold_build', return_value=nullcontext()), \
                     patch.object(operation, 'run_provider_checks', side_effect=AssertionError('provider')):
                 plan = operation.prepare_operation(**args)
                 expected = plan.report['planSha256']
-                with patch.object(operation, '_registry_fingerprint', wraps=operation._registry_fingerprint) as registry:
-                    if change == 'settings':
-                        args['settings_path'].write_text(args['settings_path'].read_text() + '\n# changed bytes\n')
-                    if change == 'suite':
-                        args['suite_path'].write_text(args['suite_path'].read_text() + '\n# changed bytes\n')
-                    if change == 'command':
-                        command.write_text(command.read_text() + '# changed executable\n')
-                    if change == 'source':
-                        source['inputsSha256'] = 'c' * 64
-                    if change == 'registry':
-                        registry.return_value = 'd' * 64
-                        registry.side_effect = None
-                    if change == 'program':
-                        stage['filesSha256'] = 'e' * 64
-                    if change == 'expected':
-                        expected = 'f' * 64
-                    output = root / 'must-not-exist'
-                    with self.assertRaises(MycelError):
-                        operation.run_operation(plan, expected_plan_sha256=expected, output_dir=output)
-                    self.assertFalse(output.exists())
+                if change == 'settings':
+                    args['settings_path'].write_text(args['settings_path'].read_text() + '\n# changed bytes\n')
+                if change == 'suite':
+                    args['suite_path'].write_text(args['suite_path'].read_text() + '\n# changed bytes\n')
+                if change == 'command':
+                    command.write_text(command.read_text() + '# changed executable\n')
+                if change == 'source':
+                    source['inputsSha256'] = 'c' * 64
+                if change == 'program':
+                    stage['filesSha256'] = 'e' * 64
+                if change == 'expected':
+                    expected = 'f' * 64
+                output = root / 'must-not-exist'
+                with self.assertRaises(MycelError):
+                    operation.run_operation(plan, expected_plan_sha256=expected, output_dir=output)
+                self.assertFalse(output.exists())
 
-    @proves('MYC-13.2', 'MYC-14.12')
     def test_development_imports_cannot_claim_staged_identity(self):
         # Read-only stage metadata is controlled; the interpreter/product are
         # the real development imports, which must be refused before hashing.
@@ -194,7 +185,6 @@ class ProviderOperationTests(unittest.TestCase):
             with self.assertRaises(MycelError):
                 operation._staged_binding(Path(temporary), '1')
 
-    @proves('MYC-13.2', 'MYC-14.12')
     def test_staged_program_symlink_refuses_before_resolution_erases_it(self):
         with tempfile.TemporaryDirectory() as temporary, \
                 patch.object(operation, 'read_guard', return_value=nullcontext()), \
@@ -209,42 +199,36 @@ class ProviderOperationTests(unittest.TestCase):
                 operation._staged_binding(root, '1')
             self.assertIn('symlinked', str(raised.exception))
 
-    @proves('MYC-13.2', 'MYC-14.12')
     def test_existing_per_call_settings_guards_catch_external_byte_changes(self):
-        for change in ('settings', 'suite', 'source', 'command', 'program', 'build-record', 'registry'):
+        for change in ('settings', 'suite', 'source', 'command', 'program', 'build-record'):
             with self.subTest(change=change), self.fixture(staged=True) as (root, args, command, source, _):
                 plan = operation.prepare_operation(**args)
                 bound = operation._BoundSettings(plan)
                 bound.require_current()
-                with patch.object(operation, '_registry_fingerprint', wraps=operation._registry_fingerprint) as registry:
-                    if change == 'settings':
-                        args['settings_path'].write_text(args['settings_path'].read_text() + '# changed bytes only\n')
-                    if change == 'suite':
-                        args['suite_path'].write_text(args['suite_path'].read_text() + '# changed bytes only\n')
-                    if change == 'source':
-                        source['inputsSha256'] = 'c' * 64
-                    if change == 'command':
-                        command.write_text(command.read_text() + '# modified\n')
-                    if change == 'program':
-                        operation._program_stamp.return_value = 'changed-metadata'
-                    if change == 'build-record':
-                        (root / 'synthetic-registry/1/build.json').write_text('{}\n')
-                    if change == 'registry':
-                        registry.return_value, registry.side_effect = 'd' * 64, None
-                    with self.assertRaises(MycelError):
-                        bound.require_current()
+                if change == 'settings':
+                    args['settings_path'].write_text(args['settings_path'].read_text() + '# changed bytes only\n')
+                if change == 'suite':
+                    args['suite_path'].write_text(args['suite_path'].read_text() + '# changed bytes only\n')
+                if change == 'source':
+                    source['inputsSha256'] = 'c' * 64
+                if change == 'command':
+                    command.write_text(command.read_text() + '# modified\n')
+                if change == 'program':
+                    operation._program_stamp.return_value = 'changed-metadata'
+                if change == 'build-record':
+                    (root / 'synthetic-registry/1/build.json').write_text('{}\n')
+                with self.assertRaises(MycelError):
+                    bound.require_current()
 
-    @proves('MYC-13.2', 'MYC-13.15')
     def test_live_group_passes_original_objects_once_and_retains_diagnostics_only(self):
         with self.fixture(staged=True) as (root, args, _, _, _), \
                 patch.object(operation, '_hold_build', return_value=nullcontext()):
             plan = operation.prepare_operation(**args)
             identity = plan.report['source']['inputsSha256']
-            registry = plan.report['registryFingerprint']
             # Proof-shaped arithmetic fixtures are never real live evidence.
-            provider = OnDemandProofs(identity, registry, (CheckResult('synthetic.provider',
+            provider = OnDemandProofs(identity, (CheckResult('synthetic.provider',
                 'live', ('MYC-13.9',), 'passed'),))
-            consumer = OnDemandProofs(identity, registry, (CheckResult('synthetic.consumer',
+            consumer = OnDemandProofs(identity, (CheckResult('synthetic.consumer',
                 'live', ('MYC-14.22',), 'passed'),))
             reports = {'syntheticUnitFixtureOnly': True}
             seen = []
@@ -280,14 +264,12 @@ class ProviderOperationTests(unittest.TestCase):
                     self.assertRaises(FileExistsError):
                 operation.run_operation(plan, expected_plan_sha256=plan.report['planSha256'], output_dir=output)
 
-    @proves('MYC-13.2', 'MYC-13.15')
     def test_failed_or_interrupted_group_is_retained_without_repeat_or_fabricated_checks(self):
         for failure in ('provider-failed', 'consumer-refused', 'interrupted'):
             with self.subTest(failure=failure), self.fixture(staged=True) as (root, args, _, _, _), \
                     patch.object(operation, '_hold_build', return_value=nullcontext()):
                 plan = operation.prepare_operation(**args)
-                proof = OnDemandProofs(plan.report['source']['inputsSha256'],
-                    plan.report['registryFingerprint'], (CheckResult('synthetic.failed',
+                proof = OnDemandProofs(plan.report['source']['inputsSha256'], (CheckResult('synthetic.failed',
                     'live', ('MYC-13.9',), 'failed'),))
                 reports = {'syntheticUnitFixtureOnly': True}
                 with patch.object(operation, 'run_provider_checks', return_value=(proof, reports)) as producer, \
@@ -312,7 +294,6 @@ class ProviderOperationTests(unittest.TestCase):
                     self.assertIs(proofs[0], proof)
                     self.assertIs(returned, reports)
 
-    @proves('MYC-13.2', 'MYC-13.15')
     def test_coverage_floors_and_source_or_settings_race_are_local_refusals(self):
         with self.fixture(staged=True) as (_, args, _, source, _):
             raw = args['suite_path'].read_text()
