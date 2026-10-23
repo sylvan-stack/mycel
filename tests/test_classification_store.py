@@ -69,6 +69,8 @@ class ClassificationStoreFixture(unittest.TestCase):
 
 
 class ClassificationEvidenceStoreTests(ClassificationStoreFixture):
+    check_kind = "store"
+
     @proves('MYC-14.14', 'MYC-14.15', 'MYC-13.18', kind='store')
     def test_newest_live_file_quiet_period_is_persisted_and_repeated_reads_do_not_restart(self):
         with self.base.connect() as connection:

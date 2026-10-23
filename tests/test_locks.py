@@ -301,6 +301,8 @@ class LockProtocolTests(unittest.TestCase):
 
 class LockStoreTests(unittest.TestCase):
     # No initialize_store override: the gate calls the product initializer.
+    check_kind = "store"
+
     def setUp(self):
         if not hasattr(self, "store_fixture"):
             self.fail("This acceptance check requires a genuine disposable store fixture.")

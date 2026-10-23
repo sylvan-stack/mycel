@@ -40,6 +40,8 @@ class RelateCliTests(unittest.TestCase):
 
 
 class RelateStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.DeriveStoreTests()
         self.fixture.store_fixture = self.store_fixture

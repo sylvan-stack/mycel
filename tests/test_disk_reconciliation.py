@@ -22,6 +22,8 @@ from mycel._settings import load_settings
 
 
 class DiskReconciliationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         if not hasattr(self, 'store_fixture'):
             self.fail('This acceptance check requires a genuine configured disposable store.')

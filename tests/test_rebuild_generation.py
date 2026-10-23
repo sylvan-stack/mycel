@@ -23,6 +23,8 @@ except ImportError:
 
 
 class RebuildGenerationStoreTests(ClassificationStoreFixture):
+    check_kind = "store"
+
     initialize_store = staticmethod(lambda backend, settings_file: None)
 
     @contextmanager

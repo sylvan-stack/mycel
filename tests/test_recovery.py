@@ -94,6 +94,8 @@ class RecoveryProtocolTests(unittest.TestCase):
 
 
 class RecoveryStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         from test_located_reconciliation import LocatedReconciliationStoreTests
         self.base=LocatedReconciliationStoreTests();self.base.store_fixture=self.store_fixture

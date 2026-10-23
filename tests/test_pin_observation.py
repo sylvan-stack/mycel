@@ -490,6 +490,8 @@ class PinObservationTests(unittest.TestCase):
 
 
 class PinObservationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     @proves('MYC-16.13',kind='store')
     def test_real_disk_callback_pins_exact_inputs_and_changed_full_file_writes_no_new_baseline(self):
         # The gate supplies its real disposable backend/default product init.

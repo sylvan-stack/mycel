@@ -25,6 +25,8 @@ from mycel._settings import load_settings
 
 
 class LocatedReconciliationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         if not hasattr(self, 'store_fixture'):
             self.fail('This partial acceptance check requires a configured disposable store.')

@@ -59,6 +59,8 @@ class UndocumentedUnitTests(unittest.TestCase):
 
 
 class UndocumentedStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.links = link_fixtures.DocumentLinksStoreTests()
         self.links.store_fixture = self.store_fixture
@@ -131,6 +133,8 @@ class UndocumentedStoreTests(unittest.TestCase):
 
 
 class UndocumentedFreshnessStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = freshness_fixtures.FreshnessStoreTests()
         self.fixture.store_fixture = self.store_fixture

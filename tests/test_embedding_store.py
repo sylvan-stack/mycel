@@ -658,6 +658,8 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
 
 class EmbeddingStoreAcceptanceTests(unittest.TestCase):
     """Every owned proof below executes against the real private backend."""
+    check_kind = "store"
+
     @classmethod
     def setUpClass(cls):
         cls.tokenizer = load_tokenizer()

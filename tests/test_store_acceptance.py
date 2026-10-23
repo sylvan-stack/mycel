@@ -32,6 +32,8 @@ class RecordingConnection:
 
 
 class ProductStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def connection(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)
 
@@ -197,6 +199,8 @@ class ProductStoreTests(unittest.TestCase):
 
 
 class EmptyProductStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     initialize_store = staticmethod(lambda backend, settings_file: None)
 
     @proves("MYC-0.8", "MYC-6.5", "MYC-6.7", kind="store")

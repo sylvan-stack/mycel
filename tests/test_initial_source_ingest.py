@@ -18,6 +18,8 @@ except ImportError:
 
 
 class InitialSourceIngestStoreTests(ClassificationStoreFixture):
+    check_kind = "store"
+
     initialize_store = staticmethod(lambda backend, settings_file: None)
 
     def invoke(self, *arguments, successful=True):

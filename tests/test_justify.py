@@ -47,6 +47,8 @@ class UriSyntaxTests(unittest.TestCase):
 
 
 class UriMutationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         try:
             from . import test_clone_locations as fixtures
@@ -158,6 +160,8 @@ class JustifyInputTests(unittest.TestCase):
 
 
 class JustifyStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
     invoke=UriMutationStoreTests.invoke
@@ -265,6 +269,8 @@ class JustifyStoreTests(unittest.TestCase):
 
 
 class ClonePolicyStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
     invoke=UriMutationStoreTests.invoke
@@ -319,6 +325,8 @@ class ClonePolicyStoreTests(unittest.TestCase):
 
 
 class JustifySelectionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
 
@@ -349,6 +357,8 @@ class JustifySelectionStoreTests(unittest.TestCase):
 
 
 class CloneAbsenceStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
 
@@ -377,6 +387,8 @@ class CloneAbsenceStoreTests(unittest.TestCase):
 
 
 class CloneEntityMoveStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
     invoke=UriMutationStoreTests.invoke
@@ -419,6 +431,8 @@ class CloneEntityMoveStoreTests(unittest.TestCase):
 
 
 class CloneGraphStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
 
@@ -444,6 +458,8 @@ class CloneGraphStoreTests(unittest.TestCase):
 
 
 class JustifySharedChunkStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
 

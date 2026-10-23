@@ -102,6 +102,8 @@ class SearchFileTests(unittest.TestCase):
 
 
 class SearchStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.base = ranking_fixtures.RankingStoreTests()
         self.base.store_fixture = self.store_fixture
@@ -222,6 +224,8 @@ class SearchStoreTests(unittest.TestCase):
 
 
 class SearchFreshnessStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.base = freshness_fixtures.FreshnessStoreTests()
         self.base.store_fixture = self.store_fixture

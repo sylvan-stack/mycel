@@ -88,6 +88,8 @@ class RefsCliTests(unittest.TestCase):
 
 
 class RefsStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def configured(self, root, repositories, *, organizations=""):
         original = load_settings(path=self.store_fixture.settings_file)
         config = root / "report.toml"
@@ -305,6 +307,8 @@ class RefsStoreTests(unittest.TestCase):
 
 
 class RefsProducerStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = producer_fixtures.LocatedDeclarationTransactionStoreTests()
         self.fixture.store_fixture = self.store_fixture

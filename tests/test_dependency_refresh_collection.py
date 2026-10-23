@@ -14,6 +14,8 @@ except ImportError:
 
 
 class DependencyRefreshCollectionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.LocatedDependencyApplicationStoreTests()
         self.fixture.store_fixture = self.store_fixture

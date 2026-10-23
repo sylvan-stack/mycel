@@ -31,6 +31,8 @@ except ImportError:
 
 
 class ProvenanceConformanceStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = classifiers.FiniteClassifyStoreTests()
         self.fixture.store_fixture = self.store_fixture

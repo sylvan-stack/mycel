@@ -20,6 +20,8 @@ except ImportError:
 
 
 class ClassificationGuardEdgeStoreTests(ClassificationStoreFixture):
+    check_kind = "store"
+
     @proves('MYC-14.2', 'MYC-14.14', 'MYC-14.15', 'MYC-16.8', kind='store')
     def test_two_related_inputs_retain_independent_evidence_and_observation_maps(self):
         self.fixture.write_answer()

@@ -29,6 +29,8 @@ except ImportError:
 
 
 class DriftRetentionStoreTests(ClassificationStoreFixture):
+    check_kind = "store"
+
     def guarded(self, connection):
         stack = ExitStack()
         for name in sorted(self.base.settings.values['repos']):

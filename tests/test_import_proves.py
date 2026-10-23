@@ -126,6 +126,8 @@ class ImportPlanTests(unittest.TestCase):
 
 
 class ProvenImportStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         try:
             from .test_clone_locations import CloneStoreTests

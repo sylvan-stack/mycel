@@ -99,6 +99,8 @@ class CloneScopeTests(unittest.TestCase):
 
 
 class CloneStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         try:
             from . import test_located_reconciliation as fixtures

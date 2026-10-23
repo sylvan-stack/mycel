@@ -608,6 +608,8 @@ class EvidenceSQLTests(unittest.TestCase):
 
 
 class EvidenceStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def seed(self, connection, observed):
         for file in (observed.dependant_file, observed.selection.file):
             connection.execute('INSERT INTO public.mycel_repository_state VALUES (%s,NULL,%s) ON CONFLICT DO NOTHING',

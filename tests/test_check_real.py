@@ -15,6 +15,8 @@ except ImportError:
 
 
 class RealActivityCheckStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     @proves('MYC-12.1', 'MYC-12.2', 'MYC-12.4', 'MYC-12.12', kind='store')
     def test_real_check_rejects_missing_duplicate_or_mismatched_public_activity(self):
         fixture = fixtures.PublicIngestActivityStoreTests()

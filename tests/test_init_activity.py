@@ -68,6 +68,8 @@ class BuildIdentityTests(unittest.TestCase):
 
 
 class InitActivityStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     initialize_store = staticmethod(lambda backend, settings_file: None)
 
     def connect(self):

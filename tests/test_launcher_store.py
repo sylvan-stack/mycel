@@ -115,6 +115,8 @@ def stage_fixture_build(base):
 
 
 class LauncherRollbackStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     @proves('MYC-15.10', kind='store')
     def test_build_install_select_withdraw_prune_and_version_rollback_preserve_settings_all_rows_schema_and_sequences(self):
         history = _History(self.store_fixture)

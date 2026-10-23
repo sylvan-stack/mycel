@@ -79,6 +79,8 @@ class RelationStalenessUnitTests(unittest.TestCase):
 
 
 class RelationStalenessStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.helper = fixtures.RetainedRelationStoreTests()
         self.helper.store_fixture = self.store_fixture

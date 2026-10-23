@@ -21,6 +21,8 @@ from mycel._store import search_text
 
 
 class ActivityStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def connect(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)
 
@@ -324,6 +326,8 @@ class ActivityStoreTests(unittest.TestCase):
 
 class ActivityDeclaredRefStoreTests(unittest.TestCase):
     """Audit actual retained-reference writes; fixture Builds are test inputs."""
+    check_kind = "store"
+
 
     def connect(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)

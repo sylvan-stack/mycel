@@ -53,6 +53,8 @@ class _Vectors:
 
 
 class EvaluationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def connection(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)
 

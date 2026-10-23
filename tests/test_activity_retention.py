@@ -103,6 +103,8 @@ class _History:
 
 
 class ActivityRetentionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.history = _History(self.store_fixture)
 

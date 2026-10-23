@@ -154,6 +154,8 @@ class SummaryEvidenceTests(unittest.TestCase):
 
 
 class SummaryEvidenceStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def seed(self, connection, file=None):
         file = file or document()
         for repository in ('owner', file.repository):

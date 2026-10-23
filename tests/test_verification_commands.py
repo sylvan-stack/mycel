@@ -14,6 +14,8 @@ except ImportError:
 
 
 class VerificationCommandTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.DependencySourceRefreshStoreTests()
         self.fixture.store_fixture = self.store_fixture

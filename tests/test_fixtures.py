@@ -276,6 +276,8 @@ class RepositoryFixtureTests(unittest.TestCase):
     # The backend runs actual product init for this fixture. These checks remain
     # store-backed and cannot qualify against an in-memory substitute.
 
+    check_kind = "store"
+
     @proves("MYC-13.6", kind="store")
     def test_real_git_locations_are_read_without_touching_the_generated_checkout(self):
         self.assertTrue(self.store_fixture.backend.real_store)

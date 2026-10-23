@@ -270,6 +270,8 @@ class ResolverUnitTests(unittest.TestCase):
 
 
 class ResolverStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def seed(self, connection, *, path='guide.md', root='artifact', source='# Exact\n',
              name='Exact', kind='document', title='Exact', family=None, aliases=(),
              location_kind='disk', location='disk', file_id=None, chunk_id=None,

@@ -143,6 +143,8 @@ class ClassifyDryRunTests(unittest.TestCase):
 
 
 class FiniteClassifyStoreTests(fixture_module.ClassificationStoreFixture):
+    check_kind = "store"
+
     def setup_three(self, connection):
         (self.fixture.fixture.downstream / 'keep.md').write_bytes(b'# Keep\nIndependent surviving document.\n')
         self.fixture.prepare(connection)

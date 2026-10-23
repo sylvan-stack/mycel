@@ -34,6 +34,8 @@ except ImportError:
 
 
 class ReadStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.base = retrieval_fixtures.RetrievalStoreTests()
         self.base.store_fixture = self.store_fixture
@@ -298,6 +300,8 @@ class ReadStoreTests(unittest.TestCase):
 
 
 class ReadFreshnessStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.base = freshness_fixtures.FreshnessStoreTests()
         self.base.store_fixture = self.store_fixture

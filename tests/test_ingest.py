@@ -42,6 +42,8 @@ class IngestUnitTests(unittest.TestCase):
 
 
 class IngestStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.base = fixtures.LocatedReconciliationStoreTests()
         self.base.store_fixture = self.store_fixture
@@ -496,6 +498,8 @@ class IngestStoreTests(unittest.TestCase):
 
 class IngestPublishesItsCaptureStoreTests(IngestStoreTests):
     """A pass publishes the capture it read (MYC-1.37, MYC-D64)."""
+    check_kind = "store"
+
 
     def disk_sources(self, connection):
         rows = connection.execute("""SELECT v.source_bytes FROM public.mycel_file_versions v

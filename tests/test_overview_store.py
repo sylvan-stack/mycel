@@ -36,6 +36,8 @@ except ImportError:
 
 
 class OverviewStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.IngestStoreTests()
         self.fixture.store_fixture = self.store_fixture

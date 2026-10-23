@@ -99,6 +99,8 @@ class RelationMemberUnitTests(unittest.TestCase):
 
 
 class RelationMemberStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.helper = fixtures.RelationStalenessStoreTests()
         self.helper.store_fixture = self.store_fixture

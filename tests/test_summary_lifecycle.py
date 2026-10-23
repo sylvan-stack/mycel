@@ -24,6 +24,8 @@ except ImportError:
 
 
 class SummaryLifecycleStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.SummaryPublicationStoreTests()
         self.fixture.store_fixture = self.store_fixture

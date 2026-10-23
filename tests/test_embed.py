@@ -151,6 +151,8 @@ class EmbedCliTests(unittest.TestCase):
 
 
 class EmbedStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     @classmethod
     def setUpClass(cls):
         cls.tokenizer = load_tokenizer()

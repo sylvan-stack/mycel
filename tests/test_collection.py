@@ -25,6 +25,8 @@ except ImportError:
 
 
 class CollectionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         helper = located_fixtures.LocatedReconciliationStoreTests()
         helper.store_fixture = self.store_fixture

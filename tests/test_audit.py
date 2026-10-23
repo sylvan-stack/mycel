@@ -70,6 +70,8 @@ class AuditFixture(unittest.TestCase):
 
 
 class AuditStoreTests(AuditFixture):
+    check_kind = "store"
+
     @proves('MYC-17.16',kind='store')
     def test_seven_deterministic_rules_use_only_current_indexed_evidence(self):
         decisions=('\n## Decisions\n\n| Decision | Question | Outcome | Discussion |\n|---|---|---|---|\n'
@@ -220,6 +222,8 @@ class AuditProtocolTests(unittest.TestCase):
 
 
 class SemanticAuditStoreTests(AuditFixture):
+    check_kind = "store"
+
     def dependencies(self, *, changed=None, top=.9, label=None, limits=None, failure=None):
         from mycel._jev import JevClient, JevLimits, HTTPResult
         from mycel._classification_runner import ClassifyDependencies

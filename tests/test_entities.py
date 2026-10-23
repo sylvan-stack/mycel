@@ -266,6 +266,8 @@ INSERT INTO messages VALUES ('9f3a2c1e-4b5d-4e6f-8a9b-0c1d2e3f4a5b', 0, 'user', 
 
 class EntityStoreTests(unittest.TestCase):
     """Entity rows through the real pass, the resolver and the read."""
+    check_kind = "store"
+
 
     def setUp(self):
         self.base = located_fixtures.LocatedReconciliationStoreTests()

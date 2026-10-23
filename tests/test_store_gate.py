@@ -27,6 +27,8 @@ def initialize_probe(backend, settings_file):
 
 
 class StoreGateTests(unittest.TestCase):
+    check_kind = "store"
+
     initialize_store = staticmethod(initialize_probe)
 
     @proves("MYC-13.4", kind="store")

@@ -23,6 +23,8 @@ except ImportError:
 
 
 class VerificationHistoryStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         helper = fixtures.LocatedReconciliationStoreTests()
         helper.store_fixture = self.store_fixture

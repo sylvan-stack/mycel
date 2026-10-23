@@ -23,6 +23,8 @@ except ImportError:
 
 
 class SummaryPublicationGuardsStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = summaries.SummaryBuildStoreTests()
         self.fixture.store_fixture = self.store_fixture

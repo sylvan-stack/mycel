@@ -31,6 +31,8 @@ METADATA = SummarySetMetadata('2026-10-12T12:00:00Z', 'mycel-summary-v1', None, 
 
 
 class GeneratedStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.DependencySourceRefreshStoreTests()
         self.fixture.store_fixture = self.store_fixture

@@ -68,6 +68,8 @@ class ActivityReaderTests(unittest.TestCase):
 
 
 class ActivityReaderStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     @proves("MYC-1.20", kind="store")
     def test_public_pass_details_preserve_all_ordered_identity_decisions_without_writes(self):
         settings = load_settings(path=self.store_fixture.settings_file)

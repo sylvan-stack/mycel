@@ -39,6 +39,8 @@ class SequentialWriter:
 
 
 class SummaryRegenerationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = builds.SummaryBuildStoreTests()
         self.fixture.store_fixture = self.store_fixture

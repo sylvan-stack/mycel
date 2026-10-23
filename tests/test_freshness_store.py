@@ -43,6 +43,8 @@ class _RecordingConnection:
 
 
 class FreshnessStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.base = fixtures.LocatedReconciliationStoreTests()
         self.base.store_fixture = self.store_fixture

@@ -14,6 +14,8 @@ from mycel._source_refs import SourceAddress
 
 
 class ActivityCompletionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def connect(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)
 

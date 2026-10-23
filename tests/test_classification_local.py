@@ -231,6 +231,8 @@ class ClassificationCliBoundaryTests(unittest.TestCase):
 
 
 class LocalClassificationStoreTests(ClassificationStoreFixture):
+    check_kind = "store"
+
     @proves('MYC-14.18', kind='store')
     def test_local_reads_preserve_waiting_review_errors_and_refuse_malformed_retained_metadata(self):
         from copy import deepcopy

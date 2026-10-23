@@ -28,6 +28,8 @@ class OriginsInputTests(unittest.TestCase):
 
 
 class OriginsStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     setUp=fixtures.UriMutationStoreTests.setUp
     ingest=fixtures.UriMutationStoreTests.ingest
     invoke=fixtures.UriMutationStoreTests.invoke

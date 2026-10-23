@@ -23,6 +23,8 @@ DEPENDANT = 'fixture:@artifact/guide.md#Guide'
 
 
 class RelationOccurrenceRegressionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.DeriveStoreTests()
         self.fixture.store_fixture = self.store_fixture

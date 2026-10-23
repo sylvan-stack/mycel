@@ -19,6 +19,8 @@ except ImportError:
 
 
 class LocatedDependencyApplicationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.LocatedDeclarationTransactionStoreTests()
         self.fixture.store_fixture = self.store_fixture

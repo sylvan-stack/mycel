@@ -25,6 +25,8 @@ except ImportError:
 
 
 class IngestConcurrencyStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     @proves("MYC-1.23", kind="store")
     def test_public_ingest_survives_disjoint_publication_inside_its_producer_transaction(self):
         require_check_database(self.store_fixture.database)
@@ -101,6 +103,8 @@ class IngestConcurrencyStoreTests(unittest.TestCase):
 
 
 class IngestCrossRepositoryStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = ingest_fixtures.IngestStoreTests()
         self.fixture.store_fixture = self.store_fixture

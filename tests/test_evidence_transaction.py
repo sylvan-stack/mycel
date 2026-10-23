@@ -22,6 +22,8 @@ except ImportError:
 
 
 class EvidenceTransactionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def connect(self):
         return self.store_fixture.backend.connection(self.store_fixture.database)
 

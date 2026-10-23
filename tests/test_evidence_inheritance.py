@@ -305,6 +305,8 @@ class InheritanceUnitTests(unittest.TestCase):
 
 
 class InheritanceStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     @proves('MYC-1.34', 'MYC-2.26', 'MYC-16.5', 'MYC-16.6', kind='store')
     def test_real_new_dependant_version_inherits_deleted_source_with_no_live_source_rows(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:

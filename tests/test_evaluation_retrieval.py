@@ -182,6 +182,8 @@ class EvaluationRetrievalUnitTests(unittest.TestCase):
 
 
 class EvaluationRetrievalStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.ranking = ranking_fixtures.RankingStoreTests()
         self.ranking.store_fixture = self.store_fixture

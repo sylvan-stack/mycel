@@ -63,6 +63,8 @@ class RetainedResolverUnitTests(unittest.TestCase):
 
 
 class DependencyApplicationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.fixture = fixtures.LocatedReconciliationStoreTests()
         self.fixture.store_fixture = self.store_fixture

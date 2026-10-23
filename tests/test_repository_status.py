@@ -48,6 +48,8 @@ class RepositoryStatusUnitTests(unittest.TestCase):
 
 
 class RepositoryStatusStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     state = provenance_fixtures.ProvenanceReportStoreTests.state
     no_work = provenance_fixtures.ProvenanceReportStoreTests.no_work
 

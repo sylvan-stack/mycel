@@ -22,6 +22,8 @@ SOURCE = 'fixture:@code/policy.py#Policy'
 
 
 class RelationSelectionRegressionStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.harness = fixtures.RelateStoreTests()
         self.harness.store_fixture = self.store_fixture

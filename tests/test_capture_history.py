@@ -17,6 +17,8 @@ import test_located_reconciliation as _fixture_module
 
 class CaptureHistoryStoreTests(unittest.TestCase):
     # Reuse genuine fixture setup without inheriting/discovering its proofs.
+    check_kind = "store"
+
     setUp = _fixture_module.LocatedReconciliationStoreTests.setUp
     configure = _fixture_module.LocatedReconciliationStoreTests.configure
     connect = _fixture_module.LocatedReconciliationStoreTests.connect

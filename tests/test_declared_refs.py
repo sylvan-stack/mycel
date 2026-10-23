@@ -70,6 +70,8 @@ def retain(connection, snapshot, location, source):
 
 
 class DeclaredRefStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     @proves('MYC-2.6', kind='store')
     def test_every_fault_and_exact_malformed_spelling_survives_reply_and_listing(self):
         source = ('---\nsources: ["malformed\\0ref"]\n---\n# Answer\n<!-- sources:\n'
@@ -188,6 +190,8 @@ class DeclaredRefStoreTests(unittest.TestCase):
 
 
 class PhysicalBindingStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setup_disk(self, *, equal=False):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -309,6 +313,8 @@ class PhysicalBindingStoreTests(unittest.TestCase):
 
 
 class TypedMutationStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setup_disk(self, owner_text, source_text, source_path='source.md'):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

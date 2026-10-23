@@ -38,6 +38,8 @@ class ProvenanceReportUnitTests(unittest.TestCase):
 
 
 class ProvenanceReportStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         self.helper = fixtures.DriftLifecycleStoreTests()
         self.helper.store_fixture = self.store_fixture

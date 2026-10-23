@@ -25,6 +25,8 @@ from mycel._verification import ConfirmationStore
 
 
 class RepositoryRemovalStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     def setUp(self):
         if not hasattr(self, 'store_fixture'):
             self.fail('Repository removal checks require a configured disposable store.')
@@ -341,6 +343,8 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
 
 
 class RepositoryRemovalEvidenceStoreTests(unittest.TestCase):
+    check_kind = "store"
+
     @proves('MYC-1.27', 'MYC-6.18', 'MYC-16.11', kind='store')
     def test_removed_source_keeps_dependant_baseline_and_projects_missing_source_without_writing(self):
         try:
