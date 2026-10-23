@@ -3014,6 +3014,43 @@
     ],
     "MYC-17.15": [
       "test_recovery.RecoveryStoreTests.test_third_party_snapshots_recover_without_linear_or_remote_reads"
+    ],
+    "MYC-17.16": [
+      "test_audit.AuditStoreTests.test_dry_run_is_readonly_and_paths_are_component_scoped",
+      "test_audit.AuditStoreTests.test_repeated_human_names_are_ambiguous_but_uuid_diagnostics_remain_auditable",
+      "test_audit.AuditStoreTests.test_requirement_marks_and_withdrawal_exempt_only_unresting_requirements",
+      "test_audit.AuditStoreTests.test_seven_deterministic_rules_use_only_current_indexed_evidence",
+      "test_audit.SemanticAuditStoreTests.test_public_command_records_mutations_settlement_and_readonly_dryrun"
+    ],
+    "MYC-17.17": [
+      "test_audit.SemanticAuditStoreTests.test_changed_input_and_late_activity_edit_roll_back_findings_and_score",
+      "test_audit.SemanticAuditStoreTests.test_every_method_and_band_is_audited_without_changing_policy_or_verification",
+      "test_audit.SemanticAuditStoreTests.test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence",
+      "test_audit.SemanticAuditStoreTests.test_three_negative_questions_retain_exact_evidence_lower_only_disputed_link_and_reuse"
+    ],
+    "MYC-17.18": [
+      "test_audit.AuditStoreTests.test_dry_run_is_readonly_and_paths_are_component_scoped",
+      "test_audit.AuditStoreTests.test_person_settles_with_reason_history_and_exact_observation_never_reopens",
+      "test_audit.SemanticAuditStoreTests.test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared",
+      "test_audit.SemanticAuditStoreTests.test_interrupt_preserves_completed_prefix_and_releases_request_leases",
+      "test_audit.SemanticAuditStoreTests.test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence",
+      "test_audit.SemanticAuditStoreTests.test_public_command_records_mutations_settlement_and_readonly_dryrun",
+      "test_audit.SemanticAuditStoreTests.test_quiet_period_byte_budget_and_uncertain_handoff_have_no_claim_effect",
+      "test_audit.SemanticAuditStoreTests.test_three_negative_questions_retain_exact_evidence_lower_only_disputed_link_and_reuse"
+    ],
+    "MYC-14.29": [
+      "test_audit.SemanticAuditStoreTests.test_adapter_cancellation_returns_interrupted_status_without_effects",
+      "test_audit.SemanticAuditStoreTests.test_busy_deadline_terminal_and_transient_failures_are_finite",
+      "test_audit.SemanticAuditStoreTests.test_candidate_cap_bounds_unresolved_preparation_before_assembly",
+      "test_audit.SemanticAuditStoreTests.test_changed_input_and_late_activity_edit_roll_back_findings_and_score",
+      "test_audit.SemanticAuditStoreTests.test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared",
+      "test_audit.SemanticAuditStoreTests.test_corrupt_cached_stage_is_refused_without_a_call_or_claim_effect",
+      "test_audit.SemanticAuditStoreTests.test_every_method_and_band_is_audited_without_changing_policy_or_verification",
+      "test_audit.SemanticAuditStoreTests.test_interrupt_preserves_completed_prefix_and_releases_request_leases",
+      "test_audit.SemanticAuditStoreTests.test_public_command_records_mutations_settlement_and_readonly_dryrun",
+      "test_audit.SemanticAuditStoreTests.test_quiet_period_byte_budget_and_uncertain_handoff_have_no_claim_effect",
+      "test_audit.SemanticAuditStoreTests.test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence",
+      "test_audit.SemanticAuditStoreTests.test_three_negative_questions_retain_exact_evidence_lower_only_disputed_link_and_reuse"
     ]
   }
 }

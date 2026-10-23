@@ -197,8 +197,13 @@ class SemanticAuditStore(AuditStore):
             metadata = {**({} if previous is None else previous[2]), 'schema': 1, 'at': at,
                         'observations': list({item['identity']:item for item in
                             [*(() if previous is None else previous[2].get('observations', ())), *pair.observations]}.values())}
+            guards=dict(metadata.get('guardsByLocation', {}))
+            guards[pair.location]={'location':pair.location,'claims':list(pair.claims),'files':list(pair.signatures)}
+            metadata['guardsByLocation']=guards
             if record is not None:
-                metadata['record'] = record
+                metadata['attempt'] = record
+                if record.get('status') == 'complete' or metadata.get('record', {}).get('status') != 'complete':
+                    metadata['record'] = record
             self.connection.execute('INSERT INTO public.mycel_manifests VALUES (%s,%s,%s,%s,%s) '
                 'ON CONFLICT(repository,hash) DO UPDATE SET metadata=EXCLUDED.metadata',
                 (repository, digest, 'origin_audit_request', raw, Jsonb(metadata)))
@@ -367,6 +372,7 @@ def run_audit(store, settings, repository, *, paths=(), dry_run=False, determini
                         reply['errors'] += 1;reply['status']=1
                         if reason in {'deadline','cancelled'}:
                             reply['incomplete']=True;stopped.set()
+                            if reason=='cancelled':reply['status']=2
                     except KeyboardInterrupt:
                         stopped.set();record.update(status='error',reason='cancelled')
                         reply.update(incomplete=True,status=2)
@@ -383,13 +389,56 @@ def run_audit(store, settings, repository, *, paths=(), dry_run=False, determini
             finally:
                 with deadline_suspended():
                     store.finish(settings,repository,invocation)
-            with checked_store(store.connection),read_snapshot(store.connection):
+            with deadline_suspended(),checked_store(store.connection),read_snapshot(store.connection):
                 reply['findings']=store.list_in_transaction(settings,repository,paths=paths,closed=closed)
             return reply
     except (MycelError,EvidenceError,_BoundaryFailure,KeyboardInterrupt) as error:
-        reply.update(status=2 if isinstance(error,KeyboardInterrupt) else 1,incomplete=True,
+        reply.update(status=2 if isinstance(error,KeyboardInterrupt) or getattr(error,'reason',None)=='cancelled' or dependencies.cancelled() else 1,incomplete=True,
             error=error.to_dict()['error'] if isinstance(error,MycelError) else
                 {'code':'refused','message':'Audit could not complete its guarded selection.'})
         return reply
 
 
+
+def handle_audit(invocation, dependencies=None):
+    from ._activity import MutationActivity
+    from ._build_identity import current_build
+    from ._cli import Result, invocation_store
+    arguments = iter(invocation.arguments)
+    paths, flags, values = [], set(), {}
+    for argument in arguments:
+        if argument == '--path':
+            paths.append(next(arguments))
+        elif argument in {'--dry-run', '--deterministic', '--closed'}:
+            flags.add(argument)
+        else:
+            values[argument] = next(arguments)
+    dry_run = '--dry-run' in flags
+    settings = invocation.settings
+    dependencies = dependencies or ClassifyDependencies()
+    deadline = Deadline.after(settings.values['drifts']['seconds'], clock=dependencies.monotonic)
+    scope = RepositoryLocations(settings).resolve_scope(invocation.repositories)
+    if len(scope) != 1 or not scope[0].enabled:
+        raise MycelError('invalid_input', 'Audit requires one enabled repository.')
+    repository = scope[0].name
+    with deadline_guard(deadline), ExitStack() as stack:
+        connection, _ = stack.enter_context(invocation_store(invocation, operation='read' if dry_run else 'write'))
+        build = None if dry_run else current_build()
+        activity = None if build is None else stack.enter_context(MutationActivity(connection, build=build).session())
+        store = SemanticAuditStore(connection)
+        if '--settle' in values:
+            finding, changed = store.settle(settings, repository, values['--settle'], reason=values['--reason'],
+                by=values.get('--by'), at=dependencies.utc_now(), activity=activity)
+            with checked_store(connection), read_snapshot(connection):
+                findings = store.list_in_transaction(settings, repository)
+            reply = {'repository': repository, 'location': scope[0].disk_location, 'paths': [],
+                'deterministic': True, 'dryRun': False, 'findings': findings, 'newFindings': 0,
+                'settled': finding, 'changed': changed, 'selected': 0, 'completed': 0, 'reused': 0,
+                'capped': False, 'jevCalls': 0, 'reviewCalls': 0, 'errors': 0, 'incomplete': False, 'pairs': [], 'status': 0}
+        else:
+            reply = run_audit(store, settings, repository, paths=paths, dry_run=dry_run,
+                deterministic='--deterministic' in flags, closed='--closed' in flags,
+                k=int(values['--k']) if '--k' in values else None, dependencies=dependencies, activity=activity, deadline=deadline)
+        if activity is not None:
+            activity.finish('done' if reply['status'] == 0 else 'refused', counts={(repository, 'audit'): reply})
+        return Result(reply, reply['status'])

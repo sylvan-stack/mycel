@@ -1,11 +1,10 @@
 """Stored Origin audit observations and explicit operator settlement."""
 from __future__ import annotations
 
-from contextlib import ExitStack
 from datetime import datetime, timezone
 from hashlib import sha256
-from itertools import combinations
 import json
+import math
 from pathlib import PurePosixPath
 import re
 from uuid import UUID, NAMESPACE_URL, uuid4, uuid5
@@ -13,10 +12,9 @@ from uuid import UUID, NAMESPACE_URL, uuid4, uuid5
 from psycopg.types.json import Jsonb
 
 from ._activity import AppliedMutation
-from ._derive import _disk_key
 from ._drift_store import DriftStore
 from ._errors import MycelError
-from ._evidence import EvidenceError, canonical_json, _chunk_snapshot
+from ._evidence import canonical_json, _chunk_snapshot, snapshot
 from ._justify import checked_link, public_reference
 from ._locks import read_snapshot, invocation_is_live
 from ._markdown import split_markdown
@@ -96,9 +94,11 @@ def deterministic_observations(connection, settings, repository, *, paths=(), ca
         if mark is not None and (not isinstance(mark,dict) or set(mark)!={'who','when','reason'} or any(not isinstance(v,str) or not v.strip() for v in mark.values())):
             raise MycelError('store_format','A needs-nothing mark has incompatible metadata.')
     result=[]
-    def add(kind,file,member,facts,disputed=()):
+    def add(kind,file,member,facts,disputed=(),evidence_files=()):
         result.append((observation(repository,location,kind,public_reference(_selection(file,member)),
-            member.place.path,facts=facts,links=[item['claim'] for item in disputed]),(_chunk_snapshot(member,file),)))
+            member.place.path,facts={**facts,'subjectVersion':member.chunk.snapshot_hash},
+            links=[item['claim'] for item in disputed]),(_chunk_snapshot(member,file),)+
+            tuple(snapshot(item.source,place=item.primary) for item in {item.identifier:item for item in evidence_files}.values())))
     for version,(file,member) in selected.items():
         chunk=member.chunk;ref=public_reference(_selection(file,member));own=links.get(version,[])
         if chunk.kind=='req' and (chunk.entity or {}).get('status')!='withdrawn' and chunk.identifier not in rested and marks.get(chunk.identifier) is None:
@@ -149,7 +149,9 @@ def deterministic_observations(connection, settings, repository, *, paths=(), ca
                 if place.name is None or not any(owner==place.repository and path==place.path and (place.root is None or root==place.root) for owner,root,path in glossaries):continue
                 resolved=catalog.resolve(declared.ref,purpose='endpoint')
                 if resolved.state!='resolved':
-                    add('missing_term',file,member,{'term':place.name,'glossary':place.address,'state':resolved.state})
+                    targets=tuple(item for item in catalog.files if any(alias.repository==place.repository and alias.path==place.path and (place.root is None or alias.root==place.root) for alias in item.aliases))
+                    add('missing_term',file,member,{'term':place.name,'glossary':place.address,'state':resolved.state,
+                        'glossaryVersions':sorted(item.snapshot_hash for item in targets)},evidence_files=targets)
     for (kind,value),rows in ids.items():
         unique={(file.identifier,row.byte_start):(file,row) for file,row in rows}
         if len(unique)<2:continue
@@ -157,13 +159,15 @@ def deterministic_observations(connection, settings, repository, *, paths=(), ca
         if not any(_in_path(item.primary.path,paths) for item,_ in rows):continue
         candidates=catalog._members(file,file.chunks);member=next((m for m in candidates if m.chunk.name==row.section),candidates[0])
         add('duplicate_id',file,member,{'identityKind':kind,'identity':value,
-            'occurrences':sorted(file.primary.address+':'+str(row.line) for file,row in rows)})
+            'occurrences':sorted(file.primary.address+':'+str(row.line) for file,row in rows),
+            'fileVersions':sorted({item.snapshot_hash for item,_ in rows})},evidence_files=tuple(item for item,_ in rows))
     for value,rows in uuid_faults.items():
         file,line=rows[0]
         if not _in_path(file.primary.path,paths):continue
         members=catalog._members(file,file.chunks);offset=sum(len(part) for part in file.source.splitlines(keepends=True)[:line-1]);member=next((m for m in members if m.chunk.span and m.chunk.span[0]<=offset<m.chunk.span[1]),members[0])
         add('duplicate_id',file,member,{'identityKind':'uuid','identity':value,
-            'occurrences':sorted(file.primary.address+':'+str(line) for file,line in rows)})
+            'occurrences':sorted(file.primary.address+':'+str(line) for file,line in rows),
+            'fileVersions':sorted({item.snapshot_hash for item,_ in rows})},evidence_files=tuple(item for item,_ in rows))
     unique={finding_id(value):(value,blobs) for value,blobs in result}
     return [unique[key] for key in sorted(unique)]
 
@@ -177,13 +181,26 @@ class AuditStore(RecoveryStore):
         digest,raw,metadata=row
         try:
             observed=json.loads(bytes(raw));wire=metadata['finding']
-            if (_hash(observed)!=digest or observed['schema']!=SCHEMA or wire['id']!=finding_id(observed)
+            if (type(metadata.get('schema')) is not int or metadata.get('schema')!=1 or canonical_json(observed)!=bytes(raw) or _hash(observed)!=digest or observed['schema']!=SCHEMA or wire['id']!=finding_id(observed)
                     or wire['observationHash']!=digest or wire['state'] not in {'open','settled'}
                     or wire['kind'] not in DETERMINISTIC+SEMANTIC
                     or any(wire[key]!=observed[key] for key in ('kind','repository','location','subject','path','links','facts'))):raise ValueError()
             _time(wire['openedAt'])
+            semantic=observed['kind'] in SEMANTIC
+            if (set(observed)!={'schema','repository','location','kind','subject','path','links','facts'} | ({'inputHash'} if semantic else set())
+                    or wire['mode']!=('semantic' if semantic else 'deterministic')
+                    or not isinstance(observed['facts'],dict) or not isinstance(observed['links'],list)
+                    or any(not isinstance(observed[key],str) or not observed[key] for key in ('repository','location','subject','path'))):raise ValueError()
+            if semantic:
+                score=wire['confidenceScore'];record=wire['evidence']['record']
+                if (type(score) not in {int,float} or not math.isfinite(score) or not 0<=score<=1
+                        or wire['evidence']['inputHash']!=observed['inputHash']
+                        or record['inputHash']!=observed['inputHash'] or record['status']!='complete'
+                        or record['judgement']!=wire['kind'] or record['confidenceScore']!=score):raise ValueError()
+            if wire['state']=='open' and 'settlement' in wire:raise ValueError()
             if wire['state']=='settled':
                 closed=wire['settlement'];_time(closed['when'])
+                if set(closed)!={'who','when','reason'}:raise ValueError()
                 if any(not isinstance(closed[key],str) or not closed[key].strip() for key in ('who','reason')):raise ValueError()
             return wire
         except (KeyError,TypeError,ValueError,MycelError):
@@ -261,6 +278,7 @@ class AuditStore(RecoveryStore):
                 'AND NOT EXISTS(SELECT 1 FROM public.mycel_evidence_references r WHERE r.repository=s.repository AND r.snapshot_hash=s.hash)',(repository,blob))
 
     def prune_in_transaction(self,repository):
+        for row in self._rows(repository):self._wire(row)
         older=self.connection.execute("SELECT o.id FROM public.mycel_evidence_owners o JOIN public.mycel_manifests m "
             "ON m.repository=o.repository AND m.hash=o.identity WHERE o.repository=%s AND o.kind='origin_audit_finding' "
             "AND m.metadata->'finding'->>'state'='settled' ORDER BY m.metadata->'finding'->'settlement'->>'when' DESC,"

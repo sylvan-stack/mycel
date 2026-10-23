@@ -20,8 +20,7 @@ import threading
 import time
 from types import MappingProxyType
 
-from ._classification_payload import (OriginDecisionPayload, ORIGIN_QUESTION, CHOICE_CRITERIA, INSTRUCTION, LABELS,
-                                     DecisionPayload, ReviewerRequest)
+from ._classification_payload import LABELS, DecisionPayload, ReviewerRequest
 from ._credentials import Credentials, CredentialUnavailable, Secret
 from ._errors import MycelError
 from ._safeguards import InvocationPolicy, require_model_call
