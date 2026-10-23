@@ -468,3 +468,28 @@ class MarkdownTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RequirementWithdrawalTests(unittest.TestCase):
+    @proves('MYC-17.2')
+    def test_withdrawn_objects_in_an_active_requirement_do_not_withdraw_the_row(self):
+        from mycel._markdown import split_markdown
+        for text in ('permit a withdrawn Build only when explicitly named',
+                     'keep withdrawn IDs reserved', 'allow a mark to be withdrawn'):
+            raw = ('---\nstatus: accepted\n---\n# Contract\n\n'
+                   '| ID | Mycel must… | From v1 | Verified by |\n|---|---|---|---|\n'
+                   '| MYC-1.1 <!-- 11111111-2222-4333-8444-555555555555 --> | ' + text + ' | New | unit |\n')
+            with self.subTest(text=text):
+                self.assertEqual(split_markdown(raw).entities[0].status, 'accepted')
+
+    @proves('MYC-17.2')
+    def test_explicit_withdrawal_markers_preserve_the_reserved_entity(self):
+        from mycel._markdown import split_markdown
+        for text in ('Withdrawn', 'Withdrawn: moved to MYC-14.1',
+                     'Withdrawn 8 October 2026; moved to MYC-14.1'):
+            raw = ('---\nstatus: accepted\n---\n# Contract\n\n'
+                   '| Former requirement | Current requirement |\n|---|---|\n'
+                   '| MYC-7.1 <!-- 11111111-2222-4333-8444-555555555555 --> | ' + text + ' |\n')
+            with self.subTest(text=text):
+                row, = split_markdown(raw).entities
+                self.assertEqual((row.id, row.status), ('MYC-7.1', 'withdrawn'))

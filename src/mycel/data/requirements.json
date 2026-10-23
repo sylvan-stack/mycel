@@ -2,75 +2,75 @@
   "schema_version": 1,
   "specifications": {
     "00-overview-and-legacy-map.md": {
-      "sha256": "f184b646e47a9983b91a7964996166cbdfa2c0df1515efc7b41331b78c05e12d",
+      "sha256": "ef7f24eb7e1ab63d98163eb6186ec2decb5319d389393a946ca57b0b6138b57e",
       "specification_status": "accepted"
     },
     "01-corpora-and-ingest.md": {
-      "sha256": "d69071428ce1c125650cd110ed75e602018c9e8c04021651dcf86ef045ec50c0",
+      "sha256": "688ccb0135b314a2cbfa99b40484355fddb351ad28ee2edb18987c7c3e98280d",
       "specification_status": "accepted"
     },
     "02-provenance-and-freshness.md": {
-      "sha256": "5340dd82a00a8d575c2fe658aa2071edae7e01fa1f2bfa19066db6a8f274d442",
+      "sha256": "2d4475f376bd6ec1fe91b6566bf5bcd82dbdf09093db2de4a5b748bc4038889a",
       "specification_status": "accepted"
     },
     "03-embedding.md": {
-      "sha256": "e4b84fc7f9b8fdb01daaea2dd2c74262557807c39243e81cfe413d72022a9e5c",
+      "sha256": "c0288ca21d626fa2c443989d8c0fe6f3a32072a8bd07d645f784791bc633b43b",
       "specification_status": "accepted"
     },
     "04-retrieval.md": {
-      "sha256": "99714e8f393d69171bf687b974ae935985440d6771c5069ca9759af482c44b20",
+      "sha256": "414232edef19fbfabe573eded6fcb8c762d25d4b894420825b0de519f7ab32a0",
       "specification_status": "accepted"
     },
     "05-settings.md": {
-      "sha256": "89d38c29b58dadcc26fb053da92b6291e9624c6d6f11f82af51d471432c09332",
+      "sha256": "15e9618f31ac744f700e49d7b73c2e3c4e1f744e60c1051be096918e9ec5c2a7",
       "specification_status": "accepted"
     },
     "06-index-store.md": {
-      "sha256": "138b23c3b4c9370d1232518bd93133957dd1ebe12daf61d552fa414ab98da934",
+      "sha256": "6b410c144584022bf387d62b15e52bbcb172c790482b3deb2d19600bd22f7408",
       "specification_status": "accepted"
     },
     "07-drifts-and-verification.md": {
-      "sha256": "72ecc926a4565b1b5df3e318da6dc0d57ff929ba6ce2bff8f6c1a4c8c898fc93",
+      "sha256": "9df6045a790554b0156e0377399955c1d7910009ae7af927bec52cd44ad0e3e7",
       "specification_status": "accepted"
     },
     "08-summaries.md": {
-      "sha256": "03a711b06454c1b9768e8ac3680f2e36689a9024b786d868e9490c3cb33c0111",
+      "sha256": "9279ebeed8e8d5dcd1dd796b90de275f093828ea2296677db1721809f355373d",
       "specification_status": "accepted"
     },
     "09-code-overview.md": {
-      "sha256": "cea58bdc60a0b55f6afaedae04d4d81e0c54aeb7a3d9281b633cad109e96723c",
+      "sha256": "e477dd61c340fdbc47d58682e718e8f506293c999e9b64bb921c57b8c070926a",
       "specification_status": "accepted"
     },
     "10-grep-replacement.md": {
-      "sha256": "f976923e5967ec76f4cc62bcf1d8823eb72427b741e05854da14224c1fb11733",
+      "sha256": "7694c317d33eab701ca18733fe55e8393b2c6c451771da9290c2010a2bfa5769",
       "specification_status": "accepted"
     },
     "11-reading-a-chunk.md": {
-      "sha256": "497b30e8161467fa07abd101e03aad0a4014713e1c7d641f1228e197eac5283a",
+      "sha256": "346ec262358e08c1ddb65da5498a529cdc5c40b8e5b0456ec38da2cda8d99238",
       "specification_status": "accepted"
     },
     "12-record-of-work.md": {
-      "sha256": "7d85444dba955899417175483096ee69402de10ffc10b868ebda921af17d72e8",
+      "sha256": "c565ed7c43ed95191b11374dd94ea0df8a078d5ce665f4ec3e44daf0fb492838",
       "specification_status": "accepted"
     },
     "13-checks-and-evaluation.md": {
-      "sha256": "4faa71aba48e0b957b73989d247da5e23be2c63b8760aab4db84e1ad82a36175",
+      "sha256": "e45dadc09a4333f1af45c72a7b0c0605e5c72416f71d5725bca816398efeaaec",
       "specification_status": "accepted"
     },
     "14-drift-detection.md": {
-      "sha256": "ac9b9b8ee2f01eea1f2d06000958eda844e698eba96018405dac6a4c7087da80",
+      "sha256": "b7e4675549ebb0956d7e12c0540039b40c02fea9ca15b7ffdfb882c7f3c2fca0",
       "specification_status": "accepted"
     },
     "15-distribution-and-replacement.md": {
-      "sha256": "d20e87873f886c596ec7cef56384059c9e9abab54e6facafe822e13e5547fda1",
+      "sha256": "5b4486316576e3014fd442ba83c3841b38aee7dd745a9e73233d3a13b07ab9d9",
       "specification_status": "accepted"
     },
     "16-source-addresses-and-evidence.md": {
-      "sha256": "9c40858e896943eec225de34f1a4e26af20fce0d350aafc95b08374edb4f97e9",
+      "sha256": "ff39584a218bd826debdfb0b4a69cdc6558a80aad9a5e6e03abb391e9c22bd35",
       "specification_status": "accepted"
     },
     "17-justification.md": {
-      "sha256": "dadb15331030bdbaf4cbd1a37703caaeb93d53f6eb654d9ad6cb1af17b3fef2d",
+      "sha256": "d6ae906903660ef3432fd29fb95a79648242bfabe2eeaaa53120d59a032a3aec",
       "specification_status": "draft"
     }
   },
