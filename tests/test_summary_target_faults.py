@@ -7,7 +7,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import run
-from mycel._coverage import proves
 from mycel._derive import DeriveStore
 from mycel._errors import MycelError
 from mycel._relate import RelateStore
@@ -60,7 +59,6 @@ class SummaryTargetFaultStoreTests(unittest.TestCase):
                        'mycel._credentials.Credentials.jev_key'):
             stack.enter_context(patch(target, side_effect=AssertionError('fault operation called a provider')))
 
-    @proves('MYC-8.23', kind='store')
     def test_real_built_summary_source_and_related_faults_keep_occurrences_without_generated_edges(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -99,7 +97,6 @@ class SummaryTargetFaultStoreTests(unittest.TestCase):
                 "SELECT 1 FROM public.mycel_relations WHERE baseline_owner IS NOT NULL").fetchall(), [])
             self.assertEqual(self.fixture.summaries(connection), summaries)
 
-    @proves('MYC-8.23', kind='store')
     def test_first_overview_projection_repeat_missing_section_and_recreation_report_generated_text(self):
         file = self.base.code / 'src' / 'work.py'
         file.parent.mkdir()
@@ -135,7 +132,6 @@ class SummaryTargetFaultStoreTests(unittest.TestCase):
                 "SELECT 1 FROM public.mycel_edges e JOIN public.mycel_chunk_versions v ON v.id=e.source_version "
                 "JOIN public.mycel_chunks c ON c.id=v.chunk_id WHERE c.kind='overview'").fetchall(), [])
 
-    @proves('MYC-8.23', kind='store')
     def test_real_built_summary_cannot_be_derive_or_relate_endpoint_or_source_including_legacy_alias(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -157,7 +153,6 @@ class SummaryTargetFaultStoreTests(unittest.TestCase):
                                 self.assertEqual(error.exception.code, 'invalid_input')
                                 self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-8.23', kind='store')
     def test_real_physical_generated_names_keep_root_selection_and_legacy_collision_ambiguity(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)

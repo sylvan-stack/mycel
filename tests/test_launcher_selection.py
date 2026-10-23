@@ -21,7 +21,6 @@ import time
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel_build import _launcher_runtime as launcher
 from mycel_build._core import atomic_json, digest, file_manifest, json_bytes, seal_program
 from mycel_build._registry import allocate
@@ -207,7 +206,6 @@ class LauncherFixture:
 
 
 class LauncherSelectionTests(unittest.TestCase):
-    @proves('MYC-15.6', kind='unit')
     def test_numeric_default_skips_every_unavailable_status_target_and_damaged_build_without_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -240,7 +238,6 @@ class LauncherSelectionTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, 'refused')
             self.assertEqual(tree_state(fixture.base), before)
 
-    @proves('MYC-15.6', kind='unit')
     def test_only_first_selector_is_consumed_and_withdrawn_requires_explicit_selection(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -259,7 +256,6 @@ class LauncherSelectionTests(unittest.TestCase):
                     finally:
                         os.close(selected.run_fd)
 
-    @proves('MYC-15.6', kind='unit')
     def test_malformed_unknown_unavailable_and_empty_default_are_sanitized_structured_errors(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -298,7 +294,6 @@ class LauncherSelectionTests(unittest.TestCase):
 
 
 class LauncherProcessTests(unittest.TestCase):
-    @proves('MYC-15.7', kind='unit')
     def test_actual_exec_preserves_pid_cwd_every_argument_and_environment_without_distribution_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -318,7 +313,6 @@ class LauncherProcessTests(unittest.TestCase):
                 self.assertEqual(errors, b'')
             self.assertEqual(tree_state(fixture.base), before)
 
-    @proves('MYC-15.7', kind='unit')
     def test_actual_binary_streams_stdin_and_arbitrary_exit_status_pass_without_json_wrapping(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -330,7 +324,6 @@ class LauncherProcessTests(unittest.TestCase):
                     self.assertEqual(reply.stdout, b'out\x00input\x00\xff\n')
                     self.assertEqual(reply.stderr, b'err\xff\n')
 
-    @proves('MYC-15.7', kind='unit')
     def test_real_signal_default_and_selected_process_handler_receive_original_pid(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -343,7 +336,6 @@ class LauncherProcessTests(unittest.TestCase):
                     output, errors = process.communicate(timeout=10)
                     self.assertEqual((process.returncode, output, errors), (expected, b'', error))
 
-    @proves('MYC-0.9', 'MYC-15.6', 'MYC-15.7', kind='unit')
     def test_info_reports_the_selected_package_identity_and_withdrawn_warning_uses_only_stderr(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -360,7 +352,6 @@ class LauncherProcessTests(unittest.TestCase):
             self.assertNotIn(b'known parser regression', explicit.stdout)
             self.assertEqual(tree_state(fixture.base), before)
 
-    @proves('MYC-15.7', kind='unit')
     def test_real_product_grep_keeps_raw_stdin_output_error_and_status_under_invalid_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)

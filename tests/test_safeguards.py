@@ -12,7 +12,6 @@ import time
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._safeguards import (
     ChildProcessFailure, InvocationPolicy, SYSTEM_PATH, model_call_allowed,
@@ -22,7 +21,6 @@ from mycel._safeguards import (
 
 
 class ModelPolicyTests(unittest.TestCase):
-    @proves("MYC-0.10")
     def test_embedding_is_separate_from_classification_and_requires_explicit_ingest_embed(self):
         for policy in (
             InvocationPolicy("embed"), InvocationPolicy("ingest", embed=True),
@@ -38,7 +36,6 @@ class ModelPolicyTests(unittest.TestCase):
         self.assertFalse(model_call_allowed(InvocationPolicy("ingest"), "embedding"))
         self.assertFalse(model_call_allowed(InvocationPolicy("evaluate", kind="drift", live=True), "embedding"))
 
-    @proves("MYC-0.10")
     def test_classifier_and_reviewer_only_allow_explicit_classify_or_live_drift_evaluation(self):
         allowed = (InvocationPolicy("classify"), InvocationPolicy("evaluate", kind="drift", live=True))
         denied = (
@@ -58,7 +55,6 @@ class ModelPolicyTests(unittest.TestCase):
                     require_model_call(policy, purpose)
                 self.assertEqual(error.exception.code, "refused")
 
-    @proves("MYC-0.10")
     def test_summaries_only_allow_explicit_build_and_regenerate(self):
         for action in ("build", "regenerate"):
             require_model_call(InvocationPolicy("summaries", action=action), "summary")
@@ -68,7 +64,6 @@ class ModelPolicyTests(unittest.TestCase):
             self.assertFalse(model_call_allowed(InvocationPolicy(command, action="build", live=True), "summary"))
         self.assertFalse(model_call_allowed(InvocationPolicy("classify"), "unknown"))
 
-    @proves("MYC-0.10")
     def test_all_dry_runs_refuse_model_calls_before_command_resolution_or_spawn(self):
         policies = (
             InvocationPolicy("ingest", embed=True, dry_run=True),
@@ -86,7 +81,6 @@ class ModelPolicyTests(unittest.TestCase):
             resolve.assert_not_called()
             spawn.assert_not_called()
 
-    @proves("MYC-0.10")
     def test_report_and_search_cannot_launch_configured_model_children(self):
         with patch("mycel._safeguards.subprocess.Popen") as spawn:
             for command in ("ingest", "search", "read", "status", "drifts", "activity", "info"):
@@ -100,7 +94,6 @@ class ChildBoundaryTests(unittest.TestCase):
     def child(self, code, request=b"", **kwargs):
         return run_child([sys.executable, "-c", code], request, timeout_seconds=kwargs.pop("timeout_seconds", 5), **kwargs)
 
-    @proves("MYC-0.10")
     def test_child_environment_is_exact_and_contains_no_parent_credentials(self):
         fake_parent = {
             "MYCEL_STORE_PASSWORD": "fixture-store-secret", "VOYAGE_API_KEY": "fixture-voyage-secret",
@@ -118,7 +111,6 @@ class ChildBoundaryTests(unittest.TestCase):
         for secret in fake_parent.values():
             self.assertNotIn(secret, environment.values())
 
-    @proves("MYC-0.10")
     def test_child_has_empty_private_directory_pipes_and_own_process_group(self):
         code = """import json,os,stat,sys
 print(json.dumps({'cwd':os.getcwd(), 'entries':os.listdir('.'),
@@ -136,7 +128,6 @@ print(json.dumps({'cwd':os.getcwd(), 'entries':os.listdir('.'),
         self.assertEqual(data["cwd"], data["tmp"])
         self.assertFalse(Path(data["cwd"]).exists())
 
-    @proves("MYC-0.10")
     def test_inheritable_credentials_and_lock_descriptors_are_closed(self):
         read_fd, write_fd = os.pipe()
         os.set_inheritable(write_fd, True)
@@ -152,7 +143,6 @@ else: print('inherited')
             os.close(read_fd)
             os.close(write_fd)
 
-    @proves("MYC-0.10")
     def test_arguments_and_input_are_literal_and_request_is_not_an_argument(self):
         arguments = ["$HOME", "$(touch /fixture)", "*.md", "; exit 1", ""]
         request = "complete request · α\n".encode()
@@ -164,7 +154,6 @@ else: print('inherited')
         self.assertEqual(json.loads(first), arguments)
         self.assertEqual(remaining, request)
 
-    @proves("MYC-0.10")
     def test_stdin_and_both_outputs_are_drained_concurrently(self):
         import errno
 
@@ -219,7 +208,6 @@ sys.stdout.buffer.write(str(len(data)).encode())
                     self.assertTrue(all(stream.closed for stream in
                                         (children[0].stdin, children[0].stdout, children[0].stderr)))
 
-    @proves("MYC-0.10")
     def test_output_caps_fail_with_safe_diagnostics_and_reap_the_child(self):
         for channel in ("stdout", "stderr"):
             code = f"import sys,time; sys.{channel}.buffer.write(b'fixture-secret'*10000); sys.{channel}.flush(); time.sleep(20)"
@@ -230,7 +218,6 @@ sys.stdout.buffer.write(str(len(data)).encode())
             self.assertNotIn("fixture-secret", str(error.exception))
             self.assertLess(time.monotonic() - started, 3)
 
-    @proves("MYC-0.10")
     def test_exact_output_caps_are_allowed(self):
         result = self.child(
             "import sys;sys.stdout.buffer.write(b'o'*1000);sys.stderr.buffer.write(b'e'*1000)",
@@ -239,7 +226,6 @@ sys.stdout.buffer.write(str(len(data)).encode())
         self.assertEqual(result.stdout, b"o" * 1000)
         self.assertEqual(result.stderr, b"e" * 1000)
 
-    @proves("MYC-0.10")
     def test_timeout_kills_term_ignoring_process_and_does_not_expose_stderr(self):
         with tempfile.TemporaryDirectory() as directory:
             pid_file = Path(directory) / "pid"
@@ -258,7 +244,6 @@ time.sleep(20)
             with self.assertRaises(ProcessLookupError):
                 os.kill(int(pid_file.read_text()), 0)
 
-    @proves("MYC-0.10")
     def test_cancellation_terminates_the_entire_process_group(self):
         with tempfile.TemporaryDirectory() as directory:
             marker = Path(directory) / "survived"
@@ -277,7 +262,6 @@ time.sleep(20)
             time.sleep(max(0, 2.2 - (time.monotonic() - started)))
             self.assertFalse(marker.exists())
 
-    @proves("MYC-0.10")
     def test_keyboard_interrupt_reaps_the_spawned_child(self):
         real_spawn = subprocess.Popen
         children = []
@@ -295,7 +279,6 @@ time.sleep(20)
         self.assertIsNotNone(children[0].returncode)
         self.assertTrue(all(stream.closed for stream in (children[0].stdin, children[0].stdout, children[0].stderr)))
 
-    @proves("MYC-0.10")
     def test_repeated_real_signals_cannot_interrupt_process_group_cleanup(self):
         source = Path(__file__).resolve().parents[1] / "src"
         for repeated_signal in (signal.SIGINT, signal.SIGTERM):
@@ -341,7 +324,6 @@ print(json.dumps({{'interrupted':interrupted,'reaped':not alive,
                     "interrupted": True, "reaped": True, "handlers_restored": True,
                 })
 
-    @proves("MYC-0.10")
     def test_invalid_transport_limits_are_refused_before_spawn(self):
         with patch("mycel._safeguards.subprocess.Popen") as spawn:
             for limit in (0, -1, float("inf"), float("nan"), True):
@@ -352,7 +334,6 @@ print(json.dumps({{'interrupted':interrupted,'reaped':not alive,
                     self.child("pass", stdout_limit=limit)
             spawn.assert_not_called()
 
-    @proves("MYC-0.10")
     def test_reviewer_resolution_never_searches_path_or_expands_arguments(self):
         with patch("mycel._safeguards.shutil.which") as search:
             with self.assertRaises(MycelError) as error:
@@ -366,7 +347,6 @@ print(json.dumps({{'interrupted':interrupted,'reaped':not alive,
 
 
 class GitBoundaryTests(unittest.TestCase):
-    @proves("MYC-0.10")
     def test_git_accepts_required_local_object_and_ref_reads(self):
         commands = (
             ("rev-parse", "--show-toplevel"), ("rev-parse", "--verify", "--end-of-options", "HEAD"),
@@ -381,7 +361,6 @@ class GitBoundaryTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(validate_read_only_git_args(command), command)
 
-    @proves("MYC-0.10")
     def test_git_mutations_and_executable_or_output_options_are_refused_before_spawn(self):
         denied = (
             ("fetch",), ("reset", "--hard"), ("pull",), ("checkout", "main"), ("worktree", "add", "/fixture"),
@@ -402,7 +381,6 @@ class GitBoundaryTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, "refused")
             spawn.assert_not_called()
 
-    @proves("MYC-0.10")
     def test_git_reads_preserve_repository_and_disable_repository_executables(self):
         git = shutil.which("git", path=SYSTEM_PATH)
         self.assertIsNotNone(git)

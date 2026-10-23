@@ -22,7 +22,7 @@ from psycopg import pq
 from psycopg.types.json import Jsonb
 
 from mycel import _embedding_store as store
-from mycel._coverage import proves, require_check_database
+from mycel._coverage import require_check_database
 from mycel._credentials import Credentials
 from mycel._embedding_plan import load_tokenizer
 from mycel._errors import MycelError
@@ -226,7 +226,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
                                  batch.model, batch.dimensions, (0.125,) * batch.dimensions)
                      for batch in prepared.batches for item in batch.inputs)
 
-    @proves("MYC-13.15")
     def test_exact_nul_parts_and_durable_receipt_roundtrip_without_projection(self):
         text = '# Heading\n雪\0body literal \\000\0end\n'
         self.seed(text)
@@ -248,7 +247,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
             self.assertEqual(self.prepare(writer).counts.embedded_versions,1)
         self.assertFalse(self.connection.receipts)
 
-    @proves("MYC-13.15")
     def test_changed_exact_bytes_are_refused_before_a_paid_plan_is_constructed(self):
         version = self.seed('original\0body')
         self.connection.versions[version]['text'] = 'changed\0body'
@@ -257,7 +255,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual(error.exception.code.value,'store_format')
         self.assertFalse(self.connection.plans)
 
-    @proves("MYC-13.15")
     def test_provisional_plans_and_disabled_unknown_settings_never_write(self):
         self.seed()
         before = deepcopy((self.connection.plans, self.connection.parts, self.connection.vectors, self.connection.receipts))
@@ -275,7 +272,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual(before, (self.connection.plans, self.connection.parts, self.connection.vectors, self.connection.receipts))
         self.assertFalse(any(sql.startswith(("INSERT", "UPDATE", "DELETE", "CREATE", "ALTER")) for sql, _ in self.connection.sql))
 
-    @proves("MYC-13.15")
     def test_saved_input_and_plan_survive_metadata_only_moves(self):
         version = self.seed()
         writer = self.writer()
@@ -291,7 +287,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual(moved.counts.embedded_versions, 1)
         self.assertFalse(moved.batches)
 
-    @proves("MYC-13.15")
     def test_same_exact_version_shared_by_locations_embeds_once_and_changed_text_is_pending(self):
         version = self.seed(location_count=4)
         writer = self.writer()
@@ -304,7 +299,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual((updated.counts.embedded_versions, updated.counts.pending_versions), (1, 1))
         self.assertEqual(len(updated.batches[0].inputs), 1)
 
-    @proves("MYC-13.15")
     def test_busy_pass_stages_before_publication_and_next_session_drains_without_resending(self):
         self.seed()
         writer = self.writer()
@@ -334,7 +328,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertFalse(published.batches)
         self.assertFalse(self.connection.receipts)
 
-    @proves("MYC-13.15")
     def test_row_contention_retains_the_whole_durable_batch(self):
         self.seed(); self.seed("second version")
         writer = self.writer()
@@ -350,7 +343,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual(len(drained.retained), 2)
         self.assertEqual(len(self.connection.vectors), 2)
 
-    @proves("MYC-13.15")
     def test_deleted_versions_only_are_discarded_and_unlocated_retained_versions_keep_vectors(self):
         first = self.seed(); second = self.seed("second")
         writer = self.writer()
@@ -364,7 +356,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual(len(self.connection.vectors), 1)
         self.assertFalse(self.connection.receipts)
 
-    @proves("MYC-13.15")
     def test_one_bad_vector_or_model_pair_rejects_the_whole_batch_before_staging(self):
         self.seed(); self.seed("second")
         writer = self.writer()
@@ -383,7 +374,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
             writer.commit(writes)
         self.assertEqual(len(self.connection.vectors), 2)
 
-    @proves("MYC-13.15")
     def test_callbacks_require_prepared_canonical_exact_part_association(self):
         self.seed()
         writer = self.writer()
@@ -398,7 +388,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         with self.assertRaises(MycelError):
             writer.commit((write,))
 
-    @proves("MYC-13.15")
     def test_publication_sql_failure_rolls_back_all_vectors_and_keeps_receipt_sanitized(self):
         self.seed(); self.seed("second")
         writer = self.writer()
@@ -416,7 +405,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual(len(self.connection.vectors), 2)
         self.assertFalse(self.connection.receipts)
 
-    @proves("MYC-13.15")
     def test_changed_retained_plan_or_repository_is_refused_without_losing_receipt(self):
         version = self.seed()
         writer = self.writer()
@@ -438,7 +426,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertFalse(self.connection.vectors)
         self.assertEqual(len(self.connection.receipts), 1)
 
-    @proves("MYC-13.15")
     def test_staged_payload_tampering_cannot_bypass_vector_or_input_validation(self):
         self.seed()
         writer = self.writer()
@@ -460,7 +447,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
                 self.assertFalse(self.connection.vectors)
                 self.assertEqual(len(self.connection.receipts), 1)
 
-    @proves("MYC-13.15")
     def test_part_failure_is_sanitized_and_other_pending_parts_continue_then_retry_keeps_success(self):
         local = replace(self.tokenizer, catalog=replace(self.tokenizer.catalog, input_token_cap=24))
         self.seed("alpha beta gamma delta\n" * 8)
@@ -488,7 +474,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
             self.assertEqual(self.prepare(writer).counts.embedded_versions, 1)
         self.assertNotIn("private", repr(self.connection.parts))
 
-    @proves("MYC-13.15")
     def test_busy_failure_receipt_is_deferred_and_drain_records_only_sanitized_failure(self):
         self.seed()
         writer = self.writer()
@@ -512,7 +497,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
             self.assertFalse(deferred.batches)
         self.assertNotIn("private", repr(self.connection.parts) + repr(self.connection.receipts))
 
-    @proves("MYC-13.15")
     def test_failed_plan_records_exact_counting_provenance_and_is_not_silently_retried(self):
         self.seed()
         impossible = replace(self.tokenizer, catalog=replace(self.tokenizer.catalog, input_token_cap=1))
@@ -531,7 +515,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual(valid.counts.pending_versions, 1)
         self.assertNotEqual(next(iter(self.connection.plans)), original)
 
-    @proves("MYC-13.15")
     def test_catalog_compatible_saved_plan_is_retained_and_incompatible_one_gets_new_pending_parts(self):
         self.seed("many words\n" * 12)
         writer = self.writer()
@@ -552,7 +535,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertGreater(replanned.counts.pending_parts, 1)
         self.assertFalse(self.connection.vectors)
 
-    @proves("MYC-13.15")
     def test_old_model_plans_vectors_and_receipts_do_not_count_or_publish_for_current_model(self):
         self.seed()
         writer = self.writer()
@@ -573,7 +555,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual(len(self.connection.plans), 2)
         self.assertFalse(self.connection.vectors)
 
-    @proves("MYC-13.15")
     def test_historical_batch_caps_publish_after_compatible_current_caps_shrink(self):
         self.seed("first"); self.seed("second")
         writer = self.writer()
@@ -591,7 +572,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
             self.assertFalse(value.batches)
         self.assertFalse(self.connection.receipts)
 
-    @proves("MYC-13.15")
     def test_incompatible_paid_inputs_are_preserved_in_quarantine_and_new_plan_remains_pending(self):
         self.seed("full source words\n" * 20)
         writer = self.writer()
@@ -618,7 +598,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual(envelope, {"format": 2, "kind": "quarantined", "reason": "catalog_incompatible", "payload": original})
         self.assertNotIn(original_id, {key[0] for key in self.connection.vectors})
 
-    @proves("MYC-13.15")
     def test_corrupt_counting_data_is_not_misclassified_as_catalog_incompatibility(self):
         self.seed()
         writer = self.writer()
@@ -638,7 +617,6 @@ class EmbeddingStoreUnitTests(unittest.TestCase):
         self.assertEqual(next(iter(self.connection.receipts.values()))[4]["format"], 1)
         self.assertFalse(self.connection.vectors)
 
-    @proves("MYC-13.15")
     def test_persisted_capture_does_not_expand_to_concurrently_added_unsaved_versions(self):
         first = self.seed("first")
         writer = self.writer()
@@ -701,7 +679,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
 
     writes = staticmethod(EmbeddingStoreUnitTests.writes)
 
-    @proves("MYC-1.34", "MYC-3.1", "MYC-3.4", "MYC-3.5", "MYC-3.17", kind="store")
     def test_exact_version_all_locations_saved_spans_vectors_and_metadata_move_coverage(self):
         with self.connect() as connection:
             text = "# Heading\r\n\n雪 é 😀 body  \r\n" * 12
@@ -738,7 +715,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
             self.assertTrue(all(row[2:4] == ("voyage-code-4", 1024) for row in rows))
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_receipts").fetchone()[0], 0)
 
-    @proves("MYC-3.4", "MYC-3.15", "MYC-3.17", kind="store")
     def test_disabled_unknown_and_old_model_state_never_supply_current_coverage(self):
         with self.connect() as connection:
             self.seed(connection, "retained exact text", locations=("stash",))
@@ -764,7 +740,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_plans").fetchone()[0], 2)
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_vectors WHERE model='historical-model'").fetchone()[0], 1)
 
-    @proves("MYC-3.1", "MYC-3.4", "MYC-3.17", kind="store")
     def test_real_nul_saved_inputs_receipts_and_restart_preserve_exact_bytes(self):
         text = '# Heading\n雪\0body literal \\000\0end\n'
         with self.connect() as owner, self.connect() as passer:
@@ -793,7 +768,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
                              (text.encode(),search_text(text.encode())))
             self.assertEqual(owner.execute('SELECT count(*) FROM public.mycel_embedding_receipts').fetchone()[0],0)
 
-    @proves("MYC-3.1", "MYC-3.4", "MYC-3.17", kind="store")
     def test_busy_pass_durable_batch_is_not_coverage_and_next_session_publishes_without_resend(self):
         with self.connect() as owner, self.connect() as passer:
             self.seed(owner, "first"); self.seed(owner, "second")
@@ -815,7 +789,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
                 self.assertFalse(complete.batches)
             self.assertEqual(owner.execute("SELECT count(*) FROM public.mycel_embedding_receipts").fetchone()[0], 0)
 
-    @proves("MYC-3.1", "MYC-3.17", kind="store")
     def test_row_lock_defers_whole_response_and_deleted_versions_alone_are_discarded(self):
         with self.connect() as owner, self.connect() as passer:
             _, first = self.seed(owner, "first"); _, second = self.seed(owner, "second")
@@ -836,7 +809,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
             self.assertEqual(owner.execute("SELECT count(*) FROM public.mycel_vectors").fetchone()[0], 1)
             self.assertEqual(owner.execute("SELECT count(*) FROM public.mycel_embedding_receipts").fetchone()[0], 0)
 
-    @proves("MYC-3.4", "MYC-3.17", kind="store")
     def test_isolated_failure_does_not_block_pending_parts_and_explicit_retry_retains_success(self):
         with self.connect() as connection:
             self.seed(connection, "complete source line\n" * 8)
@@ -863,7 +835,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
                 self.assertTrue(all(row in after for row in successes))
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_parts WHERE failure IS NOT NULL").fetchone()[0], 0)
 
-    @proves("MYC-3.1", "MYC-3.17", kind="store")
     def test_invalid_whole_batch_and_corrupt_receipt_write_no_vectors(self):
         with self.connect() as connection, self.connect() as passer:
             self.seed(connection, "first"); self.seed(connection, "second")
@@ -885,7 +856,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_vectors").fetchone()[0], 0)
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_receipts").fetchone()[0], 1)
 
-    @proves("MYC-3.1", "MYC-3.17", kind="store")
     def test_actual_sql_transaction_rolls_back_mid_batch_fault_and_durable_receipt_can_resume(self):
         class FaultingConnection:
             def __init__(self, connection):
@@ -924,7 +894,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_vectors").fetchone()[0], 2)
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_receipts").fetchone()[0], 0)
 
-    @proves("MYC-3.4", "MYC-3.17", kind="store")
     def test_recorded_plan_provenance_is_validated_and_incompatible_replanning_removes_old_vectors(self):
         with self.connect() as connection:
             self.seed(connection, "full exact body line\r\n" * 16)
@@ -955,7 +924,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_plans WHERE id=%s",
                                                (original.id,)).fetchone()[0], 0)
 
-    @proves("MYC-3.1", "MYC-3.4", "MYC-3.17", kind="store")
     def test_real_voyage_orchestration_stages_paid_results_stops_sending_and_drains_without_resend(self):
         with self.connect() as connection, self.connect() as passer:
             for number, text in enumerate(("first valid input", "second valid input", "later valid input", "bad content input"), 1):
@@ -1015,7 +983,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
             self.assertNotIn("raw provider", json.dumps(failures))
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_receipts").fetchone()[0], 0)
 
-    @proves("MYC-3.1", "MYC-3.4", "MYC-3.17", kind="store")
     def test_historical_request_caps_publish_compatible_results_and_incompatible_inputs_are_quarantined(self):
         with self.connect() as connection, self.connect() as passer:
             self.seed(connection, "first"); self.seed(connection, "second")
@@ -1057,7 +1024,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
             self.assertEqual(envelope, {"format": 2, "kind": "quarantined", "reason": "catalog_incompatible", "payload": paid_payload})
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_vectors WHERE plan_id=%s", (new.id,)).fetchone()[0], 0)
 
-    @proves("MYC-3.1", "MYC-3.4", "MYC-3.17", kind="store")
     def test_concurrent_native_ingest_after_plan_save_does_not_expand_the_finite_paid_capture(self):
         with self.connect() as connection, self.connect() as passer:
             _, first = self.seed(connection, "first captured input")

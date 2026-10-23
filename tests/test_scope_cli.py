@@ -8,7 +8,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import for_repositories, run
-from mycel._coverage import proves
 from mycel._errors import MycelError
 
 
@@ -19,7 +18,6 @@ class ScopeCliTests(unittest.TestCase):
             status = run(arguments, handlers=handlers, stdout=output, stderr=StringIO())
         return status, json.loads(output.getvalue())
 
-    @proves("MYC-5.12", "MYC-1.3")
     def test_repos_reads_current_settings_and_reports_faults_without_store_access(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -43,7 +41,6 @@ class ScopeCliTests(unittest.TestCase):
             self.assertFalse(reply["repositories"][0]["enabled"])
             self.assertEqual([path.name for path in root.iterdir()], ["config.toml"])
 
-    @proves("MYC-1.4", "MYC-1.29", "MYC-0.6")
     def test_selector_and_folder_faults_leave_unrelated_operations_visible(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -70,7 +67,6 @@ class ScopeCliTests(unittest.TestCase):
             self.assertEqual(set(reply), {"repositories"})
             self.assertEqual(reply["repositories"][0]["error"]["code"], "settings")
 
-    @proves("MYC-1.4", "MYC-0.6")
     def test_shared_store_preflight_failure_is_one_error_before_any_repository_starts(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.toml"
@@ -88,7 +84,6 @@ class ScopeCliTests(unittest.TestCase):
                 self.assertEqual(reply["error"]["code"], code)
                 self.assertEqual(touched, [])
 
-    @proves("MYC-1.4", "MYC-0.6")
     def test_started_operation_errors_keep_per_repository_reply(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.toml"
@@ -101,7 +96,6 @@ class ScopeCliTests(unittest.TestCase):
             self.assertEqual(status, 1)
             self.assertEqual(reply["repositories"][0]["error"]["code"], "busy")
 
-    @proves("MYC-5.12", "MYC-0.7")
     def test_repos_unimplemented_removal_and_extra_arguments_have_closed_errors(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.toml"

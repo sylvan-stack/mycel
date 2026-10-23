@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 from mycel._activity import MutationActivity
 from mycel._cli import Invocation
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._generated import generated_capture
 from mycel._locks import operation_guard, removal_guard
@@ -100,7 +99,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
     def no_leases(self, connection):
         self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE invocation IS NOT NULL").fetchone(), (0,))
 
-    @proves("MYC-8.17", "MYC-8.27", kind="store")
     def test_only_stale_nodes_retain_places_and_exact_membership_with_lower_response_feeding_parent(self):
         with self.base.connect() as connection, self.base.connect() as reader:
             self.prepare(connection, tree=True)
@@ -150,7 +148,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertTrue(all(level["stale"] == 0 for level in self.snapshot(connection)[1]["levels"]))
             self.no_leases(connection)
 
-    @proves("MYC-8.17", "MYC-8.18", "MYC-8.27", kind="store")
     def test_failed_leaf_remains_stale_parent_is_blocked_and_independent_successes_remain(self):
         with self.base.connect() as connection:
             self.prepare(connection, tree=True)
@@ -171,7 +168,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertNotEqual(now[summaries[1].member.chunk.identifier][1], old[summaries[1].member.chunk.identifier][1])
             self.no_leases(connection)
 
-    @proves("MYC-8.18", "MYC-8.27", kind="store")
     def test_missing_members_are_dropped_and_memberless_nodes_deleted_with_owned_evidence_cleanup(self):
         with self.base.connect() as connection:
             self.prepare(connection, independent=True)
@@ -197,7 +193,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_dependencies WHERE dependant_version=%s", (first.member.chunk.version,)).fetchone(), (0,))
             self.no_leases(connection)
 
-    @proves("MYC-8.18", "MYC-8.27", kind="store")
     def test_embedding_failure_and_exact_input_change_preserve_stale_original(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -215,7 +210,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertEqual(self.snapshot(connection)[1]["levels"][0]["stale"], 1)
             self.no_leases(connection)
 
-    @proves("MYC-8.17", "MYC-8.27", kind="store")
     def test_fixed_membership_that_grew_past_request_budget_is_blocked_without_calls_or_new_places(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -235,7 +229,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertEqual(self.current(connection), old)
             self.no_leases(connection)
 
-    @proves("MYC-8.17", "MYC-8.27", "MYC-8.28", kind="store")
     def test_single_surviving_oversized_member_keeps_place_reports_cut_and_publishes_all_vector_parts(self):
         with self.base.connect() as connection:
             self.prepare(connection, independent=True)
@@ -266,7 +259,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertGreater(vectors, 1)
             self.no_leases(connection)
 
-    @proves("MYC-8.18", "MYC-8.27", kind="store")
     def test_member_restored_during_memberless_deletion_preserves_stale_original(self):
         with self.base.connect() as connection:
             self.prepare(connection, independent=True)
@@ -284,7 +276,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertEqual(self.current(connection), old)
             self.no_leases(connection)
 
-    @proves("MYC-8.17", "MYC-8.27", "MYC-8.28", kind="store")
     def test_recreated_original_document_place_rejoins_new_identity_in_both_plan_and_actual_regeneration(self):
         with self.base.connect() as connection:
             self.prepare(connection, independent=True)
@@ -317,7 +308,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertEqual(self.snapshot(connection)[1]["levels"][0]["stale"], 0)
             self.no_leases(connection)
 
-    @proves("MYC-8.27", "MYC-8.29", kind="store")
     def test_interruption_retains_acknowledged_success_and_releases_unpublished_request_evidence(self):
         with self.base.connect() as connection:
             self.prepare(connection, independent=True)
@@ -332,7 +322,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertEqual(current[summaries[1].member.chunk.identifier], old[summaries[1].member.chunk.identifier])
             self.no_leases(connection)
 
-    @proves("MYC-8.27", "MYC-8.28", "MYC-8.29", kind="store")
     def test_final_audit_failure_returns_acknowledged_counts_and_truthful_activity(self):
         with self.base.connect() as connection, removal_guard(connection, "fixture"):
             self.prepare(connection, independent=True)
@@ -348,7 +337,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertEqual(counts["written"], 2)
             self.no_leases(connection)
 
-    @proves("MYC-8.27", "MYC-8.28", "MYC-8.29", kind="store")
     def test_signal_after_publication_acknowledgement_preserves_success_and_complete_interrupted_activity(self):
         with self.base.connect() as connection, removal_guard(connection, "fixture"):
             self.prepare(connection, independent=True)
@@ -375,7 +363,6 @@ class SummaryRegenerationStoreTests(unittest.TestCase):
             self.assertEqual((outcome, counts), ("stopped", result.value))
             self.no_leases(connection)
 
-    @proves("MYC-8.17", "MYC-8.29", kind="store")
     def test_no_stale_work_makes_no_service_calls_and_mutation_lock_is_nonblocking(self):
         with self.base.connect() as connection, self.base.connect() as competing:
             self.prepare(connection)

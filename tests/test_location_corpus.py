@@ -8,7 +8,6 @@ from psycopg.types.json import Jsonb
 from mycel._activity import MutationActivity
 from mycel._capture import (CapturedFile, CapturedLocation, CaptureManifest, FileAlias,
     LocationId, capture_repository, parse_history_record)
-from mycel._coverage import proves
 from mycel._disk_reconciliation import _guard_disk_corpora, _location_rows, _parse_history
 from mycel._embed import retained_contexts
 from mycel._errors import MycelError
@@ -41,7 +40,6 @@ class LocationCorpusUnitTests(unittest.TestCase):
             LocationId('disk', None, 'disk'), None, (captured,), True),), True)
         return captured, row, manifest
 
-    @proves('MYC-16.4')
     def test_strict_metadata_does_not_coerce_default_or_let_prior_metadata_override_capture(self):
         captured, row, _ = self.document()
         self.assertIsNone(location_corpus({}, legacy=True))
@@ -53,7 +51,6 @@ class LocationCorpusUnitTests(unittest.TestCase):
         with self.assertRaises(MycelError):
             require_captured_corpus({'corpus': 'code'}, captured)
 
-    @proves('MYC-16.4')
     def test_legacy_history_is_not_advisory_reuse_and_prior_empty_guard_needs_checked_evidence(self):
         _, row, manifest = self.document()
         history = _parse_history('fixture', [row])
@@ -109,7 +106,6 @@ class LocationCorpusStoreTests(unittest.TestCase):
                     'ORDER BY to_jsonb(t)::text').fetchall() for table in TABLES
                 if table.name not in ('mycel_invocations', 'mycel_lock_keys')}
 
-    @proves('MYC-1.19', 'MYC-1.33', 'MYC-16.2', kind='store')
     def test_checked_source_binding_writes_corpus_on_update_and_insert_without_inventing_legacy_git_ownership(self):
         from mycel._source_bindings import bind_disk_file
         from uuid import uuid4
@@ -146,7 +142,6 @@ class LocationCorpusStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT metadata->>\'corpus\' FROM public.mycel_file_locations WHERE id=%s',
                 (inserted.location,)).fetchone(), ('code',))
 
-    @proves('MYC-1.21', 'MYC-1.22', 'MYC-1.30', 'MYC-2.18', 'MYC-16.13', kind='store')
     def test_dirty_code_head_document_retains_exact_location_corpus_through_full_producer_repeat_and_rollback(self):
         from mycel._derive import DeriveStore
         with self.base.connect() as connection:
@@ -222,7 +217,6 @@ class LocationCorpusStoreTests(unittest.TestCase):
                 self.assertEqual(self.state(connection), before)
             self.assertEqual(self.base.git('rev-parse', 'HEAD'), self.commit)
 
-    @proves('MYC-1.7', 'MYC-16.13', kind='store')
     def test_legacy_fields_recapture_atomically_and_malformed_or_contradictory_corpus_refuses(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -282,7 +276,6 @@ class LocationCorpusStoreTests(unittest.TestCase):
                 self.publish(connection, confirm_empty=True)
             self.assertEqual(self.state(connection), damaged)
 
-    @proves('MYC-1.8', 'MYC-1.21', 'MYC-16.13', kind='store')
     def test_unknown_legacy_disk_guard_needs_explicit_confirmation_and_retained_git_is_not_a_prior_disk_corpus(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -309,7 +302,6 @@ class LocationCorpusStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_locations WHERE chunk_version=%s',
                 (branch.chunk_versions[0][1],)).fetchone(), (1,))
 
-    @proves('MYC-13.11', 'MYC-13.17', kind='store')
     def test_evaluation_uses_selected_disk_owner_and_fingerprints_its_corpus(self):
         with self.base.connect() as connection:
             self.publish(connection)

@@ -15,7 +15,6 @@ import time
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel_build._automatic import _sanitize_report
 from mycel_build._core import BuildError, digest, json_bytes
 from mycel_build import _process
@@ -59,7 +58,6 @@ def closed_reply(contract, *, failed=()):
 
 
 class AutomaticQualificationTests(unittest.TestCase):
-    @proves('MYC-13.1', 'MYC-13.2', 'MYC-13.3', 'MYC-13.15', kind='unit')
     def test_inventory_is_independent_frozen_metadata_and_never_imports_or_selects_eval_live(self):
         frozen = contract_inputs()
         before = copy.deepcopy(frozen)
@@ -76,7 +74,6 @@ class AutomaticQualificationTests(unittest.TestCase):
         self.assertNotIn('coverage', result)
         self.assertNotIn('private-provider-body', json.dumps(result))
 
-    @proves('MYC-13.1', 'MYC-13.3', 'MYC-13.15', kind='unit')
     def test_receiver_refuses_omitted_substituted_extra_and_rekinded_results(self):
         contract = automatic_contract(contract_inputs())
         for mutation in (
@@ -92,7 +89,6 @@ class AutomaticQualificationTests(unittest.TestCase):
                     _sanitize_report(json_bytes(reply), 10, contract=contract)
                 self.assertEqual(error.exception.code, 'refused')
 
-    @proves('MYC-13.2', 'MYC-13.15', kind='unit')
     def test_receiver_refuses_eval_live_rows_and_requirement_claims(self):
         contract = automatic_contract(contract_inputs())
         for mutation in (
@@ -104,7 +100,6 @@ class AutomaticQualificationTests(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(BuildError):
                 _sanitize_report(json_bytes(reply), 10, contract=contract)
 
-    @proves('MYC-13.3', 'MYC-13.15', kind='unit')
     def test_frozen_duplicate_unknown_repeated_or_computed_kinds_refuse_before_execution(self):
         original = contract_inputs()
         for mutation in (
@@ -117,7 +112,6 @@ class AutomaticQualificationTests(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(BuildError):
                 automatic_contract(frozen)
 
-    @proves('MYC-13.1', 'MYC-13.15', kind='unit')
     def test_failed_store_outcome_retains_every_name_without_private_details(self):
         contract = automatic_contract(contract_inputs())
         reply = closed_reply(contract, failed=('test_fixture.StoreProofs.test_store',))
@@ -127,7 +121,6 @@ class AutomaticQualificationTests(unittest.TestCase):
         self.assertEqual(result['checks'][2]['status'], 'failed')
         self.assertNotIn('private-provider-body', json.dumps(result))
 
-    @proves('MYC-13.1', 'MYC-13.15', 'MYC-13.16', kind='unit')
     def test_certificate_requires_every_executed_group_and_binds_manifests_results_and_inventory(self):
         contract = automatic_contract(contract_inputs())
         automatic = _sanitize_report(json_bytes(closed_reply(contract)), 10, contract=contract)
@@ -185,7 +178,6 @@ class AutomaticQualificationTests(unittest.TestCase):
             changed[2][field] = value
             self.assertIsNone(qualification_certificate(**{**options, 'results': changed}))
 
-    @proves('MYC-13.16', kind='unit')
     def test_real_group_preserves_raw_binary_streams_status_arguments_and_cwd(self):
         with tempfile.TemporaryDirectory() as directory:
             command = [sys.executable, '-I', '-B', '-c',
@@ -196,7 +188,6 @@ class AutomaticQualificationTests(unittest.TestCase):
             self.assertEqual(json.loads(header), [str(Path(directory).resolve()), ['with spaces', '', '$(literal)']])
             self.assertEqual((reply.returncode, tail, reply.stderr), (7, b'\0\xff', b'\xfeerror\0'))
 
-    @proves('MYC-13.1', 'MYC-13.16', kind='unit')
     def test_real_timeout_and_cancellation_reap_the_scoped_runner_and_descendant_group(self):
         with tempfile.TemporaryDirectory() as directory:
             marker = Path(directory) / 'child.pid'
@@ -252,7 +243,6 @@ class AutomaticQualificationTests(unittest.TestCase):
                     except ProcessLookupError:
                         pass
 
-    @proves('MYC-13.1', 'MYC-13.16', kind='unit')
     def test_signal_between_real_spawn_and_handle_return_is_queued_then_owned_child_is_reaped(self):
         actual = subprocess.Popen
         created = []
@@ -286,7 +276,6 @@ class AutomaticQualificationTests(unittest.TestCase):
                 except ProcessLookupError:
                     pass
 
-    @proves('MYC-13.1', 'MYC-13.16', kind='unit')
     def test_queued_alarm_preserves_the_callers_sticky_deadline_after_owned_cleanup(self):
         class Deadline(KeyboardInterrupt):
             pass
@@ -318,7 +307,6 @@ class AutomaticQualificationTests(unittest.TestCase):
                 except ProcessLookupError:
                     pass
 
-    @proves('MYC-13.1', 'MYC-13.16', kind='unit')
     def test_failed_unconfirmed_spawn_never_signals_a_guessed_group_or_claims_reaping(self):
         with patch('mycel_build._process.subprocess.Popen', side_effect=OSError('not launched')), \
                 patch('mycel_build._process.os.killpg') as groups, self.assertRaises(OSError) as error:
@@ -329,7 +317,6 @@ class AutomaticQualificationTests(unittest.TestCase):
             'processReaped': None, 'processGroupAbsent': None,
             'spawnOutcomeUnconfirmed': True, 'observedSignals': [], 'observedSignalEvents': []})
 
-    @proves('MYC-13.1', 'MYC-13.16', kind='unit')
     def test_cancellation_queued_during_error_cleanup_is_delivered_after_owned_group_and_pipes_close(self):
         actual_end = _process._end_group
         for failure in (subprocess.TimeoutExpired(['fixture'], 1), BuildError('refused', 'fixture body failure')):
@@ -372,7 +359,6 @@ class AutomaticQualificationTests(unittest.TestCase):
                             if stream is not None:
                                 stream.close()
 
-    @proves('MYC-13.1', 'MYC-13.16', kind='unit')
     def test_cleanup_signal_deferral_delivers_with_an_ordinary_exception_in_flight(self):
         failure = BuildError('refused', 'fixture cleanup failure')
         finished, delivered = [], []
@@ -396,7 +382,6 @@ class AutomaticQualificationTests(unittest.TestCase):
         finally:
             signal.signal(signal.SIGINT, previous)
 
-    @proves('MYC-13.1', 'MYC-13.16', kind='unit')
     def test_already_delivered_cancellation_is_not_dispatched_again_after_an_ordinary_failure(self):
         class Delivered(KeyboardInterrupt):
             pass
@@ -433,7 +418,6 @@ class AutomaticQualificationTests(unittest.TestCase):
                     if stream is not None:
                         stream.close()
 
-    @proves('MYC-13.1', 'MYC-13.16', kind='unit')
     def test_unbounded_or_invalid_deadline_refuses_before_spawning(self):
         with patch('mycel_build._process.subprocess.Popen') as spawn:
             for timeout in (0, -1, True, float('inf'), float('nan'), 5401, '10'):
@@ -442,7 +426,6 @@ class AutomaticQualificationTests(unittest.TestCase):
             spawn.assert_not_called()
 
 
-    @proves('MYC-15.8', 'MYC-13.15')
     def test_inherited_methods_keep_each_subclass_name_and_class_kind(self):
         frozen = contract_inputs()
         frozen['tests/test_fixture.py'] += b'\nclass Inherited(Proofs): pass\nclass InheritedStore(StoreProofs): pass\n'
@@ -457,9 +440,8 @@ class AutomaticQualificationTests(unittest.TestCase):
         # contract_inputs begins by raising: deriving this inventory must never
         # import or execute the frozen class or any inherited body.
 
-    @proves('MYC-15.8', 'MYC-13.15')
     def test_frozen_diamond_kind_order_matches_real_unittest_discovery(self):
-        from mycel._coverage import discover_checks, iter_checks
+        from mycel._coverage import discover_checks, iter_checks, run_checks
         source = b'\n'.join((
             b'import unittest',
             b'class Root(unittest.TestCase):', b' check_kind = "unit"',
@@ -476,10 +458,12 @@ class AutomaticQualificationTests(unittest.TestCase):
                 # C3 puts Right before Root, so Diamond is eval and never automatic.
                 self.assertEqual(actual['test_c3_fixture.Diamond.test_shared'], 'eval')
                 self.assertEqual(expected, {name: kind for name, kind in actual.items() if kind in {'unit', 'store'}})
+                report = run_checks(discover_checks(directory))
+                self.assertTrue(report.passed)
+                self.assertEqual(sorted(check.name for check in report.checks), sorted(expected))
         finally:
             sys.modules.pop('test_c3_fixture', None)
 
-    @proves('MYC-15.8', 'MYC-13.15')
     def test_frozen_inheritance_cycles_or_inconsistent_orders_refuse_before_execution(self):
         for extra in (b'\nclass A(B): pass\nclass B(A): pass\n',
                       b'\nclass X: pass\nclass Y: pass\nclass A(X,Y): pass\n'

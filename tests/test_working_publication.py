@@ -17,7 +17,6 @@ import tomllib
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel_build import _publication as publication
 from mycel_build import _release as release
 from mycel_build import _keychain_probe as keychain_probe
@@ -213,7 +212,6 @@ class PublicationFixture:
 
 
 class WorkingPublicationTests(unittest.TestCase):
-    @proves('MYC-15.5','MYC-15.8')
     def test_working_record_is_last_replacement_and_only_then_changes_real_numeric_selector(self):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = PublicationFixture(temporary)
@@ -235,7 +233,6 @@ class WorkingPublicationTests(unittest.TestCase):
             self.assertEqual(fixture.publish(),result)
             self.assertEqual(tree_state(fixture.root),before)
 
-    @proves('MYC-15.5')
     def test_each_precommit_failure_or_interrupt_preserves_old_default_and_exact_retry_is_controlled(self):
         for boundary in ('checks','log','record'):
             for exception in (OSError,KeyboardInterrupt):
@@ -252,7 +249,6 @@ class WorkingPublicationTests(unittest.TestCase):
                     result=fixture.publish()
                     self.assertEqual((result['status'],selected(fixture.root)),('working',fixture.number))
 
-    @proves('MYC-15.5')
     def test_postcommit_fsync_error_or_interrupt_reports_actual_working_state_without_downgrade(self):
         for exception in (OSError,KeyboardInterrupt):
             with self.subTest(exception=exception),tempfile.TemporaryDirectory() as temporary:
@@ -266,7 +262,6 @@ class WorkingPublicationTests(unittest.TestCase):
                 self.assertEqual((read_record(fixture.root,fixture.number)['status'],selected(fixture.root)),('working',fixture.number))
                 self.assertNotIn('private postcommit sentinel',str(failure.exception) if isinstance(failure.exception,BuildError) else '')
 
-    @proves('MYC-15.5','MYC-15.8')
     def test_corrupt_manifests_proofs_results_identities_or_missing_required_groups_never_publish(self):
         mutations=(lambda f:f.checks['results'].pop(),
             lambda f:f.checks['results'][2]['checks'].pop(),
@@ -294,7 +289,6 @@ class WorkingPublicationTests(unittest.TestCase):
                 self.assertEqual(selected(fixture.root),'1')
                 self.assertEqual(tree_state(fixture.root),before)
 
-    @proves('MYC-15.5')
     def test_peer_registry_lock_is_immediately_busy_with_no_write_or_default_change(self):
         with tempfile.TemporaryDirectory() as temporary:
             fixture=PublicationFixture(temporary); before=tree_state(fixture.root)
@@ -304,7 +298,6 @@ class WorkingPublicationTests(unittest.TestCase):
             self.assertEqual(selected(fixture.root),'1')
             self.assertEqual(tree_state(fixture.root),before)
 
-    @proves('MYC-15.5','MYC-15.8')
     def test_create_orchestration_recaptures_source_keeps_paid_probes_out_and_preserves_published_partial(self):
         with tempfile.TemporaryDirectory() as temporary:
             fixture=PublicationFixture(temporary)
@@ -368,7 +361,6 @@ class WorkingPublicationTests(unittest.TestCase):
                 self.assertEqual((read_record(fixture.root,fixture.number)['status'],selected(fixture.root)),('working',fixture.number))
                 self.assertNotIn('private postpublication sentinel',output.getvalue())
 
-    @proves('MYC-15.8')
     def test_unavailable_private_keychain_boundary_refuses_without_native_operations_or_publication(self):
         # This is a controller protocol fixture, never actual Keychain proof.
         # A failed qualification is explicit; no real or synthetic native pass.

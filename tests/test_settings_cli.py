@@ -11,7 +11,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import Result, StreamedResult, run
-from mycel._coverage import proves
 from mycel._settings import load_settings
 
 
@@ -35,7 +34,6 @@ class SettingsCliTests(unittest.TestCase):
                               env=environment, cwd=root, input=input,
                               capture_output=True, timeout=5)
 
-    @proves("MYC-0.5", "MYC-5.1", "MYC-5.3", "MYC-5.4")
     def test_info_reports_missing_and_invalid_settings_without_writes_or_values(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -54,7 +52,6 @@ class SettingsCliTests(unittest.TestCase):
             self.assertEqual((root / "config.toml").read_text(), content)
             self.assertEqual([p.name for p in root.iterdir()], ["config.toml"])
 
-    @proves("MYC-0.5", "MYC-1.2", "MYC-5.3", "MYC-5.4", "MYC-5.13")
     def test_invalid_settings_prevent_every_feature_handler_before_access(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.toml"
@@ -82,7 +79,6 @@ class SettingsCliTests(unittest.TestCase):
             self.assertEqual(touched, [])
             self.assertEqual(config.read_text(), content)
 
-    @proves("MYC-0.5", "MYC-1.1", "MYC-5.1", "MYC-5.7")
     def test_each_handler_receives_one_immutable_snapshot_and_no_env_settings_override(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.toml"
@@ -111,7 +107,6 @@ class SettingsCliTests(unittest.TestCase):
             self.assertEqual(reads, [config])
             self.assertEqual(json.loads(out.getvalue()), {"snapshot": True})
 
-    @proves("MYC-5.3", "MYC-5.4", "MYC-5.7")
     def test_grep_handler_receives_invalid_snapshot_and_plain_flag_without_refusal(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -135,7 +130,6 @@ class SettingsCliTests(unittest.TestCase):
                                      StreamedResult(0 if i.grep_plain else 9)}, stdout=io.StringIO()), 0)
             self.assertEqual(calls, [("--", "literal")])
 
-    @proves("MYC-5.3", "MYC-5.4", "MYC-5.7")
     def test_real_grep_preserves_bytes_stdin_arguments_and_status_for_invalid_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -150,7 +144,6 @@ class SettingsCliTests(unittest.TestCase):
                 self.assertNotIn(b'"error"', wrapped.stderr)
             self.assertFalse((root / "config.toml").exists())
 
-    @proves("MYC-5.3", "MYC-5.4", "MYC-5.7", "MYC-0.5")
     def test_plain_grep_uses_path_and_forwards_no_parent_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -170,7 +163,6 @@ class SettingsCliTests(unittest.TestCase):
             self.assertNotIn(b"private-sentinel", result.stdout + result.stderr)
             self.assertFalse((root / "config.toml").exists())
 
-    @proves("MYC-5.3", "MYC-5.4")
     def test_settings_do_not_probe_reviewer_command_even_for_info(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

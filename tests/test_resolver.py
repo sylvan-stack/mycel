@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from psycopg.types.json import Jsonb
 
-from mycel._coverage import proves
 from mycel._code import chunk_code
 from mycel._errors import MycelError
 from mycel._resolver import ResolvedChunk, ResolvedFile, SourceResolver
@@ -38,7 +37,6 @@ def file(path, source, *, root='artifact', members=(), aliases=()):
 
 
 class ResolverUnitTests(unittest.TestCase):
-    @proves('MYC-13.15')
     def test_file_declarations_are_reused_but_an_edited_capture_is_parsed_afresh(self):
         from mycel import _source_refs
         retained = file('guide.md', '---\nrole: authored\nsources: ["fixture:source.md"]\n---\n# Guide\nBody.\n')
@@ -57,7 +55,6 @@ class ResolverUnitTests(unittest.TestCase):
             self.assertEqual(read.call_count, 2)
             self.assertEqual(original.role, 'authored')
 
-    @proves('MYC-13.15')
     def test_authoritative_body_nul_survives_and_text_projection_is_not_a_source(self):
         raw = '# Heading\n雪\0body\0\n'.encode()
         metadata = {'name':'Heading','kind':'document','bodySpan':{'start':len('# Heading\n'),'end':len(raw)}}
@@ -68,7 +65,6 @@ class ResolverUnitTests(unittest.TestCase):
         with self.assertRaises(MycelError):
             _resolver._chunk(uuid4(),1,sha256(raw).hexdigest(),search_text(raw),metadata,{})
 
-    @proves('MYC-13.15')
     def test_settings_eligibility_precedes_index_lookup_and_preserves_raw_declaration(self):
         resolver=SourceResolver(settings(), ())
         for ref, state, fault in [('unregistered:path', 'invalid', 'unregistered_repository'),
@@ -79,7 +75,6 @@ class ResolverUnitTests(unittest.TestCase):
             self.assertEqual((result.declaration,result.state,result.fault),(ref,state,fault))
             self.assertIsNone(result.selection)
 
-    @proves('MYC-13.15')
     def test_aliases_resolve_once_canonical_primary_and_distinct_paths_stay_ambiguous(self):
         shared=file('README.md','# Shared\n',aliases=(SourceAddress('fixture','artifact','README.md'),
                                                         SourceAddress('fixture','code','docs/README.md')))
@@ -93,7 +88,6 @@ class ResolverUnitTests(unittest.TestCase):
         self.assertEqual(result.candidates,('fixture:@artifact/README.md','fixture:@code/README.md'))
         self.assertEqual(resolver.resolve('fixture:@code/README.md').selection.file.identifier,distinct.identifier)
 
-    @proves('MYC-13.15')
     def test_exact_heading_paths_and_only_unique_bare_heading_shortcuts(self):
         members=(chunk('One > Repeat','# Repeat\n',title='Repeat'),
                  chunk('Two > Repeat','# Repeat\n',title='Repeat'),
@@ -105,7 +99,6 @@ class ResolverUnitTests(unittest.TestCase):
         self.assertEqual(resolver.resolve('fixture:guide.md#Unique').selection.members[0].chunk,members[2])
         self.assertEqual(resolver.resolve('fixture:guide.md#One > Repeat').selection.members[0].chunk,members[0])
 
-    @proves('MYC-13.15')
     def test_class_source_family_read_header_and_endpoint_one_chunk(self):
         members=(chunk('Policy','class Policy:\n',kind='class'),
                  chunk('Policy.z',' def z(self): pass\n',kind='method',family='Policy',number=2),
@@ -121,7 +114,6 @@ class ResolverUnitTests(unittest.TestCase):
         self.assertEqual(resolver.resolve('fixture:policy.py',purpose='endpoint').fault,'one_chunk_required')
         self.assertEqual(resolver.resolve('fixture:policy.py').selection.file.source,b'whole file')
 
-    @proves('MYC-13.15')
     def test_bare_methods_require_unique_match_but_fully_qualified_symbols_work(self):
         members=(chunk('One.run','one',kind='method',family='One'),
                  chunk('Two.run','two',kind='method',family='Two',number=2))
@@ -129,7 +121,6 @@ class ResolverUnitTests(unittest.TestCase):
         self.assertEqual(resolver.resolve('fixture:policy.py#run').fault,'ambiguous_name')
         self.assertEqual(resolver.resolve('fixture:policy.py#One.run').selection.members[0].chunk,members[0])
 
-    @proves('MYC-13.15')
     def test_nested_class_families_include_owned_continuations_without_expanding_a_continuation(self):
         members=(chunk('Outer','outer',kind='class',family='Outer'),
                  chunk('Outer.<end>','fields',kind='class',family='Outer',number=2),
@@ -145,7 +136,6 @@ class ResolverUnitTests(unittest.TestCase):
         continuation=resolver.resolve('fixture:policy.py#Outer.<end>').selection
         self.assertEqual((continuation.kind,len(continuation.members)),('chunk',1))
 
-    @proves('MYC-13.15')
     def test_real_nested_python_headers_expand_their_own_family_and_continuations_stay_single(self):
         source=('class Policy:\n flag = 1\n class Inner:\n  def a(self): pass\n'
                 '  between = 1\n  def b(self): pass\n  after = 2\n tail = 3\n'
@@ -185,7 +175,6 @@ class ResolverUnitTests(unittest.TestCase):
         selected=duplicate_catalog.resolve(SourceAddress('fixture','code','policy.py',repeated.name).address).selection
         self.assertEqual((selected.kind,tuple(item.chunk for item in selected.members)),('chunk',(repeated,)))
 
-    @proves('MYC-13.15')
     def test_read_only_index_namespace_is_ineligible_for_sources_and_mutations(self):
         member=chunk('Area','# Generated\n',kind='index')
         place=SourceAddress('fixture','index','summaries','Area')
@@ -194,7 +183,6 @@ class ResolverUnitTests(unittest.TestCase):
         for purpose in ('source','endpoint'):
             self.assertEqual(resolver.resolve(place.address,purpose=purpose).fault,'ineligible_index')
 
-    @proves('MYC-13.15')
     def test_legacy_index_read_alias_requires_no_colliding_physical_file(self):
         member=chunk('Area','# Generated\n',kind='index')
         place=SourceAddress('fixture','index','summaries','Area')
@@ -212,7 +200,6 @@ class ResolverUnitTests(unittest.TestCase):
         self.assertEqual(resolver.resolve(physical.address,purpose='read').selection.kind,'chunk')
         self.assertEqual(resolver.resolve(place.address,purpose='read').selection.kind,'index')
 
-    @proves('MYC-13.15')
     def test_file_and_index_chunks_reject_bad_known_metadata_before_resolution(self):
         valid=chunk('Area','# Exact\n')
         for bad in (replace(valid,identifier=''),replace(valid,version=0),replace(valid,version=True),
@@ -223,7 +210,6 @@ class ResolverUnitTests(unittest.TestCase):
                 with self.assertRaises(MycelError):
                     SourceResolver(settings(),(),index=((SourceAddress('fixture','index','summaries','Area'),bad),))
 
-    @proves('MYC-13.15')
     def test_ambiguity_candidates_are_bounded_and_record_total_distinct_places(self):
         members=tuple(chunk(f'Parent {number:03} > Repeat','# Repeat\n',title='Repeat',number=number+1)
                       for number in range(30))
@@ -231,7 +217,6 @@ class ResolverUnitTests(unittest.TestCase):
         result=resolver.resolve('fixture:guide.md#Repeat')
         self.assertEqual((result.fault,len(result.candidates),result.candidate_count),('ambiguous_name',20,30))
 
-    @proves('MYC-13.15')
     def test_recorded_comparison_and_body_bytes_stay_exact_immutable_and_location_specific(self):
         text='# Heading\n雪 body\n'
         raw=text.encode()
@@ -249,7 +234,6 @@ class ResolverUnitTests(unittest.TestCase):
             _resolver._chunk(uuid4(),1,sha256(raw).hexdigest(),raw,
                              {**metadata,'bodySpan':{'start':len('# Heading\n')+1,'end':len(raw)}},comparison)
 
-    @proves('MYC-13.15')
     def test_corrupt_bytes_bad_spans_duplicate_versions_and_aliases_are_refused(self):
         good=file('guide.md','# Exact\n',members=(chunk('Exact','# Exact\n',span=(0,8)),))
         for bad in (replace(good,source=b'changed'),replace(good,aliases=()),
@@ -261,7 +245,6 @@ class ResolverUnitTests(unittest.TestCase):
         with self.assertRaises(MycelError):
             SourceResolver(settings(),(good,good))
 
-    @proves('MYC-13.15')
     def test_branch_and_stash_need_explicit_location_before_any_store_access(self):
         for kind in ('branch','stash'):
             with self.assertRaises(MycelError) as error:
@@ -305,7 +288,6 @@ class ResolverStoreTests(unittest.TestCase):
                            (uuid4(),version,file_location,location_kind,location,Jsonb(location_metadata or {})))
         return file_id,chunk_id,version
 
-    @proves('MYC-2.5','MYC-2.25',kind='store')
     def test_real_source_body_nul_roundtrip_never_reads_bm25_projection(self):
         source = '# Exact\n雪\0body literal \\000\0end\n'
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
@@ -318,7 +300,6 @@ class ResolverStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT text FROM public.mycel_chunk_versions WHERE id=%s',(version,)).fetchone()[0],
                              source.replace('\0','\ufffd'))
 
-    @proves('MYC-2.5','MYC-2.25',kind='store')
     def test_real_location_catalog_qualified_aliases_exact_file_bytes_and_colliding_paths(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             shared=self.seed(connection,aliases=(('code','docs/guide.md'),))
@@ -333,7 +314,6 @@ class ResolverStoreTests(unittest.TestCase):
             self.assertEqual(selected.place.address,'fixture:@artifact/guide.md')
             self.assertEqual(resolver.resolve('fixture:@code/guide.md#Exact').selection.members[0].chunk.identifier,str(distinct[1]))
 
-    @proves('MYC-2.5','MYC-2.25',kind='store')
     def test_real_catalog_rechecks_settings_and_never_substitutes_another_location(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             file_id,chunk_id,disk=self.seed(connection)
@@ -350,7 +330,6 @@ class ResolverStoreTests(unittest.TestCase):
             missing=SourceResolver.from_store(connection,settings(),kind='stash',location='never-observed')
             self.assertEqual(missing.resolve('fixture:guide.md').fault,'missing_file')
 
-    @proves('MYC-2.25',kind='store')
     def test_real_catalog_refuses_incompatible_metadata_and_keeps_source_rows_unchanged(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             _,_,version=self.seed(connection)
@@ -361,7 +340,6 @@ class ResolverStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.code.value,'store_format')
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_chunk_versions').fetchone(),before)
 
-    @proves('MYC-2.25',kind='store')
     def test_real_catalog_refuses_a_chunk_bound_to_another_repositorys_file(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             _,chunk_id,_=self.seed(connection)
@@ -371,7 +349,6 @@ class ResolverStoreTests(unittest.TestCase):
                 SourceResolver.from_store(connection,settings())
             self.assertEqual(error.exception.code.value,'store_format')
 
-    @proves('MYC-2.5','MYC-2.25',kind='store')
     def test_real_class_membership_and_located_move_metadata_do_not_change_exact_versions(self):
         source='class Policy:\n def a(self): pass\n def z(self): pass\n'
         header='class Policy:\n'

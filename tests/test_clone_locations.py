@@ -7,7 +7,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._scope import RepositoryLocations
 from mycel._settings import load_settings
@@ -38,7 +37,6 @@ class CloneScopeTests(unittest.TestCase):
         self.config.write_text('\n'.join(lines)+'\n')
         return load_settings(path=self.config, home=self.base)
 
-    @proves('MYC-5.18')
     def test_listed_clone_wins_over_organization_and_selects_only_its_checkout(self):
         settings = self.settings(readonly=self.readonly)
         with patch('subprocess.Popen', side_effect=AssertionError('Scope must not call Git')):
@@ -56,7 +54,6 @@ class CloneScopeTests(unittest.TestCase):
             self.assertEqual(RepositoryLocations(settings,cwd=self.base).named('fixture')[0].code.path,self.primary)
             self.assertEqual(settings.values['repos']['fixture']['code_root'],str(self.primary))
 
-    @proves('MYC-5.18')
     def test_clone_paths_are_typed_and_home_expanded_and_baseline_must_be_listed(self):
         for clones in ('a folder', ['relative/folder'], [False], [None]):
             with self.subTest(clones=clones):
@@ -70,7 +67,6 @@ class CloneScopeTests(unittest.TestCase):
         with self.assertRaises(MycelError):
             RepositoryLocations(bad).named('fixture')[0].require_folders()
 
-    @proves('MYC-5.18')
     def test_symlink_alias_names_one_location_and_unknown_folders_register_nothing(self):
         alias=self.base/'alias';alias.symlink_to(self.clone,target_is_directory=True)
         settings=self.settings(clones=[str(self.clone),str(alias)])
@@ -86,7 +82,6 @@ class CloneScopeTests(unittest.TestCase):
         self.assertEqual([item.name for item in scope],['fixture'])
         self.assertEqual(scope[0].code.path,self.primary)
 
-    @proves('MYC-5.18')
     def test_unresolvable_clone_remains_a_local_repository_fault(self):
         left=self.base/'loop-a';right=self.base/'loop-b'
         left.symlink_to(right);right.symlink_to(left)
@@ -142,7 +137,6 @@ class CloneStoreTests(unittest.TestCase):
         self.assertEqual(resolution.state,'resolved',resolution)
         return resolution.selection.members[0].chunk
 
-    @proves('MYC-1.31','MYC-1.38',kind='store')
     def test_clones_share_identity_and_exact_versions_and_keep_each_others_locations(self):
         self.ingest(self.primary)
         with self.base.connect() as connection:
@@ -171,7 +165,6 @@ class CloneStoreTests(unittest.TestCase):
                 "JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version WHERE v.chunk_id=%s AND l.kind='disk'",
                 (same.identifier,)).fetchone(),(2,))
 
-    @proves('MYC-6.10','MYC-6.22','MYC-1.38',kind='store')
     def test_two_public_passes_capture_concurrently_and_publish_both_clones(self):
         from concurrent.futures import ThreadPoolExecutor
         from threading import Barrier,Event
@@ -210,7 +203,6 @@ class CloneStoreTests(unittest.TestCase):
             self.assertIn(b'return 10',self.member(connection,self.primary).source)
             self.assertIn(b'return 20',self.member(connection,self.secondary).source)
 
-    @proves('MYC-6.11','MYC-6.13','MYC-6.22',kind='store')
     def test_location_reservations_are_distinct_and_both_exclude_removal(self):
         from mycel._locks import location_guard,removal_guard
         from mycel._store import checked_store
@@ -225,7 +217,6 @@ class CloneStoreTests(unittest.TestCase):
                     with location_guard(third,'fixture','disk'):pass
                 self.assertEqual(duplicate.exception.code,'busy')
 
-    @proves('MYC-1.38',kind='store')
     def test_capture_cannot_be_published_as_a_different_clone(self):
         from mycel._capture import capture_repository
         from mycel._located_reconciliation import LocatedCaptureStore

@@ -6,7 +6,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._code import chunk_code, language_for_path
-from mycel._coverage import proves
 
 
 class CodeTests(unittest.TestCase):
@@ -29,7 +28,6 @@ class CodeTests(unittest.TestCase):
         self.assertEqual(cursor, len(raw))
         return chunks
 
-    @proves("MYC-1.13", "MYC-1.14")
     def test_python_functions_async_class_headers_methods_and_attached_comments(self):
         source = ("import os\nLIMIT = 2\n\n"
                   "# function guide\n# another guide\n@wrap(\n    'x'\n)\nasync def renew(key):\n"
@@ -56,7 +54,6 @@ class CodeTests(unittest.TestCase):
         self.assertEqual(names["Store.close"].kind, "method")
         self.assertIn("async def inner", names["Store.close"].text)
 
-    @proves("MYC-1.13", "MYC-1.14")
     def test_typescript_declarations_class_methods_multiline_comments_and_decorators(self):
         source = ("import { x } from './x';\n"
                   "/**\n * Renew docs.\n */\nexport async function renew(key: string): Promise<string> { return key; }\n"
@@ -82,7 +79,6 @@ class CodeTests(unittest.TestCase):
         self.assertIn("category = 'fixture'", names["Store"].text)
         self.assertTrue(names["Store.value:2"].text.startswith("  // Setter docs"))
 
-    @proves("MYC-1.13")
     def test_javascript_jsx_tsx_arrow_factory_generator_and_multiple_declarators(self):
         fixtures = {
             "component.tsx": ("import React from 'react';\nexport const View = (p: {value: string}) => <div>{p.value}</div>;\n", "tsx", {"View"}),
@@ -99,7 +95,6 @@ class CodeTests(unittest.TestCase):
                 self.assertTrue(all(chunk.language == language for chunk in chunks))
                 self.assertFalse(any(chunk.kind == "file" for chunk in chunks))
 
-    @proves("MYC-1.13")
     def test_every_supported_ending_has_its_correct_language_and_whole_file_types_are_unparsed(self):
         fixtures = {
             ".py": ("def x():\n    pass\n", "python"),
@@ -126,7 +121,6 @@ class CodeTests(unittest.TestCase):
                 if language in {"shell", "plist", "swift"}:
                     self.assertEqual([(chunk.symbol, chunk.kind) for chunk in chunks], [("<file>", "file")])
 
-    @proves("MYC-1.13", "MYC-1.14", "MYC-1.15")
     def test_svelte_blocks_markup_quoted_attributes_comments_and_inline_byte_boundaries(self):
         source = ("<p title='<script>not a block</script>'>préface</p>\n"
                   "<!-- module guide -->\n<!-- second guide -->\n<script context='module' data='a>b'>export const x = 1;</script>\n"
@@ -144,7 +138,6 @@ class CodeTests(unittest.TestCase):
         self.assertIn("<footer>fin</footer>", names["<end>"].text)
         self.assertTrue(all(chunk.language == "svelte" for chunk in chunks))
 
-    @proves("MYC-1.15")
     def test_loose_runs_use_the_following_symbol_and_unrelated_names_survive_insertions_removals(self):
         fixtures = (
             ("module.py", "def renew():\n    pass\n\nRETRIES = {}\n\ndef expire():\n    pass\n\nrun()\n", "import time\nLIMIT = 3\n\n"),
@@ -164,7 +157,6 @@ class CodeTests(unittest.TestCase):
                 self.assertEqual(chunk_code(path, (prefix + source)[len(prefix):]), original)
                 self.assertFalse(any("module:" in chunk.symbol for chunk in inserted))
 
-    @proves("MYC-1.15")
     def test_duplicate_functions_classes_getters_and_setters_are_unique_without_silent_merges(self):
         fixtures = {
             "module.py": "def same():\n    return 1\ndef same():\n    return 2\nclass C:\n    @property\n    def x(self):\n        return 1\n    @x.setter\n    def x(self,v):\n        pass\nclass C:\n    def x(self):\n        return 3\n",
@@ -178,7 +170,6 @@ class CodeTests(unittest.TestCase):
                 self.assertEqual(sum(chunk.kind == "method" for chunk in chunks), 3)
                 self.assertEqual(sum(chunk.kind == "function" for chunk in chunks), 2)
 
-    @proves("MYC-1.13", "MYC-1.14")
     def test_unicode_crlf_indentation_blank_lines_and_no_final_newline_are_preserved(self):
         fixtures = {
             "module.py": "\r\n# café 🪴\r\ndef café():\r\n    return 'λ'\r\n\r\nVALUE = '🌿'",
@@ -194,7 +185,6 @@ class CodeTests(unittest.TestCase):
                 for chunk in chunks:
                     self.assertNotIn("\ufffd", chunk.text)
 
-    @proves("MYC-1.13", "MYC-1.14")
     def test_universal_line_endings_and_inline_class_method_decorators_keep_their_structure(self):
         for newline in ("\n", "\r\n", "\r"):
             source = newline.join(("# docs", "def first():", "    pass", "", "def second():", "    pass", ""))
@@ -209,7 +199,6 @@ class CodeTests(unittest.TestCase):
         method = next(chunk for chunk in chunks if chunk.symbol == "C.method")
         self.assertTrue(method.text.startswith("/** docs */ @logged()"))
 
-    @proves("MYC-1.16")
     def test_malformed_source_is_one_complete_whole_file_chunk_in_its_actual_language(self):
         fixtures = {
             "broken.py": "# comment\n@decorator\ndef broken(:\n    pass\n",
@@ -228,7 +217,6 @@ class CodeTests(unittest.TestCase):
                 self.assertEqual(chunks[0].kind, "file")
                 self.assertEqual(chunks[0].language, language_for_path(path))
 
-    @proves("MYC-1.16")
     def test_unavailable_or_failed_grammar_falls_back_without_partial_source(self):
         source = "// λ\nfunction x() {}\nconst after = 1;\n"
         for error in (ImportError("fixture"), RuntimeError("fixture"), ValueError("fixture")):
@@ -236,7 +224,6 @@ class CodeTests(unittest.TestCase):
                 chunks = self.partition("module.ts", source)
                 self.assertEqual([(chunk.symbol, chunk.kind) for chunk in chunks], [("<file>", "file")])
 
-    @proves("MYC-1.13", "MYC-1.16")
     def test_empty_whitespace_and_declaration_free_files_keep_every_byte(self):
         for ending in (".py", ".ts", ".tsx", ".js", ".svelte", ".sh", ".plist", ".swift"):
             for source in ("", " \t\r\n\r\n"):
@@ -250,7 +237,6 @@ class CodeTests(unittest.TestCase):
             self.assertEqual(chunks[0].symbol, "<end>")
             self.assertEqual(chunks[0].kind, "markup" if path.endswith(".svelte") else "module")
 
-    @proves("MYC-1.13", "MYC-1.16")
     def test_large_logical_chunks_are_complete_and_never_split_to_model_limits(self):
         body = "λ🌿" * 70000
         source = "def long_document():\n    return " + repr(body) + "\n"
@@ -264,7 +250,6 @@ class CodeTests(unittest.TestCase):
         self.assertEqual(len(chunks), 1)
         self.assertEqual(chunks[0].symbol, "<file>")
 
-    @proves("MYC-1.13")
     def test_official_pinned_grammars_are_installed_and_used_for_structural_results(self):
         self.assertEqual(version("tree-sitter"), "0.26.0")
         self.assertEqual(version("tree-sitter-typescript"), "0.23.2")
@@ -275,7 +260,6 @@ class CodeTests(unittest.TestCase):
             chunks = self.partition(path, source)
             self.assertFalse(any(chunk.kind == "file" for chunk in chunks))
 
-    @proves("MYC-1.13", "MYC-1.14", "MYC-1.15")
     def test_class_fields_between_and_after_methods_remain_owned_by_the_class(self):
         fixtures = {
             "class.py": ("class A:\n    head = 1\n    def first(self):\n        pass\n"
@@ -306,7 +290,6 @@ class CodeTests(unittest.TestCase):
                 for name, chunk in by_name.items():
                     self.assertEqual(next(item.text for item in inserted if item.symbol == name), chunk.text)
 
-    @proves("MYC-1.13", "MYC-1.14", "MYC-1.15")
     def test_python_nested_classes_recursively_have_headers_methods_and_class_continuations(self):
         source = ("# outer docs\nclass A:\n    before = 1\n"
                   "    # inner docs\n    @decorate\n    class B:\n        inner_value = '雪'\n"
@@ -325,7 +308,6 @@ class CodeTests(unittest.TestCase):
         self.assertIn("outer_after = 3", names["A.<before A.first>"].text)
         self.assertFalse(any(chunk.kind == "module" for chunk in chunks))
 
-    @proves("MYC-1.13", "MYC-1.14", "MYC-1.15")
     def test_svelte_css_closing_literals_comments_and_markup_expressions_are_not_blocks(self):
         for newline in ("\n", "\r\n", "\r"):
             source = newline.join((
@@ -349,7 +331,6 @@ class CodeTests(unittest.TestCase):
                 self.assertEqual(blocks[1].text.count("</style>"), 5)
                 self.assertFalse(any(chunk.kind == "file" for chunk in chunks))
 
-    @proves("MYC-1.13", "MYC-1.16")
     def test_svelte_lexer_failures_and_excessive_nesting_keep_one_complete_file(self):
         fixtures = (
             '<script>const literal = "</script>";</script><p>Hello</p>',

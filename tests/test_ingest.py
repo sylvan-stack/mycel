@@ -11,7 +11,6 @@ from unittest.mock import patch
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import capture_repository
 from mycel._cli import Invocation, parse, run
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._ingest import _cumulative, ingest
 from mycel._locks import operation_guard
@@ -27,7 +26,6 @@ except ImportError:
 
 
 class IngestUnitTests(unittest.TestCase):
-    @proves('MYC-0.6')
     def test_explicit_ingest_options_and_cumulative_reply_preview(self):
         self.assertEqual(parse(['ingest', '--repo', 'a', '--embed', '--confirm-empty']).arguments,
                          ('--embed', '--confirm-empty'))
@@ -79,7 +77,6 @@ class IngestStoreTests(unittest.TestCase):
                                                       path.stat().st_mode)
                 for path in self.base.code.rglob('*') if path.is_file()}
 
-    @proves('MYC-1.7', 'MYC-2.9', 'MYC-12.4', kind='store')
     def test_unchanged_empty_policy_is_batched_but_role_repairs_and_new_refs_run(self):
         from mycel._dependency_application import DependencyApplicationStore
         from mycel._relations import RelationApplicationStore
@@ -116,7 +113,6 @@ class IngestStoreTests(unittest.TestCase):
         self.assertEqual(status, 0, declared)
         self.assertGreater(declared['repositories']['fixture']['pinsCaptured'], 0)
 
-    @proves('MYC-1.7', 'MYC-12.4', kind='store')
     def test_late_empty_policy_mutation_refuses_and_rolls_back(self):
         from mycel._overview_store import OverviewStore
         self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
@@ -134,7 +130,6 @@ class IngestStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.7', 'MYC-12.4', kind='store')
     def test_empty_scope_mutation_during_active_policy_refuses(self):
         from mycel._relations import RelationApplicationStore
         (self.base.artifact / 'derived.md').write_text(
@@ -158,7 +153,6 @@ class IngestStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.7', 'MYC-2.9', 'MYC-7.26', kind='store')
     def test_edited_chunks_keep_prior_asserted_sources_and_relations(self):
         from mycel._derive import DeriveStore
         from mycel._relate import RelateStore
@@ -192,7 +186,6 @@ class IngestStoreTests(unittest.TestCase):
                     self.assertEqual(len(rows), 2)
                     self.assertTrue(all(row[0] is not None for row in rows))
 
-    @proves('MYC-1.7', 'MYC-2.9', 'MYC-7.26', kind='store')
     def test_restored_historical_chunk_inherits_assertions_absent_from_current_file(self):
         from mycel._derive import DeriveStore
         from mycel._relate import RelateStore
@@ -214,7 +207,6 @@ class IngestStoreTests(unittest.TestCase):
         self.assertGreater(reply['repositories']['fixture']['pinsInherited'], 0)
         self.assertGreater(reply['repositories']['fixture']['relationPinsInherited'], 0)
 
-    @proves('MYC-1.20', 'MYC-1.22', 'MYC-1.30', kind='store')
     def test_complete_disk_local_branches_stash_and_exact_quiet_activity(self):
         guide = self.base.artifact / 'guide.md'
         guide.write_bytes(b'# Guide\nOriginal body.\n# Fixed\nStable section.\n')
@@ -265,7 +257,6 @@ class IngestStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(self.state(connection), before_store)
 
-    @proves('MYC-1.21', 'MYC-1.22', kind='store')
     def test_failed_complete_capture_and_late_audit_leave_retryable_file_and_no_deletion(self):
         self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
         guide = self.base.artifact / 'guide.md'
@@ -308,7 +299,6 @@ class IngestStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_chunks').fetchone()[0], 0)
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_files').fetchone()[0], 0)
 
-    @proves('MYC-1.20', 'MYC-1.22', kind='store')
     def test_every_document_and_code_identity_decision_is_public_and_transaction_bound(self):
         guide = self.base.artifact / 'guide.md'
         code = self.base.code / 'symbols.py'
@@ -337,7 +327,6 @@ class IngestStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.23', kind='store')
     def test_busy_selected_affected_and_disjoint_owners_have_exact_pending_and_retry(self):
         downstream = self.add_repository('downstream',
             b'---\nsources: ["fixture:@artifact/guide.md#Guide"]\n---\n# Answer\nStable answer.\n')
@@ -368,7 +357,6 @@ class IngestStoreTests(unittest.TestCase):
             self.assertTrue(connection.execute("SELECT 1 FROM public.mycel_stale_reasons WHERE repository='downstream' "
                 "AND reason->>'kind'='source_changed'").fetchone())
 
-    @proves('MYC-1.23', kind='store')
     def test_named_repeated_cwd_organization_and_all_scopes_with_local_faults(self):
         other = self.add_repository('other', b'# Answer\nOther document.\n')
         self.base.config.write_text(self.base.config.read_text() + 'code_root=' + json.dumps(str(other)) + '\n')
@@ -396,7 +384,6 @@ class IngestStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_files WHERE repository='disabled'").fetchone()[0], 0)
 
-    @proves('MYC-1.23', kind='store')
     def test_busy_required_source_refuses_selected_publication_without_half_file(self):
         self.add_repository('source', b'# Answer\nRequired source.\n')
         (self.base.artifact / 'guide.md').write_bytes(
@@ -414,7 +401,6 @@ class IngestStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.21', 'MYC-1.23', kind='store')
     def test_disabled_foreign_edge_owner_gets_collection_guard_and_exact_activity(self):
         self.add_repository('downstream',
             b'---\nsources: ["fixture:@artifact/guide.md#Guide"]\n---\n# Answer\nRetained answer.\n')
@@ -438,7 +424,6 @@ class IngestStoreTests(unittest.TestCase):
             self.assertTrue(connection.execute("SELECT 1 FROM public.mycel_activity WHERE repository='downstream' "
                 "AND counts ? 'sourceEdgesCollected'").fetchone())
 
-    @proves('MYC-1.22', 'MYC-1.23', kind='store')
     def test_final_activity_close_failure_retains_committed_ingest_reply(self):
         with patch.object(MutationActivity, 'finish', side_effect=MycelError('internal', 'Fixture closing failure.')):
             status, reply = self.invoke('--repo', 'fixture')
@@ -450,7 +435,6 @@ class IngestStoreTests(unittest.TestCase):
             entry = connection.execute('SELECT id FROM public.mycel_activity').fetchone()[0]
             self.assertEqual(activity_state(connection, entry)['outcome'], 'unfinished')
 
-    @proves('MYC-1.22', 'MYC-1.23', kind='store')
     def test_guard_cleanup_failure_and_interrupt_keep_acknowledged_publication(self):
         from mycel._ingest import _publication_guards
         for fault in (MycelError('internal', 'Fixture guard cleanup failure.'), KeyboardInterrupt()):
@@ -466,7 +450,6 @@ class IngestStoreTests(unittest.TestCase):
             with self.base.connect() as connection:
                 self.assertGreater(connection.execute('SELECT count(*) FROM public.mycel_chunks').fetchone()[0], 0)
 
-    @proves('MYC-1.23', kind='store')
     def test_optional_embedding_uses_ingest_policy_only_after_scoped_publication(self):
         self.add_repository('unrelated', b'# Answer\nUnselected text.\n')
         policies, attempts = [], []
@@ -506,7 +489,6 @@ class IngestPublishesItsCaptureStoreTests(IngestStoreTests):
             JOIN public.mycel_file_locations l ON l.file_version=v.id WHERE l.kind='disk'""").fetchall()
         return sorted(bytes(row[0]) for row in rows)
 
-    @proves('MYC-1.37', 'MYC-1.7', kind='store')
     def test_file_changed_during_pass_is_saved_as_captured_named_and_taken_by_the_next_pass(self):
         self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
         guide = self.base.artifact / 'guide.md'
@@ -557,7 +539,6 @@ class IngestPublishesItsCaptureStoreTests(IngestStoreTests):
         self.assertEqual(status, 0, reply)
         self.assertFalse(reply['repositories']['fixture']['changed'])
 
-    @proves('MYC-1.37', kind='store')
     def test_pass_takes_a_foreign_source_from_the_index_and_its_own_pass_marks_the_dependant_stale(self):
         foreign = self.add_repository('foreign', b'# Source\nForeign source.\n')
         guide = self.base.artifact / 'guide.md'
@@ -584,7 +565,6 @@ class IngestPublishesItsCaptureStoreTests(IngestStoreTests):
         self.assertEqual(reply['repositories']['foreign']['chunks']['edited'], 1)
         self.assertEqual(reply['repositories']['foreign']['dependencyRepositories']['fixture']['stale'], 1)
 
-    @proves('MYC-1.37', kind='store')
     def test_pass_reads_each_location_catalog_once_for_its_dependency_run(self):
         for number in range(6):
             (self.base.artifact / f'note{number}.md').write_bytes(

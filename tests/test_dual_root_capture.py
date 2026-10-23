@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 from mycel._capture import LocationId, capture_repository
-from mycel._coverage import proves, require_check_database
+from mycel._coverage import require_check_database
 from mycel._disk_reconciliation import DiskCaptureStore
 from mycel._located_reconciliation import LocatedCaptureStore, location_key
 from mycel._resolver import SourceResolver
@@ -96,7 +96,6 @@ class DualRootCaptureStoreTests(unittest.TestCase):
         self.assertIsNotNone(code)
         self.assertEqual(code.members[0].chunk.kind, 'function')
 
-    @proves('MYC-1.32', kind='store')
     def test_disk_retains_both_document_roots_split_text_origin_and_exclusions_outside_code_subdirs(self):
         manifest = capture_repository(self.settings, 'fixture')
         expected = {(root, path, 'documents') for root, path in self.sources}
@@ -109,7 +108,6 @@ class DualRootCaptureStoreTests(unittest.TestCase):
             self.assertEqual(len(result.files), 5)
             self.assert_documents(connection, SourceResolver.from_store(connection, self.settings))
 
-    @proves('MYC-1.32', kind='store')
     def test_local_branch_documents_keep_their_independent_root_policy_chunks_and_read_addresses(self):
         for root in self.roots.values():
             self.git(root, 'init', '--initial-branch=fixture-main')

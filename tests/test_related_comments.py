@@ -5,7 +5,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel import _capture
-from mycel._coverage import proves
 from mycel._dependency_application import RetainedDependencyResolver
 from mycel._dependency_inputs import DependencyCaptureInputs
 from mycel._evidence import CaptureLocation, PinInputs
@@ -24,7 +23,6 @@ class RelatedCommentTests(unittest.TestCase):
         return tuple(ref for group in self.declarations(source).chunk_relations
                      for ref in group.relations)
 
-    @proves('MYC-2.1', 'MYC-2.3')
     def test_related_groups_cover_every_chunk_and_stay_distinct_from_sources(self):
         declarations = self.declarations(
             '---\nsources: [repo:whole]\nrelated: [repo:ignored]\n---\n'
@@ -42,7 +40,6 @@ class RelatedCommentTests(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             declarations.chunk_relations[0].relations[0].ref = 'changed'
 
-    @proves('MYC-16.1')
     def test_mixed_comments_keep_duplicate_occurrences_and_exact_physical_lines(self):
         for newline in ('\n', '\r\n', '\r'):
             with self.subTest(newline=repr(newline)):
@@ -62,7 +59,6 @@ class RelatedCommentTests(unittest.TestCase):
                 self.assertEqual(refs[-1].raw_line, '  repo:listed' + newline)
                 self.assertTrue(all(ref.chunk == 'Ω' and ref.origin == 'comment' for ref in refs))
 
-    @proves('MYC-13.15')
     def test_unclosed_related_comment_retains_each_entry_as_fault_and_reports_file(self):
         declarations = self.declarations('# A\n<!-- related:\nrepo:a\nnot a ref\n')
         refs = declarations.chunk_relations[0].relations
@@ -72,7 +68,6 @@ class RelatedCommentTests(unittest.TestCase):
                          [('docs/guide.md', 'related_comment_unclosed', 2)])
         self.assertEqual(declarations.chunk_sources[0].sources, ())
 
-    @proves('MYC-13.15')
     def test_one_line_is_one_reference_and_nested_comments_are_not_declarations(self):
         source = ('# A\n<!-- related:\n\nrepo:a, repo:b\n<!-- sources:\n-->\n'
                   '<!-- ordinary\n<!-- related: repo:nested -->\n<!-- related: repo:after -->\n')
@@ -83,7 +78,6 @@ class RelatedCommentTests(unittest.TestCase):
         self.assertEqual(refs[1].fault, 'not_a_ref')
         self.assertEqual(self.declarations(source).chunk_sources[0].sources, ())
 
-    @proves('MYC-13.15')
     def test_fences_indent_code_and_raw_html_hide_related_comments(self):
         for opening, continuation in (('', ''), ('- ', '  '), ('1. ', '   '),
                                       ('> ', '> '), ('> - ', '>   '), ('- > ', '  > ')):
@@ -101,7 +95,6 @@ class RelatedCommentTests(unittest.TestCase):
                   '<!-- related: repo:visible -->\n')
         self.assertEqual([ref.ref for ref in self.relations(source)], ['repo:visible'])
 
-    @proves('MYC-13.15')
     def test_inline_code_lazy_containers_and_block_boundaries_share_source_rules(self):
         source = ('# A\n`<!-- related: repo:hidden -->` and <!-- related: repo:one -->\n\n'
                   '``literal ` <!-- related: repo:hidden2 --> ``\n\n'
@@ -118,7 +111,6 @@ class RelatedCommentTests(unittest.TestCase):
         source = '# A\nunmatched `\n\n<!-- related: repo:blank -->\nclosing `\n# Next\n<!-- related: repo:heading -->\n`\n'
         self.assertEqual([ref.ref for ref in self.relations(source)], ['repo:blank', 'repo:heading'])
 
-    @proves('MYC-13.15')
     def test_link_titles_reference_definitions_html_attributes_and_autolinks_are_opaque(self):
         for opaque in (
                 '[label](dest "<!-- related: repo:hidden --> `")',
@@ -136,7 +128,6 @@ class RelatedCommentTests(unittest.TestCase):
         source = '# A\n[label](dest "missing <!-- related: repo:visible -->)\n'
         self.assertEqual([ref.ref for ref in self.relations(source)], ['repo:visible'])
 
-    @proves('MYC-2.2')
     def test_unreadable_frontmatter_never_exposes_its_related_example(self):
         for source in ('---\nrole: [broken\n<!-- related: repo:hidden -->\n---\n# A\n',
                        '---\nrelated: [repo:hidden]\n<!-- related: repo:hidden -->\n'):
@@ -148,7 +139,6 @@ class RelatedCommentTests(unittest.TestCase):
 
 
 class RelatedCaptureTests(capture_fixtures._CaptureFixture, unittest.TestCase):
-    @proves('MYC-13.15')
     def test_rereader_preserves_asserted_header_selection_in_fresh_catalog(self):
         code_source = 'class Policy:\n    def run(self):\n        pass\n'
         guide_source = '# Guide\nBody\n'
@@ -184,7 +174,6 @@ class RelatedCaptureTests(capture_fixtures._CaptureFixture, unittest.TestCase):
         self.assertEqual(tuple(member.chunk for member in fresh.selection.members), (header,))
         self.assertEqual(fresh.resolution, expected.resolution)
 
-    @proves('MYC-1.6', 'MYC-13.15')
     def test_exact_capture_and_parse_history_preserve_relations_without_parsing_code_comments(self):
         document = '# Guide\n<!-- sources: fixture:source -->\n<!-- related: fixture:other -->\n# Empty\nBody\n'
         self.write(self.code, 'README.md', document)
@@ -205,7 +194,6 @@ class RelatedCaptureTests(capture_fixtures._CaptureFixture, unittest.TestCase):
         self.assertIsInstance(code.parsed, tuple)
         self.assertFalse(hasattr(code.parsed, 'chunk_relations'))
 
-    @proves('MYC-13.15')
     def test_declaration_parser_revision_invalidates_unchanged_capture_policy(self):
         before = _capture._parser_revision()
         read_bytes = Path.read_bytes
@@ -225,7 +213,6 @@ class RelationEndpointResolverTests(unittest.TestCase):
         file = resolver_fixtures.file('policy.py', 'complete bytes', root='code', members=(header, method))
         return SourceResolver(resolver_fixtures.settings(), (file,)), file, header
 
-    @proves('MYC-13.15')
     def test_asserted_class_is_header_and_declared_class_is_family(self):
         base, file, header = self.catalog()
         raw = 'fixture:policy.py#Policy'
@@ -238,7 +225,6 @@ class RelationEndpointResolverTests(unittest.TestCase):
         self.assertEqual(RetainedDependencyResolver(base, {}, endpoint_refs=(raw_file,)).resolve(raw_file).fault,
                          'one_chunk_required')
 
-    @proves('MYC-13.15')
     def test_retained_file_moves_and_class_renames_keep_endpoint_semantics(self):
         base, file, header = self.catalog()
         old = 'fixture:old.py#Policy'
@@ -252,7 +238,6 @@ class RelationEndpointResolverTests(unittest.TestCase):
         self.assertEqual((selection.selection.kind, len(selection.selection.members)), ('chunk', 1))
         self.assertEqual(selection.selection.place.name, 'Policy')
 
-    @proves('MYC-13.15')
     def test_endpoint_selection_never_overrides_syntax_eligibility_or_ambiguity_faults(self):
         base, file, header = self.catalog()
         raw = 'fixture:policy.py#Policy'

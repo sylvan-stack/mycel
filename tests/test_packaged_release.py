@@ -16,7 +16,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel_build import _packaged_release as packaged
 from mycel_build._automatic import _sanitize_report
 from mycel_build._core import BuildError, digest, json_bytes, read_json, seal_program
@@ -34,14 +33,12 @@ except ImportError:
 
 
 class PackagedReleaseTests(unittest.TestCase):
-    @proves('MYC-13.16', kind='unit')
     def test_fixture_group_disappearing_before_signal_is_already_cleaned_up(self):
         with patch.object(packaged, '_gone', return_value=False), \
                 patch.object(packaged.os, 'killpg', side_effect=ProcessLookupError) as send:
             self.assertIsNone(packaged._stop_fixture_group(12345))
         send.assert_called_once_with(12345, signal.SIGTERM)
 
-    @proves('MYC-13.16', kind='unit')
     def test_real_selected_product_pid_stop_continue_interrupt_and_termination_leave_inputs_unchanged(self):
         # A real exec chain, selector and Mycel grep run on the test interpreter.
         # It deliberately does not purport to qualify a synthetic runtime pin.
@@ -60,7 +57,6 @@ class PackagedReleaseTests(unittest.TestCase):
                         self.assertTrue(result[field])
                     self.assertEqual(tree_state(fixture.base), before)
 
-    @proves('MYC-13.16', kind='unit')
     def test_actual_case_detects_a_real_write_instead_of_reporting_immutable_execution(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -72,7 +68,6 @@ class PackagedReleaseTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 'refused')
             self.assertEqual(target.read_text(), 'actual write')
 
-    @proves('MYC-13.1', 'MYC-13.16', kind='unit')
     def test_unavailable_native_host_never_fabricates_or_starts_packaged_checks(self):
         with patch.object(packaged.platform, 'system', return_value='Linux'), \
                 patch.object(packaged, '_relocation') as relocation, \
@@ -85,7 +80,6 @@ class PackagedReleaseTests(unittest.TestCase):
         relocation.assert_not_called()
         manifest.assert_not_called()
 
-    @proves('MYC-13.1', 'MYC-13.16', kind='unit')
     def test_two_native_relocation_orchestration_retains_first_actual_case_when_second_fails(self):
         # This tests orchestration with a finite executor, not distribution
         # qualification. Each executor still starts a real isolated process.
@@ -129,7 +123,6 @@ class PackagedReleaseTests(unittest.TestCase):
                 self.assertNotIn('private failure detail', json.dumps(result))
                 self.assertEqual((tree_state(program), tree_state(bundle)), before)
 
-    @proves('MYC-13.1', 'MYC-13.15', 'MYC-13.16', kind='unit')
     def test_last_packaged_failure_blocks_qualification_and_retains_all_prior_results_without_publication(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

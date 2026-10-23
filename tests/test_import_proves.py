@@ -7,7 +7,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._source_refs import format_entity_uri
 
@@ -58,7 +57,6 @@ class ImportPlanTests(unittest.TestCase):
     def plan(self):
         return migration.make_plan(self.root, self.specs, repository='fixture', by='fixture-owner', when=WHEN)
 
-    @proves('MYC-13.3', 'MYC-17.5')
     def test_literal_planning_never_imports_and_preserves_defining_symbol_and_kinds(self):
         plan = self.plan()
         self.assertEqual(len(plan['declarations']), 1)
@@ -68,7 +66,6 @@ class ImportPlanTests(unittest.TestCase):
         self.assertEqual(plan['pairs'][0]['origin'], format_entity_uri('req', REQ, 'keep the value', 'fixture'))
         migration.validate_plan(plan)
 
-    @proves('MYC-13.3', 'MYC-17.3')
     def test_unknown_dynamic_duplicate_and_unnormalized_inputs_refuse_before_store_work(self):
         for raw in (SOURCE.replace("'MYC-1.1'", "'MYC-1.3'"),
                     SOURCE.replace("'MYC-1.1'", 'choose_requirement()'),
@@ -83,7 +80,6 @@ class ImportPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Normalize'):
             self.plan()
 
-    @proves('MYC-13.3')
     def test_complete_input_and_plan_changes_refuse_and_private_outputs_cannot_enter_corpora(self):
         plan = self.plan()
         (self.root / 'new.py').write_text('NEW = 1\n')
@@ -97,7 +93,6 @@ class ImportPlanTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 migration.write_private(path, {}, self.plan())
 
-    @proves('MYC-13.3')
     def test_owner_target_is_refused_before_opening_a_connection(self):
         from mycel._settings import load_settings
         config = self.base / 'config.toml'
@@ -106,7 +101,6 @@ class ImportPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'mycel_check_'):
             migration.apply_disposable(None, settings, self.plan())
 
-    @proves('MYC-13.3')
     def test_owner_import_requires_the_named_database_and_the_indexed_clone(self):
         from mycel._settings import load_settings
         other = self.base / 'other'
@@ -150,7 +144,6 @@ class ProvenImportStoreTests(unittest.TestCase):
         self.plan = migration.make_plan(self.base.code, self.specs,
                                        repository='fixture', by='fixture-owner', when=WHEN)
 
-    @proves('MYC-17.8', 'MYC-17.9', kind='store')
     def test_imports_every_uuid_pair_as_proven_with_one_complete_check_verification(self):
         with self.base.connect() as connection:
             replies = migration.apply_disposable(connection, self.settings, self.plan)
@@ -167,7 +160,6 @@ class ProvenImportStoreTests(unittest.TestCase):
             links = connection.execute("SELECT state FROM public.mycel_dependencies WHERE kind='asserted'").fetchall()
             self.assertEqual({row[0]['originId'] for row in links}, {REQ, OTHER})
 
-    @proves('MYC-17.10', kind='store')
     def test_late_input_edit_rolls_back_all_links_verifications_and_evidence(self):
         original = migration.validate_plan
         calls = []
@@ -184,7 +176,6 @@ class ProvenImportStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(), (0,))
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_evidence_owners').fetchone(), before)
 
-    @proves('MYC-17.10', kind='store')
     def test_one_batch_captures_each_repository_once_and_compares_once_at_its_end(self):
         from mycel import _dependency_inputs
         captures = []
@@ -197,7 +188,6 @@ class ProvenImportStoreTests(unittest.TestCase):
             self.assertEqual(len(migration.apply_disposable(connection, self.settings, self.plan)), 2)
         self.assertEqual(captures, ['fixture', 'fixture'])
 
-    @proves('MYC-17.10', kind='store')
     def test_an_edit_between_pairs_refuses_the_whole_batch(self):
         from mycel import _derive
         derive = _derive.DeriveStore.apply_in_transaction
@@ -211,7 +201,6 @@ class ProvenImportStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_dependencies WHERE kind='asserted'").fetchone(), (0,))
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(), (0,))
 
-    @proves('MYC-17.8', 'MYC-17.10', kind='store')
     def test_import_refuses_to_replace_a_newer_human_statement(self):
         from mycel._justify import JustifyStore
         pairs = [(row['chunk'], row['origin']) for row in self.plan['pairs']]
@@ -224,7 +213,6 @@ class ProvenImportStoreTests(unittest.TestCase):
             link, = connection.execute("SELECT state->'originLink' FROM public.mycel_dependencies WHERE kind='asserted'").fetchone()
             self.assertEqual(link, stated['link'])
 
-    @proves('MYC-17.10', kind='store')
     def test_replay_preserves_a_reviewed_score_and_its_verification_history(self):
         from psycopg.types.json import Jsonb
         with self.base.connect() as connection:

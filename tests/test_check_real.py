@@ -6,7 +6,6 @@ import pstats
 import runpy
 import unittest
 
-from mycel._coverage import proves
 
 try:
     from . import test_ingest_activity as fixtures
@@ -17,7 +16,6 @@ except ImportError:
 class RealActivityCheckStoreTests(unittest.TestCase):
     check_kind = "store"
 
-    @proves('MYC-12.1', 'MYC-12.2', 'MYC-12.4', 'MYC-12.12', kind='store')
     def test_real_check_rejects_missing_duplicate_or_mismatched_public_activity(self):
         fixture = fixtures.PublicIngestActivityStoreTests()
         fixture.store_fixture = self.store_fixture
@@ -60,7 +58,6 @@ class RealActivityCheckStoreTests(unittest.TestCase):
         self.assertTrue(verify('fixture', quiet, before, after, detail))
 
 
-    @proves('MYC-1.7', 'MYC-12.1', 'MYC-12.2', kind='store')
     def test_profile_measures_the_real_numbered_subprocess_without_changing_its_reply(self):
         fixture = fixtures.PublicIngestActivityStoreTests()
         fixture.store_fixture = self.store_fixture
@@ -89,7 +86,6 @@ class RealActivityCheckStoreTests(unittest.TestCase):
 
 
 class RealProviderIsolationTests(unittest.TestCase):
-    @proves('MYC-4.16')
     def test_disposable_check_cannot_read_owner_provider_key_or_send_a_query(self):
         import tempfile
         from unittest.mock import patch

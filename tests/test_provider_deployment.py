@@ -9,7 +9,7 @@ import sys
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import OnDemandProofs, proves
+from mycel._coverage import OnDemandProofs
 from mycel._errors import MycelError
 from mycel._evaluation_drift import _fingerprint, _prepare
 from mycel._classification_payload import ReviewCommandIdentity
@@ -72,7 +72,6 @@ def report_shape(expected=None):
 
 
 class ProviderDeploymentTests(unittest.TestCase):
-    @proves('MYC-13.15', 'MYC-14.17')
     def test_exact_wire_decimals_survive_report_json_and_drive_jev_only_routing(self):
         for maximum, other, confidence in (
                 ('0.6666666666666667', '0.16666666666666665', '0.5'),
@@ -125,7 +124,6 @@ class ProviderDeploymentTests(unittest.TestCase):
                 with self.subTest(display=confidence, change=change), self.assertRaises(MycelError):
                     require_qualification(changed, suite, pipeline)
 
-    @proves('MYC-13.15', 'MYC-13.2')
     def test_exact_component_report_retains_quality_cost_and_cannot_be_a_same_build_proof(self):
         report, suite, pipeline = report_shape()
         with patch('mycel._credentials.Credentials', side_effect=AssertionError('credential')), \
@@ -143,7 +141,6 @@ class ProviderDeploymentTests(unittest.TestCase):
         record['report']['results'].clear()
         self.assertEqual(len(report['results']), 200)
 
-    @proves('MYC-13.15', 'MYC-14.12')
     def test_missing_changed_incomplete_empty_routed_or_failing_reports_refuse_deployment(self):
         original, suite, pipeline = report_shape()
         for change in ('missing', 'old-report', 'old-qualification', 'missing-baseline', 'confidence-diagnostic',
@@ -183,7 +180,6 @@ class ProviderDeploymentTests(unittest.TestCase):
                 require_qualification(report, suite, pipeline)
             self.assertEqual(raised.exception.code, 'refused')
 
-    @proves('MYC-13.15', 'MYC-14.12')
     def test_explicit_development_seam_binds_reviewed_report_and_current_command_without_calls_or_writes(self):
         from mycel._classification_payload import ReviewCommandIdentity
         from mycel._evaluation_live import _pipeline
@@ -266,7 +262,6 @@ class SameRunProviderDeploymentCallerTests(unittest.TestCase):
             counters = {'producer': selected.call_count, 'embedding': embed.call_count, 'drift': drift.call_count}
         return proofs, reports, captured, counters
 
-    @proves('MYC-13.2', 'MYC-0.10')
     def test_deployment_caller_requires_explicit_live_before_provider_operation(self):
         from mycel._provider_deployment import run_provider_deployment_checks
         with patch('mycel._provider_checks.run_provider_checks', side_effect=AssertionError('provider group')) as producer, \
@@ -277,7 +272,6 @@ class SameRunProviderDeploymentCallerTests(unittest.TestCase):
                         implementation_identity='fictional-immutable-unit-source', live=choice)
             producer.assert_not_called()
 
-    @proves('MYC-13.15', 'MYC-13.2')
     def test_deployment_caller_consumes_one_same_process_group_and_returns_original_proof_objects(self):
         with tempfile.TemporaryDirectory() as temporary:
             settings, suite, report, embedding, _ = self.fixture(Path(temporary))
@@ -295,7 +289,6 @@ class SameRunProviderDeploymentCallerTests(unittest.TestCase):
             self.assertEqual(reports['deployment']['additionalProviderCallsByConsumer'], 0)
             self.assertFalse(reports['deployment']['sameBuildOnDemandProof'])
 
-    @proves('MYC-13.15', 'MYC-13.2')
     def test_deployment_caller_retains_failed_provider_or_consumer_without_retry(self):
         for mutation in ('embedding-failure', 'bad-consumer-metric'):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
@@ -319,7 +312,6 @@ class SameRunProviderDeploymentCallerTests(unittest.TestCase):
                     self.assertEqual(proofs[0].checks[0].status, 'failed')
                     self.assertNotIn('drift', reports)
 
-    @proves('MYC-14.12', 'MYC-13.15')
     def test_deployment_caller_rejects_changed_settings_or_reviewer_identity_after_group(self):
         for mutation in ('settings', 'reviewer'):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:

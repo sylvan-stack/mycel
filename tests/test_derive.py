@@ -10,7 +10,6 @@ from psycopg.types.json import Jsonb
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import capture_repository
 from mycel._cli import Invocation, parse, run
-from mycel._coverage import proves
 from mycel._derive import DeriveStore
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceStore
@@ -27,7 +26,6 @@ except ImportError:
 
 
 class DeriveCliTests(unittest.TestCase):
-    @proves('MYC-0.6', 'MYC-0.7')
     def test_exact_two_ref_syntax_remove_option_and_closed_failures(self):
         dependant, source = 'fixture:@artifact/guide.md#Guide', 'fixture:@artifact/source.md#Source'
         self.assertEqual(parse(['derive', dependant, '--remove', source]),
@@ -105,7 +103,6 @@ class DeriveStoreTests(unittest.TestCase):
             JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version
             WHERE l.kind='disk' AND l.metadata->>'name'='Guide'""").fetchone()[0]
 
-    @proves('MYC-2.10', 'MYC-2.19', 'MYC-16.5', 'MYC-16.13', kind='store')
     def test_public_assertion_exact_baseline_alias_noop_and_committed_activity(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -129,7 +126,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertEqual(again['baselineManifest'], reply['baselineManifest'])
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.25', 'MYC-16.11', kind='store')
     def test_identical_assertion_leaves_unrelated_unreferenced_evidence_and_activity_untouched(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -142,7 +138,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertFalse(self.derive(connection)['changed'])
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-2.12', 'MYC-7.25', kind='store')
     def test_removing_last_assertion_does_not_give_ambiguous_retained_declaration_authority(self):
         guide = self.base.artifact / 'guide.md'
         guide.write_bytes(guide.read_bytes().replace(b'role: authored',
@@ -159,7 +154,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertEqual([row for row in self.dependencies(connection) if row[2] == 'declared'], declared)
             self.assertEqual(self.role(connection), 'authored')
 
-    @proves('MYC-2.10', 'MYC-7.25', 'MYC-16.11', kind='store')
     def test_remove_preserves_declared_and_unrelated_asserted_rows_pins_faults_and_role(self):
         guide = self.base.artifact / 'guide.md'
         guide.write_bytes(guide.read_bytes().replace(b'role: authored', b'role: authored\nsources: ["' + self.ref.encode() + b'"]'))
@@ -179,7 +173,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertTrue(all(row in snapshots for row in connection.execute(
                 'SELECT repository,hash,bytes FROM public.mycel_snapshots').fetchall()))
 
-    @proves('MYC-7.25', 'MYC-16.13', kind='store')
     def test_absent_unqualified_assertion_removal_is_a_guarded_quiet_noop(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -193,7 +186,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertFalse(absent_file['changed'])
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-2.10', 'MYC-7.25', 'MYC-16.5', kind='store')
     def test_file_family_and_member_selections_keep_separate_baselines_and_alias_removal(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -211,7 +203,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertEqual({row[7] for row in self.dependencies(connection)},
                              {file['baselineManifest'], method['baselineManifest']})
 
-    @proves('MYC-2.11', 'MYC-16.13', kind='store')
     def test_self_expanded_file_family_and_multistep_cycles_refuse_atomically(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -233,7 +224,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertIn('dependency_cycle', error.exception.message)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.24', 'MYC-7.25', 'MYC-16.7', 'MYC-16.13', kind='store')
     def test_retained_away_and_deleted_assertions_remove_exact_owner_without_empty_baseline(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -256,7 +246,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertEqual(self.role(connection), 'authored')
             self.assertFalse(self.derive(connection, 'fixture:source.md#Source', remove=True)['changed'])
 
-    @proves('MYC-16.13', 'MYC-7.25', kind='store')
     def test_changed_dependant_source_and_unindexed_recreation_refuse_assert_and_remove(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -287,7 +276,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertIn('changed_since_ingest', error.exception.message)
             self.assertEqual(self.state(connection), missing)
 
-    @proves('MYC-16.13', 'MYC-7.25', kind='store')
     def test_ambiguous_paths_and_headings_disabled_unknown_index_and_file_dependants_refuse(self):
         (self.base.code / 'source.md').write_bytes(b'# Source\nDifferent physical file.\n')
         (self.base.artifact / 'ambiguous.md').write_bytes(b'# One\n\n## Repeat\nA.\n\n# Two\n\n## Repeat\nB.\n')
@@ -308,7 +296,6 @@ class DeriveStoreTests(unittest.TestCase):
                 DeriveStore(connection).apply(self.base.settings, 'fixture:@artifact/guide.md', self.ref)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-2.10', 'MYC-16.5', 'MYC-16.13', kind='store')
     def test_cross_repository_assertion_owns_exact_source_evidence_in_dependant_repository(self):
         foreign = self.base.base / 'foreign'
         foreign.mkdir()
@@ -333,7 +320,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertIn('changed_since_ingest', error.exception.message)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-16.13', 'MYC-12.4', kind='store')
     def test_audit_failure_and_late_capture_change_roll_back_feature_and_activity(self):
         with self.base.connect() as connection:
             self.publish(connection)
@@ -363,7 +349,6 @@ class DeriveStoreTests(unittest.TestCase):
             self.assertEqual(self.state(connection), before)
             self.base.config.write_text(original_settings)
 
-    @proves('MYC-7.25', 'MYC-16.13', kind='store')
     def test_real_cli_dispatch_uses_current_store_and_single_reply_for_assert_remove_and_noop(self):
         with self.base.connect() as connection:
             self.publish(connection)

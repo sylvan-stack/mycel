@@ -6,7 +6,7 @@ from itertools import permutations
 import unittest
 
 from mycel._code import chunk_code
-from mycel._coverage import load_registry, proves, no_network
+from mycel._coverage import no_network
 from mycel._evidence import ComparisonRecord, EvidenceError, exact_comparison
 from mycel._identity import ChunkInput, KnownChunk, KnownVersion, reconcile_file
 from mycel._markdown import split_markdown
@@ -27,7 +27,6 @@ def identities(plan):
 
 
 class IdentityTests(unittest.TestCase):
-    @proves('MYC-1.17')
     def test_all_file_name_matches_are_reserved_before_any_content_match(self):
         stored=(known('A',document('A','same body\n'),1),
                 known('B',document('B','same body\n'),2))
@@ -38,7 +37,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual([decision.matched_by for decision in plan.decisions],['content','current_name'])
         self.assertEqual(plan.removed,())
 
-    @proves('MYC-1.17')
     def test_reordered_empty_headings_keep_names_and_new_empty_heading_steals_none(self):
         stored=(known('A',document('A'),1),known('B',document('B'),2))
         plan=reconcile_file((document('Introduced'),document('B'),document('A')),stored)
@@ -46,7 +44,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual([decision.reason for decision in plan.decisions],['new','unchanged','unchanged'])
         self.assertEqual(plan.removed,())
 
-    @proves('MYC-1.17')
     def test_normalized_empty_document_bodies_never_match_by_content(self):
         for body in ('','\n',' \t\n','\u00a0\u2003\n'):
             with self.subTest(body=body):
@@ -55,7 +52,6 @@ class IdentityTests(unittest.TestCase):
                 self.assertIsNone(plan.decisions[0].chunk_id)
                 self.assertEqual(plan.removed[0].chunk_id,'empty')
 
-    @proves('MYC-1.17')
     def test_a_name_match_preserves_an_empty_chunk_through_a_content_edit(self):
         old=document('A')
         current=document('A','new body\n')
@@ -63,7 +59,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual((decision.chunk_id,decision.reason,decision.matched_by),('A','edited','current_name'))
         self.assertEqual(decision.pin_decision,'requires_authorized_capture')
 
-    @proves('MYC-1.17')
     def test_names_are_exact_and_do_not_use_title_normalization_as_name_identity(self):
         old=document('A','old body\n')
         fullwidth=document('Ａ','unrelated body\n')
@@ -74,7 +69,6 @@ class IdentityTests(unittest.TestCase):
         decision=reconcile_file((case_changed,),(known('A',old),)).decisions[0]
         self.assertEqual((decision.chunk_id,decision.matched_by,decision.reason),('A','content','renamed'))
 
-    @proves('MYC-1.17')
     def test_whole_name_round_prefers_current_name_over_historical_exact_text(self):
         historical=document('B','historical A body\n')
         A=known('A',document('A','current A body\n'),1,retained=(KnownVersion(2,historical),))
@@ -86,7 +80,6 @@ class IdentityTests(unittest.TestCase):
         self.assertIsNone(decision.version_id)
         self.assertEqual([decision.chunk_id for decision in plan.removed],['A'])
 
-    @proves('MYC-1.17')
     def test_all_current_names_are_reserved_before_historical_name_assignment(self):
         old_B=document('B','old A body\n')
         A=known('A',document('A','current A body\n'),1,retained=(KnownVersion(2,old_B),))
@@ -95,7 +88,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(identities(plan),{'B':'B','A':'A'})
         self.assertTrue(all(decision.matched_by=='current_name' for decision in plan.decisions))
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_one_exact_empty_child_version_retains_multiple_located_names_and_its_own_pin(self):
         old=ChunkInput.document(split_markdown('# Disk parent\n## Child\n').chunks[-1])
         branch=ChunkInput.document(split_markdown('# Branch parent\n## Child\n').chunks[-1])
@@ -114,7 +106,6 @@ class IdentityTests(unittest.TestCase):
             self.assertEqual((decision.pin_decision,decision.pin_version),('restore_existing',10))
             self.assertTrue(decision.reuse_vectors)
 
-    @proves('MYC-1.17')
     def test_current_name_reservations_precede_competing_located_aliases(self):
         old=ChunkInput.document(split_markdown('# Disk\n## Child\n').chunks[-1])
         alias=ChunkInput.document(split_markdown('# Branch\n## Child\n').chunks[-1])
@@ -129,7 +120,6 @@ class IdentityTests(unittest.TestCase):
                 self.assertNotEqual(branch_decision.version_id,1)
                 self.assertEqual(branch_decision.pin_version,2)
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_archived_located_alias_restoration_keeps_that_exact_versions_pin(self):
         original=ChunkInput.document(split_markdown('# Old parent\n## Child\n').chunks[-1])
         restored=ChunkInput.document(split_markdown('# Branch parent\n## Child\n').chunks[-1])
@@ -144,7 +134,6 @@ class IdentityTests(unittest.TestCase):
         self.assertNotEqual(decision.pin_version,stored.current_version)
         self.assertTrue(decision.reuse_vectors)
 
-    @proves('MYC-1.17')
     def test_located_alias_assignment_is_maximum_and_independent_of_input_alias_and_storage_order(self):
         incoming=(document('X'),document('Y'))
         expected=None
@@ -170,7 +159,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(expected,{'X':('B','historical_name',21,'inherit_existing',21),
                                    'Y':('A','historical_name',11,'inherit_existing',11)})
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_located_aliases_are_exact_canonical_immutable_labels_and_do_not_duplicate_versions(self):
         old=document('Current')
         version=KnownVersion(1,old,('é','A','e\u0301','é','Ａ'))
@@ -187,7 +175,6 @@ class IdentityTests(unittest.TestCase):
         with self.assertRaises(EvidenceError):
             KnownChunk('one',1,(version,replace(version,historical_names=('different located name',))))
 
-    @proves('MYC-1.17')
     def test_historical_names_use_deterministic_maximum_assignment(self):
         X,Y=document('X','historical X\n'),document('Y','historical Y\n')
         A=known('A',document('OtherA','current A\n'),1,
@@ -199,7 +186,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(identities(first),identities(second))
         self.assertTrue(all(decision.matched_by=='historical_name' for decision in first.decisions))
 
-    @proves('MYC-1.17')
     def test_large_historical_name_conflict_chain_is_complete_without_recursive_matching(self):
         count=1100
         incoming=tuple(document(f'N{index:04}','historical body\n') for index in range(count+1))
@@ -223,7 +209,6 @@ class IdentityTests(unittest.TestCase):
                             for index,decision in enumerate(plan.decisions[:-1])))
         self.assertTrue(all(decision.matched_by=='historical_name' for decision in plan.decisions))
 
-    @proves('MYC-1.17')
     def test_equal_digest_bytes_do_not_mix_document_and_code_comparison_kinds(self):
         old=document('A','same')
         code=ChunkInput('Other','code',b'same',exact_comparison(b'same','code_text'))
@@ -232,7 +217,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(plan.decisions[0].reason,'new')
         self.assertEqual(plan.removed[0].chunk_id,'document')
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_exact_utf8_document_body_controls_are_preserved_and_compared(self):
         source=b'# Valid\nbody\x00text\n'
         chunk=ChunkInput.document(split_markdown(source).chunks[0])
@@ -245,7 +229,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(decision.pin_decision,'restore_existing')
         self.assertTrue(decision.reuse_vectors)
 
-    @proves('MYC-1.17')
     def test_duplicate_bodies_match_once_and_use_stable_ids_not_input_storage_order(self):
         stored=(known('B',document('OldB','body\n'),2),known('A',document('OldA','body\n'),1))
         incoming=(document('Y','body\n'),document('X','body\n'),document('Z','body\n'))
@@ -256,7 +239,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual([decision.incoming.name for decision in first.decisions],['Y','X','Z'])
         self.assertEqual(len({decision.chunk_id for decision in first.decisions if decision.chunk_id}),2)
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_document_heading_rename_keeps_identity_but_creates_exact_version_and_inherits_pin(self):
         old,current=document('Old','body\n'),document('New','body\n')
         decision=reconcile_file((current,),(known('chunk',old,17),)).decisions[0]
@@ -266,7 +248,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual((decision.pin_decision,decision.pin_version),('inherit_existing',17))
         self.assertFalse(decision.reuse_vectors)
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_whitespace_or_nfkc_equivalence_is_identity_comparison_not_exact_text_reuse(self):
         old=document('A','Café Ａ  body\n')
         current=document('A','Cafe\u0301 A\n\t body\n')
@@ -278,7 +259,6 @@ class IdentityTests(unittest.TestCase):
         self.assertFalse(decision.reuse_vectors)
         self.assertEqual(decision.incoming.source,current.source)
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_same_exact_text_with_changed_heading_path_metadata_reuses_only_its_own_version(self):
         old=ChunkInput.document(split_markdown('# Old parent\n## Child\nbody\n').chunks[-1])
         current=ChunkInput.document(split_markdown('# New parent\n## Child\nbody\n').chunks[-1])
@@ -290,7 +270,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual((decision.pin_decision,decision.pin_version),('restore_existing',9))
         self.assertTrue(decision.reuse_vectors)
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_restored_known_text_restores_that_versions_pin_even_when_current_body_differs(self):
         older,current=document('A','old pinned body\n'),document('A','new pinned body\n')
         chunk=known('A',older,10,retained=(KnownVersion(20,current),),current=20)
@@ -301,7 +280,6 @@ class IdentityTests(unittest.TestCase):
         self.assertTrue(decision.reuse_vectors)
         self.assertEqual(decision.reason,'edited')
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_historical_empty_heading_name_can_restore_known_version_without_content_match(self):
         original,current=document('Original'),document('Current')
         chunk=known('empty',original,10,retained=(KnownVersion(20,current),),current=20)
@@ -309,7 +287,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual((decision.chunk_id,decision.matched_by),('empty','historical_name'))
         self.assertEqual((decision.version_id,decision.pin_decision,decision.pin_version),(10,'restore_existing',10))
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_archive_body_similarity_does_not_override_substantive_current_name_edit(self):
         older,current=document('A','old   body\n'),document('A','current content\n')
         chunk=known('A',older,10,retained=(KnownVersion(20,current),),current=20)
@@ -321,7 +298,6 @@ class IdentityTests(unittest.TestCase):
                          ('create_new','requires_authorized_capture',None))
         self.assertFalse(decision.reuse_vectors)
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_historical_name_equivalence_inherits_the_explicitly_selected_retained_reference(self):
         older,current=document('Original','old   body\n'),document('Current','current content\n')
         chunk=known('A',older,10,retained=(KnownVersion(20,current),),current=20)
@@ -333,7 +309,6 @@ class IdentityTests(unittest.TestCase):
                          ('create_new','inherit_existing',10))
         self.assertFalse(decision.reuse_vectors)
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_substantive_content_edit_requests_authorization_and_never_carries_a_fresh_pin(self):
         old,current=document('A','old body\n'),document('A','new substantive body\n')
         decision=reconcile_file((current,),(known('A',old,8),)).decisions[0]
@@ -345,7 +320,6 @@ class IdentityTests(unittest.TestCase):
         new=reconcile_file((current,),()).decisions[0]
         self.assertEqual((new.reason,new.pin_decision),('new','requires_authorized_capture'))
 
-    @proves('MYC-1.17')
     def test_code_names_share_whole_file_name_reservation_and_empty_body_rule(self):
         old=ChunkInput.code(chunk_code('old.py','def work():\n    return 1\n')[0])
         edit=ChunkInput.code(chunk_code('old.py','def work():\n    return 2\n')[0])
@@ -356,7 +330,6 @@ class IdentityTests(unittest.TestCase):
         self.assertFalse(empty.has_body)
         self.assertIsNone(reconcile_file((introduced,),(known('empty',empty),)).decisions[0].chunk_id)
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_code_path_is_file_metadata_and_exact_text_can_reuse_a_known_version(self):
         old=ChunkInput.code(chunk_code('old.py','def work():\n    return 1\n')[0])
         moved=ChunkInput.code(chunk_code('new.py','def work():\n    return 1\n')[0])
@@ -366,7 +339,6 @@ class IdentityTests(unittest.TestCase):
         self.assertTrue(decision.reuse_vectors)
         # This supplied same-file identity does not infer a genuine file move.
 
-    @proves('MYC-1.18')
     def test_actual_code_declaration_rename_uses_owner_accepted_body_projection(self):
         old=ChunkInput.code(chunk_code('file.py','def original():\n    return 1\n')[0])
         renamed=ChunkInput.code(chunk_code('file.py','def renamed():\n    return 1\n')[0])
@@ -379,7 +351,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(decision.version_action,'create_new')
         self.assertFalse(decision.reuse_vectors)
 
-    @proves('MYC-1.18')
     def test_parser_rename_keys_cover_structural_languages_without_ignoring_other_bytes(self):
         examples = [
             ('file.py', '# old stays a comment\n@decorator\nasync def old(arg=1):\n    return "old"\n', 'old', 'renamed'),
@@ -410,7 +381,6 @@ class IdentityTests(unittest.TestCase):
                 edited=ChunkInput.code(next(c for c in chunk_code(path,changed) if c.symbol==new_name))
                 self.assertIsNone(reconcile_file((edited,),(known('stable',old),)).decisions[0].chunk_id)
 
-    @proves('MYC-1.18')
     def test_code_and_documents_reserve_every_name_before_body_rename_matches(self):
         for items in (
             (document('A','same\n'),document('B','same\n'),document('New','same\n'),document('A','edited\n')),
@@ -422,7 +392,6 @@ class IdentityTests(unittest.TestCase):
             plan=reconcile_file((new,edit),(known('A',a),known('B',b,2)))
             self.assertEqual([(d.chunk_id,d.reason) for d in plan.decisions],[('B','renamed'),('A','edited')])
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_code_whitespace_is_exact_comparison_and_does_not_inherit_document_policy(self):
         old=ChunkInput.code(chunk_code('file.py','def work():\n    return 1\n')[0])
         current=ChunkInput.code(chunk_code('file.py','def work():\n    return  1\n')[0])
@@ -431,7 +400,6 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(decision.pin_decision,'requires_authorized_capture')
         self.assertFalse(decision.reuse_vectors)
 
-    @proves('MYC-1.17', 'MYC-13.15')
     def test_removed_decisions_are_pure_file_absences_and_input_objects_are_immutable(self):
         chunks=(known('B',document('B'),2),known('A',document('A'),1))
         with no_network():
@@ -445,7 +413,6 @@ class IdentityTests(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             plan.removed=()
 
-    @proves('MYC-13.15')
     def test_parser_hash_or_comparison_revision_forgery_is_refused_without_repair(self):
         parsed=split_markdown('# A\nbody\n').chunks[0]
         for changed in (replace(parsed,content_hash='0'*64),replace(parsed,title_hash='0'*64),
@@ -461,7 +428,6 @@ class IdentityTests(unittest.TestCase):
             ChunkInput.document(replace(parsed,snapshot_hash='0'*64))
         self.assertEqual(error.exception.status,'snapshot_corrupt')
 
-    @proves('MYC-13.15')
     def test_forged_parser_text_without_exact_utf8_representation_is_a_sanitized_fault(self):
         parsed=split_markdown('# A\nbody\n').chunks[0]
         code=chunk_code('file.py','def run():\n    pass\n')[0]
@@ -472,7 +438,6 @@ class IdentityTests(unittest.TestCase):
             self.assertEqual(error.exception.status,'insufficient_evidence')
             self.assertEqual(str(error.exception),'insufficient_evidence')
 
-    @proves('MYC-13.15')
     def test_invalid_mutable_non_utf8_or_inconsistent_inputs_are_visible_faults(self):
         old=document('A','body\n')
         for values in ({'source':bytearray(old.source)},{'source':b'\xff'},{'body':'not present'},
@@ -484,7 +449,6 @@ class IdentityTests(unittest.TestCase):
         with self.assertRaises(EvidenceError):
             ChunkInput('code','code',b'bytes',invalid)
 
-    @proves('MYC-13.15')
     def test_duplicate_names_ids_versions_or_exact_text_and_invalid_current_pointer_are_refused(self):
         A=document('A','body\n')
         chunk=known('A',A)
@@ -500,8 +464,3 @@ class IdentityTests(unittest.TestCase):
             with self.subTest(failure=failure),self.assertRaises(EvidenceError):
                 failure()
 
-    @proves('MYC-13.15')
-    def test_unit_plans_do_not_qualify_native_identity_or_evidence_persistence(self):
-        registry=load_registry()
-        for requirement in ('MYC-1.19','MYC-1.31','MYC-1.34','MYC-2.26','MYC-16.2','MYC-16.6'):
-            self.assertEqual(registry[requirement].kind,'store')

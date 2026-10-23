@@ -19,7 +19,6 @@ from unittest.mock import Mock
 
 from mycel._cli import Invocation, parse
 from mycel._commands import help_reply
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._grep import (append_tail, parse_grep_args, render_tail,
                          resolve_tail_repository, semantic_query)
@@ -74,7 +73,6 @@ def payload():
 
 
 class GrepTailUnitTests(unittest.TestCase):
-    @proves('MYC-10.4', 'MYC-10.5', kind='unit')
     def test_explicit_attached_clustered_and_late_patterns_preserve_paths_conservatively(self):
         cases = [
             (('-rn', 'needle', 'src', 'other'), 'needle', ('src', 'other')),
@@ -101,7 +99,6 @@ class GrepTailUnitTests(unittest.TestCase):
             with self.subTest(arguments=arguments):
                 self.assertFalse(parse_grep_args(arguments).eligible)
 
-    @proves('MYC-10.5', 'MYC-10.6', kind='unit')
     def test_every_accepted_suppression_precedes_settings_and_optional_search(self):
         suppressed = [
             ('-c', 'needle'), ('-rc', 'needle'), ('--count', 'needle'),
@@ -128,7 +125,6 @@ class GrepTailUnitTests(unittest.TestCase):
             loader.assert_not_called()
             search.assert_not_called()
 
-    @proves('MYC-10.9', 'MYC-10.6', kind='unit')
     def test_dotted_identifiers_survive_and_other_signs_become_spaces_before_literal_minimum(self):
         self.assertEqual(semantic_query('session.renew'), 'session.renew')
         self.assertEqual(' '.join(semantic_query('foo[ab]+(bar)|baz$').split()), 'foo ab bar baz')
@@ -136,7 +132,6 @@ class GrepTailUnitTests(unittest.TestCase):
             self.assertIsNone(semantic_query(pattern))
         self.assertEqual(semantic_query('é雪a'), 'é雪a')
 
-    @proves('MYC-10.8', 'MYC-10.6', kind='unit')
     def test_first_path_actual_folders_longest_root_and_single_member_organization_boundary(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -177,7 +172,6 @@ class GrepTailUnitTests(unittest.TestCase):
             self.assertLessEqual(len(err.getvalue().splitlines()), 1)
             search.assert_not_called()
 
-    @proves('MYC-10.10', kind='unit')
     def test_delimited_ordered_tail_has_exact_places_lines_delivery_and_unique_marked_sections_without_scores(self):
         data = payload()
         rendered = render_tail(data)
@@ -197,7 +191,6 @@ class GrepTailUnitTests(unittest.TestCase):
         self.assertNotIn('.87654321', rendered)
         self.assertEqual(render_tail({**data, 'results': []}), '')
 
-    @proves('MYC-10.10', 'MYC-10.12', kind='unit')
     def test_document_identity_dedup_and_control_characters_cannot_forge_tail_lines(self):
         data = payload()
         original = document(identifier='stable', path='same.md', name='A')
@@ -218,7 +211,6 @@ class GrepTailUnitTests(unittest.TestCase):
         self.assertNotIn('\r', rendered)
         self.assertNotIn('\x1b', rendered)
 
-    @proves('MYC-10.11', 'MYC-10.12', 'MYC-10.6', kind='unit')
     def test_explicit_plain_silences_invalid_settings_while_selected_failure_is_one_private_line(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -311,7 +303,6 @@ class GrepTailUnitTests(unittest.TestCase):
             cwd=root / 'team' / 'alpha', env=env, input=input, capture_output=True, timeout=10)
         return result, json.loads(report.read_text())
 
-    @proves('MYC-10.1', 'MYC-10.3', 'MYC-10.11', kind='unit')
     def test_real_path_first_child_receives_literal_argv_binary_streams_and_unchanged_cwd_without_settings(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -327,7 +318,6 @@ class GrepTailUnitTests(unittest.TestCase):
                              {'argv': arguments, 'cwd': str(folders['alpha'].resolve()), 'private': []})
             self.assertEqual(report['pid'], report['pgid'])
 
-    @proves('MYC-10.1', 'MYC-10.2', 'MYC-10.3', 'MYC-10.6', kind='unit')
     def test_real_child_help_version_noargs_no_match_error_and_eligible_pipe_preserve_grep_prefix_and_status(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -360,7 +350,6 @@ class GrepTailUnitTests(unittest.TestCase):
             self.assertTrue(result.stdout.startswith(prefix))
             self.assertTrue(result.stdout[len(prefix):].startswith(b'\n' + '── mycel:'.encode()))
 
-    @proves('MYC-10.2', 'MYC-10.12', kind='unit')
     def test_real_child_status_survives_search_render_write_flush_and_tail_cancellation_faults(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -377,7 +366,6 @@ class GrepTailUnitTests(unittest.TestCase):
                 self.assertNotIn(b'private-sentinel', result.stdout + result.stderr)
                 self.assertNotIn(b'"error"', result.stdout + result.stderr)
 
-    @proves('MYC-10.2', 'MYC-10.3', kind='unit')
     def test_primary_cancellation_keeps_signal_status_and_reaps_its_real_child_group(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -414,7 +402,6 @@ class GrepTailUnitTests(unittest.TestCase):
                         pass
                 process.communicate(timeout=5)
 
-    @proves('MYC-10.14', kind='unit')
     def test_only_mycel_console_entry_and_raw_grep_command_are_exposed(self):
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / 'pyproject.toml').read_text())['project']

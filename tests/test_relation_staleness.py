@@ -4,7 +4,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._capture import capture_repository
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._evidence import CaptureLocation, EvidenceStore, capture_baseline
 from mycel._located_reconciliation import LocatedCaptureStore
@@ -24,7 +23,6 @@ except ImportError:
 
 
 class RelationStalenessUnitTests(unittest.TestCase):
-    @proves('MYC-2.17')
     def test_complete_relation_comparisons_cover_family_membership_and_whole_file_bytes(self):
         dependant = values.document('owner', 'answer.md', '# Answer\nClaim.\n')
         source = values.code('class Worker:\n    def first(self):\n        return 1\n')
@@ -60,7 +58,6 @@ class RelationStalenessUnitTests(unittest.TestCase):
             self.assertEqual(compare_dependency(baseline, current, selected.selection.place, 'related'),
                              (StaleReason('related_changed', selected.selection.place, 'related'),))
 
-    @proves('MYC-2.17')
     def test_changed_and_removed_relation_reasons_never_pass_through_authority_dependencies(self):
         nodes = tuple(StaleNode(str(number), number + 1,
             SourceAddress('fictional', 'artifact', str(number) + '.md', 'Heading')) for number in range(3))
@@ -118,7 +115,6 @@ class RelationStalenessStoreTests(unittest.TestCase):
             FROM public.mycel_relations r JOIN public.mycel_evidence_references e
             ON e.owner=r.baseline_owner AND e.ordinal=0 WHERE r.repository='downstream' ORDER BY r.id""").fetchall()
 
-    @proves('MYC-7.16', 'MYC-7.17', 'MYC-7.26', 'MYC-2.18', kind='store')
     def test_public_class_header_assertion_ignores_method_edits_and_detects_header_edits_without_repinning(self):
         code = self.base.code / 'worker.py'
         code.write_bytes(b'class Worker:\n    def first(self):\n        return 1\n')
@@ -154,7 +150,6 @@ class RelationStalenessStoreTests(unittest.TestCase):
             self.assertEqual(self.reasons(connection, 'downstream'), reasons)
             self.assertEqual(EvidenceStore(connection).read_baseline('downstream', reply['baselineManifest']), baseline)
 
-    @proves('MYC-7.14', 'MYC-7.16', 'MYC-7.17', 'MYC-7.26', 'MYC-2.18', kind='store')
     def test_declared_family_production_source_publication_detects_added_and_removed_members_directly(self):
         code = self.base.code / 'worker.py'
         code.write_bytes(b'class Worker:\n    def first(self):\n        return 1\n')
@@ -186,7 +181,6 @@ class RelationStalenessStoreTests(unittest.TestCase):
             self.assertEqual(self.pins(connection), pins)
             self.assertEqual(EvidenceStore(connection).read_baseline('downstream', pins[0][3]), baseline)
 
-    @proves('MYC-7.16', 'MYC-7.17', 'MYC-7.24', 'MYC-2.18', kind='store')
     def test_source_only_change_removal_and_restoration_are_direct_and_preserve_exact_pin(self):
         with self.base.connect() as connection:
             identifier, baseline_id = self.seed(connection)
@@ -218,7 +212,6 @@ class RelationStalenessStoreTests(unittest.TestCase):
             self.assertEqual(self.helper.relation(connection, identifier), original)
             self.assertEqual(EvidenceStore(connection).read_baseline('downstream', baseline_id), baseline)
 
-    @proves('MYC-7.16', 'MYC-7.26', 'MYC-7.17', 'MYC-2.18', kind='store')
     def test_family_member_changes_and_removal_compare_the_complete_pinned_selection(self):
         code = self.base.code / 'worker.py'
         code.write_bytes(b'class Worker:\n    def first(self):\n        return 1\n')
@@ -242,7 +235,6 @@ class RelationStalenessStoreTests(unittest.TestCase):
             self.assertEqual(self.helper.relation(connection, identifier), original)
             self.assertEqual(EvidenceStore(connection).read_baseline('downstream', baseline_id), baseline)
 
-    @proves('MYC-7.16', 'MYC-7.17', 'MYC-2.18', 'MYC-16.13', kind='store')
     def test_busy_relation_owner_and_corrupt_evidence_are_pending_only_at_the_direct_owner(self):
         with self.base.connect() as connection, self.base.connect() as peer:
             self.seed(connection)
@@ -271,7 +263,6 @@ class RelationStalenessStoreTests(unittest.TestCase):
             self.assertEqual({item['reason'] for item in result.counts['stalePending']}, {'snapshot_corrupt'})
             self.assertEqual(self.reasons(connection, 'tail'), [])
 
-    @proves('MYC-2.18', 'MYC-16.13', kind='store')
     def test_late_busy_relation_row_or_foreign_file_change_rolls_back_publication(self):
         with self.base.connect() as connection, self.base.connect() as peer:
             identifier, _ = self.seed(connection)
@@ -298,7 +289,6 @@ class RelationStalenessStoreTests(unittest.TestCase):
                     self.publish(connection)
             self.assertEqual(self.reasons(connection), [])
 
-    @proves('MYC-7.16', 'MYC-7.26', 'MYC-2.18', 'MYC-16.13', kind='store')
     def test_corrupt_pin_owner_and_reference_ordinals_remain_pending_and_late_owner_race_rolls_back(self):
         with self.base.connect() as connection, self.base.connect() as peer:
             identifier, _ = self.seed(connection)

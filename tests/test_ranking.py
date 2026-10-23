@@ -8,7 +8,6 @@ import random
 import tempfile
 import unittest
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._ranking import (DocumentCitation, RankingGraph, classify_route,
                             rank_repository)
@@ -71,7 +70,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
     def by_id(self, reply):
         return {entry.chunk.identifier: entry for entry in reply.results}
 
-    @proves("MYC-4.6")
     def test_route_shapes_and_plain_word_are_fixed(self):
         for query in ("payments", "renewSession", "auth/session.ts#renew", "a_b",
                       "áccent", "支払", "123", ".", "/", "-", "  payments\n"):
@@ -86,7 +84,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
                 classify_route(query)
             self.assertEqual(raised.exception.code, "invalid_input")
 
-    @proves("MYC-4.7")
     def test_equal_weight_rrf_one_based_ranks_and_ties(self):
         a, b, c, d = (chunk(name, cosine=0.8) for name in ("a", "b", "c", "d"))
         inputs = candidates((d, c, b, a, a),
@@ -104,7 +101,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
         self.assertAlmostEqual(self.rank("payments", only_a).results[0].score, 2 / 61, places=15)
         self.assertTrue(all(entry.via is None for entry in reply.results))
 
-    @proves("MYC-4.7", "MYC-4.8")
     def test_score_ties_use_every_canonical_field_and_never_insertion_order(self):
         a = chunk("a", cosine=0.7, path="same.py", root="artifact", name="first")
         b = chunk("b", cosine=0.7, path="same.py", name="first")
@@ -126,7 +122,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
             reply = self.rank("payments", inputs)
             self.assertEqual(tuple(item.chunk.identifier for item in reply.results), ("a", "d", "b", "c"))
 
-    @proves("MYC-4.8")
     def test_question_signed_cosines_and_wording_tail_tier(self):
         positive, zero, negative = (chunk(name, cosine=value)
             for name, value in (("positive", .4), ("zero", 0), ("negative", -.7)))
@@ -159,7 +154,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
         self.assertEqual(bridged.results[0].score_tier, "scored")
         self.assertEqual(bridged.results[0].via, negative_doc)
 
-    @proves("MYC-4.10")
     def test_once_only_bridge_agreement_before_weights(self):
         direct = chunk("direct", cosine=.8, path="test_direct.py")
         bridged = chunk("bridged", cosine=.7)
@@ -192,7 +186,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
         self.assertAlmostEqual(reply.results[0].score, .93, places=14)
         self.assertEqual(reply.results[0].via, best)
 
-    @proves("MYC-4.10")
     def test_bridge_full_pools_caps_and_citer_order_are_independent_of_arms(self):
         direct = tuple(chunk(f"direct-{i:02}", cosine=.99) for i in range(25))
         destinations = tuple(chunk(f"cited-{i}", cosine=.7 - i * .1) for i in range(4))
@@ -224,7 +217,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
         self.assertEqual(code_only[destinations[0].identifier].documented_in, (docs[0], docs[1]))
         self.assertTrue(all(entry.chunk.origin == "code" for entry in code_only.values()))
 
-    @proves("MYC-4.11")
     def test_all_entry_families_and_trigger_lifts(self):
         code = chunk("test", cosine=.8, path="__tests__/billing.test.ts", kind="module")
         generated = chunk("generated", cosine=.8, path="gql/types.ts", kind="file")
@@ -259,7 +251,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
         lifted = self.by_id(self.rank("tests", inputs))
         self.assertAlmostEqual(lifted["test"].score, 1 / 61 * .75)
 
-    @proves("MYC-4.11")
     def test_weighting_applies_to_bridge_and_wording_only_sources(self):
         test_bridge = chunk("test-bridge", cosine=.8, path="test_bridge.py", kind="module")
         generated_bridge = chunk("gen-bridge", cosine=.7, path="gql/types.ts", kind="style")
@@ -282,7 +273,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
         self.assertAlmostEqual(lexical_only["test-word"].score, 1 / 61 * .85 * .75)
         self.assertAlmostEqual(lexical_only["gen-word"].score, 1 / 62 * .75)
 
-    @proves("MYC-4.12")
     def test_repository_patterns_override_packaged_defaults(self):
         test = chunk("test", cosine=.8, path="conftest.py")
         custom = chunk("custom", cosine=.8, path="checks/billing.py")
@@ -302,7 +292,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
             self.rank("how do payments work", inputs)
         self.assertEqual(raised.exception.code, "invalid_input")
 
-    @proves("MYC-4.13")
     def test_mixed_document_margin_both_routes_arms_and_caps(self):
         code = chunk("code", cosine=.8, path="test_code.py", kind="module")
         below, boundary, above = (document(name, value) for name, value in
@@ -341,7 +330,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
                             wording=(Candidate(above, 100),))
         self.assertNotIn(above, [entry.chunk for entry in self.rank("payments", inputs).results])
 
-    @proves("MYC-4.13")
     def test_mixed_document_negative_no_code_and_no_vector_policies(self):
         code = chunk("code", cosine=-.8)
         boundary = document("boundary", -.77)
@@ -371,7 +359,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
         self.assertEqual([entry.chunk for entry in reply.results], [docs[0]])
         self.assertIsNone(reply.results[0].via)
 
-    @proves("MYC-4.7", "MYC-4.8")
     def test_input_validation_and_conflicting_snapshot_rows_refuse(self):
         code = chunk("code", cosine=.8)
         inputs = candidates((code,), meaning=(Candidate(code, .8),))

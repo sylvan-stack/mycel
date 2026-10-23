@@ -14,7 +14,6 @@ from uuid import UUID, uuid4
 import psycopg
 
 from mycel import _store as store
-from mycel._coverage import declaration, load_registry, proves
 from mycel._errors import MycelError
 
 
@@ -194,7 +193,6 @@ class CatalogueConnection:
 
 
 class StoreUnitTests(unittest.TestCase):
-    @proves("MYC-13.15")
     def test_search_projection_is_explicit_and_exact_utf8_bytes_remain_authoritative(self):
         for text in ('\0before\0雪\0', r'literal \000', '\x10\x01\xa0\0', '\uf00b\0\U000f000b', ''):
             raw = text.encode()
@@ -206,15 +204,8 @@ class StoreUnitTests(unittest.TestCase):
                 store.exact_text(invalid)
 
     def setUp(self):
-        # A scripted SQL seam must never be mistaken for native acceptance of
-        # SYL-103, even after this class gains another regression check.
-        owned = ("MYC-0.4", "MYC-0.8", "MYC-6.1", "MYC-6.3", "MYC-6.5", "MYC-6.6",
-                 "MYC-6.7", "MYC-6.8", "MYC-6.17", "MYC-6.19")
-        registry = load_registry()
-        self.assertTrue(all(registry[identifier].kind == "store" for identifier in owned))
-        proof = declaration(self)
-        self.assertEqual(proof.kind, "unit")
-        self.assertEqual(proof.requirements, ("MYC-13.15",))
+        # A scripted SQL seam must never be mistaken for native acceptance.
+        self.assertEqual(getattr(self, "check_kind", "unit"), "unit")
 
     def error(self, code, operation):
         with self.assertRaises(MycelError) as raised:
@@ -222,7 +213,6 @@ class StoreUnitTests(unittest.TestCase):
         self.assertEqual(raised.exception.code.value, code)
         return raised.exception
 
-    @proves("MYC-13.15")
     def test_foreign_and_v1_catalogue_refusals_never_read_or_write_their_tables(self):
         for relation in (("public", "kn_documents", "r"), ("public", "mycel_unknown", "r"),
                          ("another", "mycel_store", "r"), ("public", "owner_view", "v"),
@@ -238,7 +228,6 @@ class StoreUnitTests(unittest.TestCase):
                 if relation[1] != "mycel_unknown":
                     self.assertFalse(any("FROM public." in sql for sql, _ in connection.sql))
 
-    @proves("MYC-13.15")
     def test_metadata_lookalike_is_rejected_before_product_data_read(self):
         connection = CatalogueConnection()
         connection.relations = [("public", "mycel_store", "r")]
@@ -248,7 +237,6 @@ class StoreUnitTests(unittest.TestCase):
         self.assertFalse(any("FROM public." in sql for sql, _ in connection.sql))
         self.assertFalse(connection.mutations)
 
-    @proves("MYC-13.15")
     def test_empty_store_guard_and_diagnostics_have_no_implicit_bootstrap(self):
         connection = CatalogueConnection()
         inspection = store.inspect_store(connection)
@@ -258,7 +246,6 @@ class StoreUnitTests(unittest.TestCase):
         self.assertFalse(connection.mutations)
         self.assertIn("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY", [sql for sql, _ in connection.sql])
 
-    @proves("MYC-13.15")
     def test_explicit_initialization_creates_both_indexes_and_only_metadata_row(self):
         for dimensions in (256, 512, 1024, 2048):
             with self.subTest(dimensions=dimensions):
@@ -280,7 +267,6 @@ class StoreUnitTests(unittest.TestCase):
                 self.assertEqual(connection.locks, 0)
                 self.assertEqual(result.reply("configured-password-free-address")["format"], {"before": None, "after": store.STORE_FORMAT})
 
-    @proves("MYC-13.15")
     def test_same_format_and_dimensions_are_true_noop_and_keep_generation(self):
         connection = CatalogueConnection(current=True)
         before = deepcopy(connection.metadata)
@@ -292,7 +278,6 @@ class StoreUnitTests(unittest.TestCase):
         self.assertTrue(any("pg_try_advisory_lock_shared" in sql for sql, _ in connection.sql))
         self.assertFalse(any("pg_try_advisory_lock(" in sql for sql, _ in connection.sql))
 
-    @proves("MYC-13.15")
     def test_missing_extensions_are_named_before_any_ddl_and_transaction_rolls_back(self):
         for missing in ("pg_search", "vector"):
             connection = CatalogueConnection()
@@ -304,7 +289,6 @@ class StoreUnitTests(unittest.TestCase):
             self.assertEqual(connection.locks, 0)
             self.assertIn("rollback", connection.transactions)
 
-    @proves("MYC-13.15")
     def test_ddl_failure_rolls_back_extensions_schema_and_metadata_without_raw_error(self):
         for stop in ("CREATE TABLE public.mycel_chunks", f"CREATE INDEX {store.BM25_INDEX}",
                      "INSERT INTO public.mycel_store"):
@@ -317,7 +301,6 @@ class StoreUnitTests(unittest.TestCase):
             self.assertEqual(connection.extensions, {"plpgsql"})
             self.assertEqual(connection.locks, 0)
 
-    @proves("MYC-13.15")
     def test_newer_format_is_reported_and_refused_without_mutation(self):
         connection = CatalogueConnection(current=True)
         singleton, _, dimensions, generation = connection.metadata[0]
@@ -331,7 +314,6 @@ class StoreUnitTests(unittest.TestCase):
             self.assertIn(str(store.STORE_FORMAT), str(error))
         self.assertFalse(connection.mutations)
 
-    @proves("MYC-13.15")
     def test_newer_format_with_unrecognized_future_relation_is_still_store_format(self):
         connection = CatalogueConnection(current=True)
         singleton, _, dimensions, generation = connection.metadata[0]
@@ -342,7 +324,6 @@ class StoreUnitTests(unittest.TestCase):
         self.assertFalse(connection.mutations)
         self.assertFalse(any("FROM public.mycel_future_feature" in sql for sql, _ in connection.sql))
 
-    @proves("MYC-13.15")
     def test_noop_init_refuses_exclusive_structure_lock_but_accepts_other_shared_work(self):
         connection = CatalogueConnection(current=True)
         connection.shared_busy = True
@@ -353,7 +334,6 @@ class StoreUnitTests(unittest.TestCase):
         self.assertFalse(store.initialize_store(connection, dimensions=1024).changed)
         self.assertFalse(connection.mutations)
 
-    @proves("MYC-13.15")
     def test_damaged_metadata_missing_columns_constraints_and_indexes_refuse_noop(self):
         mutations = (
             lambda c: c.metadata.clear(),
@@ -376,7 +356,6 @@ class StoreUnitTests(unittest.TestCase):
                 self.error("store_format", lambda: store.initialize_store(connection, dimensions=1024))
                 self.assertFalse(connection.mutations)
 
-    @proves("MYC-13.15")
     def test_native_metadata_read_failure_is_sanitized_format_fault(self):
         connection = CatalogueConnection(current=True)
         connection.failure = lambda sql: sql.startswith("SELECT singleton, format")
@@ -384,7 +363,6 @@ class StoreUnitTests(unittest.TestCase):
         self.assertNotIn("private", str(error))
         self.assertFalse(connection.mutations)
 
-    @proves("MYC-13.15")
     def test_dimension_change_preserves_generation_text_parts_failures_and_evidence(self):
         connection = CatalogueConnection(current=True)
         connection.vector_count = 7
@@ -402,7 +380,6 @@ class StoreUnitTests(unittest.TestCase):
                          ["DELETE FROM public.mycel_vectors", "DELETE FROM public.mycel_embedding_receipts"])
         self.assertEqual(connection.locks, 0)
 
-    @proves("MYC-13.15")
     def test_failed_dimension_change_rolls_back_vectors_column_and_metadata(self):
         connection = CatalogueConnection(current=True)
         connection.vector_count = 3
@@ -415,7 +392,6 @@ class StoreUnitTests(unittest.TestCase):
         self.assertEqual((connection.columns, connection.indexes, connection.metadata), before)
         self.assertEqual(connection.locks, 0)
 
-    @proves("MYC-13.15")
     def test_embed_dimension_guard_refuses_but_retrieval_reports_for_wording_fallback(self):
         connection = CatalogueConnection(current=True)
         self.error("store_format", lambda: store.require_store(connection, dimensions=512, operation="embed"))
@@ -423,14 +399,12 @@ class StoreUnitTests(unittest.TestCase):
         self.assertEqual(inspection.dimensions, 1024)
         self.assertFalse(connection.mutations)
 
-    @proves("MYC-13.15")
     def test_invalid_dimension_is_rejected_before_catalogue_or_lock(self):
         for dimensions in (True, 0, 1, 4096, "1024", float("nan")):
             connection = CatalogueConnection()
             self.error("settings", lambda: store.initialize_store(connection, dimensions=dimensions))
             self.assertFalse(connection.sql)
 
-    @proves("MYC-13.15")
     def test_structure_lock_never_waits_and_shared_guard_lasts_through_operation(self):
         connection = CatalogueConnection(current=True)
         with store.checked_store(connection) as inspection:
@@ -448,7 +422,6 @@ class StoreUnitTests(unittest.TestCase):
         with store.checked_store(connection):
             pass
 
-    @proves("MYC-13.15")
     def test_explicit_forward_migrations_are_consecutive_atomic_and_preserve_generation(self):
         connection = CatalogueConnection(current=True)
         generation = str(connection.metadata[0][3])
@@ -467,7 +440,6 @@ class StoreUnitTests(unittest.TestCase):
         self.assertEqual(str(connection.metadata[0][3]), generation)
         self.assertEqual(connection.transactions, ["begin", "commit", "begin", "commit"])
 
-    @proves("MYC-13.15")
     def test_missing_migration_path_refuses_before_any_partial_change(self):
         connection = CatalogueConnection(current=True)
         generation = str(connection.metadata[0][3])
@@ -478,7 +450,6 @@ class StoreUnitTests(unittest.TestCase):
         self.assertEqual(store.STORE_FORMAT, 3)
         self.assertEqual(set(store.MIGRATIONS), {1, 2})
 
-    @proves("MYC-13.15")
     def test_failed_migration_rolls_back_only_failed_step_and_generation_change_refuses(self):
         for change_generation in (False, True):
             connection = CatalogueConnection(current=True)
@@ -501,7 +472,6 @@ class StoreUnitTests(unittest.TestCase):
             self.assertNotIn("second", connection.other_rows)
             self.assertEqual(connection.transactions, ["begin", "commit", "begin", "rollback"])
 
-    @proves("MYC-13.15")
     def test_search_index_deparse_normalization_accepts_only_equivalent_expressions(self):
         connection = CatalogueConnection(current=True)
         row = connection.indexes[store.BM25_INDEX]
@@ -512,7 +482,6 @@ class StoreUnitTests(unittest.TestCase):
         connection.indexes[store.VECTOR_INDEX] = (*row[:7], row[7].replace("vector_cosine_ops", "vector_l2_ops"), row[8])
         self.assertEqual(store.inspect_store(connection).state, "damaged")
 
-    @proves("MYC-13.15")
     def test_foreign_extension_is_rejected_without_reading_product_rows(self):
         connection = CatalogueConnection(current=True)
         connection.extensions.add("other_product")

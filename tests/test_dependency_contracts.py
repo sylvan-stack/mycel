@@ -7,7 +7,6 @@ from hashlib import sha256
 import unittest
 
 from mycel._capture import LocationId
-from mycel._coverage import proves
 from mycel._dependency_application import DependencyApplicationStore
 from mycel._dependency_inputs import DependencyCaptureInputs
 from mycel._evidence import EvidenceStore
@@ -48,7 +47,6 @@ class DependencyContractStoreTests(unittest.TestCase):
             inputs.verify()
         return reply
 
-    @proves('MYC-2.9', 'MYC-2.19', 'MYC-16.5', 'MYC-16.13', kind='store')
     def test_family_membership_and_complete_file_changes_keep_pin_until_declaration_removal(self):
         code = self.base.code / 'policy.py'
         original = b'class Policy:\n    def apply(self):\n        return 1\n'
@@ -87,7 +85,6 @@ class DependencyContractStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_evidence_owners '
                 'WHERE id=ANY(%s)', ([family[6], whole[6]],)).fetchone(), (0,))
 
-    @proves('MYC-2.12', kind='store')
     def test_each_publication_recomputes_file_role_and_document_code_defaults(self):
         self.fixture.answer.write_bytes(b'# Answer\nUnchanged dependant.\n')
         (self.base.code / 'plain.py').write_bytes(b'def plain():\n    return 1\n')
@@ -112,7 +109,6 @@ class DependencyContractStoreTests(unittest.TestCase):
                     JOIN public.mycel_file_versions v ON v.id=l.file_version
                     JOIN public.mycel_files f ON f.id=v.file_id WHERE f.repository='downstream'""").fetchone()[0], old_version)
 
-    @proves('MYC-2.19', 'MYC-16.13', kind='store')
     def test_source_sibling_frontmatter_observations_keep_pin_and_authorized_confirmation_answers_change(self):
         self.fixture.answer.write_bytes(self.fixture.answer.read_bytes() + b'\n## Other\nOriginal sibling.\n')
         with self.base.connect() as connection:
@@ -137,7 +133,6 @@ class DependencyContractStoreTests(unittest.TestCase):
             self.assertEqual(renewed[5]['reasons'], [])
             self.assertEqual(confirmed.plan.decisions[0].reasons, ())
 
-    @proves('MYC-2.19', 'MYC-16.13', kind='store')
     def test_substantive_dependant_edit_pins_current_source_and_answers_direct_change_in_same_commit(self):
         with self.base.connect() as connection:
             before = self.fixture.prepare(connection)
@@ -151,7 +146,6 @@ class DependencyContractStoreTests(unittest.TestCase):
             self.assertNotEqual(self.baseline(connection, current[0])['pinnedHash'], old_hash)
             self.assertEqual(current[0][5]['reasons'], [])
 
-    @proves('MYC-7.24', 'MYC-2.24', 'MYC-16.7', 'MYC-16.13', kind='store')
     def test_guarded_confirmation_withdraws_deleted_baseline_but_retains_declared_fault(self):
         with self.base.connect() as connection:
             before = self.fixture.prepare(connection)
@@ -172,7 +166,6 @@ class DependencyContractStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_evidence_owners WHERE id=%s',
                 (before[0][6],)).fetchone(), (0,))
 
-    @proves('MYC-2.19', 'MYC-16.13', kind='store')
     def test_unresolved_declared_selection_refuses_confirmation_before_any_repin_or_withdrawal(self):
         with self.base.connect() as connection:
             original = self.fixture.prepare(connection)
@@ -197,7 +190,6 @@ class DependencyContractStoreTests(unittest.TestCase):
             self.assertEqual(self.fixture.state(connection), before)
             self.assertIsNotNone(next(row for row in self.fixture.dependencies(connection) if row[6] is not None)[6])
 
-    @proves('MYC-2.22', 'MYC-2.19', 'MYC-16.5', 'MYC-16.7', kind='store')
     def test_actual_branch_switch_restores_disk_pin_and_stash_keeps_own_exact_baseline(self):
         guide = self.base.artifact / 'guide.md'
         guide.write_bytes(b'---\nsources: ["fixture:@artifact/source.md#Source"]\n---\n# Guide\nMain dependant.\n')

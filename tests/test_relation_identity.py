@@ -2,7 +2,6 @@
 import json
 import unittest
 
-from mycel._coverage import proves
 from mycel._capture import LocationId
 from mycel._dependency_inputs import DependencyCaptureInputs
 from mycel._evidence import EvidenceStore
@@ -63,7 +62,6 @@ class RelationIdentityStoreTests(unittest.TestCase):
         self.base.settings = load_settings(path=self.base.config, home=self.base.base)
         return path
 
-    @proves('MYC-7.14', 'MYC-7.15', 'MYC-7.26', kind='store')
     def test_normalized_body_heading_rename_substantive_edit_and_known_restore_keep_version_pins(self):
         original_bytes = self.declared(b'fixture:@artifact/source.md\nfixture:@code/policy.py#Policy')
         with self.base.connect() as connection:
@@ -110,7 +108,6 @@ class RelationIdentityStoreTests(unittest.TestCase):
             self.assertEqual({key: row for key, row in self.current(connection).items() if key[0] == 'branch'}, branch)
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_edges').fetchone(), (0,))
 
-    @proves('MYC-7.14', 'MYC-7.26', kind='store')
     def test_shared_exact_dependant_version_pins_separate_disk_and_branch_source_bytes(self):
         self.declared(b'fixture:@artifact/source.md')
         disk_source = b'# Source\nDifferent disk source.\n'
@@ -136,7 +133,6 @@ class RelationIdentityStoreTests(unittest.TestCase):
             self.assertEqual(now[4:6], disk[4:6])
             self.assertEqual(now[3]['reasons'], ['related_changed'])
 
-    @proves('MYC-7.14', 'MYC-7.17', kind='store')
     def test_exact_nul_and_all_declared_faults_report_readonly_without_dependency_authority(self):
         self.foreign(enabled=False)
         self.declared(b'bad\0ref\nforeign:source.md#Source\nunknown:source.md#Source\n'
@@ -166,7 +162,6 @@ class RelationIdentityStoreTests(unittest.TestCase):
             self.assertEqual(self.fixture.role(connection), 'authored')
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_edges').fetchone(), (0,))
 
-    @proves('MYC-7.14', 'MYC-7.17', 'MYC-7.26', kind='store')
     def test_disabled_repository_keeps_exact_relation_baseline_and_reenable_reuses_it(self):
         self.foreign(enabled=True)
         self.declared(b'foreign:@artifact/source.md#Source')
@@ -199,7 +194,6 @@ class RelationIdentityStoreTests(unittest.TestCase):
             self.assertEqual(reenabled.counts['relationPinsCaptured'], 0)
             self.assertEqual(self.fixture.role(connection), 'authored')
 
-    @proves('MYC-7.14', 'MYC-7.16', 'MYC-7.26', kind='store')
     def test_missing_asserted_source_withdraws_on_edit_and_confirmation_preserving_history_and_sibling(self):
         original_bytes = self.declared(b'fixture:@artifact/source.md#Source')
         self.base.git('branch', 'history-first')

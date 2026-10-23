@@ -11,7 +11,6 @@ from mycel import _activity as activity
 from mycel import _locks as locks
 from mycel._activity_reader import activity_from_store
 from mycel._cli import parse, run
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._source_refs import SourceAddress
 
@@ -34,7 +33,6 @@ class _RecordingConnection:
 
 
 class ActivityHistoryUnitTests(unittest.TestCase):
-    @proves('MYC-0.6', 'MYC-0.7', kind='unit')
     def test_count_kind_and_exclusive_detail_filters_refuse_before_any_store_access(self):
         invalid = (('--k', '0'), ('--k', '-1'), ('--k', '1.5'), ('--k', 'many'),
             ('--kind', 'search'), ('--entry', '01'), ('--entry', '0'),
@@ -65,7 +63,6 @@ class ActivityHistoryStoreTests(unittest.TestCase):
     def ids(reply):
         return [int(entry['id']) for entry in reply['entries']]
 
-    @proves('MYC-12.11', 'MYC-12.15', kind='store')
     def test_default_cap_all_kinds_and_repository_cwd_selection_use_exact_start_time_id_order(self):
         with self.history.connect() as connection:
             self.history.repositories(connection, 'fixture', 'other', 'disabled', 'orphan', 'stored-empty')
@@ -109,7 +106,6 @@ class ActivityHistoryStoreTests(unittest.TestCase):
                                                'mycel_activity_classifications')))
             self.assertEqual(self.history.state(connection, sequences=True), before)
 
-    @proves('MYC-12.12', 'MYC-12.15', kind='store')
     def test_complete_entry_details_keep_root_collisions_names_classification_references_and_build_identity(self):
         with self.history.connect() as connection:
             self.history.repositories(connection, 'fixture')
@@ -150,7 +146,6 @@ class ActivityHistoryStoreTests(unittest.TestCase):
                 'name': ref.dependant.name, 'address': ref.dependant.address}, 'outcome': ref.outcome} for ref in references])
             self.assertEqual(self.history.state(connection, sequences=True), before)
 
-    @proves('MYC-12.11', 'MYC-12.12', 'MYC-12.15', kind='store')
     def test_running_unfinished_and_over_limit_reads_never_prune_or_write_tables_or_sequences(self):
         with self.history.connect() as connection, self.history.connect() as observer:
             self.history.repositories(connection, 'fixture')
@@ -182,7 +177,6 @@ class ActivityHistoryStoreTests(unittest.TestCase):
             self.assertEqual(len(self.history.ids(observer, 'fixture')), 1003)
             self.assertEqual(self.history.state(observer, sequences=True), before)
 
-    @proves('MYC-12.15', kind='store')
     def test_empty_lists_succeed_unknown_or_pruned_entries_refuse_and_invalid_filters_leave_no_writes(self):
         with self.history.connect() as connection:
             self.history.repositories(connection, 'fixture', 'empty')
@@ -209,7 +203,6 @@ class ActivityHistoryStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, code)
             self.assertEqual(self.history.state(connection, sequences=True), before)
 
-    @proves('MYC-12.11', 'MYC-12.12', 'MYC-12.15', kind='store')
     def test_public_cli_lists_all_or_named_and_returns_one_detail_without_mutation(self):
         with self.history.connect() as connection:
             self.history.repositories(connection, 'fixture', 'other')

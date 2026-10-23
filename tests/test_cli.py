@@ -9,7 +9,6 @@ import tempfile
 import unittest
 
 from mycel._cli import Invocation, Result, StreamedResult, parse, repository_result, run
-from mycel._coverage import proves
 from mycel._errors import ErrorCode, MycelError
 
 
@@ -17,7 +16,6 @@ SOURCE = Path(__file__).resolve().parents[1] / "src"
 
 
 class CliTests(unittest.TestCase):
-    @proves("MYC-0.1", "MYC-0.2", "MYC-0.3", "MYC-0.6")
     def test_clean_environment_finite_help_and_refusal(self):
         with tempfile.TemporaryDirectory() as folder:
             env = {"HOME": folder, "PATH": os.defpath, "PYTHONPATH": str(SOURCE),
@@ -32,7 +30,6 @@ class CliTests(unittest.TestCase):
                     self.assertEqual(reply["error"]["code"], "settings")
             self.assertEqual(list(Path(folder).iterdir()), [])
 
-    @proves("MYC-0.6", "MYC-0.7")
     def test_invalid_arguments_have_one_closed_error(self):
         for args in (["unknown"], ["search", "--repo"], ["search", "--api-key", "secret-sentinel"],
                      ["search", "--rep", "demo"], ["ingest", "--repo", "demo", "--all"],
@@ -44,7 +41,6 @@ class CliTests(unittest.TestCase):
             self.assertEqual(reply["error"]["code"], "invalid_input")
             self.assertNotIn("secret-sentinel", out.getvalue() + err.getvalue())
 
-    @proves("MYC-0.6", "MYC-0.7")
     def test_errors_are_closed_and_internal_details_are_private(self):
         with self.assertRaises(ValueError):
             MycelError("not_found", "unknown")
@@ -61,7 +57,6 @@ class CliTests(unittest.TestCase):
         self.assertEqual(json.loads(out.getvalue())["error"]["code"], "internal")
         self.assertNotIn("credential-sentinel", out.getvalue() + err.getvalue())
 
-    @proves("MYC-0.6", "MYC-0.7")
     def test_caller_signals_produce_status_two(self):
         script = """import sys,time\nfrom mycel._cli import run\ndef wait(invocation):\n print('ready',file=sys.stderr,flush=True)\n time.sleep(100)\nfrom mycel._cli import _stop\nimport signal\nsignal.signal(signal.SIGTERM,_stop)\nsys.exit(run(['info'],handlers={'info':wait}))\n"""
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -79,7 +74,6 @@ class CliTests(unittest.TestCase):
                     process.kill()
                     process.communicate()
 
-    @proves("MYC-0.6")
     def test_repository_selection_is_literal_and_repeatable(self):
         invocation = parse(["embed", "--repo", "Cellar", "--repo", "Other space"])
         self.assertEqual(invocation.repositories, ("Cellar", "Other space"))
@@ -88,7 +82,6 @@ class CliTests(unittest.TestCase):
         # Scope expansion is delegated to the settings feature; the CLI
         # retains the unresolved cwd request instead of selecting a default.
 
-    @proves("MYC-0.6")
     def test_partial_repository_results_are_preserved(self):
         entries = [{"repository": "one", "result": {"done": True}},
                    {"repository": "two", "error": {"code": "busy", "message": "Busy."}}]
@@ -102,7 +95,6 @@ class CliTests(unittest.TestCase):
         self.assertEqual(repository_result(entries[1:] + refused).value["repositories"], entries[1:] + refused)
         self.assertEqual(repository_result(entries[1:] + refused).status, 1)
 
-    @proves("MYC-0.6", "MYC-0.7")
     def test_invalid_reply_cannot_emit_partial_json(self):
         out, err = io.StringIO(), io.StringIO()
         status = run(["info"], handlers={"info": lambda _: Result({"invalid": float("nan")})},
@@ -110,7 +102,6 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(json.loads(out.getvalue())["error"]["code"], "internal")
 
-    @proves("MYC-0.6", "MYC-0.7")
     def test_json_is_portable_to_ascii_output_and_closed_receiver(self):
         buffer = io.BytesIO()
         out = io.TextIOWrapper(buffer, encoding="ascii")
@@ -124,7 +115,6 @@ class CliTests(unittest.TestCase):
         self.assertEqual(run(["--help"], stdout=ClosedReceiver(), stderr=diagnostics), 1)
         self.assertIn("could not be written", diagnostics.getvalue())
 
-    @proves("MYC-0.6")
     def test_grep_boundary_preserves_arguments_and_stream_status(self):
         args = ("--help", "--repo", "literal", "-v", "a2", "--", "pattern")
         self.assertEqual(parse(["grep", *args]), Invocation("grep", arguments=args, raw=True))
@@ -138,7 +128,6 @@ class CliTests(unittest.TestCase):
         self.assertEqual(run(["info"], handlers={"info": lambda _: StreamedResult(0)}, stdout=out), 1)
         self.assertEqual(json.loads(out.getvalue())["error"]["code"], "internal")
 
-    @proves("MYC-0.6")
     def test_build_selection_is_explicitly_unavailable(self):
         out = io.StringIO()
         self.assertEqual(run(["-v", "a3", "search", "query"], stdout=out), 1)

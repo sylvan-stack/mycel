@@ -6,7 +6,6 @@ from unittest.mock import Mock, patch
 
 from mycel._classification_local import reconcile_freshness, reconcile_local
 from mycel._cli import Invocation, classification_store, parse
-from mycel._coverage import proves
 from mycel._deadline import deadline_guard
 from mycel._errors import MycelError
 from mycel._freshness import Deadline, FreshnessResult, FreshnessScope, RepositoryStatus
@@ -30,7 +29,6 @@ class LocalClassificationTests(unittest.TestCase):
             stack.enter_context(patch(target, side_effect=AssertionError('Local reconciliation launched work.')))
         return stack
 
-    @proves('MYC-14.16')
     def test_local_pending_inputs_call_no_model_credential_or_child_and_never_apply(self):
         prepared = SimpleNamespace(decision=object(), status='pending_debounce')
         with self.no_models(), patch('mycel._classification_local.DriftStore') as drifts, \
@@ -44,7 +42,6 @@ class LocalClassificationTests(unittest.TestCase):
             stores.return_value.apply.assert_not_called()
             stores.return_value.stage.assert_not_called()
 
-    @proves('MYC-14.16')
     def test_existing_deadline_prevents_store_work_without_creating_another_allowance(self):
         clock = lambda: 20.0
         with patch('mycel._classification_local.DriftStore') as drifts, \
@@ -59,7 +56,6 @@ class LocalClassificationTests(unittest.TestCase):
             drifts.assert_not_called()
             stores.assert_not_called()
 
-    @proves('MYC-14.16')
     def test_budget_expiry_retains_checked_prefix_and_does_not_prepare_another_pair(self):
         clock = [0.0]
         prepared = SimpleNamespace(decision=object(), status='pending_jev')
@@ -79,7 +75,6 @@ class LocalClassificationTests(unittest.TestCase):
             self.assertEqual(stores.return_value.prepare.call_count, 1)
             stores.return_value.apply.assert_not_called()
 
-    @proves('MYC-14.16')
     def test_unchecked_upstreams_do_no_reconciliation_and_preserve_incomplete_freshness(self):
         adapter = SimpleNamespace(connection=object(), settings=object(), activity=None, counts={})
         scope = FreshnessScope(('fixture',))
@@ -93,7 +88,6 @@ class LocalClassificationTests(unittest.TestCase):
                          {'checked': False, 'complete': False, 'reason': 'sources_unchecked'})
         self.assertFalse(returned.complete_for('fixture'))
 
-    @proves('MYC-14.16')
     def test_guarded_cache_application_keeps_obsolete_effect_out_of_reused_count(self):
         prepared = SimpleNamespace(decision=object(), status='pending_jev',
                                    bundle=SimpleNamespace(evidence_hash='bundle'))
@@ -110,7 +104,6 @@ class LocalClassificationTests(unittest.TestCase):
             self.assertTrue(callable(stores.return_value.apply.call_args.kwargs['_audit']))
             stores.return_value.stage.assert_not_called()
 
-    @proves('MYC-14.16')
     def test_current_complete_cache_is_read_without_reapplying_a_judgement(self):
         prepared = SimpleNamespace(decision=object(), status='pending_jev', input_hash='exact-input')
         drift = work('first')
@@ -126,7 +119,6 @@ class LocalClassificationTests(unittest.TestCase):
             stores.return_value.apply.assert_not_called()
             stores.return_value.stage.assert_not_called()
 
-    @proves('MYC-14.16')
     def test_search_and_read_share_original_deadline_and_skipped_reads_do_not_reconcile(self):
         from mycel._search_store import _run_search_freshness
         from mycel._read_store import _run_read_freshness
@@ -156,7 +148,6 @@ class LocalClassificationTests(unittest.TestCase):
 
 
 class ClassificationCliBoundaryTests(unittest.TestCase):
-    @proves('MYC-0.6')
     def test_final_audit_failure_and_later_interrupt_preserve_committed_repository_replies(self):
         from mycel._classify import handle_classify
         settings = SimpleNamespace(values={'drifts': {'seconds': 30}})
@@ -183,7 +174,6 @@ class ClassificationCliBoundaryTests(unittest.TestCase):
         self.assertEqual(entries['first']['result']['completed'], 2)
         self.assertEqual(entries['second']['error']['code'], 'refused')
 
-    @proves('MYC-14.21', 'MYC-5.14')
     def test_dry_run_reaches_the_store_as_every_command_and_takes_no_model_credential(self):
         from mycel._credentials import Secret
         settings = SimpleNamespace(values={'store': {'address': 'postgresql://fixture@127.0.0.1/test'},
@@ -218,7 +208,6 @@ class ClassificationCliBoundaryTests(unittest.TestCase):
                 self.assertEqual(purposes, ['store'] if challenged else [])
                 child.assert_not_called()
 
-    @proves('MYC-14.21')
     def test_classify_and_drift_options_are_preserved_and_invalid_caps_stop_before_work(self):
         invocation = parse(['classify', '--all', '--k', '3', '--dry-run'])
         self.assertEqual((invocation.all_repositories, invocation.arguments), (True, ('--k', '3', '--dry-run')))
@@ -233,7 +222,6 @@ class ClassificationCliBoundaryTests(unittest.TestCase):
 class LocalClassificationStoreTests(ClassificationStoreFixture):
     check_kind = "store"
 
-    @proves('MYC-14.18', kind='store')
     def test_local_reads_preserve_waiting_review_errors_and_refuse_malformed_retained_metadata(self):
         from copy import deepcopy
         from psycopg.types.json import Jsonb

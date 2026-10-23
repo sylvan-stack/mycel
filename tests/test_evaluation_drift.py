@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 from mycel._classification_payload import DecisionPayload, EvidenceBundle, ReviewCommandIdentity
 from mycel._classification_runner import ClassifyDependencies, run_classification
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._evaluation import DriftCase, EvaluationSet
 from mycel import _evaluation_drift as evaluation
@@ -59,7 +58,6 @@ class DriftEvaluationTests(unittest.TestCase):
                       'socket.socket.connect_ex'):
             blocked.enter_context(patch(entry, side_effect=AssertionError('non-live evaluation must not use external services')))
 
-    @proves('MYC-0.10')
     def test_all_cases_run_in_bounded_batches_without_provider_identity_or_measurement_claims(self):
         with tempfile.TemporaryDirectory() as temporary:
             loaded = settings(Path(temporary))
@@ -142,7 +140,6 @@ class DriftEvaluationTests(unittest.TestCase):
             self.assertTrue(all(value == 0 for value in stores[0].leases.values()))
             self.assertEqual(parallel.file.read_bytes(), parallel_before)
 
-    @proves('MYC-0.10')
     def test_expected_labels_identifiers_and_coverage_annotations_never_change_decision_or_routing(self):
         with tempfile.TemporaryDirectory() as temporary:
             loaded = settings(Path(temporary))
@@ -158,7 +155,6 @@ class DriftEvaluationTests(unittest.TestCase):
                                                        repository='fixture', build='development')
             self.assertEqual((duplicate['cases'], duplicate['distinctCases']), (2, 1))
 
-    @proves('MYC-0.10')
     def test_complete_canonical_snapshots_context_and_tombstone_survive_real_guard_reconstruction(self):
         with tempfile.TemporaryDirectory() as temporary:
             loaded = settings(Path(temporary))
@@ -197,7 +193,6 @@ class DriftEvaluationTests(unittest.TestCase):
                              {'allowed': False, 'reason': 'snapshot_corrupt'})
             self.assertTrue(all(row['correct'] for row in report['results']))
 
-    @proves('MYC-0.10')
     def test_obsolete_stage_never_calls_adapters_or_applies_and_releases_every_lease(self):
         class Obsolete(evaluation.FixtureStore):
             @contextmanager
@@ -213,7 +208,6 @@ class DriftEvaluationTests(unittest.TestCase):
             self.assertEqual(report['results'][0]['actual'], 'unresolved')
             self.assertTrue(report['results'][0]['lifecycle']['obsolete'])
 
-    @proves('MYC-0.10')
     def test_cancellation_retains_every_unprocessed_case_and_never_qualifies(self):
         cancelled = threading.Event()
         class Stop(evaluation._Jev):
@@ -276,7 +270,6 @@ class DriftEvaluationTests(unittest.TestCase):
             finally:
                 signal.signal(signal.SIGINT, original_handler)
 
-    @proves('MYC-0.10')
     def test_live_requires_separate_explicit_pipeline_before_standin_or_credentials(self):
         with tempfile.TemporaryDirectory() as temporary:
             loaded = settings(Path(temporary))
@@ -294,7 +287,6 @@ class DriftEvaluationTests(unittest.TestCase):
             self.assertTrue(any('reviewer' in reason for reason in report['qualificationFailures']))
             self.assertEqual(loaded.file.read_bytes(), before)
 
-    @proves('MYC-13.21', kind='unit')
     def test_real_reviewer_retry_exact_cache_and_revision_guards_join_the_finite_runner(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -336,7 +328,6 @@ print(json.dumps(reply),flush=True)
             self.assertTrue(all(count == 0 for count in store.leases.values()))
             self.assertNotIn('private raw detail', json.dumps(first))
 
-    @proves('MYC-13.10', 'MYC-0.10')
     def test_public_default_nonlive_handler_uses_real_pipeline_without_store_or_service_calls(self):
         from io import StringIO
         from mycel._cli import run
@@ -363,7 +354,6 @@ print(json.dumps(reply),flush=True)
             self.assertFalse(report['qualified'] or report['live'])
             self.assertEqual({p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob('*') if p.is_file()}, before)
 
-    @proves('MYC-0.10')
     def test_more_than_default_production_cap_is_processed_in_complete_bounded_batches(self):
         with tempfile.TemporaryDirectory() as temporary:
             loaded = settings(Path(temporary), candidates=17)
@@ -378,7 +368,6 @@ print(json.dumps(reply),flush=True)
             self.assertTrue(all(row['correct'] and row['processed'] for row in report['results']))
             self.assertFalse(report['incomplete'] or report['qualified'])
 
-    @proves('MYC-0.10')
     def test_complete_oversized_input_routes_or_refuses_without_truncating_any_context(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -411,7 +400,6 @@ print(json.dumps(reply),flush=True)
             self.assertEqual(refused['results'][0]['actual'], 'unresolved')
             self.assertIn('review_input_too_large', refused['results'][0]['error']['message'])
 
-    @proves('MYC-0.10')
     def test_each_unavailable_required_evidence_kind_has_no_canonical_request_or_adapter_call(self):
         with tempfile.TemporaryDirectory() as temporary:
             loaded = settings(Path(temporary))
@@ -426,7 +414,6 @@ print(json.dumps(reply),flush=True)
                 and row['inputBytes'] is None and 'inputHash' not in row for row in report['results']))
             self.assertTrue(all(row['jevStandinCalls'] == row['reviewStandinCalls'] == 0 for row in report['batches']))
 
-    @proves('MYC-0.6', 'MYC-0.10')
     def test_public_interruption_and_incomplete_reports_keep_partial_reply_with_nonzero_status(self):
         from io import StringIO
         from mycel._cli import run

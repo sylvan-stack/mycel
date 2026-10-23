@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel_build._automatic import _sanitize_report, run_automatic, store_address
 from mycel_build._core import BuildError, digest, json_bytes
 from mycel_build._staging import create_stage
@@ -55,7 +54,6 @@ def report(*, passed=True, errors=0):
 
 
 class InstalledAutomaticTests(unittest.TestCase):
-    @proves("MYC-13.15")
     def test_gate_protocol_retains_only_closed_sanitized_named_results(self):
         result = _sanitize_report(json.dumps(report(passed=False, errors=1)).encode(), 10, contract=contract_fixture())
         self.assertFalse(result["passed"])
@@ -81,7 +79,6 @@ class InstalledAutomaticTests(unittest.TestCase):
             with self.assertRaises(BuildError):
                 _sanitize_report(json.dumps(value).encode(), 10, contract=contract_fixture())
 
-    @proves("MYC-13.15")
     def test_cross_target_automatic_gate_never_executes_or_claims_target_checks(self):
         for target, system, machine in (("macos-x86_64", "Darwin", "arm64"),
                                         ("linux-arm64", "Darwin", "arm64"),
@@ -106,7 +103,6 @@ class InstalledAutomaticTests(unittest.TestCase):
             self.assertFalse(result["automaticQualification"])
             self.assertIn("unavailable" if target == "macos-arm64" else "unsupported", result["reason"])
 
-    @proves("MYC-13.15")
     def test_remote_store_refuses_an_unrestrictable_network_boundary_before_execution(self):
         with patch("mycel_build._automatic.platform.system", return_value="Darwin"), patch(
                 "mycel_build._automatic.platform.machine", return_value="arm64"), patch(
@@ -117,7 +113,6 @@ class InstalledAutomaticTests(unittest.TestCase):
         self.assertFalse(result["executed"])
         self.assertFalse(result["passed"])
 
-    @proves("MYC-13.15")
     def test_frozen_check_workspace_imports_installed_product_and_records_exact_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -127,7 +122,7 @@ class InstalledAutomaticTests(unittest.TestCase):
             (product / "__init__.py").write_bytes(b"# sealed product\n")
             frozen = {"src/mycel/__init__.py": b"# source copy must not be importable\n",
                       "src/mycel_build/__init__.py": b"# frozen builder\n",
-                      "tests/test_fixture.py": b"# frozen tests\n", "checks/claims.json": b"{}"}
+                      "tests/test_fixture.py": b"# frozen tests\n"}
             frozen.update(frozen_contract_fixture())
             original = dict(frozen)
             def execute(command, **options):
@@ -161,7 +156,6 @@ class InstalledAutomaticTests(unittest.TestCase):
             self.assertEqual(result["required"], 1)
             self.assertEqual((product / "__init__.py").read_bytes(), b"# sealed product\n")
 
-    @proves("MYC-13.15")
     def test_failed_or_incomplete_process_retains_no_raw_stdout_or_stderr(self):
         with tempfile.TemporaryDirectory() as directory:
             program = Path(directory) / "program"
@@ -177,7 +171,6 @@ class InstalledAutomaticTests(unittest.TestCase):
                 self.assertTrue(result["executed"])
                 self.assertNotIn("private-", json.dumps(result))
 
-    @proves("MYC-13.15")
     def test_only_explicit_password_free_store_address_is_read(self):
         self.assertIsNone(store_address(None))
         with tempfile.TemporaryDirectory() as directory:
@@ -192,7 +185,6 @@ class InstalledAutomaticTests(unittest.TestCase):
             path.write_text('[store]\naddress="postgresql://user@127.0.0.1:55432/owner"\n[unrelated]\nsecret="unused"\n')
             self.assertEqual(store_address(path), "postgresql://user@127.0.0.1:55432/owner")
 
-    @proves("MYC-13.15")
     def test_staging_retains_all_named_automatic_failures_and_never_publishes_working(self):
         from test_build import _frozen_fixture, _wheel_fixture
         from mycel_build._core import read_json
@@ -253,14 +245,13 @@ class InstalledAutomaticTests(unittest.TestCase):
                 self.assertEqual(len(checks['results']), 4)
 
 
-    @proves('MYC-15.8', 'MYC-13.15')
     def test_spawned_workers_deserialize_installed_backend_and_keep_unit_network_denied(self):
         import sys
         from mycel._coverage import discover_checks, run_checks
         from mycel_build._automatic_backend import InstalledFixtureBackend
         source = b'\n'.join((
             b'import os,socket,tempfile,time,unittest', b'from pathlib import Path',
-            b'from mycel._coverage import proves', b'class Workers(unittest.TestCase):',
+            b'class Workers(unittest.TestCase):',
             b' def check_worker(self):',
             b'  Path(__file__).with_name(str(os.getpid())+".pid").write_text("ready")',
             b'  until=time.monotonic()+10',
@@ -268,8 +259,8 @@ class InstalledAutomaticTests(unittest.TestCase):
             b'   self.assertLess(time.monotonic(),until);time.sleep(0.01)',
             b'  with self.assertRaisesRegex(RuntimeError,"network access is forbidden"):',
             b'   socket.create_connection(("127.0.0.1",1))',
-            b' @proves("MYC-13.3")', b' def test_one(self): self.check_worker()',
-            b' @proves("MYC-13.3")', b' def test_two(self): self.check_worker()', b''))
+            b' def test_one(self): self.check_worker()',
+            b' def test_two(self): self.check_worker()', b''))
         try:
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
@@ -287,7 +278,6 @@ class InstalledAutomaticTests(unittest.TestCase):
         finally:
             sys.modules.pop('test_installed_worker_fixture', None)
 
-    @proves('MYC-15.8')
     def test_unknown_child_lifetime_retains_its_private_workspace_without_database_recovery(self):
         from mycel_build import _automatic
         from mycel_build._staging import _delete_tree
@@ -318,7 +308,6 @@ class InstalledAutomaticTests(unittest.TestCase):
                     # No actual process was launched by this lifecycle fixture.
                     _delete_tree(retained)
 
-    @proves('MYC-15.8', 'MYC-13.15')
     def test_incomplete_recovery_keeps_acknowledged_records_and_does_not_follow_external_links(self):
         from mycel_build import _automatic
         from mycel_build._staging import _delete_tree

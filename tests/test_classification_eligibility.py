@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 from mycel._classification_eligibility import classification_eligibility, observe_input
 from mycel._errors import MycelError
-from mycel._coverage import proves
 
 
 NOW = datetime(2026, 10, 13, 10, tzinfo=timezone.utc)
@@ -30,7 +29,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
     def eligible(self, observation, *, at=NOW, seconds=300):
         return classification_eligibility((observation,), at=at, debounce_seconds=seconds)
 
-    @proves('MYC-0.2')
     def test_first_discovery_uses_old_modification_time_without_discovery_delay(self):
         changed = NOW - timedelta(days=7)
         observation = self.file(modified=changed)
@@ -42,7 +40,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         self.assertEqual(result.eligible_at, (changed + timedelta(seconds=300)).isoformat(timespec='microseconds'))
         self.assertEqual(result.faults, ())
 
-    @proves('MYC-0.2')
     def test_newest_source_dependant_context_and_generated_version_determine_time(self):
         source = self.file(modified=NOW - timedelta(seconds=180))
         dependant = observe_input('fixture:@artifact/answer.md', 'dep', observed_at=NOW,
@@ -61,7 +58,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         self.assertTrue(classification_eligibility((source, dependant, context, generated),
                         at=NOW + timedelta(seconds=280)).eligible)
 
-    @proves('MYC-0.2')
     def test_unchanged_hash_scan_mtime_touch_and_cache_reuse_do_not_restart(self):
         first = self.file(modified=NOW - timedelta(seconds=100))
         rescanned = self.file(observed=NOW + timedelta(seconds=200),
@@ -74,7 +70,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         self.assertEqual(self.eligible(first).eligible_at, self.eligible(repeated).eligible_at)
         self.assertTrue(self.eligible(repeated, at=NOW + timedelta(seconds=200)).eligible)
 
-    @proves('MYC-0.2')
     def test_preserved_backward_and_restored_timestamps_use_first_exact_read(self):
         first = self.file(modified=NOW - timedelta(seconds=100))
         last_read = NOW + timedelta(seconds=300)
@@ -92,7 +87,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
                 self.assertEqual(again['firstObservedAt'], delta['firstObservedAt'])
                 self.assertEqual(self.eligible(again).eligible_at, self.eligible(delta).eligible_at)
 
-    @proves('MYC-0.2')
     def test_true_newer_modification_time_is_trusted_after_content_delta(self):
         first = self.file(modified=NOW - timedelta(days=1))
         delta = self.file('second', observed=NOW + timedelta(seconds=30),
@@ -100,7 +94,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         self.assertEqual(delta['timeSource'], 'modification')
         self.assertEqual(delta['changedAt'], (NOW + timedelta(seconds=20)).isoformat(timespec='microseconds'))
 
-    @proves('MYC-0.2')
     def test_return_to_old_hash_after_another_version_establishes_new_timer(self):
         first = self.file(modified=NOW - timedelta(days=1))
         second = self.file('second', observed=NOW + timedelta(seconds=60),
@@ -113,7 +106,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         self.assertFalse(self.eligible(restored, at=NOW + timedelta(seconds=399)).eligible)
         self.assertTrue(self.eligible(restored, at=NOW + timedelta(seconds=400)).eligible)
 
-    @proves('MYC-0.2')
     def test_whole_file_delta_outside_unchanged_cited_span_restarts_timer(self):
         selected = b'# Selected\nUnchanged claim.\n'
         before = sha256(selected + b'# Other\nOld context.\n').hexdigest()
@@ -126,7 +118,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         self.assertEqual(changed['changedAt'], (NOW + timedelta(seconds=100)).isoformat(timespec='microseconds'))
         self.assertEqual(changed['faults'], ['timestamp_untrusted'])
 
-    @proves('MYC-0.2')
     def test_future_missing_naive_and_malformed_source_times_fall_back_visibly(self):
         for modified in (NOW + timedelta(days=300), None, NOW.replace(tzinfo=None), 'malformed'):
             with self.subTest(modified=modified):
@@ -138,7 +129,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
                 self.assertEqual(result.as_dict()['faults'], [{'identity': FILE, 'reason': 'timestamp_untrusted'}])
                 self.assertTrue(self.eligible(observed, at=NOW + timedelta(seconds=300)).eligible)
 
-    @proves('MYC-0.2')
     def test_failed_initial_read_stays_pending_until_success_establishes_observation(self):
         unavailable = self.file(observed=None, successful_read=False)
         self.assertIsNone(unavailable['firstObservedAt'])
@@ -151,7 +141,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         failed_again = self.file(observed=None, successful_read=False, previous=observed)
         self.assertEqual(failed_again, observed)
 
-    @proves('MYC-0.2')
     def test_deletion_uses_first_tombstone_read_and_restoration_checks_that_time(self):
         first = self.file(modified=NOW - timedelta(days=1))
         deleted = observe_input(FILE, 'tombstone', kind='deleted', observed_at=NOW, previous=first)
@@ -166,7 +155,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         self.assertEqual(restored['timeSource'], 'observation')
         self.assertEqual(restored['changedAt'], (NOW + timedelta(seconds=250)).isoformat(timespec='microseconds'))
 
-    @proves('MYC-0.2')
     def test_generated_creation_time_is_not_discovery_time_and_future_creation_falls_back(self):
         identity = 'fixture:@index/summary#Summary'
         first = observe_input(identity, 'generated-v1', kind='generated', observed_at=NOW,
@@ -181,7 +169,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         self.assertEqual(future['timeSource'], 'observation')
         self.assertEqual(future['faults'], ['timestamp_untrusted'])
 
-    @proves('MYC-0.2')
     def test_all_serialized_times_are_utc_and_custom_zero_quiet_period_is_effective(self):
         madrid = timezone(timedelta(hours=2))
         observation = self.file(observed=NOW.astimezone(madrid),
@@ -194,7 +181,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         self.assertEqual(self.eligible(observation, seconds=600).eligible_at,
                          (NOW + timedelta(seconds=590)).isoformat(timespec='microseconds'))
 
-    @proves('MYC-0.2')
     def test_unavailable_required_context_prevents_eligibility_of_other_old_inputs(self):
         old = self.file(modified=NOW - timedelta(days=1))
         unavailable = observe_input('fixture:@artifact/context.md', 'context', successful_read=False)
@@ -202,7 +188,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
         self.assertEqual(result.as_dict(), {'eligibleAt': None, 'eligible': False,
                                           'status': 'pending_debounce', 'faults': []})
 
-    @proves('MYC-0.2')
     def test_invalid_clocks_periods_duplicate_inputs_and_corrupt_retained_state_are_refused(self):
         observation = self.file(modified=NOW)
         for kwargs in ({'observed_at': NOW.replace(tzinfo=None)}, {'observed_at': None},

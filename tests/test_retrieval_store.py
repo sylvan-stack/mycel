@@ -7,7 +7,6 @@ from uuid import uuid4
 
 from psycopg.types.json import Jsonb
 
-from mycel._coverage import proves
 from mycel._embedding_plan import EmbeddingPart, load_tokenizer, plan_chunk
 from mycel._errors import MycelError
 from mycel._evaluation_store import _hash
@@ -115,7 +114,6 @@ class RetrievalStoreTests(unittest.TestCase):
             f"SELECT to_jsonb(t) FROM public.{table.name} t ORDER BY to_jsonb(t)::text").fetchall())
                 for table in TABLES}
 
-    @proves("MYC-4.2", "MYC-4.3", kind="store")
     def test_disabled_and_selected_shared_documents_use_origin_and_artifact_aliases(self):
         with self.connection() as connection:
             own_code = self.seed(connection, path="mine.py", source="scope\n")[1:]
@@ -145,7 +143,6 @@ class RetrievalStoreTests(unittest.TestCase):
                     with StoreCandidates(connection, settings).snapshot(("disabled",)):
                         self.fail("a disabled direct scope must refuse")
 
-    @proves("MYC-4.4", "MYC-4.5", kind="store")
     def test_complete_body_name_and_path_find_partial_failed_and_unembedded_versions(self):
         with self.connection() as connection:
             long_source = "ordinary words\n" * 100 + "tailneedle\n"
@@ -171,7 +168,6 @@ class RetrievalStoreTests(unittest.TestCase):
                 self.assertEqual(next(chunk.text for chunk in snapshot.chunks if chunk.identifier == str(body_id)),
                                  long_source)
 
-    @proves("MYC-4.4", "MYC-4.27", kind="store")
     def test_complete_current_model_parts_collapse_before_each_candidate_limit(self):
         with self.connection() as connection:
             source = "manyparts\n" * 30
@@ -207,7 +203,6 @@ class RetrievalStoreTests(unittest.TestCase):
                 self.assertEqual(len(reply.wording), 25)
                 self.assertEqual(reply.without_vector, 26)
 
-    @proves("MYC-4.26", kind="store")
     def test_branch_stash_and_replaced_disk_versions_never_enter_candidates(self):
         with self.connection() as connection:
             file_id, chunk_id, old = self.seed(connection, source="oldneedle\n", name="Old")
@@ -224,7 +219,6 @@ class RetrievalStoreTests(unittest.TestCase):
                 for query in ("oldneedle", "branchneedle", "stashneedle"):
                     self.assertEqual(snapshot.candidates(query)[0].wording, ())
 
-    @proves("MYC-4.24", kind="store")
     def test_organization_members_keep_separate_candidate_lists_and_limits(self):
         with self.connection() as connection:
             for repository, count in (("fixture", 25), ("other", 24), ("disabled", 30)):
@@ -238,7 +232,6 @@ class RetrievalStoreTests(unittest.TestCase):
                 for reply in replies:
                     self.assertTrue(all(candidate.chunk.repository == reply.repository for candidate in reply.wording))
 
-    @proves("MYC-4.4", "MYC-4.27", kind="store")
     def test_deleted_planned_parts_and_failed_vectors_do_not_become_complete(self):
         with self.connection() as connection:
             _, chunk_id, version = self.seed(connection, source="firstneedle\nsecondneedle\n")
@@ -254,7 +247,6 @@ class RetrievalStoreTests(unittest.TestCase):
                 self.assertEqual(reply.meaning, ())
                 self.assertEqual(reply.without_vector, 2)
 
-    @proves("MYC-4.4", "MYC-4.26", kind="store")
     def test_snapshot_keeps_text_places_vectors_together_and_changes_no_store_rows(self):
         with self.connection() as connection, self.connection() as writer:
             file_id, chunk_id, version = self.seed(connection, source="oldneedle\n", name="Old")

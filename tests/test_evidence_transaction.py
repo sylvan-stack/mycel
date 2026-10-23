@@ -10,7 +10,6 @@ from psycopg.types.json import Jsonb
 
 from mycel import _evidence as evidence
 from mycel._activity import AppliedMutation, MutationActivity
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._locks import atomic_transaction
 from mycel._resolver import SourceResolver
@@ -59,7 +58,6 @@ class EvidenceTransactionStoreTests(unittest.TestCase):
                 override = ' OVERRIDING SYSTEM VALUE' if table == 'mycel_chunk_versions' else ''
                 connection.execute(f'INSERT INTO public.{table}{override} VALUES (' + ','.join(['%s'] * len(values)) + ')', values)
 
-    @proves('MYC-16.5', 'MYC-16.13', kind='store')
     def test_new_file_versions_exact_evidence_and_activity_publish_in_one_transaction(self):
         with self.connect() as connection, self.connect() as reader:
             _, observed, writer = self.prepare(connection)
@@ -81,7 +79,6 @@ class EvidenceTransactionStoreTests(unittest.TestCase):
             owner = connection.execute('SELECT baseline_owner FROM public.mycel_dependencies WHERE id=%s', (dependency,)).fetchone()[0]
             self.assertIsNotNone(owner)
 
-    @proves('MYC-16.5', 'MYC-16.13', kind='store')
     def test_evidence_or_activity_failure_rolls_back_new_file_rows_and_all_owners(self):
         with self.connect() as connection:
             _, observed, writer = self.prepare(connection)
@@ -105,7 +102,6 @@ class EvidenceTransactionStoreTests(unittest.TestCase):
                     self.assertEqual(self.counts(connection), (0,) * 8)
                     activity.finish('failed', error={'code': 'internal', 'message': 'public fixture outcome'})
 
-    @proves('MYC-16.5', 'MYC-16.13', kind='store')
     def test_idle_expired_foreign_and_aborted_transaction_tokens_refuse_before_writes(self):
         with self.connect() as connection, self.connect() as other:
             helper, observed, writer = self.prepare(connection)
@@ -126,7 +122,6 @@ class EvidenceTransactionStoreTests(unittest.TestCase):
                 self.pin(writer, token)
             self.assertEqual(self.counts(connection), before)
 
-    @proves('MYC-16.5', 'MYC-16.13', kind='store')
     def test_capture_rechecks_new_version_bytes_and_existing_baseline_owner(self):
         with self.connect() as connection:
             helper, observed, writer = self.prepare(connection)
@@ -144,7 +139,6 @@ class EvidenceTransactionStoreTests(unittest.TestCase):
             self.assertEqual(self.counts(connection), before)
             self.assertEqual(writer.read_baseline('owner', original).manifest.identifier, original)
 
-    @proves('MYC-2.26', 'MYC-16.5', 'MYC-16.6', kind='store')
     def test_inheritance_copies_selected_old_evidence_without_current_source_in_caller_transaction(self):
         with self.connect() as connection:
             helper, observed, writer = self.prepare(connection)
@@ -172,7 +166,6 @@ class EvidenceTransactionStoreTests(unittest.TestCase):
             self.assertEqual(self.counts(connection)[-2], before[-2] + 1)
             self.assertEqual(writer.read_baseline('owner', original_id), original)
 
-    @proves('MYC-16.5', 'MYC-16.6', kind='store')
     def test_inheritance_locks_and_validates_complete_prior_owning_graph(self):
         with self.connect() as connection, self.connect() as blocker:
             helper, observed, writer = self.prepare(connection)

@@ -12,7 +12,6 @@ from unittest.mock import patch
 import psycopg
 from psycopg import conninfo, pq
 
-from mycel._coverage import proves
 from mycel._credentials import Secret, StoreTarget
 from mycel._database import _native_connect, _without_libpq_environment, store_connection
 from mycel._errors import MycelError
@@ -63,7 +62,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertNotIn(ADDRESS, str(raised.exception))
         return raised.exception
 
-    @proves("MYC-6.2", "MYC-6.4", "MYC-5.11")
     def test_address_parameters_are_explicit_and_no_ambient_auth_or_service_is_available(self):
         credentials = FakeCredentials()
         connection, calls = FakeConnection(), []
@@ -102,7 +100,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(parameters["require_auth"], "password,md5,scram-sha-256,none")
         self.assertLessEqual(int(parameters["connect_timeout"]), 5)
 
-    @proves("MYC-5.11", "MYC-6.4")
     def test_password_is_acquired_only_after_a_native_challenge_and_passed_only_in_memory(self):
         credentials, calls = FakeCredentials(), []
         failed, connection = FakePGconn(needs_password=True), FakeConnection()
@@ -127,7 +124,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(stderr.getvalue(), "")
         self.assertNotIn(SENTINEL, str(credentials))
 
-    @proves("MYC-5.11", "MYC-6.4")
     def test_refusal_without_password_challenge_never_acquires_keychain_password(self):
         credentials, failed = FakeCredentials(), FakePGconn()
 
@@ -142,7 +138,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(credentials.requests, [False])
         self.assertTrue(failed.finished)
 
-    @proves("MYC-5.11")
     def test_missing_password_sends_none_and_rejected_password_is_not_reacquired(self):
         for password, attempts in ((None, 1), (SENTINEL, 2)):
             with self.subTest(password_present=password is not None):
@@ -164,7 +159,6 @@ class DatabaseTests(unittest.TestCase):
                 self.assertTrue(all(failure.finished for failure in failures))
                 self.assertEqual(calls[0]["password"], "")
 
-    @proves("MYC-6.2", "MYC-5.11")
     def test_uri_credentials_and_unsupported_options_are_refused_before_resolution_or_connect(self):
         for address in ("postgresql://fixture:password@localhost/fixture", "postgresql://fixture@localhost/fixture?service=other",
                         "postgresql://fixture@localhost/fixture?passfile=/private", "postgresql://fixture@localhost/fixture?options=secret",
@@ -177,7 +171,6 @@ class DatabaseTests(unittest.TestCase):
                     self.fail("accepted")
             self.assertEqual(raised.exception.code, "settings")
 
-    @proves("MYC-6.2")
     def test_literal_ipv6_skips_dns_and_encoded_target_names_remain_separate_parameters(self):
         calls = []
 
@@ -194,7 +187,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(calls[0]["sslmode"], "verify-full")
         self.assertLessEqual(calls[0]["timeout_seconds"], 0.4)
 
-    @proves("MYC-6.2")
     def test_hostname_resolution_preserves_all_explicit_ips_under_one_deadline(self):
         calls, resolutions = [], []
 
@@ -212,7 +204,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(calls[0]["hostaddr"], "127.0.0.1,127.0.0.2,::1")
         self.assertEqual(calls[0]["host"], "store.invalid,store.invalid,store.invalid")
 
-    @proves("MYC-6.2", "MYC-5.11")
     def test_dns_timeout_or_failure_never_reaches_connector_or_password_acquisition(self):
         release = threading.Event()
         self.addCleanup(release.set)
@@ -235,7 +226,6 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(credentials.requests, [False])
         release.set()
 
-    @proves("MYC-5.11")
     def test_cancellation_during_dns_returns_before_any_connection_or_password_acquisition(self):
         cancel, entered, release = threading.Event(), threading.Event(), threading.Event()
         self.addCleanup(release.set)
@@ -255,7 +245,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(credentials.requests, [False])
         release.set()
 
-    @proves("MYC-5.11", "MYC-6.4")
     def test_context_failure_interrupt_and_normal_exit_all_close_connection(self):
         for error in (None, RuntimeError("operation failed"), KeyboardInterrupt()):
             connection = FakeConnection()
@@ -267,7 +256,6 @@ class DatabaseTests(unittest.TestCase):
                 self.assertIs(raised, error)
             self.assertTrue(connection.closed)
 
-    @proves("MYC-5.11", "MYC-6.4")
     def test_environment_is_restored_after_native_error_and_interruption(self):
         for error in (psycopg.OperationalError(SENTINEL), KeyboardInterrupt()):
             environment = {"PGPASSWORD": SENTINEL, "PGOPTIONS": "private", "HOME": "/home"}
@@ -285,7 +273,6 @@ class DatabaseTests(unittest.TestCase):
                     self.assertIsInstance(raised, KeyboardInterrupt if isinstance(error, KeyboardInterrupt) else MycelError)
                 self.assertEqual(dict(os.environ), environment)
 
-    @proves("MYC-5.11")
     def test_late_connector_success_is_closed_and_not_published_after_total_deadline(self):
         connection = FakeConnection()
 
@@ -300,7 +287,6 @@ class DatabaseTests(unittest.TestCase):
         self.assert_unavailable(operation)
         self.assertTrue(connection.closed)
 
-    @proves("MYC-5.11", "MYC-6.4")
     def test_cancellation_immediately_after_environment_lock_preserves_original_parameters(self):
         cancel, environment = threading.Event(), {"PGPASSWORD": SENTINEL, "PGUSER": "fixture", "HOME": "/home"}
 
@@ -322,7 +308,6 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(dict(os.environ), environment)
         self.assertTrue(guard.released)
 
-    @proves("MYC-5.11", "MYC-6.4", "MYC-6.2")
     def test_native_polling_handshake_is_password_free_until_challenged_and_closes_both_native_handles(self):
         calls, natives = [], []
 
@@ -364,7 +349,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(calls[1]["password"], SENTINEL)
         self.assertTrue(all(native.finished for native in natives))
 
-    @proves("MYC-5.11")
     def test_native_polling_cancellation_and_deadline_finish_handles_without_network_or_password_reads(self):
         for cancelled in (False, True):
             cancel, native = threading.Event(), FakePGconn()
@@ -402,7 +386,6 @@ class DatabaseTests(unittest.TestCase):
             self.assertTrue(native.finished)
             self.assertEqual(credentials.requests, [False])
 
-    @proves("MYC-5.11", "MYC-6.4")
     def test_password_acquisition_shares_remaining_total_deadline_and_cancellation_prevents_retry(self):
         for should_cancel in (False, True):
             cancel, calls = threading.Event(), []

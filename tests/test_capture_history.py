@@ -8,7 +8,6 @@ import unittest
 from psycopg.types.json import Jsonb
 
 from mycel import _capture
-from mycel._coverage import proves
 from mycel._disk_reconciliation import DiskCaptureStore
 from mycel._errors import MycelError
 from mycel._located_reconciliation import LocatedCaptureStore
@@ -42,7 +41,6 @@ class CaptureHistoryStoreTests(unittest.TestCase):
             self.source.write_bytes(b'def value():\n    return 2\n')
             self.git('stash', 'push', '--message', 'Saved')
 
-    @proves('MYC-1.7', kind='store')
     def test_unchanged_disk_and_located_repeat_from_persisted_history_never_splits(self):
         self.populate()
         with self.connect() as connection:
@@ -84,7 +82,6 @@ class CaptureHistoryStoreTests(unittest.TestCase):
             self.assertFalse(repeat.changed)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.7', kind='store')
     def test_changed_code_after_preliminary_scan_is_not_hidden_or_preemptively_stored(self):
         self.populate(git=False)
         with self.connect() as connection:
@@ -113,7 +110,6 @@ class CaptureHistoryStoreTests(unittest.TestCase):
             self.assertEqual(bytes(connection.execute('SELECT source_bytes FROM public.mycel_file_versions '
                 'WHERE id=%s', (current.binding.version,)).fetchone()[0]), self.source.read_bytes())
 
-    @proves('MYC-1.7', 'MYC-16.13', kind='store')
     def test_reused_parses_preserve_late_disk_git_and_effective_settings_rollback_guards(self):
         self.populate()
         with self.connect() as connection:
@@ -142,7 +138,6 @@ class CaptureHistoryStoreTests(unittest.TestCase):
                         if stage == 'git':
                             self.git('branch', '--delete', 'late-ref')
 
-    @proves('MYC-1.7', kind='store')
     def test_forged_incoming_parse_is_refused_and_corrupt_or_changed_parser_cache_reparses(self):
         self.populate(git=False)
         with self.connect() as connection:

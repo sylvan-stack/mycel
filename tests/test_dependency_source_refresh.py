@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import capture_repository
-from mycel._coverage import proves
 from mycel._dependency_application import DependencyApplicationStore, RetainedDependencyResolver
 from mycel._evidence import EvidenceError, EvidenceStore, PinInputs
 from mycel._located_dependencies import LocatedDependencyProducer
@@ -100,7 +99,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
         return {table: connection.execute(f'SELECT to_jsonb(t),xmin::text FROM public.{table} t '
                                           'ORDER BY to_jsonb(t)::text').fetchall() for table in tables}
 
-    @proves('MYC-2.12', 'MYC-2.22', 'MYC-2.8', 'MYC-2.24', 'MYC-16.7', 'MYC-16.13', kind='store')
     def test_source_only_away_and_restoration_preserve_foreign_pin_and_role(self):
         with self.base.connect() as connection:
             before = self.prepare(connection)
@@ -132,7 +130,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.assertEqual(len(self.edges(connection)), 1)
             self.assertEqual(self.answer.read_bytes(), original_answer)
 
-    @proves('MYC-7.24', 'MYC-2.24', 'MYC-16.7', 'MYC-16.11', 'MYC-16.13', kind='store')
     def test_last_location_deletion_and_recreation_keep_exact_dependant_owned_evidence(self):
         with self.base.connect() as connection:
             before = self.prepare(connection)
@@ -157,7 +154,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.assertEqual(restored[0][5]['reasons'], [])
             self.assertNotEqual(self.edges(connection)[0][1], old_source)
 
-    @proves('MYC-2.8', 'MYC-16.13', kind='store')
     def test_source_pass_retries_never_resolved_foreign_declaration(self):
         self.source.unlink()
         self.base.commit()
@@ -174,7 +170,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.assertEqual(result.counts['dependencyRepositories']['downstream']['pinsCaptured'], 1)
             self.assertEqual(self.role(connection), 'derived')
 
-    @proves('MYC-16.11', 'MYC-16.13', kind='store')
     def test_disabled_foreign_owner_is_unchanged_by_source_publication(self):
         with self.base.connect() as connection:
             before = self.prepare(connection)
@@ -188,7 +183,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.assertEqual(self.edges(connection), edges)
             self.assertNotIn('downstream', result.counts.get('dependencyRepositories', {}))
 
-    @proves('MYC-2.7', 'MYC-2.8', 'MYC-2.12', 'MYC-16.13', kind='store')
     def test_settings_only_source_disable_and_enable_recheck_unchanged_captures(self):
         with self.base.connect() as connection:
             before = self.prepare(connection)
@@ -218,7 +212,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.publish(connection)
             self.assertEqual(self.state(connection), stable)
 
-    @proves('MYC-2.12', 'MYC-2.24', 'MYC-16.7', 'MYC-16.13', kind='store')
     def test_empty_file_selection_survives_deletion_and_recreation_without_chunk_edges(self):
         self.source.write_bytes(b'')
         self.base.commit()
@@ -243,7 +236,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.assertEqual(self.edges(connection), [])
             self.assertEqual(self.role(connection), 'derived')
 
-    @proves('MYC-16.7', 'MYC-16.13', kind='store')
     def test_unindexed_removed_foreign_branch_refuses_an_away_observation(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -259,7 +251,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.assertEqual(caught.exception.status, 'changed_since_ingest')
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-16.7', 'MYC-16.13', kind='store')
     def test_unindexed_new_foreign_branch_file_refuses_a_deleted_observation(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -278,7 +269,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.assertEqual(caught.exception.status, 'changed_since_ingest')
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-16.7', 'MYC-16.13', kind='store')
     def test_unindexed_recreation_of_deleted_moved_source_refuses_original_declaration(self):
         with self.base.connect() as connection:
             before = self.prepare(connection)
@@ -302,7 +292,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.assertEqual(caught.exception.status, 'changed_since_ingest')
             self.assertEqual(self.state(connection), stable)
 
-    @proves('MYC-16.13', 'MYC-12.8', kind='store')
     def test_foreign_current_text_change_and_late_audit_failure_roll_back_source_and_owner(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -333,7 +322,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
                 self.assertEqual(self.state(connection), before)
                 activity.finish('failed', error={'code': 'internal', 'message': 'fixture failed'})
 
-    @proves('MYC-16.13', 'MYC-12.8', kind='store')
     def test_foreign_change_in_reply_callback_refuses_all_prospective_rows(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -350,7 +338,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.assertEqual(caught.exception.status, 'changed_since_ingest')
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-12.4', 'MYC-12.8', 'MYC-16.13', kind='store')
     def test_source_and_foreign_activity_share_one_commit_and_owner_counts(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -369,7 +356,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             self.assertEqual(foreign['decisions'], [])
             self.assertEqual(activity_state(connection, rows[1][0])['counts'], result.counts)
 
-    @proves('MYC-12.4', 'MYC-12.8', 'MYC-16.13', kind='store')
     def test_two_source_only_changes_keep_foreign_cumulative_reply_and_activity_counts(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -409,7 +395,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             for identifier, repository in entries:
                 self.assertEqual(activity_state(connection, identifier)['counts'], committed[repository])
 
-    @proves('MYC-12.4', 'MYC-16.11', 'MYC-16.13', kind='store')
     def test_collection_only_unchanged_pass_reports_and_audits_its_feature_mutation(self):
         with self.base.connect() as connection:
             before = self.prepare(connection)
@@ -459,7 +444,6 @@ class DependencySourceRefreshStoreTests(unittest.TestCase):
             return DependencyApplicationStore(connection).apply_in_transaction(self.base.settings, str(located[0]), located[1],
                 captured_at='2026-10-09T11:00:00Z', reread=lambda expected: self.reread(connection, expected), **kwargs)
 
-    @proves('MYC-2.10', 'MYC-2.12', 'MYC-16.11', 'MYC-16.13', kind='store')
     def test_declared_and_asserted_same_source_survive_each_others_removal(self):
         with self.base.connect() as connection:
             self.prepare(connection)

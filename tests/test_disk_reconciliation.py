@@ -14,7 +14,7 @@ from psycopg.types.json import Jsonb
 
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import capture_repository
-from mycel._coverage import proves, require_check_database
+from mycel._coverage import require_check_database
 from mycel._disk_reconciliation import DiskCaptureStore, GitFileMove
 from mycel._errors import MycelError
 from mycel._resolver import SourceResolver
@@ -69,7 +69,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
                 (uuid4(), version, location, 'branch', 'retained-main', Jsonb({})))
         return location
 
-    @proves('MYC-16.13', 'MYC-12.8', kind='store')
     def test_effective_settings_change_before_or_after_handoff_or_reply_counts_refuses_disk_publication(self):
         (self.artifact / 'guide.md').write_bytes(b'# Guide\nComplete body.\n')
         original = self.config.read_text()
@@ -103,7 +102,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
                     finally:
                         self.config.write_text(original)
 
-    @proves('MYC-16.13', 'MYC-12.8', kind='store')
     def test_file_change_after_last_handoff_or_reply_counts_rolls_back_disk_publication(self):
         path = self.artifact / 'guide.md'
         original = b'# Guide\nComplete body.\n'
@@ -136,7 +134,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
                     finally:
                         path.write_bytes(original)
 
-    @proves('MYC-16.2', 'MYC-1.33', kind='store')
     def test_complete_capture_applies_one_overlap_identity_stable_primary_and_noop(self):
         (self.artifact / 'guide.md').write_bytes(b'# Guide\nComplete body.\n')
         with self.connect() as connection:
@@ -158,7 +155,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
             self.assertEqual(self.state(connection), before)
             self.assertEqual(same.files[0].binding, file.binding)
 
-    @proves('MYC-16.2', 'MYC-1.33', kind='store')
     def test_previous_primary_remains_valid_when_fresh_discovery_would_choose_another_alias(self):
         (self.artifact / 'guide.md').write_bytes(b'# Guide\nStable place.\n')
         settings = self.configure(code=self.artifact, artifact=self.code)
@@ -175,7 +171,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
             self.assertEqual(current.binding.identifier, first.binding.identifier)
             self.assertEqual(current.chunk_versions, first.chunk_versions)
 
-    @proves('MYC-16.2', 'MYC-1.33', kind='store')
     def test_distinct_files_with_equal_bytes_paths_or_new_names_do_not_merge(self):
         raw = b'# Guide\nIdentical body.\n'
         (self.code / 'guide.md').write_bytes(raw)
@@ -203,7 +198,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
             self.assertEqual(SourceResolver.from_store(connection, self.settings).resolve_retained(
                 'fixture:@artifact/guide.md#Guide', old.members[0].chunk.identifier).fault, 'missing_file')
 
-    @proves('MYC-16.2', 'MYC-1.34', kind='store')
     def test_inode_changing_atomic_save_preserves_identity_and_changes_exact_version(self):
         path = self.artifact / 'guide.md'
         path.write_bytes(b'# Guide\nOriginal body.\n')
@@ -231,7 +225,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
             self.assertEqual([item['decision'] for item in detail['decisions']], ['edited'])
             self.assertEqual(detail['files'][0]['change'], 'changed')
 
-    @proves('MYC-16.2', 'MYC-1.19', 'MYC-1.33', kind='store')
     def test_physical_move_reserves_old_identity_before_a_reused_original_path(self):
         path = self.artifact / 'guide.md'
         path.write_bytes(b'# Guide\nOriginal file.\n')
@@ -249,7 +242,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
             self.assertEqual(SourceResolver.from_store(connection, self.settings).resolve_retained(
                 'fixture:@artifact/guide.md#Guide', original.chunk_versions[0][0]).fault, 'missing_name')
 
-    @proves('MYC-16.2', 'MYC-1.33', kind='store')
     def test_root_retarget_creates_new_identity_and_retains_branch_binding(self):
         (self.artifact / 'guide.md').write_bytes(b'# Guide\nSame body.\n')
         with self.connect() as connection:
@@ -274,7 +266,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
                              original.binding.identifier)
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_files').fetchone()[0], 2)
 
-    @proves('MYC-16.2', kind='store')
     def test_branch_only_chunk_is_removed_from_disk_once_and_partial_old_binding_is_preserved(self):
         path = self.artifact / 'guide.md'
         path.write_bytes(b'# Guide\nDisk body.\n# Away\nRetained branch body.\n')
@@ -308,7 +299,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
             self.assertIsNotNone(retained.resolve('fixture:@artifact/guide.md#Guide').selection)
             self.assertEqual(retained.resolve('fixture:@artifact/new.md').fault, 'missing_file')
 
-    @proves('MYC-16.2', 'MYC-1.33', kind='store')
     def test_reconfigured_root_reaches_same_physical_file_and_updates_primary_without_reidentifying(self):
         (self.artifact / 'guide.md').write_bytes(b'# Guide\nSame file.\n')
         with self.connect() as connection:
@@ -322,7 +312,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
                 'fixture:@artifact/guide.md#Guide', original.chunk_versions[0][0])
             self.assertEqual(followed.selection.place.address, 'fixture:@artifact/docs/guide.md#Guide')
 
-    @proves('MYC-16.2', kind='store')
     def test_transaction_handoff_and_activity_failure_leave_complete_file_unchanged(self):
         path = self.artifact / 'guide.md'
         path.write_bytes(b'# Guide\nBefore.\n')
@@ -353,7 +342,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
                 self.assertEqual(changed.files[0].identity.decisions[0].pin_decision, 'inherit_existing')
                 audit.finish('done')
 
-    @proves('MYC-16.2', 'MYC-1.8', kind='store')
     def test_retirement_refuses_incomplete_changed_or_unconfirmed_empty_capture(self):
         path = self.artifact / 'guide.md'
         path.write_bytes(b'# Guide\nBefore.\n')
@@ -391,7 +379,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
                 'GIT_TERMINAL_PROMPT': '0'})
         return result.stdout.decode().strip()
 
-    @proves('MYC-16.2', 'MYC-1.19', 'MYC-1.33', 'MYC-1.34', kind='store')
     def test_checked_git_rename_preserves_identity_across_physical_replacement_and_retained_refs(self):
         path = self.artifact / 'guide.md'
         raw = b'# Guide\nComplete committed source.\n'
@@ -437,7 +424,6 @@ class DiskReconciliationStoreTests(unittest.TestCase):
             self.assertEqual(reused.fault, 'missing_name')
             self.assertIsNone(reused.selection)
 
-    @proves('MYC-16.2', 'MYC-1.34', kind='store')
     def test_stale_or_unrecognized_git_move_rolls_back_and_code_name_rename_has_exact_version(self):
         (self.artifact / 'guide.md').write_bytes(b'# Guide\nBody.\n')
         path = self.code / 'worker.py'

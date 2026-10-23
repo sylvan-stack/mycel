@@ -14,7 +14,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._classification_runner import ClassifyDependencies
-from mycel._coverage import proves
 from mycel._credentials import CredentialUnavailable
 from mycel._embedding_live import FIXED_QUERY, FIXED_TEXT, run_embedding_live_check
 from mycel._errors import MycelError
@@ -97,7 +96,6 @@ def artificial_outcomes():
 
 
 class ProviderEvaluationTests(unittest.TestCase):
-    @proves('MYC-0.10', 'MYC-13.2')
     def test_live_embedding_requires_explicit_choice_before_settings_tokenizer_or_credentials(self):
         with patch('mycel._embedding_live.load_tokenizer', side_effect=AssertionError('tokenizer')), \
                 patch('mycel._embedding_live.Credentials', side_effect=AssertionError('credential')):
@@ -108,7 +106,6 @@ class ProviderEvaluationTests(unittest.TestCase):
         self.assertFalse(model_call_allowed(InvocationPolicy('check', action='embedding'), 'embedding'))
         self.assertFalse(model_call_allowed(InvocationPolicy('evaluate', kind='drift'), 'jev'))
 
-    @proves('MYC-0.10', 'MYC-13.7')
     def test_embedding_fixed_inputs_separate_submitted_planning_usage_and_stop_on_mismatch(self):
         catalog = SimpleNamespace(tokenizer_repository='fixture', tokenizer_revision='a' * 40,
             tokenizer_sha256='b' * 64, counting_rule='submitted-exact; planning-prompt-plus-exact-v1')
@@ -149,7 +146,6 @@ class ProviderEvaluationTests(unittest.TestCase):
                 self.assertNotIn('error', row)
                 self.assertEqual(row['attempts'], 1)
 
-    @proves('MYC-0.10', 'MYC-13.7')
     def test_embedding_compatibility_failures_stop_before_query(self):
         catalog = SimpleNamespace(tokenizer_repository='fixture', tokenizer_revision='a' * 40,
             tokenizer_sha256='b' * 64, counting_rule='submitted-exact; planning-prompt-plus-exact-v1')
@@ -187,7 +183,6 @@ class ProviderEvaluationTests(unittest.TestCase):
                     self.assertIsNone(row['providerInputTextTokens'])
                     self.assertIsNone(row['tokenCountComparison'])
 
-    @proves('MYC-0.10', 'MYC-14.12')
     def test_missing_reviewer_or_key_stops_before_any_paid_case_and_preserves_settings(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); loaded = settings(root, reviewer=False)
@@ -207,7 +202,6 @@ class ProviderEvaluationTests(unittest.TestCase):
             self.assertFalse(report['qualified']); self.assertEqual(report['batches'], [])
             self.assertTrue(any('credential' in reason for reason in report['qualificationFailures']))
 
-    @proves('MYC-0.10', 'MYC-14.17')
     def test_live_standins_use_actual_configured_identity_canonical_runner_and_no_store(self):
         policies, stores = [], []
         def store(*args, **kwargs):
@@ -272,7 +266,6 @@ class ProviderEvaluationTests(unittest.TestCase):
                 report['jevUnresolvedOnRouted'], report['reviewerUnresolvedOnRouted']), (0, 0, 1, 0))
             self.assertEqual(before, loaded.file.read_bytes())
 
-    @proves('MYC-13.15')
     def test_coverage_floors_are_distinct_semantics_and_conflicting_labels_cannot_qualify(self):
         cases, rows, identity = artificial_outcomes()
         self.assertTrue(qualify_profile(cases, rows, identity, real_provider_execution=True)['qualified'])
@@ -300,7 +293,6 @@ class ProviderEvaluationTests(unittest.TestCase):
                     run_provider_checks(None, suite(selected), repository='fixture', build='fixture',
                         implementation_identity='fictional-immutable-test-identity', live=True)
 
-    @proves('MYC-13.15', 'MYC-14.17')
     def test_zero_critical_suppression_and_common_subset_strict_improvement_are_required(self):
         cases, rows, identity = artificial_outcomes()
         for change in ('critical', 'no-routed', 'no-improvement', 'identity', 'environment', 'incomplete'):
@@ -327,7 +319,6 @@ class ProviderEvaluationTests(unittest.TestCase):
                     self.assertEqual(report['qualificationFailures'],
                         ['The configured or returned provider identity is missing or changed.'])
 
-    @proves('MYC-13.15', 'MYC-14.17')
     def test_correct_tentative_labels_can_leave_jev_only_policy_unresolved(self):
         cases, rows, identity = artificial_outcomes()
         for label, probabilities, confidence, reason in (
@@ -367,7 +358,6 @@ class ProviderEvaluationTests(unittest.TestCase):
         self.assertEqual((report['jevErrorsOnRouted'], report['reviewerErrorsOnRouted'],
             report['jevUnresolvedOnRouted'], report['reviewerUnresolvedOnRouted']), (0, 1, 1, 0))
 
-    @proves('MYC-13.15', 'MYC-14.17')
     def test_missing_or_inconsistent_jev_only_baselines_cannot_qualify(self):
         cases, rows, identity = artificial_outcomes()
         for change in ('missing', 'false-complete', 'false-abstention', 'old-identity'):
@@ -380,7 +370,6 @@ class ProviderEvaluationTests(unittest.TestCase):
                 report = qualify_profile(cases, selected, chosen, real_provider_execution=True)
                 self.assertFalse(report['qualified'])
 
-    @proves('MYC-13.15', 'MYC-0.10')
     def test_unavailable_evidence_requires_unresolved_and_zero_calls_even_with_other_good_metrics(self):
         cases, rows, identity = artificial_outcomes()
         cases[-1] = replace(cases[-1], expect='unresolved', unavailable=('baseline',))
@@ -391,7 +380,6 @@ class ProviderEvaluationTests(unittest.TestCase):
         rows[-1]['attempts'] = 1
         self.assertFalse(qualify_profile(cases, rows, identity, real_provider_execution=True)['qualified'])
 
-    @proves('MYC-13.15')
     def test_profile_identity_changes_require_a_new_versioned_profile_report(self):
         cases, rows, _ = artificial_outcomes()
         diagnostics = classification_diagnostics(cases, rows)

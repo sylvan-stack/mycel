@@ -6,7 +6,6 @@ from uuid import uuid4
 
 from psycopg.types.json import Jsonb
 
-from mycel._coverage import proves
 from mycel._declared_refs import _raw
 from mycel._errors import MycelError
 from mycel._ranking_store import graph_for
@@ -71,7 +70,6 @@ class RankingStoreTests(unittest.TestCase):
     def entries(reply):
         return {entry.chunk.identifier: entry for entry in reply.results}
 
-    @proves('MYC-4.9', kind='store')
     def test_bridge_uses_full_document_and_code_pools_before_eight_and_three_caps(self):
         with self.base.connection() as connection:
             for number in range(25):
@@ -111,7 +109,6 @@ class RankingStoreTests(unittest.TestCase):
                 self.assertEqual(len(graph.documents), 9)
                 self.assertEqual(len(graph.citations), 9)
 
-    @proves('MYC-4.9', 'MYC-4.17', kind='store')
     def test_repeated_refs_do_not_multiply_results_via_or_documented_in(self):
         with self.base.connection() as connection:
             code = self.seed(connection, path='work.py', name='Work', cosine=.8)
@@ -131,7 +128,6 @@ class RankingStoreTests(unittest.TestCase):
                 self.assertEqual(entry.via.name, 'b')
                 self.assertEqual([doc.name for doc in entry.documented_in], ['b', 'z'])
 
-    @proves('MYC-4.9', kind='store')
     def test_current_resolved_versions_replace_pins_and_retained_moves_keep_identity(self):
         with self.base.connection() as connection:
             old = self.seed(connection, path='work.py', name='Work', cosine=.7)
@@ -156,7 +152,6 @@ class RankingStoreTests(unittest.TestCase):
                 self.assertEqual(entry.chunk.path, 'moved.py')
                 self.assertEqual(entry.via.name, 'Guide')
 
-    @proves('MYC-4.9', 'MYC-4.17', kind='store')
     def test_branch_owned_refs_generated_edges_faults_and_foreign_code_never_deliver(self):
         with self.base.connection() as connection:
             code = self.seed(connection, path='work.py', name='Work', cosine=.4)
@@ -180,7 +175,6 @@ class RankingStoreTests(unittest.TestCase):
                 self.assertEqual(entry.documented_in, ())
                 self.assertNotIn(str(foreign[1]), self.entries(snapshot.ranked('how does work happen', self.query)[0]))
 
-    @proves('MYC-4.9', 'MYC-4.17', kind='store')
     def test_snapshot_is_read_only_stable_per_member_and_refuses_escaped_lease(self):
         with self.base.connection() as connection, self.base.connection() as writer:
             code = self.seed(connection, path='work.py', name='Work', cosine=.4)
@@ -207,7 +201,6 @@ class RankingStoreTests(unittest.TestCase):
             self.assertFalse(any(statement.lstrip().upper().startswith(
                 ('INSERT','UPDATE','DELETE','CREATE','ALTER','DROP')) for statement in recorded.statements))
 
-    @proves('MYC-4.9', 'MYC-4.17', kind='store')
     def test_actual_ingest_file_and_class_family_refs_are_one_hop_current_disk_citations(self):
         base = ingest_fixtures.IngestStoreTests()
         base.store_fixture = self.store_fixture
@@ -234,7 +227,6 @@ class RankingStoreTests(unittest.TestCase):
                 reply = snapshot.ranked('how does work happen', self.query, k=100, only='code')[0]
                 self.assertTrue(any(entry.via and entry.via.name=='Guide' for entry in reply.results))
 
-    @proves('MYC-4.9', 'MYC-4.17', kind='store')
     def test_incomplete_citers_and_selected_shared_documents_respect_code_only_scope(self):
         with self.base.connection() as connection:
             code = self.seed(connection, path='work.py', name='Work', cosine=.4)
@@ -253,7 +245,6 @@ class RankingStoreTests(unittest.TestCase):
                 self.assertEqual(code_only.via.name, 'Own')
                 self.assertEqual([doc.name for doc in code_only.documented_in], ['Own'])
 
-    @proves('MYC-4.9', 'MYC-4.17', kind='store')
     def test_actual_ingest_shared_version_branch_ref_cannot_restore_deleted_disk_source(self):
         base = ingest_fixtures.IngestStoreTests()
         base.store_fixture = self.store_fixture

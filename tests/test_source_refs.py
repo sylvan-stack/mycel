@@ -3,7 +3,6 @@
 from dataclasses import FrozenInstanceError
 import unittest
 
-from mycel._coverage import proves
 from mycel._markdown import split_markdown
 from mycel._source_refs import (SourceAddress, SourceAddressError,
                                format_source_address, parse_source_address,
@@ -11,7 +10,6 @@ from mycel._source_refs import (SourceAddress, SourceAddressError,
 
 
 class SourceAddressTests(unittest.TestCase):
-    @proves("MYC-16.1")
     def test_qualified_roots_select_distinct_literal_places(self):
         for root in ("code", "artifact"):
             with self.subTest(root=root):
@@ -19,7 +17,6 @@ class SourceAddressTests(unittest.TestCase):
                 self.assertEqual(address, SourceAddress("cellar", root, "README.md", "Setup"))
                 self.assertEqual(address.address, f"cellar:@{root}/README.md#Setup")
 
-    @proves("MYC-16.1")
     def test_unicode_spaces_delimiters_and_percent_canonicalize_once(self):
         address = parse_source_address("café%3A案:@artifact/docs/naïve%23plan%25.md#Limits > Ω%3A%23%25/名")
         self.assertEqual((address.repository, address.path, address.name),
@@ -29,12 +26,10 @@ class SourceAddressTests(unittest.TestCase):
         self.assertEqual(parse_source_address(canonical), address)
         self.assertEqual(format_source_address(parse_source_address(canonical)), canonical)
 
-    @proves("MYC-16.1")
     def test_lowercase_escapes_format_uppercase_with_all_unreserved_ascii_unchanged(self):
         address = parse_source_address("a-z_A.Z~09:@code/na%c3%afve%20x.py#%e2%82%ac")
         self.assertEqual(address.address, "a-z_A.Z~09:@code/na%C3%AFve%20x.py#%E2%82%AC")
 
-    @proves("MYC-16.1")
     def test_no_unicode_normalization_or_case_folding(self):
         composed = parse_source_address("Répo:@code/café.py#ABC")
         decomposed = parse_source_address("Répo:@code/café.py#abc")
@@ -42,7 +37,6 @@ class SourceAddressTests(unittest.TestCase):
         self.assertEqual(parse_source_address(composed.address), composed)
         self.assertEqual(parse_source_address(decomposed.address), decomposed)
 
-    @proves("MYC-16.1")
     def test_legacy_percent_sequences_and_spaces_are_literal_and_have_no_guessed_root(self):
         for ref in ("repo:docs/a%20b.md#Limits > Backoff", "repo:src/%ZZ.py#%2F",
                     "répo:docs/猫.md#A#B", "repo:summaries#1/7", "repo:overview#src/net"):
@@ -52,7 +46,6 @@ class SourceAddressTests(unittest.TestCase):
                 self.assertEqual(address.address, ref)
         self.assertEqual(parse_source_address("repo:docs/a%20b.md").path, "docs/a%20b.md")
 
-    @proves("MYC-16.1")
     def test_reserved_prefixes_and_real_folders_are_explicit(self):
         address = parse_source_address("repo:@code/@code/file.md")
         self.assertEqual((address.root, address.path), ("code", "@code/file.md"))
@@ -63,7 +56,6 @@ class SourceAddressTests(unittest.TestCase):
         with self.assertRaises(SourceAddressError):
             format_source_address(SourceAddress("repo", None, "@artifact/file.md"))
 
-    @proves("MYC-16.1")
     def test_index_namespaces_and_name_paths(self):
         for ref, name, canonical in (("repo:@index/summaries#1/7", "1/7", "repo:@index/summaries#1%2F7"),
                                      ("repo:@index/overview#src/net", "src/net", "repo:@index/overview#src%2Fnet")):
@@ -73,7 +65,6 @@ class SourceAddressTests(unittest.TestCase):
             with self.subTest(path=path), self.assertRaises(SourceAddressError):
                 parse_source_address("repo:@index/" + path)
 
-    @proves("MYC-16.1")
     def test_encoded_separator_traversal_and_backslashes_are_refused(self):
         paths = ("/absolute", "a//b", "a/", ".", "..", "a/../b", "a/./b", "a\\b",
                  "%2e%2e/b", "a/%2E/b", "a%2fb", "a%2Fb", "%2fabsolute", "a%5Cb", "%00")
@@ -85,13 +76,11 @@ class SourceAddressTests(unittest.TestCase):
             with self.subTest(legacy=path), self.assertRaises(SourceAddressError):
                 parse_source_address("repo:" + path)
 
-    @proves("MYC-16.1")
     def test_double_encoded_sequences_remain_literal_after_one_decode(self):
         address = parse_source_address("repo:@code/a%252Fb/%252e%252e.py#Name%2523x")
         self.assertEqual((address.path, address.name), ("a%2Fb/%2e%2e.py", "Name%23x"))
         self.assertEqual(address.address, "repo:@code/a%252Fb/%252e%252e.py#Name%2523x")
 
-    @proves("MYC-16.1")
     def test_malformed_utf8_escapes_empty_components_and_controls_are_visible(self):
         refs = ("", "no separator", ":path", "repo:", "repo:path#", "repo:@code/", "repo:@code/path#",
                 "repo:@code/%", "repo:@code/%0", "repo:@code/%GG", "repo:@code/%FF", "repo:@code/%C0%AF",
@@ -104,7 +93,6 @@ class SourceAddressTests(unittest.TestCase):
                 parse_source_address(ref)
             self.assertEqual(error.exception.fault, "not_a_ref")
 
-    @proves("MYC-16.1")
     def test_formatter_validates_constructed_addresses_and_dataclass_is_immutable(self):
         for address in (SourceAddress("", "code", "a"), SourceAddress("r", "bad", "a"),
                         SourceAddress("r", "artifact", "a//b"), SourceAddress("r", "code", "a", ""),
@@ -123,7 +111,6 @@ class DocumentDeclarationTests(unittest.TestCase):
     def refs(self, declarations):
         return tuple(source for chunk in declarations.chunk_sources for source in chunk.sources)
 
-    @proves("MYC-2.1", "MYC-2.3")
     def test_quoted_yaml_anchors_flow_sources_and_freeform_heartwood_pins(self):
         declarations = self.declarations("---\nrole: 'derived'\nstatus: \"heartwood\"\nimplemented: 2026-03\n"
                                          "outdated: 'last commit: café'\ngenerated: true\n"
@@ -137,7 +124,6 @@ class DocumentDeclarationTests(unittest.TestCase):
         self.assertEqual([source.chunk for source in declarations.frontmatter_sources], ["Notes", "Notes"])
         self.assertEqual(declarations.diagnostics, ())
 
-    @proves("MYC-2.1")
     def test_yaml_false_is_false_and_unrelated_fields_never_set_flags(self):
         declarations = self.declarations("---\ngenerated: false\nrole: authored\nheartwood: true\n"
                                          "implemented: before\noutdated: after\nunknown: {generated: true}\n---\n# A\n")
@@ -147,7 +133,6 @@ class DocumentDeclarationTests(unittest.TestCase):
         self.assertEqual(declarations.diagnostics, ())
         self.assertEqual(dict(self.declarations("# Plain\n").metadata), {})
 
-    @proves("MYC-2.1", "MYC-2.2")
     def test_metadata_and_diagnostic_values_remain_immutable(self):
         declarations = self.declarations("---\nstatus: heartwood\nsources: [repo:a, {bad: [one, two]}]\n---\n# A\n")
         with self.assertRaises(TypeError):
@@ -159,7 +144,6 @@ class DocumentDeclarationTests(unittest.TestCase):
         self.assertEqual(declarations.diagnostics[0].key, "sources[1]")
         self.assertEqual(declarations.diagnostics[0].value["bad"], ("one", "two"))
 
-    @proves("MYC-2.2")
     def test_each_known_wrong_value_reports_its_file_and_key(self):
         declarations = self.declarations("---\nrole: false\nstatus: accepted\ngenerated: 'false'\n"
                                          "implemented: [a, b]\noutdated: {date: yesterday}\nsources: repo:a\n---\n# A\n",
@@ -174,7 +158,6 @@ class DocumentDeclarationTests(unittest.TestCase):
             declaration = self.declarations("---\ngenerated: " + yaml.safe_dump(generated).replace("\n...\n", "\n") + "---\n# A\n")
             self.assertTrue(declaration.diagnostics)
 
-    @proves("MYC-2.2")
     def test_unreadable_yaml_is_reported_and_never_trusted_as_metadata_or_sources(self):
         for source in ("---\nrole: [broken\n<!-- sources:\nrepo:a\n-->\n---\n# A\n",
                        "---\nrole: derived\nrole: authored\n---\n# A\n",
@@ -186,7 +169,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                 self.assertTrue(declarations.diagnostics)
                 self.assertTrue(all(diagnostic.file == "bad.md" for diagnostic in declarations.diagnostics))
 
-    @proves("MYC-2.3")
     def test_frontmatter_sources_attach_to_first_preamble_chunk_only(self):
         declarations = self.declarations("---\nsources: [repo:whole.md]\n---\nPreface\n\n# First\n"
                                          "<!-- sources:\nrepo:one.py#f\nrepo:two.md#A > B\n-->\n"
@@ -196,7 +178,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                          [["repo:whole.md"], ["repo:one.py#f", "repo:two.md#A > B"], ["repo:three"]])
         self.assertEqual([source.line for source in self.refs(declarations)], [None, 8, 9, 12])
 
-    @proves("MYC-2.3")
     def test_malformed_entries_and_duplicate_declarations_are_retained_in_source_order(self):
         declarations = self.declarations("---\nsources: [not a ref, repo:a, repo:a, 'repo:@code/%FF']\n---\n# A\n"
                                          "<!-- sources:\n  repo:a  \n  nonsense  \nrepo:@code/a%2Fb\n\nrepo:a, repo:b\n-->\n")
@@ -208,14 +189,12 @@ class DocumentDeclarationTests(unittest.TestCase):
         self.assertEqual(refs[4].raw_line, "  repo:a  \n")
         self.assertEqual(refs[7].address.path, "a, repo:b")
 
-    @proves("MYC-2.3")
     def test_empty_body_still_retains_frontmatter_declarations_without_inventing_a_chunk(self):
         declarations = self.declarations("---\nsources: [repo:a]\n---\n")
         self.assertEqual(len(declarations.frontmatter_sources), 1)
         self.assertIsNone(declarations.frontmatter_sources[0].chunk)
         self.assertEqual(declarations.chunk_sources, ())
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_crlf_cr_and_unicode_keep_original_lines_and_do_not_split_unicode_whitespace(self):
         for newline in ("\n", "\r\n", "\r"):
             source = newline.join(("# Ω", "<!-- sources:", "répo:docs/猫.md#A\u2028B", "repo:two", "-->", ""))
@@ -227,7 +206,6 @@ class DocumentDeclarationTests(unittest.TestCase):
             self.assertEqual(refs[0].raw_line, "répo:docs/猫.md#A\u2028B" + newline)
             self.assertEqual("".join(chunk.text for chunk in document.chunks), source)
 
-    @proves("MYC-2.4")
     def test_backtick_tilde_and_container_fences_hide_comments_until_a_valid_closer(self):
         containers = (("", ""), ("- ", "  "), ("1. ", "   "), ("> ", "> "),
                       ("> > ", "> > "), ("> - ", ">   "), ("- > ", "  > "))
@@ -241,7 +219,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                                                continuation + marker, "<!-- sources: repo:visible -->", ""))
                         self.assertEqual([source.ref for source in self.refs(self.declarations(source))], ["repo:visible"])
 
-    @proves("MYC-2.4")
     def test_inherited_list_fences_and_container_dedent(self):
         for source in ("# A\n- item\n\n  ```\n  <!-- sources: repo:hidden -->\n  ```\n<!-- sources: repo:visible -->\n",
                        "# A\n> ```\n> <!-- sources: repo:hidden -->\n<!-- sources: repo:visible -->\n",
@@ -249,7 +226,6 @@ class DocumentDeclarationTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.assertEqual([ref.ref for ref in self.refs(self.declarations(source))], ["repo:visible"])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_lazy_quote_and_list_paragraphs_keep_code_spans_across_physical_lines(self):
         for newline in ("\n", "\r\n", "\r"):
             for opening in ("> `open", "- `open", "1. `open", "> - `open", "> > `open"):
@@ -265,7 +241,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                     self.assertEqual([ref.raw_line for ref in refs],
                                      ["repo:after" + newline, "<!-- sources: repo:outside -->" + newline])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_lazy_setext_text_keeps_code_span_but_actual_block_starts_end_it(self):
         for newline in ("\n", "\r\n", "\r"):
             for opening in ("> `open", "- `open"):
@@ -279,7 +254,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                 self.assertEqual([ref.ref for ref in refs], ["repo:outside", "repo:heading"])
                 self.assertEqual([ref.line for ref in refs], [3, 6])
 
-    @proves("MYC-2.4")
     def test_inline_code_equal_length_runs_escapes_and_unmatched_backticks(self):
         source = ("# A\n`<!-- sources: repo:hidden -->` and <!-- sources: repo:one -->\n\n"
                   "``literal ` <!-- sources: repo:hidden2 --> ``\n\n"
@@ -290,7 +264,6 @@ class DocumentDeclarationTests(unittest.TestCase):
         self.assertEqual([ref.ref for ref in self.refs(self.declarations(source))],
                          ["repo:one", "repo:two", "repo:three", "repo:four#tick`name"])
 
-    @proves("MYC-2.4")
     def test_code_spans_do_not_cross_blank_lines_headings_or_html_block_boundaries(self):
         source = ("# A\nunmatched `\n\n<!-- sources: repo:blank -->\nclosing `\n"
                   "# Next\n<!-- sources: repo:heading -->\n`\n"
@@ -298,7 +271,6 @@ class DocumentDeclarationTests(unittest.TestCase):
         self.assertEqual([ref.ref for ref in self.refs(self.declarations(source))],
                          ["repo:blank", "repo:heading", "repo:block"])
 
-    @proves("MYC-2.4")
     def test_indented_code_raw_html_and_nested_ordinary_comments_hide_examples(self):
         source = ("# A\n\n    <!-- sources: repo:indented -->\n\n"
                   "<pre>\n<!-- sources: repo:pre -->\n</pre>\n"
@@ -308,13 +280,11 @@ class DocumentDeclarationTests(unittest.TestCase):
                   "<!-- sources: repo:visible -->\n")
         self.assertEqual([ref.ref for ref in self.refs(self.declarations(source))], ["repo:visible"])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_real_html_tags_have_precedence_over_backticks_and_comment_literals_in_attributes(self):
         source = ("# A\nA tag <a title='`'> <!-- sources: repo:visible --> followed by `literal`\n\n"
                   "A tag <a title='<!-- sources: repo:attribute -->'> <!-- sources: repo:other -->\n")
         self.assertEqual([ref.ref for ref in self.refs(self.declarations(source))], ["repo:visible", "repo:other"])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_complete_inline_link_destinations_and_titles_are_opaque(self):
         links = (
             '[label](dest "<!-- sources: repo:hidden -->")',
@@ -341,7 +311,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                                      [(2, "Ω", line + newline)])
                     self.assertEqual("".join(chunk.text for chunk in document.chunks), source)
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_multiline_inline_titles_preserve_following_declaration_lines(self):
         for newline in ("\n", "\r\n", "\r"):
             with self.subTest(newline=newline):
@@ -354,7 +323,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                 self.assertEqual([(ref.line, ref.chunk, ref.raw_line) for ref in refs],
                                  [(5, "Ω", "repo:visible" + newline)])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_link_labels_keep_actual_comments_and_inline_code_precedence(self):
         cases = (
             ('[label <!-- sources: repo:label -->](dest "<!-- sources: repo:hidden -->")',
@@ -370,7 +338,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                 self.assertEqual([ref.ref for ref in self.refs(self.declarations("# A\n" + source + "\n"))],
                                  expected)
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_malformed_inline_link_suffixes_leave_visible_comments_in_prose(self):
         malformed = (
             '[label](dest "missing <!-- sources: repo:visible -->)',
@@ -388,7 +355,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                     self.assertEqual([ref.ref for ref in refs], ["repo:visible"])
                     self.assertEqual([ref.line for ref in refs], [2])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_reference_definition_titles_are_opaque_before_following_prose(self):
         definitions = (
             '[label]: dest "<!-- sources: repo:hidden --> `"',
@@ -410,7 +376,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                                      [(4, "Ω", visible + newline)])
                     self.assertEqual("".join(chunk.text for chunk in document.chunks), source)
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_multiline_and_consecutive_reference_titles_keep_physical_spans(self):
         for newline in ("\n", "\r\n", "\r"):
             with self.subTest(newline=newline):
@@ -424,7 +389,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                 self.assertEqual([(ref.line, ref.chunk, ref.raw_line) for ref in refs],
                                  [(9, "Ω", "repo:visible" + newline)])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_invalid_or_paragraph_internal_reference_titles_remain_prose(self):
         cases = (
             ('[label]: dest "<!-- sources: repo:visible -->" extra', 3),
@@ -442,7 +406,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                     self.assertEqual([ref.ref for ref in refs], ["repo:visible"])
                     self.assertEqual([ref.line for ref in refs], [physical_line])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_nested_full_collapsed_and_shortcut_references_reject_outer_link_titles(self):
         for newline in ("\n", "\r\n", "\r"):
             for inner in ("[text][id]", "[id][]", "[id]"):
@@ -459,7 +422,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                                          [(5 if definition_first else 3, "Ω", visible + newline)])
                         self.assertEqual("".join(chunk.text for chunk in document.chunks), source)
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_reference_labels_use_raw_escapes_casefold_and_collapsed_whitespace(self):
         cases = (
             ("[text][a B]", "[ A  b ]: /target", True),
@@ -483,7 +445,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                     self.assertEqual([ref.line for ref in refs],
                                      [3 + inner.count("\n")] * (2 if matched else 1))
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_unknown_or_malformed_full_reference_labels_preserve_outer_title_context(self):
         cases = (
             ("[id][missing]", False),
@@ -507,7 +468,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                 self.assertEqual([ref.ref for ref in refs], expected)
                 self.assertTrue(all(ref.line == 5 for ref in refs))
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_only_eligible_definition_blocks_bind_references(self):
         definitions = (
             ("[id]: /target", True),
@@ -532,7 +492,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                                      ["repo:outer", "repo:after"] if matched else ["repo:after"])
                     self.assertTrue(all(ref.line == 3 for ref in refs))
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_duplicate_and_multiline_definitions_bind_without_consuming_real_comments(self):
         for newline in ("\n", "\r\n", "\r"):
             with self.subTest(newline=newline):
@@ -547,7 +506,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                                  [(3, "Ω", visible + newline),
                                   (11, "Ω", '[A B]: /bad "<!-- sources: repo:malformed -->" extra' + newline)])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_reference_label_length_limit_and_definition_late_title_fallback(self):
         for size in (999, 1000):
             with self.subTest(size=size):
@@ -564,7 +522,6 @@ class DocumentDeclarationTests(unittest.TestCase):
                 self.assertEqual([ref.ref for ref in refs], ["repo:outer", "repo:ordinary"])
                 self.assertEqual([ref.line for ref in refs], [3, 6])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_autolink_brackets_and_backticks_remain_literal_in_link_labels(self):
         for newline in ("\n", "\r\n", "\r"):
             for literal in ("<https://example.com/?search=][id]>", "<https://example.com/tick`>", "<tick`@example.com>"):
@@ -576,13 +533,11 @@ class DocumentDeclarationTests(unittest.TestCase):
                     self.assertEqual([ref.ref for ref in refs], ["repo:after", "repo:plain"])
                     self.assertEqual([ref.line for ref in refs], [5, 7])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_fence_tokens_in_ordinary_html_blocks_are_literal_and_do_not_hide_declarations(self):
         source = ("# A\n<div>\n```\n<!-- sources: repo:html -->\n</div>\n\n"
                   "```\n<!-- sources: repo:code -->\n```\n<!-- sources: repo:after -->\n")
         self.assertEqual([ref.ref for ref in self.refs(self.declarations(source))], ["repo:html", "repo:after"])
 
-    @proves("MYC-2.3", "MYC-2.4")
     def test_container_prose_comments_keep_physical_source_and_scope(self):
         source = "# A\n> <!-- sources:\n> repo:quoted\n> -->\n- <!-- sources:\n  repo:listed\n  -->\n"
         refs = self.refs(self.declarations(source))
@@ -591,7 +546,6 @@ class DocumentDeclarationTests(unittest.TestCase):
         self.assertEqual([ref.line for ref in refs], [3, 6])
         self.assertTrue(all(ref.chunk == "A" for ref in refs))
 
-    @proves("MYC-2.3")
     def test_unclosed_sources_comment_keeps_refs_as_faults_and_reports_file(self):
         declarations = self.declarations("# A\n<!-- sources:\nrepo:a\nnot a ref\n")
         self.assertEqual([ref.ref for ref in self.refs(declarations)], ["repo:a", "not a ref"])

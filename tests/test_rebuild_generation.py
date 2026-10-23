@@ -11,7 +11,7 @@ from uuid import UUID
 
 from mycel._classification_store import ClassificationStore
 from mycel._cli import run
-from mycel._coverage import proves, require_check_database
+from mycel._coverage import require_check_database
 from mycel._drift_store import DriftStore
 from mycel._evidence import EvidenceStore
 from mycel._store import TABLES, inspect_store
@@ -128,7 +128,6 @@ class RebuildGenerationStoreTests(ClassificationStoreFixture):
             for name, (value, called) in sequences.items():
                 connection.execute('SELECT setval(%s::regclass,%s,%s)', ('public.' + name, value, called))
 
-    @proves('MYC-16.12', kind='store')
     def test_lost_store_cli_rebuild_reports_new_generation_and_only_new_current_baselines(self):
         old_generation, old_baseline, verification, prepared = self.history()
         with self.base.connect() as connection:
@@ -168,7 +167,6 @@ class RebuildGenerationStoreTests(ClassificationStoreFixture):
         for entry, _, _ in entries:
             self.assertEqual(self.invoke('activity', '--entry', str(entry))['entries'][0]['indexGeneration'], generation)
 
-    @proves('MYC-16.12', kind='store')
     def test_exact_store_backup_restores_generation_pins_verification_and_classifier_bytes(self):
         generation, baseline, verification, prepared = self.history()
         with self.base.connect() as connection:

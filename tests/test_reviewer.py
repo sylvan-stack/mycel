@@ -19,7 +19,6 @@ from mycel import _classification_payload as payload
 from mycel import _evidence as evidence
 from mycel import _reviewer as reviewer
 from mycel._classification_runner import ClassifyDependencies, _Runner
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._jev import JevOutcome
 from mycel._safeguards import CompletedChild, InvocationPolicy, SYSTEM_PATH
@@ -103,7 +102,6 @@ class ReviewerProtocolTests(unittest.TestCase):
         self.decision = context_fixture(command)
         self.request = payload.ReviewerRequest(self.decision, 1000)
 
-    @proves('MYC-13.21', 'MYC-14.19', 'MYC-14.24')
     def test_success_strict_identity_judgement_evidence_and_usage(self):
         for judgement in payload.LABELS:
             reply = reviewer.validate_response(completed(success(self.request, judgement=judgement)), self.request)
@@ -126,7 +124,6 @@ class ReviewerProtocolTests(unittest.TestCase):
             self.assertEqual(raised.exception.code, 'protocol')
             self.assertFalse(raised.exception.retryable)
 
-    @proves('MYC-13.21', 'MYC-14.24', 'MYC-14.26')
     def test_failure_codes_delays_exit_and_safe_diagnostics(self):
         codes = ('authentication', 'connection', 'timeout', 'rate_limited', 'unavailable', 'input_too_large',
                  'invalid_request', 'provider_result_invalid', 'unsupported_protocol', 'internal')
@@ -162,7 +159,6 @@ class ReviewerProtocolTests(unittest.TestCase):
             with self.subTest(missing=missing), self.assertRaises(reviewer.ReviewerFailure):
                 reviewer.validate_response(completed(value, 1), self.request)
 
-    @proves('MYC-13.21', 'MYC-14.24')
     def test_json_rejects_duplicate_keys_bom_nonfinite_trailing_and_unknown_shapes(self):
         raw = json.dumps(success(self.request)).encode()
         accepted = reviewer.validate_response(completed(b' \t\r\n' + raw + b'\r\n '), self.request)
@@ -183,7 +179,6 @@ class ReviewerProtocolTests(unittest.TestCase):
             with self.subTest(exit=exit), self.assertRaises(reviewer.ReviewerFailure):
                 reviewer.validate_response(completed(mixed, exit), self.request)
 
-    @proves('MYC-14.27', 'MYC-14.24')
     def test_documented_complete_examples_validate_hash_wire_contract_and_replies(self):
         documentation = (Path(__file__).resolve().parents[1] / 'docs/reviewer.md').read_text()
         def block(heading):
@@ -230,7 +225,6 @@ class ReviewerExecutionTests(unittest.TestCase):
         return client.classify(decision, deadline=kwargs.pop('deadline', time.monotonic() + 5),
             before_call=kwargs.pop('before_call', lambda: None), **kwargs)
 
-    @proves('MYC-13.21', 'MYC-14.19', 'MYC-14.23', 'MYC-14.24', 'MYC-14.27')
     def test_exact_request_eof_independent_context_and_literal_resolved_argv(self):
         captured = self.root / 'request'
         observed = self.root / 'observed'
@@ -276,7 +270,6 @@ assert all(key not in request for key in ('probabilities','confidence','reason',
         self.assertEqual(result.request.decision, decision)
         self.assertEqual(result.request.decision.payload['context'], decision.payload['context'])
 
-    @proves('MYC-13.21', 'MYC-14.23')
     def test_inheritable_store_lock_and_credential_descriptors_are_closed(self):
         with (self.root / 'credential').open('w+b') as credential, (self.root / 'lock').open('w+b') as lock:
             fds = [credential.fileno(), lock.fileno()]
@@ -292,7 +285,6 @@ assert closed=={fds!r}
             for fd in fds:
                 self.assertIsNotNone(os.fstat(fd))
 
-    @proves('MYC-13.21', 'MYC-14.19', 'MYC-14.24', 'MYC-14.26')
     def test_large_complete_request_and_concurrent_output_pressure_do_not_deadlock(self):
         captured = self.root / 'request'
         code = """import os,sys
@@ -316,7 +308,6 @@ os.write(2,b'd'*65536)
         result = self.call(*self.adapter(exact_code))
         self.assertEqual(result.judgement, 'needs_review')
 
-    @proves('MYC-13.21', 'MYC-14.19', 'MYC-14.26')
     def test_full_transmitted_byte_budget_counts_lf_and_never_truncates_or_spawns(self):
         client, decision = self.adapter()
         wire_size = len(payload.ReviewerRequest(decision, 1000).transmitted_bytes)
@@ -335,7 +326,6 @@ os.write(2,b'd'*65536)
             self.assertEqual(result.request.decision.payload['current']['state'], state)
             self.assertTrue(result.request.decision.payload['before'][0]['text'])
 
-    @proves('MYC-13.21', 'MYC-14.23', 'MYC-14.26')
     def test_dry_run_report_paths_and_unavailable_command_launch_nothing(self):
         client, decision = self.adapter()
         for policy in (InvocationPolicy('classify', dry_run=True), InvocationPolicy('read'),
@@ -352,7 +342,6 @@ os.write(2,b'd'*65536)
         self.assertEqual(raised.exception.code, 'review_command_unavailable')
         spawn.assert_not_called()
 
-    @proves('MYC-13.21', 'MYC-14.19', 'MYC-14.23')
     def test_changed_executable_or_frozen_configuration_is_refused_at_fresh_launch_guard(self):
         adapter = self.root / 'adapter'
         adapter.write_text('#!/bin/sh\nexit 1\n')
@@ -380,7 +369,6 @@ os.write(2,b'd'*65536)
         self.assertEqual(raised.exception.code, 'obsolete')
         spawn.assert_not_called()
 
-    @proves('MYC-13.21', 'MYC-14.19', 'MYC-14.26')
     def test_under_millisecond_or_exhausted_prelaunch_budget_never_spawns(self):
         for invalid in (0, -1, True, float('inf'), float('nan'), 10**1000):
             with self.subTest(timeout=invalid), self.assertRaises(MycelError):
@@ -399,7 +387,6 @@ os.write(2,b'd'*65536)
         self.assertEqual(raised.exception.code, 'timeout')
         spawn.assert_not_called()
 
-    @proves('MYC-13.21', 'MYC-14.19', 'MYC-14.24', 'MYC-14.26')
     def test_valid_object_followed_by_hang_or_wrong_exit_is_never_success(self):
         for tail, expected in (('time.sleep(10)\n', 'timeout'), ('sys.exit(1)\n', 'protocol'),
                                ('sys.exit(2)\n', 'transport'), ('os.kill(os.getpid(),15)\n', 'transport')):
@@ -408,7 +395,6 @@ os.write(2,b'd'*65536)
                 self.call(client, decision)
             self.assertEqual(raised.exception.code, expected)
 
-    @proves('MYC-13.21', 'MYC-14.19', 'MYC-14.24', 'MYC-14.26')
     def test_incomplete_request_cannot_accept_a_premature_valid_reply(self):
         # An adversarial adapter knows the expected reply but closes stdin before
         # the request is transmitted. A large full request keeps writes pending.
@@ -424,7 +410,6 @@ os.write(2,b'd'*65536)
         self.assertEqual(raised.exception.code, 'input_incomplete')
         self.assertFalse(raised.exception.retryable)
 
-    @proves('MYC-13.21', 'MYC-14.19', 'MYC-14.26')
     def test_output_overflow_kills_and_reaps_before_another_attempt(self):
         real_spawn = subprocess.Popen
         for stream, size in ((1, 1048577), (2, 65537)):
@@ -453,7 +438,6 @@ os.write({stream},b'fixture-secret'+b'x'*{size});time.sleep(10)
             time.sleep(max(0, 1.7 - (time.monotonic() - started)))
             self.assertFalse(survived.exists())
 
-    @proves('MYC-13.21', 'MYC-14.26')
     def test_typed_transient_failure_is_exposed_once_without_adapter_or_parent_retry(self):
         count = self.root / 'calls'
         code = READ + f"""__import__('pathlib').Path({str(count)!r}).write_text('one')
@@ -471,7 +455,6 @@ reply['error']={{'code':'rate_limited','message':'fixture-secret adapter diagnos
         self.assertTrue(raised.exception.retryable)
         self.assertNotIn('fixture-secret', json.dumps(raised.exception.as_dict()))
 
-    @proves('MYC-13.21', 'MYC-14.26')
     def test_timeout_and_cancellation_kill_ignoring_descendants_and_reap_child(self):
         real_spawn = subprocess.Popen
         for cancel in (False, True):
@@ -549,7 +532,6 @@ print(json.dumps({{'interrupted':interrupted,'reaped':reaped}}))
         time.sleep(max(0, 1.7 - (time.monotonic() - started)))
         self.assertFalse(survived.exists())
 
-    @proves('MYC-13.21', 'MYC-14.26')
     def test_successful_parent_cannot_leave_a_live_descendant_behind(self):
         survived = self.root / 'survived'
         grandchild = f"import pathlib,signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);time.sleep(1.5);pathlib.Path({str(survived)!r}).write_text('survived')"
@@ -560,7 +542,6 @@ print(json.dumps({{'interrupted':interrupted,'reaped':reaped}}))
         time.sleep(max(0, 1.7 - (time.monotonic() - started)))
         self.assertFalse(survived.exists())
 
-    @proves('MYC-13.21', 'MYC-14.19', 'MYC-14.26')
     def test_invocation_deadline_bounds_guard_spawn_drain_validation_and_budget(self):
         client, decision = self.adapter(limits=reviewer.ReviewerLimits(3))
         result = self.call(client, decision, deadline=time.monotonic() + .4)
@@ -578,7 +559,6 @@ print(json.dumps({{'interrupted':interrupted,'reaped':reaped}}))
             self.call(client, decision, deadline=time.monotonic() + .08)
         self.assertEqual(raised.exception.code, 'timeout')
 
-    @proves('MYC-13.21')
     def test_real_typed_adapter_exhaustion_counts_attempts_and_waits_after_reaping(self):
         # Only store lease/guard observations use an in-memory seam. The finite
         # parent, ReviewerClient, process launcher and wire parser are genuine.
@@ -649,7 +629,6 @@ sys.stdout.write(json.dumps(reply));sys.stdout.flush();sys.exit(1)
         self.assertAlmostEqual(sum(waits), 1.25)
         self.assertTrue(all(child.returncode is not None for child in children))
 
-    @proves('MYC-13.21')
     def test_each_failure_path_removes_its_private_cwd_after_child_cleanup(self):
         real_spawn = subprocess.Popen
         tails = {
@@ -687,7 +666,6 @@ sys.stdout.write(json.dumps(reply));sys.stdout.flush();sys.exit(1)
             self.assertTrue(all(pipe.closed for pipe in
                                 (children[0].stdin, children[0].stdout, children[0].stderr)))
 
-    @proves('MYC-13.21')
     def test_real_executable_malformed_json_and_failure_exit_zero_never_succeed(self):
         variants = {
             'bom': "wire=b'\\xef\\xbb\\xbf'+wire\n",
@@ -708,7 +686,6 @@ sys.stdout.write(json.dumps(reply));sys.stdout.flush();sys.exit(1)
             self.assertFalse(raised.exception.retryable)
             self.assertEqual(spawn.call_count, 1)
 
-    @proves('MYC-13.21')
     def test_revision_and_executable_changes_independently_refuse_prior_review_inputs(self):
         executable = self.root / 'revision-adapter'
         executable.write_text('#!' + sys.executable + '\n' + READ + WRITE)

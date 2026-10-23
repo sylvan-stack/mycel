@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 
 
 AUDIT = runpy.run_path(str(Path(__file__).resolve().parents[1] /
@@ -23,7 +22,6 @@ HELP = {"program": "mycel", "options": ["--help"], "commands": [
 
 
 class HubCommandTests(unittest.TestCase):
-    @proves("MYC-0.12")
     def test_retired_commands_unavailable_handlers_and_command_specific_options_fail(self):
         text = ("`mycel sync` `mycel search --path src query` "
                 "`mycel future` `mycel --made-up` `--retired-option`")
@@ -33,7 +31,6 @@ class HubCommandTests(unittest.TestCase):
             ("command is unavailable",), ("unknown command",),
             ("unknown option --retired-option",)])
 
-    @proves("MYC-0.12")
     def test_multiline_inline_and_shell_examples_keep_options_and_skip_quoted_query_flags(self):
         text = ("# Example\n`mycel search --repo <repo>\n[--no-fresh]`\n"
                 "```sh\nmycel search --repo fixture \\\n  --no-fresh '--query-content'\n```\n")
@@ -44,7 +41,6 @@ class HubCommandTests(unittest.TestCase):
             self.assertEqual(mention.options, ("--repo", "--no-fresh"))
             self.assertEqual(faults, ())
 
-    @proves("MYC-0.12")
     def test_grep_options_are_delegated_and_file_names_are_not_commands(self):
         text = ("`src/mycel/file.py` `mycel …` `mycel --help` "
                 "`mycel grep -rn --regexp=needle src`")
@@ -52,7 +48,6 @@ class HubCommandTests(unittest.TestCase):
         self.assertEqual([mention.command for mention, _ in rows], ["--help", "grep"])
         self.assertEqual([faults for _, faults in rows], [(), ()])
 
-    @proves("MYC-0.12")
     def test_cli_executes_only_help_and_refuses_missing_files_or_invalid_help(self):
         import json
         with tempfile.TemporaryDirectory() as directory:

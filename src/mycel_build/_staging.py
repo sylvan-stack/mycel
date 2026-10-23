@@ -41,7 +41,7 @@ def check_input_manifest(inputs: list[dict]) -> list[dict]:
     # The runner and the code it imports are part of the gate, as are its
     # declarations and tests. Binding only tests/ would miss changed runner
     # semantics even when every named test retained its bytes.
-    return [row for row in inputs if row["path"].startswith(("src/", "checks/", "tests/", "scripts/"))
+    return [row for row in inputs if row["path"].startswith(("src/", "tests/", "scripts/"))
             or row["path"] in {"Makefile", "pyproject.toml"}]
 
 

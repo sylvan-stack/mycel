@@ -5,7 +5,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import run
-from mycel._coverage import proves
 
 try:
     from . import test_dependency_source_refresh as fixtures
@@ -31,7 +30,6 @@ class VerificationCommandTests(unittest.TestCase):
         self.assertEqual(diagnostic.getvalue(), '')
         return status, json.loads(output.getvalue())
 
-    @proves('MYC-7.18', 'MYC-7.20', 'MYC-7.30', kind='store')
     def test_real_confirm_dispatch_and_history_reply_with_explicit_and_default_voucher(self):
         self.fixture.answer.write_bytes(b'# Answer\nIndependent statement.\n')
         with self.base.connect() as connection:

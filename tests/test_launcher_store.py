@@ -11,7 +11,6 @@ from unittest.mock import patch
 
 from psycopg import sql
 
-from mycel._coverage import proves
 from mycel._store import STORE_FORMAT
 from mycel_build._core import digest, json_bytes
 from mycel_build._launcher import install_launcher
@@ -117,7 +116,6 @@ def stage_fixture_build(base):
 class LauncherRollbackStoreTests(unittest.TestCase):
     check_kind = "store"
 
-    @proves('MYC-15.10', kind='store')
     def test_build_install_select_withdraw_prune_and_version_rollback_preserve_settings_all_rows_schema_and_sequences(self):
         history = _History(self.store_fixture)
         with tempfile.TemporaryDirectory() as directory, history.connect() as connection:

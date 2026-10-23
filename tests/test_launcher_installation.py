@@ -15,7 +15,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel_build import _launcher as installer
 from mycel_build._core import BuildError, atomic_json, digest, file_manifest, json_bytes, seal_program
 
@@ -65,7 +64,6 @@ def bundle_fixture(base, label):
 
 
 class LauncherInstallationTests(unittest.TestCase):
-    @proves('MYC-15.7', 'MYC-15.9', kind='unit')
     def test_complete_independent_bundles_install_atomically_run_and_keep_old_bundle_bytes(self):
         with tempfile.TemporaryDirectory(prefix="mycel launcher ' quoted ") as directory:
             fixture = LauncherFixture(directory)
@@ -105,7 +103,6 @@ class LauncherInstallationTests(unittest.TestCase):
             self.assertEqual(installer.install_launcher(second, home=fixture.home)['bundle'], two['bundle'])
             self.assertEqual(tree_state(old_bundle), old_before)
 
-    @proves('MYC-15.9', kind='unit')
     def test_unrelated_command_and_unsafe_parent_refuse_before_creating_or_replacing_owner_files(self):
         for conflict in ('regular-command', 'outside-command-link', 'launcher-parent-link', 'bin-parent-link'):
             with self.subTest(conflict=conflict), tempfile.TemporaryDirectory() as directory:
@@ -133,7 +130,6 @@ class LauncherInstallationTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, 'refused')
                 self.assertEqual(tree_state(fixture.base), before)
 
-    @proves('MYC-15.9', kind='unit')
     def test_busy_installer_and_failed_final_cutover_preserve_existing_runnable_launcher(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = LauncherFixture(directory)
@@ -203,7 +199,6 @@ class LauncherInstallationTests(unittest.TestCase):
                         (fixture.home / '.mycel/launcher').iterdir() if path.is_dir()}, immutable)
                     self.assertFalse(list(entry.parent.glob('.mycel-launcher-*')))
 
-    @proves('MYC-15.9', kind='unit')
     def test_unchecked_or_tampered_bundle_never_replaces_existing_command(self):
         for damage in ('unchecked', 'payload', 'pin', 'writable'):
             with self.subTest(damage=damage), tempfile.TemporaryDirectory() as directory:

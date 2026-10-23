@@ -4,7 +4,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._code import chunk_code
-from mycel._coverage import proves
 from mycel._disk_reconciliation import _metadata
 from mycel._overview_render import OverviewFile, OverviewSymbol, render_sections
 
@@ -26,7 +25,6 @@ def parsed(path, source):
 
 
 class OverviewRenderTests(unittest.TestCase):
-    @proves('MYC-9.2', 'MYC-9.3', 'MYC-9.11', kind='unit')
     def test_all_files_classes_eight_caps_order_and_complete_counts_are_offline(self):
         source = 'class Zed:\n' + ''.join(f'    def m{i}(self):\n        return {i}\n' for i in range(11))
         source += '\nclass Alpha:\n    def only(self):\n        pass\n'
@@ -44,7 +42,6 @@ class OverviewRenderTests(unittest.TestCase):
             'f0, f1, f2, f3, f4, f5, f6, f7, +2 more\n- **empty.py**\n- **run.sh**\n')
         self.assertEqual(sections[0]['text'], '## .\n\n- **top.py**\n')
 
-    @proves('MYC-9.2', 'MYC-9.3', 'MYC-9.11', kind='unit')
     def test_duplicate_nested_classes_continuations_kind_and_position_ties(self):
         file = parsed('same.py', 'class A:\n    value = 1\n    def first(self):\n        pass\n'
             '    class Inner:\n        def nested(self):\n            pass\n    value = 2\n'

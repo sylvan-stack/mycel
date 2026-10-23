@@ -9,12 +9,10 @@ from unittest.mock import patch
 
 from mycel._cli import parse, run
 from mycel._commands import COMMANDS, help_reply
-from mycel._coverage import proves
 from mycel._errors import MycelError
 
 
 class ReadCliTests(unittest.TestCase):
-    @proves("MYC-11.2")
     def test_cli_keeps_a_source_ref_or_identifier_context_and_skipped_check_explicit(self):
         place = "fixture:@artifact/docs/guide.md#Limits%20%3E%20Backoff"
         invocation = parse(["read", place, "--context", "5", "--no-fresh"])
@@ -33,7 +31,6 @@ class ReadCliTests(unittest.TestCase):
                 parse(args)
             self.assertEqual(error.exception.code, "invalid_input")
 
-    @proves("MYC-11.10")
     def test_info_names_the_running_build_commands_and_read_reply_without_a_capabilities_command(self):
         with tempfile.TemporaryDirectory(prefix="mycel_read_info_") as directory:
             missing = Path(directory) / "absent.toml"

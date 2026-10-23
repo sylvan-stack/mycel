@@ -6,11 +6,9 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import Invocation, parse, run
-from mycel._coverage import proves
 
 
 class VerificationCliTests(unittest.TestCase):
-    @proves("MYC-0.6")
     def test_exact_endpoint_and_voucher_options_survive_argument_parsing(self):
         endpoint = "cellar:@artifact/docs/net.md#Retry policy"
         self.assertEqual(parse(("confirm", endpoint)), Invocation("confirm", arguments=(endpoint,)))
@@ -20,7 +18,6 @@ class VerificationCliTests(unittest.TestCase):
                          Invocation("verifications", ("Cellar",), arguments=("--history",)))
         self.assertEqual(parse(("verifications",)).arguments, ())
 
-    @proves("MYC-0.6", "MYC-0.7")
     def test_invalid_verification_options_refuse_before_settings_or_store_access(self):
         cases = (("confirm",), ("confirm", "one", "two"),
                  ("confirm", "one", "--by", " "), ("confirm", "one", "--by"),
@@ -36,7 +33,6 @@ class VerificationCliTests(unittest.TestCase):
                 self.assertEqual(diagnostic.getvalue(), "")
             settings.assert_not_called()
 
-    @proves("MYC-0.6")
     def test_verification_help_is_available_without_configuration(self):
         with patch("mycel._cli.load_settings") as settings:
             for command, options in (("confirm", ("--by <name>", "--how read|check")),

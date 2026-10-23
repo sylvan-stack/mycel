@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import capture_repository
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._located_dependencies import LocatedDependencyProducer
 from mycel._located_reconciliation import LocatedCaptureStore
@@ -23,7 +22,6 @@ except ImportError:
 
 
 class StalenessUnitTests(unittest.TestCase):
-    @proves('MYC-2.17')
     def test_hash_and_membership_decisions_are_pure_and_use_complete_selection(self):
         import test_reconciliation as values
         from mycel._evidence import CaptureLocation, capture_baseline
@@ -58,7 +56,6 @@ class StalenessUnitTests(unittest.TestCase):
             self.assertEqual(compare_dependency(baseline, changed, selected.selection.place, 'declared')[0].kind,
                              'source_changed')
 
-    @proves('MYC-2.17')
     def test_offline_iterative_all_path_planning_and_cycle_refusal(self):
         def node(number, exempt=False):
             return StaleNode(str(number), number + 1,
@@ -150,7 +147,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             "WHERE repository='unrelated' ORDER BY to_jsonb(t)::text").fetchall()
             for table in ('mycel_dependencies', 'mycel_chunks', 'mycel_stale_reasons', 'mycel_activity')}
 
-    @proves('MYC-2.13', 'MYC-2.15', 'MYC-2.18', kind='store')
     def test_complete_same_pass_hash_reasons_diamond_paths_and_unrelated_rows(self):
         self.write('tail', 'Tail', ('left:@artifact/answer.md#Left', 'right:@artifact/answer.md#Right',
                                    'fixture:@code/worker.py#work'))
@@ -190,7 +186,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(self.reasons(connection), [])
             self.assertEqual(self.pins(connection), pins)
 
-    @proves('MYC-2.14', 'MYC-2.15', 'MYC-2.18', kind='store')
     def test_disk_absence_and_restoration_clear_direct_and_every_indirect_reason(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -206,7 +201,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(self.reasons(connection), [])
             self.assertEqual(self.pins(connection), pins)
 
-    @proves('MYC-2.16', 'MYC-2.18', kind='store')
     def test_heartwood_and_external_generated_stop_propagation_but_their_bytes_still_compare(self):
         self.write('left', 'Left', ('fixture:@artifact/source.md#Source',), metadata='status: heartwood\n')
         self.write('right', 'Right', ('fixture:@artifact/source.md#Source',), metadata='generated: true\n')
@@ -224,7 +218,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(reasons[0][4]['source']['repository'], 'left')
             self.assertEqual(self.reasons(connection, 'left'), [])
 
-    @proves('MYC-2.16', 'MYC-2.15', 'MYC-2.18', kind='store')
     def test_generic_frontmatter_exemption_changes_clear_and_restore_only_applicable_paths(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -248,7 +241,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(self.reasons(connection, 'tail')[0][4]['via'][0]['repository'], 'left')
             self.assertEqual(self.pins(connection), pins)
 
-    @proves('MYC-2.16', 'MYC-2.18', kind='store')
     def test_document_to_code_move_cannot_carry_its_old_document_exemption(self):
         from mycel._derive import DeriveStore
         from mycel._resolver import SourceResolver
@@ -279,7 +271,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(len(reasons), 1)
             self.assertEqual(reasons[0][4]['kind'], 'source_changed')
 
-    @proves('MYC-2.18', 'MYC-2.15', kind='store')
     def test_busy_owner_stays_pending_while_guarded_descendants_apply_and_retry(self):
         with self.base.connect() as connection, self.base.connect() as busy:
             self.prepare(connection)
@@ -302,7 +293,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertNotIn('unrelated', repeated.counts.get('dependencyRepositories', {}))
             self.assertEqual(self.unrelated_state(connection), unrelated)
 
-    @proves('MYC-2.18', kind='store')
     def test_final_busy_peer_dependency_change_refuses_all_prospective_marks(self):
         with self.base.connect() as connection, self.base.connect() as peer:
             self.prepare(connection)
@@ -325,7 +315,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
                 "JOIN public.mycel_file_locations l ON l.file_version=v.id JOIN public.mycel_files f ON f.id=v.file_id "
                 "WHERE f.repository='fixture' AND l.kind='disk' AND l.metadata->>'path'='source.md'").fetchone(), old_source)
 
-    @proves('MYC-2.18', kind='store')
     def test_disjoint_busy_owner_can_commit_metadata_during_source_publication(self):
         with self.base.connect() as connection, self.base.connect() as peer:
             self.prepare(connection)
@@ -343,7 +332,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("""SELECT count(*) FROM public.mycel_locations
                 WHERE metadata->>'peerObservation'='true'""").fetchone(), (1,))
 
-    @proves('MYC-2.18', kind='store')
     def test_new_downstream_pin_during_source_deletion_invalidates_and_then_retries(self):
         from psycopg.types.json import Jsonb
         from mycel._derive import DeriveStore
@@ -371,7 +359,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(retry.counts['stalePending'], [])
             self.assertEqual(self.reasons(connection, 'unrelated')[0][4]['kind'], 'source_removed')
 
-    @proves('MYC-2.18', kind='store')
     def test_native_activity_contains_exact_downstream_detection_and_audit_failure_rolls_back(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -397,7 +384,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
                         self.publish(connection, activity=audit)
             self.assertEqual(self.reasons(connection), stable)
 
-    @proves('MYC-2.18', kind='store')
     def test_final_root_audit_and_baseline_reader_file_mutations_refuse_publication(self):
         from mycel._evidence import EvidenceStore
         with self.base.connect() as connection:
@@ -428,7 +414,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
                     self.publish(connection, producer=False)
             self.assertEqual(self.reasons(connection), [])
 
-    @proves('MYC-2.13', 'MYC-2.15', 'MYC-2.18', kind='store')
     def test_corrupt_baseline_and_foreign_uningested_bytes_keep_marks_pending_with_exact_counts(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -449,7 +434,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertIn('changed_since_ingest', {item['reason'] for item in result.counts['stalePending']})
             self.assertEqual(self.reasons(connection), before)
 
-    @proves('MYC-2.16', 'MYC-2.18', kind='store')
     def test_fault_on_exempt_intermediate_does_not_block_an_independent_downstream_reason(self):
         self.write('left', 'Left', ('fixture:@artifact/source.md#Source',), metadata='status: heartwood\n')
         self.write('tail', 'Tail', ('left:@artifact/answer.md#Left', 'fixture:@code/worker.py#work'))
@@ -464,7 +448,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(len(self.reasons(connection, 'tail')), 1)
             self.assertEqual(self.reasons(connection, 'tail')[0][4]['source']['address'], 'fixture:@code/worker.py#work')
 
-    @proves('MYC-2.13', 'MYC-2.14', 'MYC-2.15', 'MYC-2.18', kind='store')
     def test_current_class_members_expand_prelocks_and_retries_after_generic_publication(self):
         self.code.write_bytes(b'class Worker:\n    def first(self):\n        return 1\n')
         self.write('left', 'Left', ('fixture:@code/worker.py#Worker',))
@@ -482,7 +465,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(next(row[4]['source']['name'] for row in self.reasons(connection, 'left')
                 if row[4]['kind'] == 'source_removed'), 'Worker.first')
 
-    @proves('MYC-2.18', 'MYC-2.15', kind='store')
     def test_disabled_source_deactivates_stale_authority_without_a_removed_or_missing_baseline_claim(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -497,7 +479,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(tail, [])
             self.assertEqual(result.counts['stalePending'], [])
 
-    @proves('MYC-2.13', 'MYC-2.18', kind='store')
     def test_shared_disk_branch_version_selects_only_its_disk_owned_pin(self):
         guide = self.base.artifact / 'guide.md'
         guide.write_bytes(b'---\nsources: ["fixture:@artifact/source.md#Source"]\n---\n# Guide\nRepository guide.\n')
@@ -515,7 +496,6 @@ class MechanicalStalenessStoreTests(unittest.TestCase):
             self.assertEqual(len(current), 1)
             self.assertEqual(current[0][3], next(row[0] for row in deps if row[3] == 'disk'))
 
-    @proves('MYC-2.13', 'MYC-2.15', 'MYC-2.18', kind='store')
     def test_declared_asserted_reasons_keep_both_kinds_and_new_family_members_supply_prelocks(self):
         from mycel._derive import DeriveStore
         self.code.write_bytes(b'class Worker:\n    def first(self):\n        return 1\n')

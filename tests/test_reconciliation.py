@@ -6,7 +6,6 @@ from pathlib import Path
 import unittest
 
 from mycel._code import chunk_code
-from mycel._coverage import proves
 from mycel._evidence import (CaptureLocation, capture_baseline, document_comparisons,
                              exact_comparison)
 from mycel._markdown import split_markdown
@@ -75,7 +74,6 @@ class ReconciliationTests(unittest.TestCase):
         return plan_dependencies(member(self.dep), self.resolver(source), tuple(requests), tuple(existing),
             pin_version=kwargs.pop('pin_version', self.dep.chunks[0].version), **kwargs)
 
-    @proves('MYC-13.15')
     def test_initial_resolution_schedules_capture_without_claiming_captured_evidence(self):
         plan = self.plan((DependencyRequest('new', 'declared', self.declaration),), source=self.src)
         decision = plan.decisions[0]
@@ -83,7 +81,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(plan.role, 'derived')
         self.assertEqual(plan.graph, (GraphEdge('source-chunk', 'answer', 'new'),))
 
-    @proves('MYC-13.15')
     def test_unresolved_first_reference_remains_visible_without_removed_baseline(self):
         for absent in (None, 'away', 'deleted'):
             plan = self.plan((DependencyRequest('new', 'declared', self.declaration, absent),))
@@ -93,7 +90,6 @@ class ReconciliationTests(unittest.TestCase):
             self.assertEqual(decision.fault, 'missing_file')
             self.assertEqual(plan.role, 'unclassified')
 
-    @proves('MYC-13.15')
     def test_missing_previously_resolved_source_retains_every_baseline_and_governs_role(self):
         old = self.record()
         for state in ('away', 'deleted'):
@@ -106,7 +102,6 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ReconciliationError):
             self.plan((DependencyRequest(old.identifier, 'declared', self.declaration),), (old,))
 
-    @proves('MYC-13.15')
     def test_recreation_joins_new_identifier_without_renewing_the_old_pin(self):
         old = self.record()
         recreated = document('source', 'source.md', '# Source\nNew source.\n', identifier='recreated', version=22)
@@ -115,7 +110,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertIs(decision.baseline, old.baseline)
         self.assertEqual(decision.baseline.identifier, old.baseline.identifier)
 
-    @proves('MYC-13.15')
     def test_source_changes_and_sibling_file_changes_do_not_authorize_repinning(self):
         old = self.record()
         changed = document('source', 'source.md', '# Source\nChanged.\n', identifier='source-chunk', version=8)
@@ -127,7 +121,6 @@ class ReconciliationTests(unittest.TestCase):
                            snapshot_hash=sha256(self.dep.source + b'# Sibling\nNew text.\n').hexdigest())
         self.assertEqual(self.plan((DependencyRequest(old.identifier, 'declared', self.declaration),), (old,), source=changed).decisions[0].action, 'keep')
 
-    @proves('MYC-13.15')
     def test_disabled_and_unregistered_targets_keep_baseline_but_are_not_governing(self):
         old = self.record()
         for enabled, registered, fault in ((False, True, 'disabled_repository'), (True, False, 'unregistered_repository')):
@@ -140,7 +133,6 @@ class ReconciliationTests(unittest.TestCase):
             self.assertEqual(plan.role, 'unclassified')
             self.assertEqual(plan.graph, ())
 
-    @proves('MYC-13.15')
     def test_empty_file_and_empty_chunk_are_present_and_govern_role(self):
         empty = document('source', 'empty.md', '')
         self.assertEqual(empty.chunks, ())
@@ -149,7 +141,6 @@ class ReconciliationTests(unittest.TestCase):
         heading = document('source', 'source.md', '# Source\n')
         self.assertEqual(self.plan((DependencyRequest('heading', 'declared', self.declaration),), source=heading).role, 'derived')
 
-    @proves('MYC-13.15')
     def test_declared_removal_never_removes_an_assertion_between_the_same_ends(self):
         declared, asserted = self.record(), self.record('asserted-link', 'asserted')
         plan = self.plan((), (declared, asserted), source=self.src)
@@ -159,7 +150,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(plan.graph, (GraphEdge('source-chunk', 'answer', 'asserted-link'),))
         self.assertEqual(plan.role, 'derived')
 
-    @proves('MYC-13.15')
     def test_asserted_removal_is_selection_exact_and_leaves_declared_record(self):
         declared, asserted = self.record(), self.record('asserted-link', 'asserted')
         requests = (DependencyRequest(declared.identifier, 'declared', self.declaration),)
@@ -170,7 +160,6 @@ class ReconciliationTests(unittest.TestCase):
         absent = AssertedRemoval(SourceAddress('source', 'artifact', 'other.md', 'Other'), 'chunk')
         self.assertEqual(self.plan(requests, (declared, asserted), source=self.src, remove_assertions=(absent,)).decisions[-1].action, 'keep')
 
-    @proves('MYC-13.15')
     def test_asserted_removal_of_absent_source_requires_no_new_capture(self):
         old = self.record('asserted-link', 'asserted')
         request = DependencyRequest(old.identifier, 'asserted', self.declaration, 'deleted')
@@ -178,7 +167,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(decision.action, 'release')
         self.assertIs(decision.baseline, old.baseline)
 
-    @proves('MYC-13.15')
     def test_confirmation_withdraws_old_missing_source_but_refuses_new_fault_atomically(self):
         old = self.record()
         request = DependencyRequest(old.identifier, 'declared', self.declaration, 'deleted')
@@ -189,7 +177,6 @@ class ReconciliationTests(unittest.TestCase):
                 self.plan((request, DependencyRequest('bad', 'declared', bad)), (old,), mode='confirm')
             self.assertEqual((caught.exception.status, caught.exception.dependencies), ('invalid_input', ('bad',)))
 
-    @proves('MYC-13.15')
     def test_authorized_confirmation_schedules_capture_and_identical_assertion_scan_is_noop(self):
         old = self.record('asserted-link', 'asserted')
         observed = self.plan((), (old,), source=self.src)
@@ -199,7 +186,6 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ReconciliationError):
             self.plan((DependencyRequest('different-id', 'asserted', self.declaration),), (old,), source=self.src)
 
-    @proves('MYC-13.15')
     def test_exact_restoration_uses_that_versions_pin_and_rejects_the_later_pin(self):
         old = self.record()
         self.dep = document('owner', 'answer.md', '# Answer\nChanged answer.\n', identifier='answer', version=2)
@@ -212,7 +198,6 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ReconciliationError):
             self.plan((request,), (later,), source=self.src, mode='restore')
 
-    @proves('MYC-13.15')
     def test_normalized_edit_and_heading_rename_inherit_instead_of_recapturing(self):
         old = self.record()
         self.dep = document('owner', 'answer.md', '# Renamed\nAnswer\t body.\n', identifier='answer', version=2)
@@ -223,7 +208,6 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ReconciliationError):
             self.plan((request,), (old,), source=self.src, mode='edit', pin_version=1)
 
-    @proves('MYC-13.15')
     def test_substantive_edit_schedules_capture_or_withdraws_missing_and_never_confirms_a_normalized_edit(self):
         old = self.record()
         self.dep = document('owner', 'answer.md', '# Answer\nSubstantive change.\n', identifier='answer', version=2)
@@ -234,7 +218,6 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ReconciliationError):
             self.plan((request,), (old,), source=self.src, mode='inherit', pin_version=1)
 
-    @proves('MYC-13.15')
     def test_missing_or_corrupt_baseline_can_never_be_treated_as_initial_resolution(self):
         request = DependencyRequest('previously-resolved', 'declared', self.declaration)
         for status in ('baseline_missing', 'snapshot_corrupt', 'unsupported_comparison'):
@@ -242,7 +225,6 @@ class ReconciliationTests(unittest.TestCase):
                 self.plan((request,), source=self.src, baseline_faults=(BaselineFault(request.identifier, status),))
             self.assertEqual((caught.exception.status, caught.exception.dependencies), (status, (request.identifier,)))
 
-    @proves('MYC-13.15')
     def test_roles_recomputed_from_file_or_code_default_without_governing_dependencies(self):
         self.assertEqual(self.plan(file_role='authored').role, 'authored')
         self.assertEqual(self.plan(file_role='derived').role, 'derived')
@@ -251,7 +233,6 @@ class ReconciliationTests(unittest.TestCase):
             comparison=exact_comparison(self.dep.chunks[0].source, 'code_text').as_dict()),))
         self.assertEqual(self.plan().role, 'authored')
 
-    @proves('MYC-13.15')
     def test_whole_operation_refuses_self_cycle_and_cross_repository_cycle(self):
         self_ref = DependencyRequest('self', 'declared', 'owner:answer.md#Answer')
         with self.assertRaises(ReconciliationError) as caught:
@@ -264,7 +245,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(set(caught.exception.cycle[:-1]), {'answer', 'intermediate', 'source-chunk'})
         self.assertEqual(caught.exception.cycle[0], caught.exception.cycle[-1])
 
-    @proves('MYC-13.15')
     def test_cycle_result_is_independent_of_insert_order_and_large_graph_is_iterative(self):
         request = DependencyRequest('new', 'declared', self.declaration)
         edges = (GraphEdge('answer', 'middle', 'a'), GraphEdge('middle', 'source-chunk', 'b'), GraphEdge('other', 'end', 'c'))
@@ -277,7 +257,6 @@ class ReconciliationTests(unittest.TestCase):
         large = tuple(GraphEdge(str(index), str(index + 1), 'chain:' + str(index)) for index in range(2000))
         self.assertEqual(len(self.plan(graph=large).graph), 2000)
 
-    @proves('MYC-13.15')
     def test_owned_graph_edges_are_replaced_and_other_kinds_are_preserved(self):
         old = self.record()
         graph = (GraphEdge('source-chunk', 'answer', old.identifier), GraphEdge('answer', 'source-chunk', 'elsewhere'))
@@ -285,7 +264,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(plan.graph, (graph[1],))
         self.assertEqual(plan.decisions[0].action, 'release')
 
-    @proves('MYC-13.15')
     def test_file_selection_expands_every_current_chunk_for_cycle_check(self):
         source = document('source', 'source.md', '# First\nFirst.\n# Second\nSecond.\n')
         requests = (DependencyRequest('file', 'declared', 'source:source.md'),)
@@ -295,7 +273,6 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ReconciliationError):
             self.plan(requests, source=source, graph=graph)
 
-    @proves('MYC-13.15')
     def test_family_added_and_removed_members_keep_complete_old_baseline(self):
         initial = code('class C:\n    def first(self):\n        return 1\n\n    def second(self):\n        return 2\n')
         old = self.record(source=initial, declaration='source:code.py#C')
@@ -309,7 +286,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertIn('code:C.third', decision.active_sources)
         self.assertNotIn('code:C.second', decision.active_sources)
 
-    @proves('MYC-13.15')
     def test_alias_spelling_keeps_identity_pin_original_declaration_and_natural_place(self):
         old = self.record()
         request = DependencyRequest(old.identifier, 'declared', 'source:@artifact/source.md#Source')
@@ -319,7 +295,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(decision.baseline.payload['ref'], self.declaration)
         self.assertEqual(decision.natural_place, old.natural_place)
 
-    @proves('MYC-13.15')
     def test_frozen_decisions_and_invalid_request_observations(self):
         plan = self.plan((DependencyRequest('new', 'declared', self.declaration),), source=self.src)
         with self.assertRaises(FrozenInstanceError):
@@ -331,7 +306,6 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ReconciliationError):
             self.plan((DependencyRequest('bad', 'declared', 'bad ref', 'deleted'),))
 
-    @proves('MYC-13.15')
     def test_reusing_a_record_id_cannot_rebind_an_unrelated_selection(self):
         old = self.record()
         unrelated = document('source', 'other.md', '# Other\nOther bytes.\n', identifier='unrelated')
@@ -340,7 +314,6 @@ class ReconciliationTests(unittest.TestCase):
             plan_dependencies(member(self.dep), resolver,
                 (DependencyRequest(old.identifier, 'declared', 'source:other.md#Other'),), (old,), pin_version=1)
 
-    @proves('MYC-13.15')
     def test_recognized_move_retains_natural_place_when_current_identity_is_the_same(self):
         old = self.record()
         moved = document('source', 'moved.md', '# Source\nOld source.\n', identifier='source-chunk')
@@ -351,14 +324,12 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(decision.current_selection.place.path, 'moved.md')
         self.assertIs(decision.baseline, old.baseline)
 
-    @proves('MYC-13.15')
     def test_unaffected_incoming_authoritative_graph_edge_governs_role(self):
         incoming = GraphEdge('unaffected-source', 'answer', 'unaffected-generated')
         self.assertEqual(self.plan(graph=(incoming,)).role, 'derived')
         outgoing = GraphEdge('answer', 'other', 'outgoing')
         self.assertEqual(self.plan(graph=(outgoing,)).role, 'unclassified')
 
-    @proves('MYC-13.15')
     def test_current_dependant_must_be_exactly_the_enabled_catalog_endpoint(self):
         fake = document('owner', 'not-in-catalog.md', '# Fake\nFake.\n', identifier='fake')
         resolver = self.resolver(self.src)
@@ -369,7 +340,6 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ReconciliationError):
             plan_dependencies(altered, resolver, (), (), pin_version=99)
 
-    @proves('MYC-13.15')
     def test_missing_disabled_and_malformed_rebinding_cannot_reuse_old_dependency_id(self):
         old = self.record()
         for declaration, state in (('source:other.md#Other', 'deleted'), ('unknown:source.md#Source', None), ('bad ref', None)):
@@ -386,7 +356,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual({decision.identifier: decision.action for decision in plan.decisions},
                          {old.identifier: 'release', 'new-target': 'unresolved'})
 
-    @proves('MYC-13.15')
     def test_recreated_anchor_can_move_again_without_replacing_audit_baseline(self):
         old = self.record()
         recreated = document('source', 'source.md', '# Source\nRecreated.\n', identifier='recreated')
@@ -408,7 +377,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(missing.baseline.payload['source']['path'], 'source.md')
         self.assertEqual(missing.reasons, ('source_removed',))
 
-    @proves('MYC-13.15')
     def test_new_matching_id_cannot_displace_an_unaffected_graph_dependency(self):
         existing_generated = GraphEdge('generated-source', 'answer', 'collision')
         request = DependencyRequest('collision', 'declared', self.declaration)
@@ -418,7 +386,6 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ReconciliationError):
             self.plan((request,), source=self.src, graph=(different_dependant,))
 
-    @proves('MYC-13.15')
     def test_ambiguity_report_retains_typed_candidates_without_replacing_baseline(self):
         old = self.record()
         secondary_place = SourceAddress('source', 'code', 'source.md')
@@ -432,7 +399,6 @@ class ReconciliationTests(unittest.TestCase):
                          ('source:@artifact/source.md', 'source:@code/source.md'))
         self.assertIs(decision.baseline, old.baseline)
 
-    @proves('MYC-13.15')
     def test_binding_output_updates_current_anchor_without_mutating_audit(self):
         old = self.record()
         recreated = document('source', 'source.md', '# Source\nRecreated.\n', identifier='recreated')
@@ -443,7 +409,6 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(old.baseline.payload['members'][0]['id'], 'source-chunk')
         self.assertEqual(old.baseline.payload['ref'], self.declaration)
 
-    @proves('MYC-13.15')
     def test_real_parser_code_kinds_without_governing_dependencies_are_authored(self):
         parsed = code('import os\n\nclass C:\n    def method(self):\n        return 1\n\ndef function():\n    return 2\n')
         owner_place = SourceAddress('owner', 'code', 'code.py')

@@ -6,7 +6,6 @@ import unittest
 from uuid import uuid4
 
 from mycel._capture import _parse_value, _restore_parse_value
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._markdown import EntityRow, comparison_hash, split_markdown
 
@@ -50,7 +49,6 @@ status: accepted
 
 
 class EntityRowTests(unittest.TestCase):
-    @proves("MYC-17.2", "MYC-1.35")
     def test_rows_with_a_uuid_become_entities_with_their_metadata_beside_unchanged_sections(self):
         document = split_markdown(FIXTURE)
         self.assertEqual([chunk.name for chunk in document.chunks],
@@ -83,7 +81,6 @@ class EntityRowTests(unittest.TestCase):
         self.assertEqual(restored.entities, document.entities)
         self.assertIsInstance(restored.entities[0], EntityRow)
 
-    @proves("MYC-17.3")
     def test_missing_and_repeated_uuids_are_faults_and_no_entity(self):
         source = FIXTURE.replace(f"| FIX-1.2 <!-- {REQ_B} --> |", "| FIX-1.2 |")
         source = source.replace("| FIX-D2 <!-- 9c0d1e2f-3a4b-4c5d-8e6f-7a8b9c0d1e2f --> |", f"| FIX-D2 <!-- {DEC_A} --> |")
@@ -96,7 +93,6 @@ class EntityRowTests(unittest.TestCase):
         self.assertEqual(len(document.chunks), 4)
         self.assertEqual("".join(chunk.text for chunk in document.chunks).encode(), document.source[document.frontmatter_span.byte_end:])
 
-    @proves("MYC-17.2")
     def test_an_edit_to_a_neighbouring_row_leaves_the_entity_its_text_and_hashes(self):
         before = split_markdown(FIXTURE)
         after = split_markdown(FIXTURE.replace("keep the cellar cool", "keep the cellar cold"))
@@ -111,7 +107,6 @@ class EntityRowTests(unittest.TestCase):
         row = next(item for item in moved.entities if item.uuid == REQ_B)
         self.assertEqual((row.section, row.position, row.text), ("Fixture · 1 Cellar > Moved", 1, before.entities[1].text))
 
-    @proves("MYC-17.3")
     def test_prose_cells_fenced_rows_and_headerless_lines_are_not_entities(self):
         document = split_markdown(FIXTURE)
         self.assertNotIn("FIX-1.9", [row.id for row in document.entities])
@@ -122,7 +117,6 @@ class EntityRowTests(unittest.TestCase):
 
 
 class EntityUriTests(unittest.TestCase):
-    @proves("MYC-17.5", "MYC-16.15")
     def test_entity_uris_parse_format_and_resolve_by_uuid_with_the_kind_tag_as_a_check(self):
         from mycel._resolver import ResolvedChunk, ResolvedFile, SourceResolver
         from mycel._settings import SettingsSnapshot, _freeze
@@ -168,7 +162,6 @@ class EntityUriTests(unittest.TestCase):
 
 
 class DiscussionSettingsTests(unittest.TestCase):
-    @proves("MYC-5.17")
     def test_discussions_table_knows_only_a_password_free_address_and_its_keychain_item(self):
         import tempfile
         from mycel._credentials import _ACCOUNTS, Credentials
@@ -302,7 +295,6 @@ class EntityStoreTests(unittest.TestCase):
             JOIN public.mycel_locations l ON l.chunk_version = v.id AND l.kind='disk'
             WHERE c.kind IN ('req', 'dec') ORDER BY c.id, v.id""").fetchall()
 
-    @proves("MYC-17.1", "MYC-17.4", "MYC-1.36", "MYC-6.21", kind="store")
     def test_pass_publishes_entity_rows_keyed_by_uuid_and_keeps_them_through_edits_and_moves(self):
         self.ingest()
         with self.base.connect() as connection:
@@ -346,7 +338,6 @@ class EntityStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_chunk_versions WHERE chunk_id::text=%s", (REQ_B,)).fetchone(), (0,))
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_chunks WHERE kind IN ('req','dec')").fetchone()[0], 3)
 
-    @proves("MYC-11.13", kind="store")
     def test_read_by_entity_uri_address_and_human_id_with_the_kind_tag_as_a_check(self):
         self.ingest()
         with self.base.connect() as connection:
@@ -370,7 +361,6 @@ class EntityStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.code.value, "invalid_input")
                 self.assertIn(message, error.exception.message)
 
-    @proves("MYC-17.6", "MYC-17.7", "MYC-7.31", kind="store")
     def test_a_decision_shows_its_chats_from_a_stand_in_database_and_an_edit_marks_dependants_stale(self):
         (self.base.artifact / "note.md").write_text(NOTE, encoding="utf-8")
         self.ingest()
@@ -427,7 +417,6 @@ class EntityStoreTests(unittest.TestCase):
             self.assertTrue(note["stale"], note)
             self.assertIn("source_changed", json.dumps(note["staleReasons"]))
 
-    @proves("MYC-6.21", "MYC-6.6", kind="store")
     def test_init_brings_a_format_2_store_forward_in_one_step_and_info_reports_the_format(self):
         with self.base.connect() as connection:
             before = store.require_store(connection)

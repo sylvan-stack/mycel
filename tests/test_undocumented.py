@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 from mycel._capture import _Capture
 from mycel._cli import parse, run
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._freshness import Deadline
 from mycel._undocumented import handle_undocumented, normalize_paths, undocumented_from_store
@@ -25,7 +24,6 @@ except ImportError:
 
 
 class UndocumentedUnitTests(unittest.TestCase):
-    @proves('MYC-0.6', kind='unit')
     def test_cli_keeps_repeated_paths_and_refuses_invalid_or_multiple_repository_selectors(self):
         invocation = parse(['undocumented', '--repo', 'fixture', '--path', 'src',
                             '--path', 'scripts/build.py', '--no-fresh'])
@@ -42,7 +40,6 @@ class UndocumentedUnitTests(unittest.TestCase):
         self.assertEqual(normalize_paths(('src/./net/', 'src/net', 'scripts/../tests', '.')),
                          ('src/net', 'tests', '.'))
 
-    @proves('MYC-0.6', kind='unit')
     def test_unknown_disabled_and_organization_scopes_refuse_before_opening_the_store(self):
         fixture = scope_fixtures.OverviewCliTests()
         fixture.setUp()
@@ -72,7 +69,6 @@ class UndocumentedStoreTests(unittest.TestCase):
         return undocumented_from_store(connection, self.settings, ('fixture',),
                                        deadline=Deadline.after(30), **options)
 
-    @proves('MYC-2.27', kind='store')
     def test_paths_form_a_union_at_component_boundaries_and_results_sort_by_root_path_name(self):
         with self.base.connection() as connection:
             self.links.seed(connection, path='src/a.py', root='artifact', name='ArtifactCode', source='artifact\n')
@@ -112,7 +108,6 @@ class UndocumentedStoreTests(unittest.TestCase):
             self.assertNotIn('fixture:@code/src/described.py#Described',
                              {row['address'] for row in reply['chunks']})
 
-    @proves('MYC-2.27', kind='store')
     def test_removing_the_last_dependency_exposes_code_without_creating_another_link(self):
         with self.base.connection() as connection:
             code = self.links.seed(connection, path='work.py', name='Work', source='work\n')
@@ -141,7 +136,6 @@ class UndocumentedFreshnessStoreTests(unittest.TestCase):
         self.fixture.setUp()
         self.addCleanup(self.fixture.doCleanups)
 
-    @proves('MYC-2.27', kind='store')
     def test_new_document_link_is_seen_only_after_default_freshness_ingests_it(self):
         with self.fixture.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -165,7 +159,6 @@ class UndocumentedFreshnessStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_dependencies "
                 "WHERE kind='asserted'").fetchone(), (0,))
 
-    @proves('MYC-2.27', kind='store')
     def test_default_freshness_ingests_new_code_and_removed_refs_while_no_fresh_preserves_old_snapshot(self):
         guide = self.fixture.folders['fixture'] / 'code.md'
         guide.write_bytes(self.fixture.document('Implementation', 'fixture:@code/driver.py#drive'))
@@ -209,7 +202,6 @@ class UndocumentedFreshnessStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_dependencies '
                 'WHERE dependant_version=%s', (version,)).fetchone(), (0,))
 
-    @proves('MYC-2.27', kind='store')
     def test_public_cli_returns_the_same_path_scoped_store_reply(self):
         with self.fixture.base.connect() as connection:
             self.fixture.prepare(connection)

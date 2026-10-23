@@ -9,7 +9,6 @@ from unittest.mock import patch
 from mycel import _dependency_inputs as inputs
 from mycel._capture import capture_repository
 from mycel._cli import run
-from mycel._coverage import proves
 
 try:
     from .test_classification_store import ClassificationStoreFixture
@@ -40,7 +39,6 @@ class InitialSourceIngestStoreTests(ClassificationStoreFixture):
     def dependencies(self, connection):
         return self.fixture.fixture.dependencies(connection)
 
-    @proves('MYC-2.8', kind='store')
     def test_initial_unindexed_sources_remain_visible_without_broadening_scope_and_source_pass_retries(self):
         self.invoke('init')
         source_bytes = {path: path.read_bytes() for path in
@@ -67,7 +65,6 @@ class InitialSourceIngestStoreTests(ClassificationStoreFixture):
         self.assertEqual(self.fixture.fixture.answer.read_bytes(), dependant_bytes)
         self.assertEqual({path: path.read_bytes() for path in source_bytes}, source_bytes)
 
-    @proves('MYC-2.8', kind='store')
     def test_empty_store_all_processes_downstream_before_sources_and_captures_new_baselines(self):
         self.invoke('init')
         reply = self.invoke('ingest', '--all')
@@ -80,7 +77,6 @@ class InitialSourceIngestStoreTests(ClassificationStoreFixture):
             self.assertEqual({row[5]['resolution']['state'] for row in rows}, {'resolved'})
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_edges').fetchone()[0], 3)
 
-    @proves('MYC-2.8', 'MYC-1.37', kind='store')
     def test_changed_initial_unindexed_source_does_not_stop_the_dependant_pass_and_stays_unresolved(self):
         # Since 20 October 2026 a pass publishes the capture it read and takes
         # another repository's sources from the index (MYC-1.37): a change to
@@ -105,7 +101,6 @@ class InitialSourceIngestStoreTests(ClassificationStoreFixture):
         with self.base.connect() as connection:
             self.assertEqual({row[5]['resolution']['state'] for row in self.dependencies(connection)}, {'resolved'})
 
-    @proves('MYC-1.37', kind='store')
     def test_resolved_uningested_source_change_preserves_existing_pins_and_the_pass_completes(self):
         self.invoke('init')
         self.invoke('ingest', '--repo', 'fixture')

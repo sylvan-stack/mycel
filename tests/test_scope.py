@@ -8,7 +8,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._scope import RepositoryLocations
 from mycel._settings import load_settings
@@ -58,7 +57,6 @@ class ScopeTests(unittest.TestCase):
             self.assertEqual(raised.exception.code, code)
         return raised.exception
 
-    @proves("MYC-1.3", "MYC-5.12")
     def test_organization_derives_checkout_and_document_folders_with_provenance(self):
         checkout = self.checkout("orchard", "presses")
         locations = self.locations({"Orchard": {"root": self.home / "orchard"}},
@@ -78,7 +76,6 @@ class ScopeTests(unittest.TestCase):
                               "documents": {"folder": str(self.home / "Artifacts/orchard/repos/presses"),
                                             "from": "organization"}}]})
 
-    @proves("MYC-1.3", "MYC-5.12")
     def test_repository_folders_override_each_organization_folder_independently(self):
         checkout = self.checkout("orchard", "presses")
         artifact = self.home / "manuals"
@@ -101,7 +98,6 @@ class ScopeTests(unittest.TestCase):
         self.assertIsNone(standalone.organization)
         self.assertEqual(standalone.documents.path, artifact)
 
-    @proves("MYC-1.3", "MYC-1.4")
     def test_empty_code_subdirs_means_whole_code_and_documents_keep_both_roots(self):
         code, documents = self.home / "source", self.home / "documents"
         locations = self.locations(repositories={"project": {"code_root": code, "artifact_root": documents,
@@ -116,7 +112,6 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(tuple(folder.path for folder in manual.document_roots), (documents,))
         manual.require_folders()
 
-    @proves("MYC-1.3", "MYC-1.5")
     def test_members_are_only_configured_direct_children_with_checkout_markers(self):
         direct = self.checkout("orchard", "direct", worktree=True)
         self.checkout("orchard", "unconfigured")
@@ -133,7 +128,6 @@ class ScopeTests(unittest.TestCase):
             self.assertIsNone(repository.organization)
             self.assertIsNotNone(repository.fault)
 
-    @proves("MYC-1.3", "MYC-1.4")
     def test_explicit_code_membership_uses_direct_parent_and_not_repository_name(self):
         root = self.home / "orchard"
         locations = self.locations({"Orchard": {"root": root}},
@@ -145,7 +139,6 @@ class ScopeTests(unittest.TestCase):
         self.assertIsNone(locations.named("nested")[0].organization)
         self.assertIsNone(locations.named("root-itself")[0].organization)
 
-    @proves("MYC-1.4", "MYC-1.5")
     def test_named_scope_preserves_exact_names_without_environment_or_fallback_aliases(self):
         locations = self.locations(repositories={"Project": {"code_root": self.home / "p"},
                                                    "project": {"code_root": self.home / "q"},
@@ -157,7 +150,6 @@ class ScopeTests(unittest.TestCase):
             self.assert_refused(lambda: locations.resolve_scope(cwd=self.home / "elsewhere"), code="unknown_repository")
         self.assertEqual(set(locations.snapshot.values["repos"]), {"Project", "project", "Repository with spaces"})
 
-    @proves("MYC-1.4")
     def test_disabled_explicit_and_cwd_selection_but_enabled_organization_and_all_sweeps(self):
         self.checkout("orchard", "on")
         off = self.checkout("orchard", "off")
@@ -171,7 +163,6 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(self.names(locations.resolve_scope(["Orchard", "outside", "on"])), ("on", "outside"))
         self.assert_refused(lambda: locations.resolve_scope(["on"], all_repositories=True), code="invalid_input")
 
-    @proves("MYC-1.4")
     def test_longest_containing_code_or_document_root_wins_on_component_boundaries(self):
         locations = self.locations(repositories={"wide": {"code_root": self.home / "repos", "artifact_root": self.home / "docs"},
                                                    "narrow": {"code_root": self.home / "repos/project", "artifact_root": self.home / "docs/project"}})
@@ -180,7 +171,6 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(self.names(locations.resolve_scope(cwd=self.home / "repos/project-other")), ("wide",))
         self.assert_refused(lambda: locations.resolve_scope(cwd=self.home / "repos-other"), code="unknown_repository")
 
-    @proves("MYC-1.4")
     def test_organization_cwd_outside_members_expands_enabled_members_for_both_folders(self):
         member = self.checkout("orchard", "member")
         self.checkout("orchard", "off")
@@ -190,7 +180,6 @@ class ScopeTests(unittest.TestCase):
             self.assertEqual(self.names(locations.resolve_scope(cwd=cwd)), ("member",))
         self.assertEqual(self.names(locations.resolve_scope(cwd=member / "src")), ("member",))
 
-    @proves("MYC-1.4")
     def test_empty_organization_and_all_scope_refuse_instead_of_false_success(self):
         self.checkout("orchard", "off")
         locations = self.locations({"Orchard": {"root": self.home / "orchard"}}, {"off": {}})
@@ -200,7 +189,6 @@ class ScopeTests(unittest.TestCase):
         empty = self.locations()
         self.assert_refused(lambda: empty.resolve_scope(all_repositories=True), code="refused")
 
-    @proves("MYC-1.4")
     def test_equal_longest_roots_or_repo_organization_name_collisions_are_explicit_faults(self):
         locations = self.locations({"collision": {"root": self.home / "org"}},
                                    {"first": {"code_root": self.home / "same"},
@@ -211,7 +199,6 @@ class ScopeTests(unittest.TestCase):
         self.assertIn("second", str(error))
         self.assert_refused(lambda: locations.named("collision"), code="unknown_repository")
 
-    @proves("MYC-1.29", "MYC-5.12")
     def test_ambiguous_membership_is_local_lists_organizations_and_keeps_other_repos_usable(self):
         orchard = self.checkout("orchard", "presses")
         vineyard = self.checkout("vineyard", "presses")
@@ -235,7 +222,6 @@ class ScopeTests(unittest.TestCase):
         self.assertIn("fault", next(row for row in report["repositories"] if row["name"] == "presses"))
         self.assertNotIn("fault", next(row for row in report["repositories"] if row["name"] == "good"))
 
-    @proves("MYC-1.3", "MYC-1.29")
     def test_explicit_code_root_disambiguates_organizations_and_allows_a_second_name(self):
         orchard = self.checkout("orchard", "presses")
         vineyard = self.checkout("vineyard", "presses")
@@ -248,7 +234,6 @@ class ScopeTests(unittest.TestCase):
         for repository in locations.repositories:
             repository.require_folders()
 
-    @proves("MYC-5.12")
     def test_listing_includes_disabled_and_folderless_repositories_and_fresh_json_copies(self):
         locations = self.locations(repositories={"folderless": {}, "disabled": {"artifact_root": self.home / "docs"}})
         report = locations.repositories_reply()
@@ -263,7 +248,6 @@ class ScopeTests(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             locations.repositories[0].name = "changed"
 
-    @proves("MYC-1.3", "MYC-5.12")
     def test_relative_paths_that_follow_symlinks_outside_roots_are_local_faults(self):
         code, documents, outside = self.home / "code", self.home / "docs", self.home / "outside"
         code.mkdir()
@@ -279,7 +263,6 @@ class ScopeTests(unittest.TestCase):
         locations.named("good")[0].require_folders()
         self.assertIsNone(locations.named("good")[0].fault)
 
-    @proves("MYC-1.3", "MYC-5.12")
     def test_explicit_roots_are_configured_paths_and_do_not_need_existing_files(self):
         locations = self.locations(repositories={"future": {"code_root": self.home / "not-created"},
                                                    "documents-only": {"artifact_root": self.home / "docs"},
@@ -290,7 +273,6 @@ class ScopeTests(unittest.TestCase):
         self.assertIn("requires a code_root", locations.named("bad-subdir")[0].fault)
         self.assertIn("requires an artifact_root", locations.named("bad-evaluation")[0].fault)
 
-    @proves("MYC-1.4")
     def test_physical_path_resolution_handles_cwd_aliases_without_path_prefix_tricks(self):
         code = self.home / "physical"
         code.mkdir()
@@ -301,7 +283,6 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(self.names(locations.resolve_scope(cwd=alias / "src")), ("project",))
         self.assertEqual(locations.repositories_reply()["repositories"][0]["code"]["folder"], str(alias))
 
-    @proves("MYC-1.1", "MYC-1.3", "MYC-1.4")
     def test_resolution_uses_loaded_snapshot_without_re_read_store_process_or_file_mutation(self):
         locations = self.locations(repositories={"project": {"enabled": True, "code_root": self.home / "project"}})
         before = locations.snapshot.file.read_bytes()

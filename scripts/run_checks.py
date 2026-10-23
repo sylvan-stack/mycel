@@ -21,9 +21,7 @@ sys.path.insert(0, str(REPOSITORY / "src"))
 for variable in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
     os.environ[variable] = "1"
 
-from mycel._coverage import (CoverageError, declaration, discover_checks, iter_checks,
-                             load_claims, load_registry, run_checks, select_checks,
-                             verify_specification_snapshot)
+from mycel._coverage import CoverageError, check_kind, discover_checks, iter_checks, run_checks, select_checks
 from mycel._check_store import NativePostgresBackend
 
 
@@ -54,14 +52,11 @@ def ownership_journal():
             directory.rmdir()
 
 
-def main(*, json_output: bool = False) -> int:
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--release", action="store_true", help="require proofs for every active requirement")
-    parser.add_argument("--claims", type=Path, default=REPOSITORY / "checks/claims.json")
     parser.add_argument("--tests", type=Path, default=REPOSITORY / "tests")
     parser.add_argument("--select", action="append", default=[], metavar="MODULE[.CLASS[.METHOD]]")
     parser.add_argument("--workers", type=int, default=min(6, os.cpu_count() or 1))
-    parser.add_argument("--specifications", type=Path)
     parser.add_argument("--store-settings", type=Path, help="read only store.address from this settings file")
     parser.add_argument("--report", type=Path, help="write the complete JSON report outside the repository")
     arguments = parser.parse_args()
@@ -69,18 +64,8 @@ def main(*, json_output: bool = False) -> int:
     try:
         if arguments.workers < 1:
             raise CoverageError("check workers must be a positive integer")
-        if arguments.release and arguments.select:
-            raise CoverageError("a release gate cannot select only part of the check inventory")
-        registry = load_registry()
-        if arguments.specifications is not None:
-            verify_specification_snapshot(arguments.specifications)
-        claims = load_claims(arguments.claims)
         suite = select_checks(discover_checks(arguments.tests), arguments.select)
         checks = list(iter_checks(suite))
-        if arguments.select:
-            names = {check.id() for check in checks}
-            # Focused runs retain only claims whose complete proof list is present.
-            claims = {identifier: proofs for identifier, proofs in claims.items() if set(proofs) <= names}
         backend = None
         with ownership_journal() as journal:
             native = None
@@ -93,15 +78,14 @@ def main(*, json_output: bool = False) -> int:
                         raise CoverageError("test store settings require store.address") from error
                     native = NativePostgresBackend(address, _ownership_journal=Path(journal))
                     backend = native
-                    if any(declaration(check) and declaration(check).kind == "store" for check in checks):
+                    if any(check_kind(check) == "store" for check in checks):
                         try:
                             native.preflight()
                         except (CoverageError, RuntimeError):
                             reason = f"store checks unavailable at {native.server_label}: cannot connect or create a disposable database"
                             print(reason, file=sys.stderr)
                             backend = UnavailableStore(native, reason)
-                report = run_checks(suite, registry=registry, claims=claims, release=arguments.release,
-                                    store_backend=backend, workers=arguments.workers,
+                report = run_checks(suite, store_backend=backend, workers=arguments.workers,
                                     tests_directory=arguments.tests)
             finally:
                 # run_checks stops its workers before returning or raising.
@@ -114,36 +98,24 @@ def main(*, json_output: bool = False) -> int:
         data = report.to_dict()
         if arguments.report is not None:
             arguments.report.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        if json_output:
-            print(json.dumps(data, ensure_ascii=False, indent=2))
-        else:
-            statuses = Counter(check.status for check in report.checks)
-            kinds = Counter(check.kind for check in report.checks)
-            summary = data["summary"]
-            print(f"{statuses['passed']:,} passed, {statuses['failed']:,} failed, {statuses['skipped']:,} skipped; "
-                  f"{kinds['unit']:,} unit, {kinds['store']:,} store; "
-                  f"{summary['implemented']} requirements proven; {(time.monotonic()-started)/60:.2f} minutes")
-            pending = [name for name, row in data["requirements"].items() if row["status"] == "pending"]
-            if arguments.select:
-                print(f"Pending: {len(pending)} requirements in this focused run.")
-                print("Focused run; full requirement acceptance requires the complete make check run.")
-            else:
-                print("Pending: " + ", ".join(pending))
-            for check in report.checks:
-                if check.status != "passed":
-                    detail = (check.detail or check.status).strip().splitlines()[-1]
-                    print(f"{check.name}: {detail}", file=sys.stderr)
-            for error in report.errors:
-                print(error, file=sys.stderr)
+        statuses = Counter(check.status for check in report.checks)
+        kinds = Counter(check.kind for check in report.checks)
+        print(f"{statuses['passed']:,} passed, {statuses['failed']:,} failed, {statuses['skipped']:,} skipped; "
+              f"{kinds['unit']:,} unit, {kinds['store']:,} store; {(time.monotonic()-started)/60:.2f} minutes")
+        if arguments.select:
+            print("Focused run; acceptance requires the complete make check run.")
+        for check in report.checks:
+            if check.status != "passed":
+                detail = (check.detail or check.status).strip().splitlines()[-1]
+                print(f"{check.name}: {detail}", file=sys.stderr)
+        for error in report.errors:
+            print(error, file=sys.stderr)
         return 0 if report.passed else 1
     except KeyboardInterrupt:
         print("Check run interrupted; owned disposable databases cleaned.", file=sys.stderr)
         return 130
     except (CoverageError, OSError, ValueError, RuntimeError) as error:
-        if json_output:
-            print(json.dumps({"passed": False, "errors": [str(error)]}))
-        else:
-            print(str(error), file=sys.stderr)
+        print(str(error), file=sys.stderr)
         return 1
 
 

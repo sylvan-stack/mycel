@@ -9,7 +9,6 @@ import unittest
 
 from mycel._activity import MutationActivity, activity_state
 from mycel._capture import capture_repository
-from mycel._coverage import proves
 from mycel._declared_refs import DeclaredRefStore
 from mycel._errors import MycelError
 from mycel._evidence import (CaptureLocation, EvidenceError, EvidenceStore, PinInputs,
@@ -116,7 +115,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
             'FROM public.mycel_dependencies d JOIN public.mycel_evidence_references r '
             'ON r.owner=d.baseline_owner AND r.ordinal=0 ORDER BY d.id').fetchall()
 
-    @proves('MYC-16.13', kind='store')
     def test_settings_change_after_capture_refuses_publication_without_dependency_handoff(self):
         self.fixture.initialize()
         captured = capture_repository(self.fixture.settings, 'fixture')
@@ -129,7 +127,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 'invalid_input')
             self.assertEqual(self.fixture.state(connection), before)
 
-    @proves('MYC-16.13', 'MYC-12.8', kind='store')
     def test_settings_change_after_last_handoff_or_reply_counts_rolls_back_complete_publication(self):
         self.prepare()
         original = self.fixture.config.read_text()
@@ -161,7 +158,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
                     finally:
                         self.fixture.config.write_text(original)
 
-    @proves('MYC-16.5', 'MYC-16.13', kind='store')
     def test_complete_capture_declarations_edges_pins_and_activity_commit_together(self):
         self.prepare()
         with self.fixture.connect() as connection, self.fixture.connect() as reader:
@@ -184,7 +180,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
             self.assertEqual({item['location']['kind'] for item in manifests}, {'disk', 'branch'})
             self.assertEqual(len({item['dependantVersion'] for item in manifests}), 1)
 
-    @proves('MYC-16.5', 'MYC-16.13', kind='store')
     def test_frontmatter_locations_sharing_exact_version_keep_different_source_pins(self):
         self.prepare()
         path = self.fixture.artifact / 'guide.md'
@@ -198,7 +193,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
             self.assertEqual({item['source']['name'] for item in manifests}, {'Source', 'Other'})
             self.assertEqual(len({row[2] for row in rows}), 2)
 
-    @proves('MYC-16.5', 'MYC-16.13', kind='store')
     def test_evidence_and_audit_failures_roll_back_the_complete_prospective_publication(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -215,7 +209,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
                 self.assertEqual(self.fixture.state(connection), before)
                 activity.finish('failed', error={'code': 'internal', 'message': 'fixture failure'})
 
-    @proves('MYC-16.13', kind='store')
     def test_changed_real_disk_source_before_pin_refuses_and_rolls_back_all_rows(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -227,7 +220,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.status, 'changed_since_ingest')
             self.assertEqual(self.fixture.state(connection), before)
 
-    @proves('MYC-16.13', 'MYC-1.22', kind='store')
     def test_source_change_after_last_pin_refuses_complete_publication_and_activity(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -243,7 +235,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
                 self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_activity').fetchone()[0], 0)
                 activity.finish('failed', error={'code': 'internal', 'message': 'fixture changed capture'})
 
-    @proves('MYC-16.13', 'MYC-1.22', kind='store')
     def test_git_ref_change_after_last_pin_refuses_complete_publication(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -256,7 +247,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.code.value, 'invalid_input')
             self.assertEqual(self.fixture.state(connection), before)
 
-    @proves('MYC-16.5', kind='store')
     def test_source_only_change_keeps_baseline_and_unchanged_capture_can_retry_refs(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -272,7 +262,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
             self.assertEqual(self.rows(connection), original)
             self.assertTrue(all(item.baseline_status == 'retained' for item in repeated.refs))
 
-    @proves('MYC-2.6', 'MYC-2.8', 'MYC-16.5', kind='store')
     def test_unresolved_and_malformed_refs_remain_visible_and_initial_resolution_retries(self):
         self.prepare()
         (self.fixture.artifact / 'waiting.md').write_bytes(b'---\nsources: ["fixture:@artifact/later.md#Later", "bad"]\n---\n# Waiting\nBody.\n')
@@ -292,7 +281,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
             self.assertIn(missing.identifier, {str(row[0]) for row in current})
             self.assertEqual(DeclaredRefStore(connection).list(repository='fixture', faults_only=True)[0].declaration, 'bad')
 
-    @proves('MYC-16.5', 'MYC-16.13', kind='store')
     def test_pinned_alias_or_version_replacement_refuses_without_identity_policy(self):
         self.prepare()
         with self.fixture.connect() as connection:
@@ -308,7 +296,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.code.value, 'refused')
                 self.assertEqual(self.fixture.state(connection), before)
 
-    @proves('MYC-2.6', 'MYC-16.5', kind='store')
     def test_frontmatter_line_shift_refreshes_ref_occurrence_without_changing_pins(self):
         self.prepare()
         path = self.fixture.artifact / 'guide.md'
@@ -330,7 +317,6 @@ class LocatedDeclarationTransactionStoreTests(unittest.TestCase):
                 self.assertEqual(ref.line, before[ref.identifier] + (1 if kinds[ref.location] == 'disk' else 0))
                 self.assertEqual(ref.baseline_status, 'retained')
 
-    @proves('MYC-16.13', kind='store')
     def test_idle_unguarded_foreign_and_expired_transaction_adapters_refuse_before_writes(self):
         self.prepare()
         with self.fixture.connect() as connection, self.fixture.connect() as foreign:

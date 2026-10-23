@@ -12,7 +12,6 @@ from unittest.mock import Mock, patch
 
 from mycel._activity import MutationActivity
 from mycel._cli import parse, run
-from mycel._coverage import proves
 from mycel._credentials import Secret
 from mycel._embedding_plan import load_tokenizer
 from mycel._embedding_store import (EmbeddingCounts, EmbeddingStore, PreparedRepository,
@@ -62,7 +61,6 @@ class EmbedCliTests(unittest.TestCase):
                 activity.assert_not_called()
             self.assertEqual(before, config.read_bytes())
 
-    @proves("MYC-0.6", "MYC-0.7", "MYC-6.14")
     def test_all_initial_capture_or_prepare_failures_have_one_closed_error(self):
         with self.dry_run_boundary() as (config, writer):
             for phase in ("capture", "prepare"):
@@ -82,7 +80,6 @@ class EmbedCliTests(unittest.TestCase):
                     if phase == "capture":
                         writer.prepare.assert_not_called()
 
-    @proves("MYC-0.6", "MYC-0.7", "MYC-6.14")
     def test_initial_capture_or_prepare_interruption_has_common_closed_reply_without_later_work(self):
         with self.dry_run_boundary() as (config, writer):
             for phase in ("capture", "prepare"):
@@ -97,7 +94,6 @@ class EmbedCliTests(unittest.TestCase):
                     self.assertEqual(capture.call_count, 1)
                     self.assertEqual(writer.prepare.call_count, int(phase == "prepare"))
 
-    @proves("MYC-0.6", "MYC-0.7", "MYC-6.14")
     def test_completed_empty_or_failed_planning_preserves_started_and_mixed_replies(self):
         empty = PreparedRepository("b", True, (), EmbeddingCounts(), ())
         version = RetainedVersion("b", "public-fixture-chunk", "document", {}, "1", "f" * 64,
@@ -123,7 +119,6 @@ class EmbedCliTests(unittest.TestCase):
                                      (int(bool(prepared.counts.failed_versions)), "", {"b"}))
                     self.assertEqual(reply["estimate"]["planningFailed"], prepared.counts.failed_versions)
 
-    @proves("MYC-0.6", "MYC-0.7", "MYC-0.10")
     def test_help_options_and_invalid_or_ineligible_scope_precede_store_and_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.toml"
@@ -197,7 +192,6 @@ class EmbedStoreTests(unittest.TestCase):
                 patch("mycel._build_identity.current_build", return_value=build):
             yield service
 
-    @proves("MYC-3.6", "MYC-3.13", kind="store")
     def test_public_named_repeated_cwd_organization_and_all_scopes_exclude_other_repositories(self):
         with tempfile.TemporaryDirectory() as directory, self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             root = Path(directory)
@@ -224,7 +218,6 @@ class EmbedStoreTests(unittest.TestCase):
                 self.assertEqual((status, reply["error"]["code"]), (1, "unknown_repository"))
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_vectors").fetchone(), (2,))
 
-    @proves("MYC-3.11", "MYC-3.12", kind="store")
     def test_dry_run_has_provisional_exact_selection_tokens_and_local_faults_with_no_mutation(self):
         local = replace(self.tokenizer, catalog=replace(self.tokenizer.catalog, input_token_cap=40,
                     batch_token_cap=40, batch_input_cap=1))
@@ -254,7 +247,6 @@ class EmbedStoreTests(unittest.TestCase):
             self.assertEqual(sum(part["tokens"] for entry in selection for part in entry["parts"]), reply["estimate"]["tokens"])
             self.assertTrue(all(part["tokens"] > part["submittedTokens"] for entry in selection for part in entry["parts"]))
 
-    @proves("MYC-3.7", "MYC-3.12", kind="store")
     def test_interrupted_batches_retain_commits_and_resume_only_missing_parts_with_finite_inventory(self):
         local = replace(self.tokenizer, catalog=replace(self.tokenizer.catalog, batch_input_cap=1))
         with tempfile.TemporaryDirectory() as directory, self.store_fixture.backend.connection(self.store_fixture.database) as connection:
@@ -288,7 +280,6 @@ class EmbedStoreTests(unittest.TestCase):
                 self.assertEqual(len(service.attempts), 2)
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_activity").fetchone(), (2,))
 
-    @proves("MYC-3.7", "MYC-3.12", kind="store")
     def test_content_failures_keep_successful_parts_and_only_explicit_retry_selects_failures(self):
         local = replace(self.tokenizer, catalog=replace(self.tokenizer.catalog, input_token_cap=32,
                     batch_token_cap=32, batch_input_cap=1))
@@ -317,7 +308,6 @@ class EmbedStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT counts,outcome FROM public.mycel_activity ORDER BY id DESC LIMIT 1").fetchone(),
                              (retry["repositories"]["a"], "done"))
 
-    @proves("MYC-3.7", "MYC-3.11", "MYC-3.13", kind="store")
     def test_changed_settings_stage_paid_response_block_publication_and_dry_run_never_drains(self):
         with tempfile.TemporaryDirectory() as directory, self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             config = self.configured(Path(directory))
@@ -348,7 +338,6 @@ class EmbedStoreTests(unittest.TestCase):
                 self.assertFalse(service.attempts)
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_receipts").fetchone(), (0,))
 
-    @proves("MYC-3.7", "MYC-3.11", "MYC-3.12", kind="store")
     def test_retry_dry_run_reports_saved_planning_failure_as_failed_and_retry_selection_separately(self):
         with tempfile.TemporaryDirectory() as directory, self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             config = self.configured(Path(directory))
@@ -370,7 +359,6 @@ class EmbedStoreTests(unittest.TestCase):
                 status, retried, _ = invoke(config, ("embed", "--repo", "a", "--retry-failed"))
                 self.assertEqual((status, retried["repositories"]["a"]["sent"], len(service.attempts)), (0, 1, 1))
 
-    @proves("MYC-3.6", "MYC-3.7", "MYC-3.12", kind="store")
     def test_unavailable_final_recount_and_later_local_fault_preserve_committed_prefix_and_other_results(self):
         from mycel import _embed
         local = replace(self.tokenizer, catalog=replace(self.tokenizer.catalog, batch_input_cap=1))
@@ -401,7 +389,6 @@ class EmbedStoreTests(unittest.TestCase):
             self.assertEqual(reply["repositories"]["b"]["error"]["code"], "invalid_input")
             self.assertEqual(connection.execute("SELECT counts,outcome FROM public.mycel_activity").fetchone(), (report, "failed"))
 
-    @proves("MYC-3.7", kind="store")
     def test_interruption_during_later_repository_capture_keeps_first_reply_and_exact_stopped_activity(self):
         from mycel import _embed
         with tempfile.TemporaryDirectory() as directory, self.store_fixture.backend.connection(self.store_fixture.database) as connection:
@@ -422,7 +409,6 @@ class EmbedStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT counts,outcome FROM public.mycel_activity").fetchone(),
                              (reply["repositories"]["a"], "stopped"))
 
-    @proves("MYC-3.7", kind="store")
     def test_lost_connection_after_first_batch_keeps_progress_reply_and_committed_vector(self):
         local = replace(self.tokenizer, catalog=replace(self.tokenizer.catalog, batch_input_cap=1))
         with tempfile.TemporaryDirectory() as directory, self.store_fixture.backend.connection(self.store_fixture.database) as connection:
@@ -443,7 +429,6 @@ class EmbedStoreTests(unittest.TestCase):
             with self.store_fixture.backend.connection(self.store_fixture.database) as reopened:
                 self.assertEqual(reopened.execute("SELECT count(*) FROM public.mycel_vectors").fetchone(), (1,))
 
-    @proves("MYC-3.13", kind="store")
     def test_disable_during_credential_acquisition_prevents_the_first_provider_send(self):
         with tempfile.TemporaryDirectory() as directory, self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             config = self.configured(Path(directory))
@@ -459,7 +444,6 @@ class EmbedStoreTests(unittest.TestCase):
             self.assertFalse(service.attempts)
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_receipts").fetchone(), (0,))
 
-    @proves("MYC-3.7", kind="store")
     def test_publication_audit_failure_rolls_back_vectors_preserving_paid_receipt_and_safe_progress(self):
         with tempfile.TemporaryDirectory() as directory, self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             config = self.configured(Path(directory))
@@ -477,7 +461,6 @@ class EmbedStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_receipts").fetchone(), (1,))
             self.assertEqual(connection.execute("SELECT counts,outcome FROM public.mycel_activity").fetchone(), (report, "failed"))
 
-    @proves("MYC-3.7", "MYC-3.13", kind="store")
     def test_settings_change_after_audit_rolls_back_vectors_and_preserves_original_receipt(self):
         with tempfile.TemporaryDirectory() as directory, self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             config = self.configured(Path(directory))
@@ -495,7 +478,6 @@ class EmbedStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_embedding_receipts").fetchone(), (1,))
             self.assertEqual(connection.execute("SELECT counts,outcome FROM public.mycel_activity").fetchone(), (report, "failed"))
 
-    @proves("MYC-3.7", "MYC-3.6", kind="store")
     def test_busy_pass_keeps_receipt_and_embed_lock_refuses_duplicate_sends(self):
         with tempfile.TemporaryDirectory() as directory, self.store_fixture.backend.connection(self.store_fixture.database) as connection, \
                 self.store_fixture.backend.connection(self.store_fixture.database) as blocker:

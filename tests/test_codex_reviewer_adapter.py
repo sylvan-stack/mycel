@@ -12,7 +12,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel import _classification_payload as payload
-from mycel._coverage import proves
 
 try:
     from .test_reviewer import context_fixture
@@ -106,7 +105,6 @@ class ScriptedServer:
 
 
 class CodexReviewerAdapterTests(unittest.TestCase):
-    @proves("MYC-13.21", "MYC-14.24")
     def test_complete_canonical_request_matches_production_builder_and_literal_runtime_flags(self):
         request, command = complete_request()
         args = SimpleNamespace(revision="fictional-codex-v1")
@@ -114,7 +112,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
         self.assertEqual(request["inputHash"], payload.DecisionPayload(request["payload"]).input_hash)
         self.assertEqual(adapter.CRITERIA_SHA256, adapter.sha256(payload.CRITERIA.encode()).hexdigest())
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_recomputed_hash_cannot_change_fixed_question_text_snapshots_or_locator_contract(self):
         request, command = complete_request()
         for mutate in (
@@ -132,7 +129,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
             with self.assertRaises(adapter.Refused):
                 adapter.validate_request(adapter.canonical(changed) + b"\n", SimpleNamespace(revision="fictional-codex-v1"), command.command_hash)
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_duplicate_keys_nonfinite_bom_and_complete_input_limit_are_refused(self):
         for raw in (b'{"a":1,"a":2}', b'{"a":NaN}', b'\xef\xbb\xbf{}', b'{} trailing'):
             with self.assertRaises(adapter.Refused):
@@ -145,7 +141,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
             with self.assertRaises(adapter.Refused):
                 adapter.validate_request(raw, SimpleNamespace(revision="fictional-codex-v1"), command.command_hash)
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_configuration_rejects_enabled_mcp_retries_external_routes_or_compaction(self):
         original = configured()
         origins = {"tools.update_plan.enabled": {}, "tools.experimental_request_user_input.enabled": {},
@@ -167,7 +162,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
             with self.assertRaises(adapter.Refused):
                 adapter.check_config(changed, origins, CATALOG)
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_preflight_never_starts_a_model_turn_and_disallows_instruction_sources_and_fallback(self):
         request, _ = complete_request()
         server = ScriptedServer(request)
@@ -190,7 +184,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "authentication")
         self.assertNotIn("thread/start", [method for method, _ in server.calls])
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_one_turn_supplies_complete_evidence_schema_and_only_platform_reported_usage(self):
         request, _ = complete_request()
         server = ScriptedServer(request)
@@ -206,7 +199,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
         self.assertEqual(sent["outputSchema"]["properties"]["evidence"]["items"]["enum"], request["evidenceLocators"])
         payload.ReviewerRequest(payload.DecisionPayload(request["payload"]), 120000)
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_tools_reroutes_compaction_extra_completions_and_cross_turn_evidence_never_continue(self):
         request, _ = complete_request()
         def append_event(method, params):
@@ -225,7 +217,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
             self.assertEqual([method for method, _ in server.calls], ["turn/start"])
             self.assertEqual(server.sent, [])
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_structured_provider_faults_reach_only_the_parent_retry_contract(self):
         request, _ = complete_request()
         cases = [
@@ -261,7 +252,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
                     self.assertEqual([method for method, _ in server.calls], ["turn/start"])
                     self.assertEqual(server.sent, [])
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_retrying_or_misbound_error_cannot_grant_a_parent_retry(self):
         request, _ = complete_request()
         original = {"method": "error", "params": {"threadId": "fictional-thread",
@@ -288,7 +278,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
             adapter.classify(ScriptedServer(request, events=lambda events: [failed]), selected_thread(), request)
         self.assertEqual(caught.exception.code, "provider_result_invalid")
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_unknown_usage_stays_unknown_and_complete_oversized_evidence_is_never_truncated(self):
         request, _ = complete_request()
         def remove_usage(events):
@@ -303,7 +292,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "input_too_large")
         self.assertEqual(server.calls, [])
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_os_instruction_boundary_excludes_global_file_aliases_without_auth_paths(self):
         with patch.object(Path, "home", return_value=Path("/Users/fictional")):
             policy = adapter.instruction_sandbox()
@@ -312,7 +300,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
         self.assertIn("/System/Volumes/Data/Users/fictional/.codex/AGENTS.override.md", policy)
         self.assertNotIn("auth.json", policy)
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_profile_fingerprint_preserves_python_isolation_flags_and_checks_script_and_config(self):
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder).resolve()
@@ -334,7 +321,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
                 with self.assertRaises(adapter.Refused):
                     adapter.inspect_profile(args)
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_catalog_bytes_cannot_refresh_inside_an_unchanged_command_revision(self):
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder).resolve()
@@ -353,7 +339,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
                 with self.assertRaises(adapter.Refused):
                     adapter.inspect_profile(args)
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_local_pipe_overflow_is_bounded_and_child_is_reaped(self):
         real_popen = subprocess.Popen
         def standin(*unused, **kwargs):
@@ -373,7 +358,6 @@ class CodexReviewerAdapterTests(unittest.TestCase):
             self.assertIsNotNone(server.child.returncode)
             self.assertLessEqual(server.sizes["stdout"], adapter.MAX_RPC_OUTPUT + 65536)
 
-    @proves("MYC-13.21", "MYC-14.24")
     def test_cancellation_stops_waiting_and_reaps_local_child_without_model_work(self):
         real_popen = subprocess.Popen
         def standin(*unused, **kwargs):

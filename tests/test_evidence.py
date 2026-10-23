@@ -20,7 +20,6 @@ from psycopg import pq
 from psycopg.types.json import Jsonb
 
 from mycel import _evidence as evidence
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._markdown import split_markdown, COMPARISON_REVISION, UNICODE_VERSION
 from mycel._resolver import ResolvedChunk, ResolvedFile, SelectionMember, SourceResolver
@@ -70,7 +69,6 @@ def capture(observation, **kwargs):
 
 
 class EvidenceUnitTests(unittest.TestCase):
-    @proves('MYC-16.4')
     def test_document_body_and_title_normalize_separately_exact_versions_do_not(self):
         first = document('source', 'guide.md', '# Ａ title\r\nBody\twith  space.\r\n')
         second = document('source', 'guide.md', '# A title\nBody with\nspace.\n', version=2)
@@ -85,7 +83,6 @@ class EvidenceUnitTests(unittest.TestCase):
         self.assertEqual(evidence.chunk_comparison(renamed.chunks[0]).hash, body1.hash)
         self.assertNotEqual(renamed.chunks[0].comparison['title']['hash'], first.chunks[0].comparison['title']['hash'])
 
-    @proves('MYC-16.4')
     def test_code_file_and_snapshot_hashes_cover_original_complete_bytes(self):
         raw = b'#!/bin/sh\r\n# comment\r\necho exact  \r\n'
         for kind in ('code_text', 'file_bytes'):
@@ -99,7 +96,6 @@ class EvidenceUnitTests(unittest.TestCase):
         self.assertEqual(evidence.snapshot(complete).evidence.hash, sha256(complete).hexdigest())
         self.assertNotEqual(evidence.snapshot(complete).evidence.hash, evidence.snapshot(complete.split(b'---\n')[-1]).evidence.hash)
 
-    @proves('MYC-16.4')
     def test_canonical_json_fixed_bytes_and_sha_vector_reject_non_semantic_numbers(self):
         value = {'é': 'literal Å', 'a': ['\x00\b\t\n\f\r"\\', -12, True, None], '𐀀': 'x'}
         expected = b'{"a":["\\u0000\\b\\t\\n\\f\\r\\"\\\\",-12,true,null],"\xc3\xa9":"literal \xe2\x84\xab","\xf0\x90\x80\x80":"x"}'
@@ -114,7 +110,6 @@ class EvidenceUnitTests(unittest.TestCase):
         with self.assertRaises(evidence.EvidenceError):
             evidence.canonical_json(recursive)
 
-    @proves('MYC-16.4')
     def test_unavailable_pinned_revision_and_unicode_identity_never_repin_or_reparse(self):
         observation = inputs()
         good = observation.selection.members[0].chunk
@@ -134,7 +129,6 @@ class EvidenceUnitTests(unittest.TestCase):
         with patch.object(evidence, 'UNICODE_VERSION', 'future'):
             code.verify(b'print("exact")\n')
 
-    @proves('MYC-16.4')
     def test_recorded_body_and_title_mismatch_are_corruption(self):
         chunk = inputs().selection.members[0].chunk
         for bad in (replace(chunk, body=b'other body'), replace(chunk, title='other title')):
@@ -142,7 +136,6 @@ class EvidenceUnitTests(unittest.TestCase):
                 evidence.chunk_comparison(bad)
             self.assertEqual(error.exception.status, 'snapshot_corrupt')
 
-    @proves('MYC-16.4')
     def test_family_membership_and_order_are_in_the_comparison_hash(self):
         raw = b'class C:\n def a(self): pass\n def z(self): pass\n'
         primary = SourceAddress('source', 'code', 'c.py')
@@ -189,7 +182,6 @@ class EvidenceUnitTests(unittest.TestCase):
             evidence.BaselineManifest.from_bytes(raw, sha256(raw).hexdigest())
         self.assertEqual(error.exception.status, 'unsupported_comparison')
 
-    @proves('MYC-13.15')
     def test_rehashed_manifest_rejects_wrong_pins_places_kinds_missing_spans_and_body_hash(self):
         baseline = capture(inputs())
         original = json.loads(baseline.manifest.canonical_bytes)
@@ -215,7 +207,6 @@ class EvidenceUnitTests(unittest.TestCase):
             with self.subTest(variant=variant), self.assertRaises(evidence.EvidenceError):
                 evidence.BaselineCapture(evidence.BaselineManifest(variant), baseline.snapshots)
 
-    @proves('MYC-13.15')
     def test_manifest_and_snapshots_are_immutable_complete_owner_scoped_and_fixed_id(self):
         observed = inputs(source='---\nrole: authored\n---\n# Source\r\n Exact source.  \r\n', whole=True)
         recorded = capture(observed)
@@ -233,7 +224,6 @@ class EvidenceUnitTests(unittest.TestCase):
         with self.assertRaises(evidence.EvidenceError):
             evidence.BaselineManifest.from_bytes(manifest.canonical_bytes + b' ', manifest.identifier)
 
-    @proves('MYC-13.15')
     def test_snapshot_verifies_length_hash_exact_text_limits_and_extraction(self):
         raw = b'prefix\n# Exact\r\nbody\t\r\nsuffix'
         begin, end = 7, len(raw) - 6
@@ -257,7 +247,6 @@ class EvidenceUnitTests(unittest.TestCase):
             binary.evidence.verify(binary.source, textual=True)
         self.assertEqual(error.exception.status, 'insufficient_evidence')
 
-    @proves('MYC-13.15')
     def test_inheritance_keeps_original_sources_and_its_audit_location(self):
         observed = inputs(location=evidence.CaptureLocation('branch', 'a'*40))
         baseline = capture(observed)
@@ -399,7 +388,6 @@ class EvidenceSQLTests(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    @proves('MYC-13.15')
     def test_pin_exact_version_guard_and_evidence_keep_body_nul(self):
         observed = inputs(dependant='# Answer\nExact\0answer.\n',source='# Source\nComplete\0source.\n')
         self.connection.seed(observed)
@@ -433,7 +421,6 @@ class EvidenceSQLTests(unittest.TestCase):
                captured_at=kwargs.pop('captured_at', '2026-10-09T00:00:00Z'),
                authorization=kwargs.pop('authorization', 'initial_resolution'), **kwargs)
 
-    @proves('MYC-13.15')
     def test_locked_atomic_owner_capture_and_read_never_create_searchable_rows(self):
         def reread():
             self.assertEqual(self.connection.guards, ['owner', 'source'])
@@ -449,7 +436,6 @@ class EvidenceSQLTests(unittest.TestCase):
                                             'INSERT INTO public.mycel_locations', 'INSERT INTO public.mycel_vectors'))
                              for sql, _ in self.connection.sql))
 
-    @proves('MYC-13.15')
     def test_changed_files_versions_resolution_and_settings_refuse_before_any_write(self):
         changed = inputs(source='# Source\nChanged\n')
         dep_changed = inputs(dependant='# Answer\nChanged\n')
@@ -470,7 +456,6 @@ class EvidenceSQLTests(unittest.TestCase):
         self.assertEqual(self.connection.snapshots, {})
         self.assertNotIn('begin', self.connection.events)
 
-    @proves('MYC-13.15')
     def test_native_failure_rolls_back_complete_capture_and_sanitizes_detail(self):
         self.connection.fail = lambda sql: sql == evidence._INSERT_REFERENCE_SQL
         with self.assertRaises(MycelError) as error:
@@ -482,7 +467,6 @@ class EvidenceSQLTests(unittest.TestCase):
             self.assertFalse(data)
         self.assertEqual(self.connection.events[-1], 'rollback')
 
-    @proves('MYC-13.15')
     def test_store_changed_version_and_file_checks_roll_back_before_blob_insert(self):
         for mutate in (lambda: self.connection.versions.pop(11), lambda: self.connection.files.clear()):
             with self.subTest(mutate=mutate):
@@ -493,7 +477,6 @@ class EvidenceSQLTests(unittest.TestCase):
                 self.assertEqual(error.exception.status, 'changed_since_ingest')
                 self.assertFalse(self.connection.snapshots)
 
-    @proves('MYC-13.15')
     def test_existing_pin_requires_exact_expected_owner_no_initial_silent_repin(self):
         dependency = uuid4()
         identifier = self.pin(identifier=dependency)
@@ -505,7 +488,6 @@ class EvidenceSQLTests(unittest.TestCase):
         self.assertEqual(repeated, identifier)
         self.assertEqual(len(self.connection.manifests), 1)
 
-    @proves('MYC-13.15')
     def test_confirmation_releases_only_unreferenced_old_owner_and_collects_no_live_evidence(self):
         for protected in (False, True):
             with self.subTest(protected=protected):
@@ -521,7 +503,6 @@ class EvidenceSQLTests(unittest.TestCase):
                 self.assertEqual(('owner', first) in self.connection.manifests, protected)
                 self.assertTrue(('owner', second) in self.connection.manifests)
 
-    @proves('MYC-13.15')
     def test_raw_declaration_fresh_full_catalog_collision_and_missing_resolution_fail_closed(self):
         for ref in ('not a ref', 'source:missing.md', 'source:source.md#Missing', 'source:@index/summaries'):
             with self.subTest(ref=ref), self.assertRaises(evidence.EvidenceError):
@@ -540,7 +521,6 @@ class EvidenceSQLTests(unittest.TestCase):
         self.assertEqual(error.exception.status, 'changed_since_ingest')
         self.assertFalse(self.connection.snapshots)
 
-    @proves('MYC-13.15')
     def test_version_rows_must_belong_to_each_exact_repository_and_file(self):
         for position, value in ((2,'source'), (3,uuid4())):
             with self.subTest(position=position):
@@ -553,7 +533,6 @@ class EvidenceSQLTests(unittest.TestCase):
                 self.assertEqual(error.exception.status, 'changed_since_ingest')
                 self.assertFalse(self.connection.snapshots)
 
-    @proves('MYC-13.15')
     def test_missing_and_corrupt_snapshot_and_unknown_comparison_stay_visible(self):
         identifier = self.pin()
         baseline = self.store.read_baseline('owner', identifier)
@@ -572,7 +551,6 @@ class EvidenceSQLTests(unittest.TestCase):
             self.store.read_snapshot('owner', replace(blob.evidence, comparison=replace(blob.evidence.comparison, revision='future')))
         self.assertEqual(error.exception.status, 'unsupported_comparison')
 
-    @proves('MYC-13.15')
     def test_inherited_pin_has_new_dependant_version_and_identical_old_source(self):
         dependency = uuid4()
         original_id = self.pin(identifier=dependency)
@@ -591,7 +569,6 @@ class EvidenceSQLTests(unittest.TestCase):
         self.assertEqual(inherited.manifest.payload['dependantVersion'], '2')
         self.assertEqual(len(self.connection.dependencies), 2)
 
-    @proves('MYC-13.15')
     def test_reconstruction_only_exact_owned_blob_never_changes_pin(self):
         dependency = uuid4()
         identifier = self.pin(identifier=dependency)
@@ -651,7 +628,6 @@ class EvidenceStoreTests(unittest.TestCase):
                           kind='declared', declaration=observed.resolution.declaration, captured_at='2026-10-09T00:00:00Z',
                           authorization='initial_resolution')
 
-    @proves('MYC-2.26','MYC-16.5','MYC-16.6', kind='store')
     def test_real_body_nul_pin_and_snapshot_roundtrip_never_uses_projection(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             observed = self.seed(connection,inputs(dependant='# Answer\nExact\0answer.\n',source='# Source\nComplete\0source.\n'))
@@ -665,7 +641,6 @@ class EvidenceStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT source_bytes FROM public.mycel_chunk_versions WHERE id=%s',
                                                (observed.dependant.chunk.version,)).fetchone()[0],observed.dependant.chunk.source)
 
-    @proves('MYC-2.26','MYC-16.5','MYC-16.6', kind='store')
     def test_real_owner_owned_complete_evidence_survives_source_deletion_and_is_not_searchable(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             observed = self.seed(connection, inputs(source='---\nrole: authored\n---\n# Source\r\nComplete source.\r\n', whole=True))
@@ -682,7 +657,6 @@ class EvidenceStoreTests(unittest.TestCase):
             self.assertEqual(writer.read_baseline('owner', identifier), baseline)
             self.assertIsNone(connection.execute('SELECT id FROM public.mycel_chunks WHERE repository=%s', ('source',)).fetchone())
 
-    @proves('MYC-16.5','MYC-16.13', kind='store')
     def test_real_callback_and_mid_transaction_failure_write_no_partial_baseline(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             observed = self.seed(connection, inputs())
@@ -702,7 +676,6 @@ class EvidenceStoreTests(unittest.TestCase):
                     '(SELECT count(*) FROM public.mycel_evidence_references),(SELECT count(*) FROM public.mycel_dependencies)').fetchone()
             self.assertEqual(counts, (0, 0, 0, 0, 0))
 
-    @proves('MYC-1.34','MYC-2.26','MYC-16.5', 'MYC-13.18', kind='store')
     def test_real_branch_stash_baselines_restore_own_exact_versions_and_inherit_without_source_repin(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             branch = self.seed(connection, inputs(location=evidence.CaptureLocation('branch','a'*40)))
@@ -726,7 +699,6 @@ class EvidenceStoreTests(unittest.TestCase):
             self.assertEqual(inherited.manifest.payload['members'], branch_baseline.manifest.payload['members'])
             self.assertEqual(inherited.manifest.payload['pinnedHash'], branch_baseline.manifest.payload['pinnedHash'])
 
-    @proves('MYC-16.9', 'MYC-13.18', kind='store')
     def test_real_exact_reconstruction_limits_non_utf8_and_unsupported_comparison_never_repin(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             observed = self.seed(connection, inputs())
@@ -744,7 +716,6 @@ class EvidenceStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.status, status)
             self.assertEqual(writer.read_baseline('owner', identifier), baseline)
 
-    @proves('MYC-16.6','MYC-16.9', kind='store')
     def test_real_binary_file_evidence_and_corrupt_metadata_are_visible_without_lossy_text(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             observed = inputs(whole=True)
@@ -770,7 +741,6 @@ class EvidenceStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.status, 'snapshot_corrupt')
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_dependencies').fetchone()[0],1)
 
-    @proves('MYC-16.5','MYC-16.6', kind='store')
     def test_real_confirmation_releases_old_live_pin_but_preserves_verification_owner(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             observed = self.seed(connection, inputs())

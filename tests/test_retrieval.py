@@ -7,7 +7,6 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._retrieval import (RetrievalChunk, meaning_candidates, resolve_search_scope,
     select_chunks, selected_shared_document, validate_search, wording_candidates)
@@ -53,7 +52,6 @@ shared_documents = [{{repo="handbook", paths=["guides", "TERMS.md"]}},
     def names(self, scope):
         return tuple(repository.name for repository in scope)
 
-    @proves("MYC-4.1")
     def test_named_repository_overrides_cwd_and_unconfigured_names_refuse(self):
         selected = resolve_search_scope(self.settings, ("press",), cwd=self.home)
         self.assertEqual(self.names(selected), ("press",))
@@ -63,7 +61,6 @@ shared_documents = [{{repo="handbook", paths=["guides", "TERMS.md"]}},
             self.assertEqual(raised.exception.code, "unknown_repository")
         self._assert_origin_and_actual_artifact_alias_determine_scope()
 
-    @proves("MYC-4.1")
     def test_cwd_resolves_code_artifact_and_organization_folders(self):
         self.assertEqual(self.names(resolve_search_scope(self.settings,
             cwd=self.organization / "press" / "src")), ("press",))
@@ -78,7 +75,6 @@ shared_documents = [{{repo="handbook", paths=["guides", "TERMS.md"]}},
                          ("mill", "press"))
         self._assert_shared_document_paths_are_files_or_recursive_folder_boundaries()
 
-    @proves("MYC-4.1")
     def test_no_containing_repository_has_no_fallback(self):
         with self.assertRaises(MycelError) as raised:
             resolve_search_scope(self.settings, cwd=self.home / "unrelated")
@@ -130,7 +126,6 @@ shared_documents = [{{repo="handbook", paths=["guides", "TERMS.md"]}},
 
 
 class RetrievalCandidateTests(unittest.TestCase):
-    @proves("MYC-4.22")
     def test_empty_query_and_limits_refuse_in_every_corpus(self):
         for only in (None, "code", "docs"):
             for query in ("", " ", "\n\t"):
@@ -144,7 +139,6 @@ class RetrievalCandidateTests(unittest.TestCase):
             for k in (1, 100):
                 validate_search("step", k, only)
 
-    @proves("MYC-4.22")
     def test_candidate_arms_validate_limits_and_produce_distinct_bounded_lists(self):
         for k in (0, 101):
             with self.subTest(k=k), self.assertRaises(MycelError):

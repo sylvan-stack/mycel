@@ -6,7 +6,6 @@ import runpy
 import tempfile
 import unittest
 
-from mycel._coverage import proves
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +13,6 @@ SYNC = runpy.run_path(str(ROOT / "scripts/sync_guides.py"))
 
 
 class GuideCopyTests(unittest.TestCase):
-    @proves("MYC-0.12")
     def test_every_repository_guide_has_a_portable_corpus_copy(self):
         self.assertEqual(len(SYNC["GUIDES"]), 21)
         self.assertEqual(len(set(SYNC["GUIDES"])), 21)
@@ -24,7 +22,6 @@ class GuideCopyTests(unittest.TestCase):
             self.assertEqual(SYNC["check_copies"](ROOT / "docs", corpus), [])
             self.assertEqual(len(list(corpus.glob("*.md"))), 21)
 
-    @proves("MYC-0.12")
     def test_projection_keeps_prose_exact_and_rewrites_only_local_guide_links(self):
         original = ("# Guide\n\n[read](reading.md#exact) [cmd](command-line.md) "
                     "[check](./checks.md) [other](./other.md) "
@@ -38,7 +35,6 @@ class GuideCopyTests(unittest.TestCase):
         self.assertEqual(SYNC["render_corpus_guide"](original), expected)
         self.assertEqual(SYNC["render_corpus_guide"](expected), expected)
 
-    @proves("MYC-0.12")
     def test_check_reports_missing_and_changed_pairs_without_writing(self):
         with tempfile.TemporaryDirectory() as directory:
             docs, corpus = Path(directory) / "docs", Path(directory) / "tools"
@@ -56,7 +52,6 @@ class GuideCopyTests(unittest.TestCase):
             self.assertEqual(before, (changed.read_bytes(), changed.stat().st_mtime_ns))
             self.assertEqual(set(p.name for p in corpus.iterdir()), {changed.name})
 
-    @proves("MYC-0.12")
     def test_explicit_cli_checks_every_selected_pair_and_refuses_drift(self):
         with tempfile.TemporaryDirectory() as directory:
             corpus = Path(directory)
@@ -70,7 +65,6 @@ class GuideCopyTests(unittest.TestCase):
                 self.assertEqual(SYNC["main"](["check", *args]), 1)
                 self.assertEqual(SYNC["main"](["check", *args, "--guide", "activity"]), 0)
 
-    @proves("MYC-0.12")
     def test_write_validates_originals_before_replacing_and_refuses_symbolic_links(self):
         with tempfile.TemporaryDirectory() as directory:
             docs, corpus = Path(directory) / "docs", Path(directory) / "tools"
@@ -90,7 +84,6 @@ class GuideCopyTests(unittest.TestCase):
                 SYNC["write_copies"](docs, corpus, ("activity",))
             self.assertEqual(outside.read_text(), "# Outside\n")
 
-    @proves("MYC-0.12")
     def test_copy_replacement_preserves_hard_linked_outside_bytes_and_mtime(self):
         with tempfile.TemporaryDirectory() as directory:
             docs, corpus = Path(directory) / "docs", Path(directory) / "tools"

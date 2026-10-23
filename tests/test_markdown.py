@@ -6,7 +6,6 @@ from pathlib import Path
 import unittest
 from uuid import uuid4
 
-from mycel._coverage import proves
 from mycel._markdown import (COMPARISON_REVISION, UNICODE_VERSION, MarkdownDecodeError,
                              comparison_hash, normalize_comparison, split_markdown)
 from mycel._evidence import document_comparisons
@@ -24,7 +23,6 @@ class MarkdownTests(unittest.TestCase):
             self.assertEqual(chunk.snapshot_hash, sha256(chunk.text.encode("utf-8")).hexdigest())
         self.assertEqual(document.file_hash, sha256(document.source).hexdigest())
 
-    @proves("MYC-1.9", "MYC-1.10")
     def test_nested_sections_own_only_until_next_heading_with_exact_preamble_and_spans(self):
         source = "Preface\n\n# Setup\nParent body\n## Database\nChild body\n### Backups\nDeep body\n## Other\nSibling body\n# Finish\n"
         document = split_markdown(source)
@@ -39,7 +37,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(document.chunks[2].heading_path, ("Setup", "Database"))
         self.assert_exact(document)
 
-    @proves("MYC-1.9")
     def test_backtick_and_tilde_fences_hide_headings_and_need_matching_long_enough_closers(self):
         source = ("# Real\n````python\n# Hidden\n```\n## Still hidden\n~~~~\n### Still hidden\n````\n"
                   "## Visible\n~~~ shell\n# Hidden tilde\n```\n~~~~ text\n# Still hidden\n~~~~\n# End\n")
@@ -49,7 +46,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertIn("# Still hidden", document.chunks[1].body)
         self.assert_exact(document)
 
-    @proves("MYC-1.9")
     def test_unclosed_fence_keeps_remaining_source_in_one_section(self):
         document = split_markdown("# Start\n~~~\n# Not a heading\nEnd without closer")
         self.assertEqual(len(document.chunks), 1)
@@ -57,7 +53,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertIn("# Not a heading", document.chunks[0].body)
         self.assert_exact(document)
 
-    @proves("MYC-1.9")
     def test_list_and_quote_container_fences_hide_pseudoheadings_and_close_in_their_container(self):
         containers = (("- ", "  "), ("1. ", "   "), ("12) ", "    "),
                       ("> ", "> "), ("> > ", "> > "),
@@ -75,7 +70,6 @@ class MarkdownTests(unittest.TestCase):
                         self.assertIn("# Hidden", document.chunks[0].body)
                         self.assert_exact(document)
 
-    @proves("MYC-1.9")
     def test_inherited_list_fences_and_unclosed_container_fences_end_at_container_boundaries(self):
         cases = ("# Real\n- item\n\n  ```\n  # Hidden\n  ```\n# End\n",
                  "# Real\n- item\n  - child\n    ```\n    # Hidden\n    ```\n# End\n",
@@ -89,7 +83,6 @@ class MarkdownTests(unittest.TestCase):
                 self.assertEqual([chunk.name for chunk in document.chunks], ["Real", "End"])
                 self.assert_exact(document)
 
-    @proves("MYC-1.9")
     def test_opaque_html_comments_raw_tags_processing_declarations_and_cdata_hide_headings(self):
         pairs = (("<!--", "-->"), ("<pre>", "</pre>"), ("<ScRiPt>", "</sCrIpT>"),
                  ("<style type='text/css'>", "</style>"), ("<textarea>", "</textarea>"),
@@ -108,7 +101,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual([chunk.name for chunk in document.chunks], ["Real", "End"])
         self.assert_exact(document)
 
-    @proves("MYC-1.9")
     def test_html_blank_terminated_blocks_end_on_blank_lines_and_single_line_blocks_end_immediately(self):
         for tag in ("div", "table", "custom-element"):
             source = ("# Real\n<" + tag + " data='a>b'>\n# Hidden\n</" + tag
@@ -129,14 +121,12 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual([chunk.name for chunk in document.chunks], ["Real", "End"])
         self.assert_exact(document)
 
-    @proves("MYC-1.9")
     def test_incomplete_html_attribute_text_does_not_hide_later_headings_or_discard_long_lines(self):
         source = "# Real\n<custom-element " + " " * 100000 + "!\n# End\n"
         document = split_markdown(source)
         self.assertEqual([chunk.name for chunk in document.chunks], ["Real", "End"])
         self.assert_exact(document)
 
-    @proves("MYC-1.9", "MYC-1.11")
     def test_atx_syntax_handles_indentation_closing_marks_empty_titles_and_escaped_marks(self):
         source = ("#no separator\n####### Seven\n    # Indented code\n\t# Tab code\n"
                   "   ## Title ###  \nBody\n# ###\n# Escaped \\#\n# Literal#\n# Nonclosing # text\n")
@@ -148,7 +138,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(document.chunks[2].title_hash, sha256(b"").hexdigest())
         self.assert_exact(document)
 
-    @proves("MYC-1.9", "MYC-1.10", "MYC-1.11")
     def test_setext_heading_lines_are_excluded_from_body_and_keep_multiline_title(self):
         source = "Preface\n\nTop title\ncontinued\n===\nBody\n\nChild\n---\nChild body\n\n---\nThematic body\n"
         document = split_markdown(source)
@@ -159,7 +148,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(document.chunks[1].title_hash, comparison_hash("Top title continued"))
         self.assert_exact(document)
 
-    @proves("MYC-1.9", "MYC-1.11")
     def test_link_reference_definitions_are_not_setext_heading_paragraphs(self):
         for source, expected in (
             ("[foo]: /url\n---\n# Next\n", ["<preamble>", "Next"]),
@@ -176,7 +164,6 @@ class MarkdownTests(unittest.TestCase):
                     self.assertEqual(document.chunks[-1].title_hash, comparison_hash("bar"))
                 self.assert_exact(document)
 
-    @proves("MYC-1.9")
     def test_complete_reference_destinations_labels_and_optional_titles_are_consumed_before_setext(self):
         definitions = ("[foo]:\n  </url>\n",
                        "[foo]: /url\n\"Title\"\n",
@@ -195,7 +182,6 @@ class MarkdownTests(unittest.TestCase):
                     self.assertEqual(document.chunks[1].span.line_start, definition.count("\n") + 1)
                     self.assert_exact(document)
 
-    @proves("MYC-1.9")
     def test_invalid_definitions_and_failed_title_lookahead_keep_ordinary_heading_text(self):
         for source, names in (
             ("[foo]: /url extra\n---\n", ["[foo]: /url extra"]),
@@ -209,7 +195,6 @@ class MarkdownTests(unittest.TestCase):
                 self.assertEqual([chunk.name for chunk in document.chunks], names)
                 self.assert_exact(document)
 
-    @proves("MYC-1.9", "MYC-1.11")
     def test_indented_paragraph_continuations_remain_part_of_multiline_setext_titles(self):
         for newline in ("\n", "\r\n", "\r"):
             source = newline.join(("Foo", "    bar", "\tbaz", "---", "Body", ""))
@@ -225,7 +210,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(document.chunks[1].span.line_start, 2)
         self.assert_exact(document)
 
-    @proves("MYC-1.10")
     def test_duplicate_names_reserve_literal_suffixes_before_allocating_numbers(self):
         document = split_markdown("# Setup\n# Setup\n# Setup (2)\n# Setup\n# Setup (3)\n# Setup (2)\n")
         self.assertEqual([chunk.name for chunk in document.chunks],
@@ -235,7 +219,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual([chunk.name for chunk in split_markdown(document.source).chunks], [chunk.name for chunk in document.chunks])
         self.assert_exact(document)
 
-    @proves("MYC-1.10")
     def test_duplicate_heading_paths_and_literal_path_separators_never_merge_sections(self):
         source = "# A\n## B\n# A\n## B\n# A > B\n# <preamble>\n"
         document = split_markdown("Leading\n\n" + source)
@@ -246,7 +229,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(len(document.chunks), 7)
         self.assert_exact(document)
 
-    @proves("MYC-1.10")
     def test_untitled_headings_remain_exact_addressable_sections_and_names_do_not_collide(self):
         source = ("#\nFirst\n# <untitled>\nLiteral\n#\nSecond\n"
                   "# <untitled> (2)\nReserved\n# Parent\n##\nNested\n"
@@ -298,7 +280,6 @@ class MarkdownTests(unittest.TestCase):
                     self.assertEqual([chunk.title for chunk in parsed.chunks], [None])
                     self.assertEqual([chunk.name for chunk in parsed.chunks], ["<preamble>"])
 
-    @proves("MYC-1.11")
     def test_nfkc_unicode_whitespace_normalization_uses_fixed_sha256_vectors(self):
         self.assertEqual(normalize_comparison("\tＦoo\u00a0bar\n\r\v baz  "), "Foo bar baz")
         self.assertEqual(comparison_hash("\tＦoo\u00a0bar\n\r\v baz  "),
@@ -306,7 +287,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(comparison_hash("Cafe\u0301"), comparison_hash("Caf\u00e9"))
         self.assertEqual(comparison_hash(""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 
-    @proves("MYC-1.11")
     def test_rewrapped_unicode_equivalent_bodies_match_but_exact_text_and_title_changes_differ(self):
         old = split_markdown("# Before\nCafe\u0301 and\nＦoo\u00a0bar\n").chunks[0]
         new = split_markdown("# After\nCaf\u00e9 and Foo bar\n").chunks[0]
@@ -320,7 +300,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(new.title_hash, equivalent_title.title_hash)
         self.assertNotEqual(new.content_hash, equivalent_title.content_hash)
 
-    @proves("MYC-1.12", "MYC-1.9")
     def test_safe_yaml_metadata_handles_quotes_inline_lists_comments_and_long_blocks(self):
         source = ("---\nrole: 'authored'\nsources: [\"project:docs/a.md#One\", 'other:src.py#run']\n"
                   "generated: true # YAML comment\nnotes: |\n  retained note\n  # not a Markdown heading\n"
@@ -338,7 +317,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(document.diagnostics, ())
         self.assert_exact(document)
 
-    @proves("MYC-1.12")
     def test_frontmatter_changes_metadata_and_file_hash_without_changing_chunk_text(self):
         first = split_markdown("---\nrole: authored\n---\n# Title\nBody\n")
         second = split_markdown("---\nrole: derived\n---\n# Title\nBody\n")
@@ -352,7 +330,6 @@ class MarkdownTests(unittest.TestCase):
         self.assert_exact(first)
         self.assert_exact(second)
 
-    @proves("MYC-1.12", "MYC-1.9")
     def test_bom_crlf_non_ascii_and_missing_final_newline_have_exact_source_spans(self):
         source = "\ufeff---\r\nrole: authored\r\n---\r\n前書き\r\n\r\n# Café\r\n本文".encode("utf-8")
         document = split_markdown(source)
@@ -366,7 +343,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(bom_heading.chunks[0].name, "Title")
         self.assert_exact(bom_heading)
 
-    @proves("MYC-1.12")
     def test_empty_frontmatter_and_yaml_end_marker_are_valid_and_only_leading_blocks_parse(self):
         for source in ("---\n---\n# Title\n", "---\nrole: authored\n...\n# Title\n"):
             document = split_markdown(source)
@@ -379,7 +355,6 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(later.frontmatter, {})
         self.assert_exact(later)
 
-    @proves("MYC-1.12")
     def test_malformed_unclosed_non_mapping_and_duplicate_yaml_are_reported_and_retained(self):
         cases = ("---\nrole: [broken\n---\n# Title\n",
                  "---\nrole: authored\n# No delimiter\n",
@@ -396,7 +371,6 @@ class MarkdownTests(unittest.TestCase):
                 self.assertEqual(document.frontmatter, {})
                 self.assert_exact(document)
 
-    @proves("MYC-1.12")
     def test_safe_yaml_refuses_object_construction_and_recursive_aliases_with_no_partial_metadata(self):
         cases = ("---\nrole: !!python/object/apply:os.system ['unexpected']\n---\n# Title\n",
                  "---\nvalue: &loop [*loop]\n---\n# Title\n")
@@ -407,7 +381,6 @@ class MarkdownTests(unittest.TestCase):
             self.assertEqual(len(document.diagnostics), 1)
             self.assert_exact(document)
 
-    @proves("MYC-1.12")
     def test_parsed_settings_and_chunk_records_are_immutable_and_dates_stay_text(self):
         document = split_markdown("---\nrole: authored\nwhen: 2026-10-09\nsource: &source [one, two]\nsources: *source\n---\n# Title\n")
         self.assertEqual(document.frontmatter["when"], "2026-10-09")
@@ -419,7 +392,6 @@ class MarkdownTests(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             document.chunks[0].name = "changed"
 
-    @proves("MYC-1.12")
     def test_yaml_anchor_merges_allow_explicit_overrides_and_nested_settings_are_immutable(self):
         source = ("---\nbase: &base {role: authored, generated: false}\n<<: *base\nrole: derived\n"
                   "extra: !!set {one: null, two: null}\nordered: !!omap [{one: {nested: [value]}}]\n---\n# Title\n")
@@ -433,7 +405,6 @@ class MarkdownTests(unittest.TestCase):
             document.frontmatter["ordered"][0][1]["nested"] = "changed"
         self.assert_exact(document)
 
-    @proves("MYC-1.9", "MYC-1.10", "MYC-1.11")
     def test_empty_files_blank_preambles_and_empty_heading_sections_preserve_all_bytes(self):
         empty = split_markdown(b"")
         self.assertEqual(empty.chunks, ())
@@ -452,14 +423,12 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(only_settings.chunks, ())
         self.assert_exact(only_settings)
 
-    @proves("MYC-1.9")
     def test_unicode_whitespace_is_body_content_and_does_not_create_markdown_line_boundaries(self):
         document = split_markdown("# Title\nBody\u2028# not a new heading\u0085still body\n# End\n")
         self.assertEqual([chunk.name for chunk in document.chunks], ["Title", "End"])
         self.assertEqual(document.chunks[0].span.line_end, 2)
         self.assert_exact(document)
 
-    @proves("MYC-1.9")
     def test_non_utf8_and_unpaired_surrogates_are_explicit_decode_failures(self):
         for source in (b"# Title\n\xff", "# Title\n\ud800"):
             with self.assertRaises(MarkdownDecodeError):
@@ -471,7 +440,6 @@ if __name__ == "__main__":
 
 
 class RequirementWithdrawalTests(unittest.TestCase):
-    @proves('MYC-17.2')
     def test_withdrawn_objects_in_an_active_requirement_do_not_withdraw_the_row(self):
         from mycel._markdown import split_markdown
         for text in ('permit a withdrawn Build only when explicitly named',
@@ -482,7 +450,6 @@ class RequirementWithdrawalTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(split_markdown(raw).entities[0].status, 'accepted')
 
-    @proves('MYC-17.2')
     def test_explicit_withdrawal_markers_preserve_the_reserved_entity(self):
         from mycel._markdown import split_markdown
         for text in ('Withdrawn', 'Withdrawn: moved to MYC-14.1',

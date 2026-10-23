@@ -6,7 +6,6 @@ import os
 import unittest
 from unittest.mock import patch
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._source_refs import format_entity_uri
 
@@ -29,7 +28,6 @@ status: accepted
 
 
 class UriSyntaxTests(unittest.TestCase):
-    @proves('MYC-17.5')
     def test_mutation_preflight_accepts_uuid_spelling_and_rejects_malformed_inputs(self):
         from mycel._derive import _validate_ref_syntax
         from mycel._source_refs import read_document_declarations
@@ -91,7 +89,6 @@ class UriMutationStoreTests(unittest.TestCase):
         self.assertEqual(diagnostic.getvalue(),'')
         return status,json.loads(output.getvalue())
 
-    @proves('MYC-7.26',kind='store')
     def test_entity_uris_work_in_declarations_and_existing_mutations(self):
         from mycel._derive import DeriveStore
         from mycel._relate import RelateStore
@@ -134,7 +131,6 @@ class UriMutationStoreTests(unittest.TestCase):
 
 
 class JustifyInputTests(unittest.TestCase):
-    @proves('MYC-0.6')
     def test_bulk_format_and_cli_reject_ambiguous_input_before_store_access(self):
         import tempfile
         from pathlib import Path
@@ -175,7 +171,6 @@ class JustifyStoreTests(unittest.TestCase):
         return {table:connection.execute('SELECT to_jsonb(t) FROM public.'+table+' t ORDER BY to_jsonb(t)::text').fetchall()
                 for table in tables}
 
-    @proves('MYC-17.8','MYC-17.9','MYC-6.23',kind='store')
     def test_atomic_stated_link_and_verification_persist_only_in_index_store(self):
         from mycel._justify import JustifyStore,checked_link
         before={path:path.read_bytes() for root in (self.fixture.clone,self.origins,self.fixture.artifact)
@@ -205,7 +200,6 @@ class JustifyStoreTests(unittest.TestCase):
             links=connection.execute("SELECT state->'originLink' FROM public.mycel_dependencies WHERE state ? 'originLink'").fetchall()
             self.assertEqual(len(links),2)
 
-    @proves('MYC-17.8','MYC-17.10',kind='store')
     def test_all_pairs_resolve_before_mutation_and_changed_or_generated_inputs_refuse(self):
         from mycel._justify import JustifyStore
         from mycel._derive import DeriveStore
@@ -237,7 +231,6 @@ class JustifyStoreTests(unittest.TestCase):
                     JustifyStore(connection).apply(self.secondary,chunk,origin,build=1)
                 self.assertEqual(self.state(connection),before)
 
-    @proves('MYC-17.8','MYC-17.9','MYC-17.10',kind='store')
     def test_bulk_rolls_back_every_pair_when_late_capture_changes_then_succeeds_atomically(self):
         from mycel._justify import JustifyStore
         from mycel._verification import ConfirmationStore
@@ -275,7 +268,6 @@ class ClonePolicyStoreTests(unittest.TestCase):
     ingest=UriMutationStoreTests.ingest
     invoke=UriMutationStoreTests.invoke
 
-    @proves('MYC-17.10','MYC-6.22','MYC-1.38',kind='store')
     def test_equal_clone_versions_keep_independent_policies_staleness_and_verification_readback(self):
         from mycel._justify import JustifyStore
         from mycel._verification import ConfirmationStore
@@ -330,7 +322,6 @@ class JustifySelectionStoreTests(unittest.TestCase):
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
 
-    @proves('MYC-17.8','MYC-17.9',kind='store')
     def test_complete_class_family_and_existing_review_are_retained(self):
         from psycopg.types.json import Jsonb
         from mycel._justify import JustifyStore
@@ -362,7 +353,6 @@ class CloneAbsenceStoreTests(unittest.TestCase):
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
 
-    @proves('MYC-6.22','MYC-1.38',kind='store')
     def test_absence_guard_compares_only_the_selected_clones_retained_witnesses(self):
         source=self.base.code/'primary-only.md'
         source.write_text('# Source\nA source absent from the other clone.\n')
@@ -393,7 +383,6 @@ class CloneEntityMoveStoreTests(unittest.TestCase):
     ingest=UriMutationStoreTests.ingest
     invoke=UriMutationStoreTests.invoke
 
-    @proves('MYC-1.38','MYC-17.10',kind='store')
     def test_refs_keep_each_entitys_actual_file_when_its_row_moves_in_only_one_clone(self):
         from mycel._justify import JustifyStore
         identifier='22222222-3333-4444-8555-666666666666'
@@ -436,7 +425,6 @@ class CloneGraphStoreTests(unittest.TestCase):
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
 
-    @proves('MYC-1.38','MYC-17.10',kind='store')
     def test_cycles_use_the_selected_location_of_every_repository(self):
         from mycel._derive import DeriveStore
         from mycel._justify import JustifyStore
@@ -463,7 +451,6 @@ class JustifySharedChunkStoreTests(unittest.TestCase):
     setUp=UriMutationStoreTests.setUp
     ingest=UriMutationStoreTests.ingest
 
-    @proves('MYC-17.8','MYC-17.9','MYC-17.10',kind='store')
     def test_several_origins_for_one_chunk_share_its_complete_final_verification(self):
         from mycel._justify import JustifyStore
         from mycel._locks import snapshot_transaction

@@ -11,7 +11,6 @@ from unittest.mock import patch
 from psycopg.types.json import Jsonb
 
 from mycel import _evidence as evidence
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._resolver import SourceResolver
 from mycel._settings import _freeze
@@ -79,7 +78,6 @@ class InheritanceUnitTests(unittest.TestCase):
         return self.writer.inherit_pin(current, reread or (lambda: current), previous_dependency=self.dependency,
                          dependency_id=uuid4(), authorization='normalized_equivalent_edit')
 
-    @proves('MYC-13.15')
     def test_old_manifest_and_every_old_snapshot_are_locked_and_revalidated_before_inheritance(self):
         current = inherited_inputs(self.observed)
         self.prepare(current)
@@ -139,7 +137,6 @@ class InheritanceUnitTests(unittest.TestCase):
                 row[6]['body']['hash'] = '0'*64
             self.connection.versions[previous[1]] = tuple(row)
 
-    @proves('MYC-13.15')
     def test_complete_prior_owner_reference_graph_and_exact_version_are_required(self):
         current = inherited_inputs(self.observed); self.prepare(current)
         owners, refs, versions = dict(self.connection.owners), dict(self.connection.refs), dict(self.connection.versions)
@@ -156,7 +153,6 @@ class InheritanceUnitTests(unittest.TestCase):
                 self.assertEqual(error.exception.status,'snapshot_corrupt')
                 self.assertEqual((len(self.connection.manifests),len(self.connection.dependencies)),(1,1))
 
-    @proves('MYC-13.15')
     def test_prior_corruption_during_fresh_reread_is_not_inherited(self):
         current = inherited_inputs(self.observed); self.prepare(current)
         for kind in ('owner_kind','refs_missing','version_bytes'):
@@ -171,7 +167,6 @@ class InheritanceUnitTests(unittest.TestCase):
                 self.assertEqual(len(self.connection.manifests),1)
                 self.connection.owners, self.connection.refs, self.connection.versions = owners, refs, versions
 
-    @proves('MYC-13.15')
     def test_atomic_recheck_detects_owner_refs_and_old_row_races_before_writes(self):
         current = inherited_inputs(self.observed); self.prepare(current)
         owners, refs, versions = dict(self.connection.owners), dict(self.connection.refs), dict(self.connection.versions)
@@ -193,7 +188,6 @@ class InheritanceUnitTests(unittest.TestCase):
                 self.assertEqual(error.exception.status,'changed_since_ingest')
                 self.assertEqual((len(self.connection.manifests),len(self.connection.dependencies)),(1,1))
 
-    @proves('MYC-13.15')
     def test_captured_old_comparison_has_no_mutable_alias_during_atomic_recheck(self):
         current = inherited_inputs(self.observed); self.prepare(current)
         previous = self.connection.dependencies[self.dependency]
@@ -211,7 +205,6 @@ class InheritanceUnitTests(unittest.TestCase):
         self.assertEqual(error.exception.status,'changed_since_ingest')
         self.assertEqual(len(self.connection.manifests),1)
 
-    @proves('MYC-13.15')
     def test_old_file_rebinding_is_allowed_but_all_integrity_rows_are_locked(self):
         current = inherited_inputs(self.observed); self.prepare(current)
         previous = self.connection.dependencies[self.dependency]
@@ -224,7 +217,6 @@ class InheritanceUnitTests(unittest.TestCase):
             self.assertIn(sql,statements)
             self.assertIn('NOWAIT',sql)
 
-    @proves('MYC-13.15')
     def test_invalid_authorization_never_takes_a_snapshot_or_creates_evidence(self):
         current = inherited_inputs(self.observed); self.prepare(current)
         before = len(self.connection.sql)
@@ -234,7 +226,6 @@ class InheritanceUnitTests(unittest.TestCase):
         self.assertEqual(error.exception.status,'invalid_input')
         self.assertEqual(len(self.connection.sql),before)
 
-    @proves('MYC-13.15')
     def test_deleted_or_disabled_source_needs_no_live_source_rows_and_preserves_owned_before_text(self):
         for disabled in (False, True):
             with self.subTest(disabled=disabled):
@@ -252,7 +243,6 @@ class InheritanceUnitTests(unittest.TestCase):
                 self.assertNotEqual(inherited.manifest.payload['dependant'], self.original.manifest.payload['dependant'])
                 self.assertEqual(current.resolution.state, 'invalid' if disabled else 'unresolved')
 
-    @proves('MYC-13.15')
     def test_substantive_body_edit_and_wrong_original_declaration_cannot_inherit(self):
         for current in (inherited_inputs(self.observed, body='Different answer.\n'),
                         inherited_inputs(self.observed)):
@@ -265,7 +255,6 @@ class InheritanceUnitTests(unittest.TestCase):
                 self.inherit(current)
             self.assertEqual(len(self.connection.manifests), before)
 
-    @proves('MYC-13.15')
     def test_fresh_observation_and_exact_dependant_binding_are_required_before_inheritance(self):
         current = inherited_inputs(self.observed)
         self.prepare(current)
@@ -279,7 +268,6 @@ class InheritanceUnitTests(unittest.TestCase):
         self.assertEqual(error.exception.status, 'changed_since_ingest')
         self.assertEqual(len(self.connection.manifests), 1)
 
-    @proves('MYC-13.15')
     def test_baseline_must_belong_to_previous_exact_dependant_version(self):
         current = inherited_inputs(self.observed)
         self.prepare(current)
@@ -291,7 +279,6 @@ class InheritanceUnitTests(unittest.TestCase):
         self.assertEqual(error.exception.status, 'snapshot_corrupt')
         self.assertEqual(len(self.connection.manifests), 1)
 
-    @proves('MYC-13.15')
     def test_capture_guard_binds_file_identity_and_aliases_as_well_as_complete_bytes(self):
         source = replace(self.observed.selection.file, identifier=str(uuid4()))
         catalog = SourceResolver(self.observed.settings, (self.observed.dependant_file, source))
@@ -307,7 +294,6 @@ class InheritanceUnitTests(unittest.TestCase):
 class InheritanceStoreTests(unittest.TestCase):
     check_kind = "store"
 
-    @proves('MYC-1.34', 'MYC-2.26', 'MYC-16.5', 'MYC-16.6', kind='store')
     def test_real_new_dependant_version_inherits_deleted_source_with_no_live_source_rows(self):
         with self.store_fixture.backend.connection(self.store_fixture.database) as connection:
             helper = fixtures.EvidenceStoreTests()

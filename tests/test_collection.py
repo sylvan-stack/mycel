@@ -11,7 +11,6 @@ from psycopg.types.json import Jsonb
 from mycel._capture import capture_repository
 from mycel._activity import MutationActivity
 from mycel._collection import CollectionStore
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel import _evidence as evidence
 from mycel._located_reconciliation import LocatedCaptureStore
@@ -71,7 +70,6 @@ class CollectionStoreTests(unittest.TestCase):
         (self.artifact / 'answer.md').write_bytes(b'# Answer\nAn answer.\n')
         (self.artifact / 'source.md').write_bytes(b'# Source\nOriginal source.\n')
 
-    @proves('MYC-16.11', kind='store')
     def test_unlocated_versions_vectors_and_dead_chunks_collect_but_branch_stash_versions_survive(self):
         self.helper.initialize()
         self.helper.git('branch', 'retained')
@@ -104,7 +102,6 @@ class CollectionStoreTests(unittest.TestCase):
             self.assertEqual({str(row[0]) for row in connection.execute('SELECT id FROM public.mycel_evidence_owners').fetchall()},
                 {owner for version, (owner, _) in owners.items() if version != old})
 
-    @proves('MYC-1.34', 'MYC-16.11', kind='store')
     def test_source_deletion_removes_search_rows_but_preserves_dependant_record_and_owned_exact_bytes(self):
         self.docs()
         with self.connect() as connection:
@@ -124,7 +121,6 @@ class CollectionStoreTests(unittest.TestCase):
             self.assertIn(b'# Source\nOriginal source.\n', [blob.source for blob in retained.snapshots])
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_chunks').fetchone(), (1,))
 
-    @proves('MYC-16.11', kind='store')
     def test_selected_withdrawal_keeps_history_owners_then_collects_after_final_release(self):
         self.docs()
         with self.connect() as connection:
@@ -145,7 +141,6 @@ class CollectionStoreTests(unittest.TestCase):
                 self.assertEqual(store.collect_evidence_in_transaction('fixture'), (2, 1))
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_evidence_owners').fetchone(), (0,))
 
-    @proves('MYC-16.11', kind='store')
     def test_dead_dependant_releases_its_owners_without_collecting_surviving_history(self):
         self.docs()
         with self.connect() as connection:
@@ -163,7 +158,6 @@ class CollectionStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_dependencies').fetchone(), (0,))
             self.assertEqual(evidence.EvidenceStore(connection).read_baseline('fixture', baseline).manifest.identifier, baseline)
 
-    @proves('MYC-16.11', kind='store')
     def test_incomplete_unpublished_changed_and_unguarded_collection_refuse_without_mutation(self):
         self.docs()
         with self.connect() as connection:
@@ -187,7 +181,6 @@ class CollectionStoreTests(unittest.TestCase):
                 store.collect_in_transaction(self.settings, unpublished)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-16.11', kind='store')
     def test_collection_and_owner_release_roll_back_with_complete_publication_on_failure(self):
         self.docs()
         with self.connect() as connection:
@@ -204,7 +197,6 @@ class CollectionStoreTests(unittest.TestCase):
                 LocatedCaptureStore(connection).apply(self.settings, manifest, batch_handoff=failed)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.34', 'MYC-16.11', kind='store')
     def test_original_code_file_survives_other_chunk_edit_and_can_verify_later_rename(self):
         (self.code / 'answer.py').write_bytes(b'# prefix\ndef old(x):\n    return x\n\ndef other():\n    return 1\n')
         (self.artifact / 'source.md').write_bytes(b'# Source\nOriginal source.\n')
@@ -234,7 +226,6 @@ class CollectionStoreTests(unittest.TestCase):
             self.assertEqual(retained.manifest.payload['pinnedHash'], original_pin)
             self.assertEqual(retained.manifest.payload['dependant']['comparison']['kind'], 'code_text')
 
-    @proves('MYC-16.11', kind='store')
     def test_unlocated_source_cross_repository_edges_require_downstream_guard_and_keep_owned_copy(self):
         self.docs()
         downstream = self.helper.base / 'downstream'
@@ -267,7 +258,6 @@ class CollectionStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT baseline_owner FROM public.mycel_dependencies WHERE id=%s',
                 (dependency,)).fetchone(), (owner,))
 
-    @proves('MYC-16.11', kind='store')
     def test_live_invocation_and_independent_snapshot_owner_protect_bytes_after_baseline_release(self):
         self.docs()
         with self.connect() as connection:
@@ -292,7 +282,6 @@ class CollectionStoreTests(unittest.TestCase):
                         (digest,)).fetchone(), (raw,))
                 activity.finish('done')
 
-    @proves('MYC-16.11', kind='store')
     def test_row_lock_conflict_refuses_without_waiting_or_partial_collection(self):
         self.docs()
         with self.connect() as connection, self.connect() as blocker:
@@ -308,7 +297,6 @@ class CollectionStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.code.value, 'busy')
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-16.11', kind='store')
     def test_same_bytes_at_replaced_physical_file_need_new_publication_before_collection(self):
         self.docs()
         with self.connect() as connection:
@@ -343,7 +331,6 @@ class CollectionStoreTests(unittest.TestCase):
             (work, 'fixture', dependency, Jsonb({}), owner))
         return owner, work, digest
 
-    @proves('MYC-16.11', kind='store')
     def test_dependency_release_collects_independent_classification_owner_and_only_selected_owners(self):
         self.docs()
         with self.connect() as connection:
@@ -371,7 +358,6 @@ class CollectionStoreTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT hash FROM public.mycel_snapshots').fetchall(), [(orphan_hash,)])
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_manifests').fetchone(), (0,))
 
-    @proves('MYC-16.11', kind='store')
     def test_dependency_release_preserves_independent_classification_history_and_exact_baseline(self):
         self.docs()
         with self.connect() as connection:
@@ -389,7 +375,6 @@ class CollectionStoreTests(unittest.TestCase):
             self.assertEqual(evidence.EvidenceStore(connection).read_baseline('fixture', baseline), original)
             self.assertIsNotNone(connection.execute('SELECT bytes FROM public.mycel_snapshots WHERE hash=%s', (digest,)).fetchone())
 
-    @proves('MYC-16.11', kind='store')
     def test_dependency_release_work_lock_conflict_and_later_failure_roll_back_selected_owners(self):
         self.docs()
         with self.connect() as connection, self.connect() as blocker:

@@ -15,7 +15,6 @@ from psycopg.types.json import Jsonb
 
 from mycel._cli import Invocation
 from mycel._credentials import Secret
-from mycel._coverage import proves
 from mycel._embedding_plan import load_tokenizer
 from mycel._errors import MycelError
 from mycel._freshness import Deadline
@@ -123,7 +122,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
     def no_leases(self, connection):
         self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE invocation IS NOT NULL").fetchone(), (0,))
 
-    @proves('MYC-8.13', 'MYC-8.14', 'MYC-8.15', 'MYC-8.26', kind='store')
     def test_public_build_publishes_exact_text_complete_vectors_pins_and_new_versions_atomically(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -145,7 +143,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
                 (first[0][1],)).fetchone(), (0,))
             self.no_leases(connection)
 
-    @proves('MYC-8.14', 'MYC-8.26', kind='store')
     def test_real_lower_response_vectors_feed_higher_groups_with_no_searchable_staging(self):
         with self.base.connect() as connection:
             self.prepare(connection, count=24)
@@ -177,7 +174,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
             self.assertEqual(len(upper[3]['members']), 12)
             self.no_leases(connection)
 
-    @proves('MYC-8.15', 'MYC-8.26', 'MYC-8.29', kind='store')
     def test_generation_embedding_and_interruption_preserve_old_tree_and_release_private_leases(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -193,7 +189,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
                     self.assertEqual(self.state(connection), old)
                     self.no_leases(connection)
 
-    @proves('MYC-8.15', 'MYC-8.26', kind='store')
     def test_exact_physical_source_settings_and_late_audit_changes_discard_whole_tree(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -211,7 +206,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
             self.base.config.write_bytes(config)
             self.no_leases(connection)
 
-    @proves('MYC-8.15', 'MYC-8.26', kind='store')
     def test_empty_eligible_replacement_keeps_complete_set_metadata_without_service_calls(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -230,7 +224,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
                 self.assertEqual(set(status['numericalVersions']), {'numpy', 'scipy', 'scikit-learn'})
             self.no_leases(connection)
 
-    @proves('MYC-8.22', 'MYC-8.19', kind='store')
     def test_published_tree_competes_as_own_documents_has_no_file_code_bridge_or_search_mutations(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -249,7 +242,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
             self.assertNotIn('summary', [row['origin'] for row in code['results']])
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-8.29', 'MYC-8.26', kind='store')
     def test_ingest_pass_is_unlocked_during_calls_competing_mutations_and_removal_are_busy(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -274,7 +266,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
             self.assertEqual(self.summaries(connection), old)
             self.no_leases(connection)
 
-    @proves('MYC-8.19', kind='store')
     def test_complete_ingest_does_not_generate_rewrite_or_repin_existing_summaries(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -287,7 +278,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
             self.assertEqual(self.summaries(connection), old)
             self.assertEqual(connection.execute("SELECT to_jsonb(d) FROM public.mycel_dependencies d WHERE kind='generated' ORDER BY id").fetchall(), pins)
 
-    @proves('MYC-8.22', 'MYC-8.19', kind='store')
     def test_real_tree_uses_shared_document_margin_limit_and_retains_stale_generated_annotations(self):
         with self.base.connect() as connection:
             self.prepare(connection)
@@ -326,7 +316,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
             self.assertEqual([row['name'] for row in stale], ['1/1'])
             self.assertTrue(stale[0]['staleReasons'])
 
-    @proves('MYC-8.14', 'MYC-8.22', kind='store')
     def test_actual_multipart_summary_search_uses_best_part_and_excludes_other_shared_repository_trees(self):
         from mycel._capture import capture_repository
         from mycel._located_reconciliation import LocatedCaptureStore
@@ -381,7 +370,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
                 self.assertFalse(any(item.chunk.repository == 'other' and item.chunk.origin == 'summary'
                                      for item in (*candidates.meaning, *candidates.wording)))
 
-    @proves('MYC-8.13', 'MYC-8.14', 'MYC-8.15', 'MYC-8.29', kind='store')
     def test_public_cli_uses_real_writer_and_validated_embedding_adapter_with_local_service(self):
         from fixtures import EmbeddingStandIn
         from mycel._cli import run
@@ -418,7 +406,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
             self.assertEqual(self.summaries(connection)[0][2], b'summaryneedle\n')
             self.no_leases(connection)
 
-    @proves('MYC-8.15', 'MYC-8.29', kind='store')
     def test_interrupt_after_confirmed_commit_reports_the_actual_published_tree(self):
         from mycel._summary_publication import SummaryPublicationStore
         with self.base.connect() as connection:
@@ -439,7 +426,6 @@ class SummaryBuildStoreTests(unittest.TestCase):
             self.assertNotEqual(self.summaries(connection)[0][:2], old[0][:2])
             self.no_leases(connection)
 
-    @proves('MYC-8.15', 'MYC-8.26', 'MYC-8.29', kind='store')
     def test_configuration_changed_at_actual_writer_launch_stops_without_child_retry_or_replacement(self):
         from mycel._summary_writer import SummaryWriter
         with self.base.connect() as connection:

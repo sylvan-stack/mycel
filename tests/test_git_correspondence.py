@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 from mycel import _git_correspondence as correspondence
 from mycel._capture import FileAlias
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._safeguards import CompletedChild, run_git
 
@@ -46,7 +45,6 @@ class GitCorrespondenceTests(unittest.TestCase):
         second = self.commit()
         return self.snapshot(first, old, raw), self.snapshot(second, new, raw)
 
-    @proves('MYC-1.24')
     def test_complete_rename_bytes_are_checked_and_the_checkout_is_unchanged(self):
         before, after = self.rename()
         head, status = self.git('rev-parse', 'HEAD'), self.git('status', '--porcelain=v1')
@@ -58,7 +56,6 @@ class GitCorrespondenceTests(unittest.TestCase):
         self.assertEqual(plan, correspondence.build_correspondences((after, before)))
         self.assertEqual((self.git('rev-parse', 'HEAD'), self.git('status', '--porcelain=v1')), (head, status))
 
-    @proves('MYC-1.24')
     def test_equal_copies_and_uncommitted_text_do_not_supply_identity(self):
         raw = b'# Guide\nExact text.\n'
         (self.base / 'original.md').write_bytes(raw)
@@ -71,7 +68,6 @@ class GitCorrespondenceTests(unittest.TestCase):
         plan = correspondence.build_correspondences((before, after))
         self.assertEqual(plan.peers({after.place.logical}, b'# Guide\nUncommitted different text.\n'), ())
 
-    @proves('MYC-1.24')
     def test_changed_endpoint_bytes_and_retargeted_checkout_scope_are_refused(self):
         before, after = self.rename()
         with self.assertRaises(MycelError):
@@ -80,7 +76,6 @@ class GitCorrespondenceTests(unittest.TestCase):
             correspondence.build_correspondences((before, replace(after,
                 place=replace(after.place, identity=(after.place.identity[0], after.place.identity[1] + 1)))))
 
-    @proves('MYC-1.24')
     def test_malformed_or_truncated_rename_inventory_is_refused(self):
         before, after = self.rename()
         for raw in (b'R100\0old name.md\0', b'R100\0old name.md\0new name.md',
@@ -91,7 +86,6 @@ class GitCorrespondenceTests(unittest.TestCase):
                 with self.assertRaises(MycelError):
                     correspondence.build_correspondences((before, after))
 
-    @proves('MYC-1.24')
     def test_large_regular_blobs_are_verified_with_their_complete_finite_bound(self):
         before, after = self.rename(raw=b'# Guide\n' + b'complete line\n' * 100000)
         with patch.object(correspondence, 'run_git', wraps=run_git) as reader:
@@ -101,7 +95,6 @@ class GitCorrespondenceTests(unittest.TestCase):
         self.assertEqual(len(blobs), 1)
         self.assertEqual(blobs[0].kwargs['stdout_limit'], len(before.source))
 
-    @proves('MYC-1.24')
     def test_edited_rename_uses_the_padded_git_score_and_both_exact_blobs(self):
         original = b'# Guide\n' + b'Original complete paragraph.\n' * 20
         (self.base / 'old.md').write_bytes(original)
@@ -116,7 +109,6 @@ class GitCorrespondenceTests(unittest.TestCase):
         self.assertLess(plan.renames[0].similarity, 100)
         self.assertEqual(plan.peers({after.place.logical}, changed)[0][0], before)
 
-    @proves('MYC-1.24')
     def test_equal_text_on_unrelated_local_histories_does_not_make_a_rename(self):
         raw = b'# Guide\nUnrelated exact text.\n'
         (self.base / 'old.md').write_bytes(raw)

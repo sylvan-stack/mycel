@@ -4,7 +4,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._activity import MutationActivity, activity_state
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceStore
 from mycel._locks import operation_guard
@@ -38,7 +37,6 @@ class ConfirmationStoreTests(unittest.TestCase):
                 'ORDER BY to_jsonb(t)::text').fetchall()
         return state
 
-    @proves('MYC-7.18', 'MYC-7.27', 'MYC-7.28', kind='store')
     def test_confirm_records_exact_dependency_and_related_snapshots_and_renewed_pins_atomically(self):
         self.fixture.answer.write_bytes(self.fixture.answer.read_bytes() +
             b'\n<!-- related:\nfixture:@artifact/guide.md#Guide\n-->\n')
@@ -68,7 +66,6 @@ class ConfirmationStoreTests(unittest.TestCase):
             self.assertEqual({value[1] for value in refs if value[1]}, set(reply['baselineManifests']))
             self.assertTrue(all(source['snapshot'].startswith('snapshot:') for source in reply['sources']))
 
-    @proves('MYC-7.18', 'MYC-7.20', 'MYC-7.27', kind='store')
     def test_source_free_confirm_uses_login_read_defaults_and_does_not_mutate_files(self):
         self.fixture.answer.write_bytes(b'# Answer\nIndependent statement.\n')
         with self.base.connect() as connection:
@@ -81,7 +78,6 @@ class ConfirmationStoreTests(unittest.TestCase):
             self.assertEqual(self.fixture.answer.read_bytes(), before)
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(), (1,))
 
-    @proves('MYC-7.18', 'MYC-7.28', kind='store')
     def test_confirmation_retains_full_file_and_family_membership_with_every_exact_source(self):
         code = self.base.code / 'policy.py'
         code.write_bytes(b'class Policy:\n    def apply(self):\n        return 1\n')
@@ -106,7 +102,6 @@ class ConfirmationStoreTests(unittest.TestCase):
                     ('downstream', source['hash'])).fetchone()[0]
                 self.assertEqual(sha256(bytes(raw)).hexdigest(), source['hash'])
 
-    @proves('MYC-7.27', kind='store')
     def test_changed_since_ingest_dependant_or_source_refuses_without_publication_or_record(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -125,7 +120,6 @@ class ConfirmationStoreTests(unittest.TestCase):
             self.assertIn('changed_since_ingest', error.exception.message)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.27', kind='store')
     def test_new_invalid_relation_rolls_back_earlier_dependency_repin(self):
         self.fixture.answer.write_bytes(self.fixture.answer.read_bytes() +
             b'\n<!-- related:\nfixture:@artifact/missing.md#Absent\n-->\n')
@@ -139,7 +133,6 @@ class ConfirmationStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 'invalid_input')
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.27', 'MYC-7.28', kind='store')
     def test_deleted_declared_source_withdrawal_keeps_fault_and_independent_old_verification_evidence(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -159,7 +152,6 @@ class ConfirmationStoreTests(unittest.TestCase):
             self.assertEqual(bytes(row[0]), self.fixture.source_bytes)
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(), (2,))
 
-    @proves('MYC-7.27', kind='store')
     def test_final_audit_callback_source_change_rolls_back_pins_record_and_activity(self):
         with self.base.connect() as connection:
             self.fixture.prepare(connection)
@@ -178,7 +170,6 @@ class ConfirmationStoreTests(unittest.TestCase):
             # feature or per-repository mutation activity row can survive.
             self.assertEqual(after, before)
 
-    @proves('MYC-7.27', kind='store')
     def test_final_audit_callback_relation_withdrawal_rolls_back_complete_confirmation(self):
         self.fixture.answer.write_bytes(self.fixture.answer.read_bytes() +
             b'\n<!-- related:\nfixture:@artifact/guide.md#Guide\n-->\n')
@@ -196,7 +187,6 @@ class ConfirmationStoreTests(unittest.TestCase):
             self.assertIn('changed_since_ingest', error.exception.message)
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-7.27', kind='store')
     def test_required_busy_source_refuses_and_unrelated_busy_repository_does_not_block(self):
         unrelated = self.base.base / 'unrelated'
         unrelated.mkdir()
@@ -214,7 +204,6 @@ class ConfirmationStoreTests(unittest.TestCase):
             with operation_guard(peer, 'unrelated', 'pass'):
                 self.assertTrue(self.confirm(connection)['current'])
 
-    @proves('MYC-7.27', kind='store')
     def test_confirm_keeps_remaining_upstream_staleness_and_records_actual_build_reply(self):
         guide = self.base.artifact / 'guide.md'
         guide.write_bytes(b'# Guide\nOriginal upstream fact.\n')

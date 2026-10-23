@@ -13,7 +13,6 @@ from uuid import uuid4
 from psycopg import pq
 from psycopg.types.json import Jsonb
 
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._evaluation import (EvaluationSet, PreparedQueryVector, RetrievalPlace,
     RetrievalQuery, RetrievalReply, comparison_failures, run_retrieval_evaluation)
@@ -126,7 +125,6 @@ class EvaluationStoreTests(unittest.TestCase):
             f"SELECT to_jsonb(t) FROM public.{table.name} t ORDER BY to_jsonb(t)::text").fetchall())
                 for table in TABLES}
 
-    @proves("MYC-13.11", "MYC-13.14", "MYC-13.17", kind="store")
     def test_query_vectors_precede_one_snapshot_and_all_store_rows_remain_exact(self):
         with self.connection() as connection:
             self.seed(connection)
@@ -159,7 +157,6 @@ class EvaluationStoreTests(unittest.TestCase):
             self.assertFalse(any(sql.lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP"))
                                  for sql in recorded.statements))
 
-    @proves("MYC-13.12", "MYC-13.13", "MYC-13.17", kind="store")
     def test_exact_header_positions_faults_and_whole_query_denominators(self):
         with self.connection() as connection:
             whole = "class Policy:\n def apply(self): pass\n"
@@ -201,7 +198,6 @@ class EvaluationStoreTests(unittest.TestCase):
                 ["not_in_index", "ambiguous", "not_one_chunk", "not_in_index", "ineligible"])
             self.assertEqual(len(rows[0]["returned"]), 4)
 
-    @proves("MYC-13.17", kind="store")
     def test_current_versions_vectors_and_settings_have_guarded_comparison_fingerprints(self):
         with self.connection() as connection:
             _, _, version = self.seed(connection)
@@ -223,7 +219,6 @@ class EvaluationStoreTests(unittest.TestCase):
                                (Jsonb({"kind": "fictional_failed_part"}), plan))
             self.assertNotEqual(changed["indexFingerprint"], self.measure(connection, (query,), search)["indexFingerprint"])
 
-    @proves("MYC-13.11", "MYC-13.17", kind="store")
     def test_concurrent_publication_cannot_mix_resolution_vectors_or_search_versions(self):
         with self.connection() as connection, self.connection() as writer:
             file_id, chunk_id, version = self.seed(connection, source="# Old\n", name="Old")
@@ -251,7 +246,6 @@ class EvaluationStoreTests(unittest.TestCase):
                 self.assertEqual(after.resolver.resolve("fixture:guide.md#Old", purpose="read").fault, "missing_name")
                 self.assertNotEqual(report["indexFingerprint"], after.index_fingerprint)
 
-    @proves("MYC-13.13", "MYC-13.17", kind="store")
     def test_shared_artifact_alias_selects_retained_code_primary_without_changing_identity(self):
         with self.connection() as connection:
             source = "# Shared\n# Other\n"
@@ -312,7 +306,6 @@ class EvaluationStoreTests(unittest.TestCase):
                         self.assertEqual(error.exception.code, "internal")
             self.assertEqual(self.contents(connection), before)
 
-    @proves("MYC-13.13", "MYC-13.17", kind="store")
     def test_result_scope_uses_stored_corpus_and_only_selected_enabled_shared_documents(self):
         with self.connection() as connection:
             self.seed(connection, root="code", path="docs/checkout.md", name="Checkout")
@@ -332,7 +325,6 @@ class EvaluationStoreTests(unittest.TestCase):
                 self.assertEqual(snapshot.resolver.resolve("disabled:selected/one.md#Hidden").fault, "disabled_repository")
                 self.assertEqual(snapshot.resolver.resolve("fixture:branch.md#Branch").fault, "missing_file")
 
-    @proves("MYC-13.11", "MYC-13.17", kind="store")
     def test_read_handoff_rejects_missing_guards_and_expired_snapshot_and_store_blocks_writes(self):
         with self.connection() as connection:
             self.seed(connection)
@@ -356,7 +348,6 @@ class EvaluationStoreTests(unittest.TestCase):
             with self.assertRaises(MycelError):
                 snapshot.search(RetrievalQuery("Exact", ("fixture:guide.md#Exact",)), PreparedQueryVector((1.0,)))
 
-    @proves("MYC-13.14", "MYC-13.17", kind="store")
     def test_empty_section_reports_actual_index_and_null_shares_without_search(self):
         with self.connection() as connection:
             self.seed(connection)

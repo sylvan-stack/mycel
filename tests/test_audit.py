@@ -10,7 +10,6 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from mycel._audit import AuditStore, DETERMINISTIC
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._locks import read_snapshot
 from mycel._settings import load_settings
@@ -72,7 +71,6 @@ class AuditFixture(unittest.TestCase):
 class AuditStoreTests(AuditFixture):
     check_kind = "store"
 
-    @proves('MYC-17.16',kind='store')
     def test_seven_deterministic_rules_use_only_current_indexed_evidence(self):
         decisions=('\n## Decisions\n\n| Decision | Question | Outcome | Discussion |\n|---|---|---|---|\n'
             '| FIX-D1 <!-- 12345678-2222-4333-8444-555555555555 --> | Why? | Decided 19 October 2026 by owner: Keep it. | |\n'
@@ -108,7 +106,6 @@ class AuditStoreTests(AuditFixture):
         again,new=self.deterministic();self.assertEqual(new,0)
         self.assertEqual(again,findings)
 
-    @proves('MYC-17.18',kind='store')
     def test_person_settles_with_reason_history_and_exact_observation_never_reopens(self):
         findings,_=self.deterministic();target=findings[0]
         with self.base.connect() as connection:
@@ -126,7 +123,6 @@ class AuditStoreTests(AuditFixture):
         changed,new=self.deterministic();self.assertGreater(new,0)
         self.assertNotIn(target['id'],[r['id'] for r in changed])
 
-    @proves('MYC-17.16','MYC-17.18',kind='store')
     def test_dry_run_is_readonly_and_paths_are_component_scoped(self):
         before=self.state();findings,new=self.deterministic(dry_run=True,paths=('value.py',))
         self.assertEqual(new,0);self.assertEqual(len(findings),2,findings)
@@ -136,7 +132,6 @@ class AuditStoreTests(AuditFixture):
         with self.assertRaises(MycelError):self.deterministic(paths=('../escape',))
         self.assertEqual(before,self.state())
 
-    @proves('MYC-17.16',kind='store')
     def test_requirement_marks_and_withdrawal_exempt_only_unresting_requirements(self):
         from mycel._origins import mark_needs_nothing
         with self.base.connect() as connection:
@@ -150,7 +145,6 @@ class AuditStoreTests(AuditFixture):
         proposed=[row for row in current if row['state']=='proposed' and row['kind']=='unresting_requirement']
         self.assertFalse(any(UNUSED in row['subject'] for row in proposed))
 
-    @proves('MYC-17.16',kind='store')
     def test_repeated_human_names_are_ambiguous_but_uuid_diagnostics_remain_auditable(self):
         from mycel._resolver import SourceResolver
         self.spec.write_text(self.spec.read_text().replace('FIX-1.2','FIX-1.1'))
@@ -171,7 +165,6 @@ class AuditStoreTests(AuditFixture):
 
 
 class AuditProtocolTests(unittest.TestCase):
-    @proves('MYC-14.12','MYC-14.24')
     def test_three_questions_have_distinct_exact_payloads_and_strict_scored_review(self):
         from mycel._classification_payload import AuditDecisionPayload, DecisionText, ReviewCommandIdentity, ReviewerRequest
         from mycel._evidence import snapshot, EvidenceError
@@ -262,7 +255,6 @@ class SemanticAuditStoreTests(AuditFixture):
     def two_origins(self):
         self.justify();self.justify('fixture:@artifact/other.md#FIX-2.1')
 
-    @proves('MYC-17.17','MYC-17.18','MYC-14.29',kind='store')
     def test_three_negative_questions_retain_exact_evidence_lower_only_disputed_link_and_reuse(self):
         from mycel._classification_payload import AuditDecisionPayload
         self.two_origins()
@@ -305,7 +297,6 @@ class SemanticAuditStoreTests(AuditFixture):
         self.assertNotIn(disputed['id'],[r['id'] for r in settled['findings']])
         self.assertEqual(next(link for link in self.links() if REQ in link['origin'])['confidenceScore'],1)
 
-    @proves('MYC-17.17','MYC-14.29',kind='store')
     def test_changed_input_and_late_activity_edit_roll_back_findings_and_score(self):
         self.justify()
         reply=self.audit(k=1,paths=('value.py',),dependencies=self.dependencies(changed=lambda request:self.source.write_text('def value():\n    return 9\n')))
@@ -338,7 +329,6 @@ print(json.dumps(v))
             '\nreview_provider="fixture"\nreview_model="fixture-review-1"\nreview_revision="fixture-v1"\n')
         return load_settings(path=self.base.config,home=self.base.base)
 
-    @proves('MYC-17.17','MYC-14.29',kind='store')
     def test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence(self):
         self.settings=self.reviewer_settings();self.two_origins()
         reply=self.audit(dependencies=self.dependencies(top=.7))
@@ -351,7 +341,6 @@ print(json.dumps(v))
         again=self.audit(dependencies=self.dependencies(top=.7))
         self.assertEqual((again['jevCalls'],again['reviewCalls'],again['reused']),(0,0,6))
 
-    @proves('MYC-17.17','MYC-14.29',kind='store')
     def test_every_method_and_band_is_audited_without_changing_policy_or_verification(self):
         from psycopg.types.json import Jsonb
         self.two_origins();self.justify(chunk='fixture:@code/value.py#spare')
@@ -377,7 +366,6 @@ print(json.dumps(v))
                 for key in ('chunk','origin','method','who','when'):self.assertEqual(state['originLink'][key],old['originLink'][key])
             self.assertEqual(connection.execute('SELECT to_jsonb(t),xmin::text FROM public.mycel_verifications t ORDER BY id').fetchall(),verifications)
 
-    @proves('MYC-14.29','MYC-17.18',kind='store')
     def test_quiet_period_byte_budget_and_uncertain_handoff_have_no_claim_effect(self):
         from mycel._jev import JevLimits
         self.justify();os.utime(self.source,None)
@@ -394,7 +382,6 @@ print(json.dumps(v))
         self.assertEqual(uncertain['pairs'][0]['reason'],'reviewer_unconfigured')
         self.assertEqual(self.links()[0]['confidenceScore'],1)
 
-    @proves('MYC-14.29',kind='store')
     def test_candidate_cap_bounds_unresolved_preparation_before_assembly(self):
         from mycel._audit_semantic import SemanticAuditStore
         from psycopg.types.json import Jsonb
@@ -411,7 +398,6 @@ print(json.dumps(v))
         self.assertEqual(reply['pairs'][0]['status'],'unresolved')
         self.assertEqual(self.state(),before)
 
-    @proves('MYC-14.29',kind='store')
     def test_busy_deadline_terminal_and_transient_failures_are_finite(self):
         from mycel._locks import operation_guard
         from mycel._freshness import Deadline
@@ -430,7 +416,6 @@ print(json.dumps(v))
         self.assertEqual(len(transient['pairs'][0]['attempts']),2)
         self.assertEqual(self.links()[0]['confidenceScore'],1)
 
-    @proves('MYC-14.29','MYC-17.18',kind='store')
     def test_interrupt_preserves_completed_prefix_and_releases_request_leases(self):
         self.two_origins()
         def interrupt(request):
@@ -442,7 +427,6 @@ print(json.dumps(v))
         with self.base.connect() as connection:
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_audit_request' AND invocation IS NOT NULL").fetchone(),(0,))
 
-    @proves('MYC-14.29',kind='store')
     def test_corrupt_cached_stage_is_refused_without_a_call_or_claim_effect(self):
         from psycopg.types.json import Jsonb
         self.justify()
@@ -457,7 +441,6 @@ print(json.dumps(v))
         self.assertEqual(reply['pairs'][0]['reason'],'snapshot_corrupt')
         self.assertEqual(self.links()[0]['confidenceScore'],1)
 
-    @proves('MYC-17.16','MYC-17.18','MYC-14.29',kind='store')
     def test_public_command_records_mutations_settlement_and_readonly_dryrun(self):
         self.justify()
         status,preview=public_audit(self,('audit','--repo','fixture','--dry-run'),self.dependencies())
@@ -482,7 +465,6 @@ print(json.dumps(v))
         self.assertEqual(status,0);self.assertEqual(before,self.state())
 
 
-    @proves('MYC-17.18','MYC-14.29',kind='store')
     def test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared(self):
         self.base.git('init','--initial-branch=main');self.base.git('add','--all');self.base.git('commit','--message','Fixture')
         clone=self.base.base/'blue';self.base.git('clone','--no-hardlinks',str(self.code),str(clone),cwd=self.base.base)
@@ -513,7 +495,6 @@ print(json.dumps(v))
         retained,_=self.deterministic();self.assertEqual([r['id'] for r in retained],primary_findings)
         self.assertEqual(self.links()[0]['confidenceScore'],.15)
 
-    @proves('MYC-17.18',kind='store')
     def test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence(self):
         from psycopg.types.json import Jsonb
         from mycel._audit import observation, finding_id
@@ -574,7 +555,6 @@ print(json.dumps(v))
                 self.assertIsNotNone(connection.execute('SELECT 1 FROM public.mycel_snapshots WHERE hash=%s',(shared.evidence.hash,)).fetchone())
                 self.assertIsNone(connection.execute('SELECT 1 FROM public.mycel_snapshots WHERE hash=%s',(unique.evidence.hash,)).fetchone())
 
-    @proves('MYC-14.29',kind='store')
     def test_adapter_cancellation_returns_interrupted_status_without_effects(self):
         self.justify();cancelled=[False]
         def stop(request):cancelled[0]=True
@@ -598,7 +578,6 @@ def public_audit(test,arguments,dependencies=None):
 
 
 class AuditInputTests(unittest.TestCase):
-    @proves('MYC-0.6')
     def test_cli_options_scopes_settlement_and_count_validation(self):
         from mycel._cli import parse
         self.assertEqual(parse(('audit','--repo','fixture','--path','src/./audit','--deterministic')).arguments,

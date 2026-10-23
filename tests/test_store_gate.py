@@ -13,8 +13,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import urlsplit
 
-from mycel._coverage import (CoverageError, PostgresBackend, disposable_store,
-                             proves, run_checks)
+from mycel._coverage import CoverageError, PostgresBackend, disposable_store, run_checks
 
 
 def initialize_probe(backend, settings_file):
@@ -31,7 +30,6 @@ class StoreGateTests(unittest.TestCase):
 
     initialize_store = staticmethod(initialize_probe)
 
-    @proves("MYC-13.4", kind="store")
     def test_source_runner_cleans_real_store_after_failure_and_cancellation(self):
         fixture = self.store_fixture
         runner = Path(__file__).resolve().parents[1] / "scripts" / "run_checks.py"
@@ -46,12 +44,11 @@ class StoreGateTests(unittest.TestCase):
                         from pathlib import Path
                         import time
                         import unittest
-                        from mycel._coverage import proves
 
                         class ChildCleanupTests(unittest.TestCase):
+                            check_kind = "store"
                             initialize_store = staticmethod(lambda backend, settings: None)
 
-                            @proves("MYC-13.4", kind="store")
                             def test_cleanup(self):
                                 fixture = self.store_fixture
                                 ready = Path(__file__).with_name("database.ready")
@@ -96,7 +93,6 @@ class StoreGateTests(unittest.TestCase):
                                 process.kill()
                                 process.communicate()
 
-    @proves("MYC-0.11", kind="store")
     def test_real_store_proofs_are_private_executed_and_discarded(self):
         fixture = self.store_fixture
         backend = fixture.backend
@@ -148,12 +144,12 @@ class StoreGateTests(unittest.TestCase):
         self.assertFalse(configs[-1].exists())
         self.assertEqual(len(set(databases)), len(databases))
 
-        # Executed success qualifies a named claim; uncovered claims and failed
-        # cleanup fail the same gate. No fake backend can qualify this proof.
+        # Executed success passes the gate; failed cleanup fails it. No fake
+        # backend can qualify this store check.
         class Probe(unittest.TestCase):
+            check_kind = "store"
             initialize_store = staticmethod(initialize_probe)
 
-            @proves("MYC-0.11", kind="store")
             def runTest(case):
                 current = case.store_fixture
                 databases.append(current.database)
@@ -161,26 +157,20 @@ class StoreGateTests(unittest.TestCase):
                 case.assertEqual(current.backend.query(current.database, "SELECT current_database()"), current.database)
 
         proof = Probe()
-        claim = {"MYC-0.11": [proof.id()]}
-        report = run_checks(unittest.TestSuite([proof]), store_backend=backend, claims=claim)
+        report = run_checks(unittest.TestSuite([proof]), store_backend=backend)
         self.assertTrue(report.passed, report.errors)
-        self.assertEqual(report.requirements["MYC-0.11"]["verified_by"], [proof.id()])
+        self.assertEqual([(check.name, check.kind) for check in report.checks], [(proof.id(), "store")])
         self.assertFalse(backend.database_exists(databases[-1]))
         self.assertFalse(configs[-1].exists())
-
-        report = run_checks(unittest.TestSuite([Probe()]), store_backend=backend,
-                            claims={"MYC-0.11": ["unexecuted.proof"]})
-        self.assertFalse(report.passed)
-        self.assertEqual(report.requirements["MYC-0.11"]["status"], "pending")
 
         original_drop = backend.drop_database
         def fail_cleanup(database):
             original_drop(database)
             raise RuntimeError("injected cleanup failure after actual removal")
         with patch.object(backend, "drop_database", side_effect=fail_cleanup):
-            report = run_checks(unittest.TestSuite([Probe()]), store_backend=backend, claims=claim)
+            report = run_checks(unittest.TestSuite([Probe()]), store_backend=backend)
         self.assertFalse(report.passed)
-        self.assertEqual(report.requirements["MYC-0.11"]["status"], "pending")
+        self.assertEqual(report.checks[0].status, "failed")
         self.assertIn("cleanup failure", report.checks[0].detail)
         self.assertFalse(backend.database_exists(databases[-1]))
         self.assertFalse(configs[-1].exists())

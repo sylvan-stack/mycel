@@ -8,7 +8,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import Invocation, run
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._provenance_reports import (ProvenanceReports, handle_drifts,
                                       handle_stale, handle_status)
@@ -24,7 +23,6 @@ HANDLERS = {'drifts': handle_drifts, 'stale': handle_stale, 'status': handle_sta
 
 
 class ProvenanceReportUnitTests(unittest.TestCase):
-    @proves('MYC-0.6', 'MYC-0.10')
     def test_invalid_report_arguments_stop_before_settings_store_and_children(self):
         with patch('mycel._cli.invocation_store') as store, patch('subprocess.Popen') as child:
             for handler, arguments in ((handle_stale, ('extra',)), (handle_status, ('extra',)),
@@ -79,7 +77,6 @@ class ProvenanceReportStoreTests(unittest.TestCase):
         self.assertEqual(stderr.getvalue(), '')
         return status, json.loads(stdout.getvalue())
 
-    @proves('MYC-14.13', kind='store')
     def test_public_current_closed_reports_count_work_pairs_and_completed_support_without_writes(self):
         with self.base.connect() as connection:
             self.helper.prepare(connection)
@@ -133,7 +130,6 @@ class ProvenanceReportStoreTests(unittest.TestCase):
             self.assertEqual(current['repositories'][0]['result']['drifts'], report['counts'])
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-2.20', 'MYC-14.13', kind='store')
     def test_generated_index_staleness_keeps_separate_regeneration_work_and_canonical_sources(self):
         from mycel._locks import invocation_guard
         helper = fixtures.generated.GeneratedStoreTests()
@@ -162,7 +158,6 @@ class ProvenanceReportStoreTests(unittest.TestCase):
             self.assertEqual((status['stale'], status['drifts']['regeneration']), (1, 1))
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-14.13', kind='store')
     def test_off_disk_work_and_removed_version_history_require_explicit_filters_and_keep_locations(self):
         (self.fixture.downstream / 'keep.md').write_bytes(b'# Keep\nIndependent document.\n')
         self.base.git('init', '--initial-branch=dependant-main', cwd=self.fixture.downstream)
@@ -203,7 +198,6 @@ class ProvenanceReportStoreTests(unittest.TestCase):
             self.assertEqual(removed['locations'], [])
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-2.20', kind='store')
     def test_stale_report_keeps_all_changed_removed_and_upstream_sources_and_classification_evidence(self):
         tail = self.base.base / 'tail'
         tail.mkdir()
@@ -242,7 +236,6 @@ class ProvenanceReportStoreTests(unittest.TestCase):
                                 for reason in first['reasons'] + last['reasons']))
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-2.21', kind='store')
     def test_repository_status_counts_current_stale_and_every_unresolved_invalid_ref_occurrence(self):
         self.helper.write_answer(*self.helper.addresses, 'fixture:@artifact/missing.md#Missing',
             'fixture:missing.md#Missing', 'unknown:@artifact/source.md', 'disabled:@artifact/source.md', 'not a ref')

@@ -11,7 +11,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel import _capture as capture
-from mycel._coverage import proves, load_registry
 from mycel._errors import MycelError
 from mycel._safeguards import CompletedChild, run_git
 from mycel._scope import Folder, RepositoryLocations
@@ -63,7 +62,6 @@ class _CaptureFixture:
 
 
 class CaptureTests(_CaptureFixture, unittest.TestCase):
-    @proves('MYC-1.6')
     def test_both_roots_share_configured_endings_skips_and_markdown_ignores_code_subdirs(self):
         for root in (self.code, self.artifact):
             for path in ('README.md', 'docs/design.md', 'nested/build/private.md', 'nested/node_modules/private.md'):
@@ -81,7 +79,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
             ('code', 'src/code.py', 'code'), ('code', 'src/module.plist.in', 'code')})
         self.assertEqual(manifest.disk.files[-1].parsed[0].language, 'plist')
 
-    @proves('MYC-1.6')
     def test_custom_scan_policy_uses_literal_endings_and_the_same_exclusions(self):
         for root in (self.code, self.artifact):
             self.write(root, 'read.txt', '# Text\n')
@@ -93,7 +90,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertEqual(self.paths(manifest), {('code','read.txt','documents'),
                                               ('artifact','read.txt','documents'),('code','file.xyz','code')})
 
-    @proves('MYC-1.6')
     def test_skip_folders_never_excludes_an_identically_named_regular_file(self):
         self.write(self.code,'excluded.md','# Regular document\n')
         self.write(self.code,'nested/excluded.md','# Nested regular document\n')
@@ -102,7 +98,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertEqual(self.paths(result),{('code','excluded.md','documents'),
                                             ('code','nested/excluded.md','documents')})
 
-    @proves('MYC-1.6')
     def test_hierarchical_gitignore_anchoring_negation_escapes_and_excluded_parents(self):
         self.write(self.code, '.gitignore', '/top.md\n*.tmp.md\nblocked/\n!blocked/keep.md\nallowed/*\n!allowed/keep.md\n\\#literal.md\nspace\\ .md\n')
         self.write(self.code, 'nested/.gitignore', '!keep.tmp.md\nlocal.md\n')
@@ -115,7 +110,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
                                               ('code','nested/keep.tmp.md','documents'),
                                               ('code','allowed/keep.md','documents')})
 
-    @proves('MYC-1.6')
     def test_unicode_line_separator_is_literal_in_an_ignore_pattern(self):
         self.write(self.code,'.gitignore','odd\u2028name.md\n')
         self.write(self.code,'odd\u2028name.md','# Ignored literal filename\n')
@@ -123,7 +117,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         result=self.read(self.settings(artifact=False))
         self.assertEqual(self.paths(result),{('code','name.md','documents')})
 
-    @proves('MYC-1.6', 'MYC-13.3')
     def test_overlap_uses_specific_root_and_retains_previous_primary_when_still_reachable(self):
         self.artifact = self.code / 'docs'
         self.artifact.mkdir()
@@ -141,7 +134,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertTrue(current.disk.files[0].reused_parse)
         self.assertEqual(len(current.delta(previous).unchanged),1)
 
-    @proves('MYC-1.6', 'MYC-13.3')
     def test_equal_roots_choose_artifact_but_distinct_same_paths_and_bytes_never_merge(self):
         self.write(self.code,'README.md','# Same\n')
         self.write(self.artifact,'README.md','# Same\n')
@@ -153,7 +145,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertEqual(len(equal.disk.files),1)
         self.assertEqual(equal.disk.files[0].primary.root,'artifact')
 
-    @proves('MYC-1.6', 'MYC-13.3')
     def test_directory_links_file_links_loops_and_fifos_are_never_followed(self):
         self.write(self.code,'real.md','# Real\n')
         outside=self.write(self.home,'outside.md','# Outside\n')
@@ -166,7 +157,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertTrue(result.complete)
         self.assertEqual(self.paths(result),{('code','real.md','documents')})
 
-    @proves('MYC-1.6', 'MYC-13.3')
     def test_configured_root_link_resolves_once_and_retains_portable_binding(self):
         actual=self.home/'actual'
         actual.mkdir()
@@ -179,7 +169,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertEqual(file.source,b'# Exact\r\n')
         self.assertNotIn(str(actual),result.canonical_bytes().decode())
 
-    @proves('MYC-13.3')
     def test_complete_bytes_exact_hashes_immutable_manifest_and_local_decode_failure(self):
         large=b'# Complete\r\n'+('雪 and spaces\r\n'.encode()*90000)
         self.write(self.code,'large.md',large)
@@ -199,7 +188,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
             result.complete=False
         self.assertEqual(result.manifest_hash,sha256(result.canonical_bytes()).hexdigest())
 
-    @proves('MYC-13.3')
     def test_every_disk_file_is_reread_and_only_exact_unchanged_text_reuses_parsing(self):
         path=self.write(self.code,'file.py','def f():\n    return 1\n')
         settings=self.settings(artifact=False)
@@ -217,7 +205,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertIn('return 2',changed.disk.files[0].parsed[0].text)
         self.assertEqual(first.disk.files[0].source,b'def f():\n    return 1\n')
 
-    @proves('MYC-13.3')
     def test_changed_policy_or_parser_revision_requires_fresh_parsing_even_with_identical_bytes(self):
         self.write(self.code,'file.py','def f():\n    pass\n')
         settings=self.settings(artifact=False)
@@ -233,7 +220,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         changed=self.read(policy,previous=first)
         self.assertFalse(changed.disk.files[0].reused_parse)
 
-    @proves('MYC-13.3')
     def test_deleted_recreated_empty_and_incomplete_manifests_never_authorize_unsafe_removal(self):
         path=self.write(self.code,'README.md','# First\n')
         settings=self.settings(artifact=False)
@@ -257,7 +243,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         with self.assertRaises(MycelError):
             incomplete.require_safe_reconciliation(first,confirm_empty=True)
 
-    @proves('MYC-13.3')
     def test_observed_disk_race_invalid_path_and_broken_git_context_prevent_deletion(self):
         path=self.write(self.code,'README.md','# First\n')
         settings=self.settings(artifact=False)
@@ -278,7 +263,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertNotIn('private',broken.canonical_bytes().decode())
         self.assertTrue(any(file.primary.path=='README.md' for file in broken.disk.files))
 
-    @proves('MYC-1.6', 'MYC-13.3')
     def test_disabled_or_non_settings_folders_refuse_before_git_and_cancellation_propagates(self):
         settings=self.settings(enabled=False)
         with patch('mycel._capture.run_git') as git:
@@ -296,12 +280,6 @@ class CaptureTests(_CaptureFixture, unittest.TestCase):
         current=self.read(settings)
         with self.assertRaises(MycelError):
             current.require_safe_reconciliation(replace(current,repository='other'),confirm_empty=True)
-
-    @proves('MYC-13.3', 'MYC-13.15')
-    def test_capture_units_do_not_substitute_for_owned_store_acceptance(self):
-        registry=load_registry()
-        for requirement in ('MYC-1.7','MYC-1.8','MYC-1.30','MYC-1.31','MYC-1.32','MYC-1.33'):
-            self.assertEqual(registry[requirement].kind,'store')
 
 
 class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
@@ -333,7 +311,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         return {str(path.relative_to(self.code)):sha256(path.read_bytes()).hexdigest()
                 for path in self.code.rglob('*') if path.is_file() and not path.is_symlink()}
 
-    @proves('MYC-1.6', 'MYC-1.24', 'MYC-13.3')
     def test_disk_local_branches_and_commit_named_untracked_stashes_are_read_without_mutation(self):
         self.write(self.code,'README.md','# Main\n')
         self.write(self.code,'src/code.py','def original():\n    pass\n')
@@ -373,7 +350,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
                             for args in calls if args[0]=='config'))
         self.assertTrue(all(args[:2]==('stash','list') for args in calls if args[0]=='stash'))
 
-    @proves('MYC-1.6', 'MYC-1.24', 'MYC-13.3')
     def test_each_immutable_location_uses_its_own_hierarchical_ignore_bytes(self):
         self.write(self.code,'.gitignore','private.md\n')
         self.write(self.code,'private.md','# Main private\n')
@@ -392,7 +368,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertEqual(paths['refs/heads/main'],{'visible.md'})
         self.assertEqual(paths['refs/heads/feature'],{'private.md'})
 
-    @proves('MYC-1.6', 'MYC-1.24', 'MYC-13.3')
     def test_nested_configured_roots_keep_checkout_paths_and_git_overlap_aliases(self):
         self.write(self.code,'.gitignore','hidden/\n')
         self.write(self.code,'docs/a.md','# Artifact\n')
@@ -408,7 +383,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
             self.assertEqual(document.primary,capture.FileAlias('artifact','a.md'))
             self.assertEqual(document.aliases,(capture.FileAlias('artifact','a.md'),capture.FileAlias('code','docs/a.md')))
 
-    @proves('MYC-1.24', 'MYC-13.3')
     def test_known_commit_reuse_removed_recreated_branch_and_stash_commit_identity(self):
         self.write(self.code,'file.md','# Main\n')
         self.commit()
@@ -432,7 +406,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         recreated,_=self.read_git(settings,previous=changed)
         self.assertIn(capture.LocationId('branch','code','refs/heads/same'),recreated.delta(changed).added_locations)
 
-    @proves('MYC-1.24', 'MYC-13.3')
     def test_bounded_git_failure_and_changed_final_inventory_preserve_disk_and_disable_removals(self):
         self.write(self.code,'file.md','# Main\n')
         self.commit()
@@ -460,7 +433,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertFalse(raced.complete)
         self.assertTrue(any(item.code=='changed_during_capture' for item in raced.diagnostics))
 
-    @proves('MYC-1.6', 'MYC-1.24', 'MYC-13.3')
     def test_two_independent_checkouts_do_not_merge_equal_names_or_bytes_and_order_stashes_last(self):
         self.git('init','--initial-branch=main',cwd=self.artifact)
         for root in (self.code,self.artifact):
@@ -477,7 +449,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
                          {'code','artifact'})
         self.assertTrue(all(len(location.files)==1 for location in result.locations if location.id.kind!='disk'))
 
-    @proves('MYC-1.6', 'MYC-1.24', 'MYC-13.3')
     def test_root_inside_checkout_honors_parent_ignore_rules_and_worktree_git_file(self):
         self.write(self.code,'.gitignore','docs/blocked/\n')
         self.write(self.code,'docs/visible.md','# Visible\n')
@@ -495,7 +466,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertEqual(before,{str(path.relative_to(worktree)):sha256(path.read_bytes()).hexdigest()
                                 for path in worktree.rglob('*') if path.is_file()})
 
-    @proves('MYC-1.6', 'MYC-1.24', 'MYC-13.3')
     def test_git_symlink_blobs_are_excluded_and_large_regular_blobs_are_not_truncated(self):
         large=b'# Full bytes\n'+b'x'*1200000+b'\n'
         self.write(self.code,'large.md',large)
@@ -509,7 +479,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
             self.assertEqual(next(file.source for file in location.files if file.primary.path=='large.md'),large)
         self.assertTrue(any(args[0]=='cat-file' for args in calls))
 
-    @proves('MYC-1.24', 'MYC-13.3')
     def test_oversized_metadata_and_short_blob_leave_visible_incomplete_manifests(self):
         self.write(self.code,'file.md','# Complete\n')
         self.commit()
@@ -535,7 +504,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertEqual(result.delta(first).removed,())
         self.assertTrue(any(item.code=='git_blob' for item in result.diagnostics))
 
-    @proves('MYC-1.24', 'MYC-13.3')
     def test_replacement_refs_cannot_substitute_bytes_under_an_unchanged_commit_identity(self):
         self.write(self.code,'file.md','# Original commit\n')
         self.commit('original')
@@ -553,7 +521,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertEqual(result.disk.files[0].source,b'# Replacement commit\n')
         self.assertEqual(self.state(),before)
 
-    @proves('MYC-1.24', 'MYC-13.3')
     def test_sha256_git_object_ids_are_retained_and_captured_as_complete_bytes(self):
         self.code=self.home/'sha256'
         self.code.mkdir()
@@ -568,7 +535,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertEqual(branch.commit,oid)
         self.assertEqual(branch.files[0].source,b'# Exact SHA-256 repository\r\n')
 
-    @proves('MYC-1.24', 'MYC-13.3')
     def test_new_ancestor_ignore_file_and_changed_overlap_metadata_prevent_deletion(self):
         self.write(self.code,'docs/file.md','# Exact\n')
         self.commit()
@@ -583,7 +549,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertFalse(result.complete)
         self.assertTrue(any(item.code=='changed_during_capture' for item in result.diagnostics))
 
-    @proves('MYC-1.6', 'MYC-1.24')
     def test_ignored_ignore_files_still_supply_rules_in_every_location(self):
         self.write(self.code,'.gitignore','.gitignore\n')
         self.write(self.code,'nested/.gitignore','hidden.md\n')
@@ -597,7 +562,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertTrue(all([file.primary.path for file in location.files]==['nested/visible.md']
                             for location in result.locations))
 
-    @proves('MYC-1.6', 'MYC-1.24')
     def test_unselected_unaddressable_names_do_not_obstruct_selected_disk_or_git_files(self):
         self.write(self.code,'unselected\\bytes.bin',b'not a selected source')
         self.write(self.code,'visible.md','# Selected\n')
@@ -607,7 +571,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertTrue(all([file.primary.path for file in location.files]==['visible.md']
                             for location in result.locations))
 
-    @proves('MYC-1.6', 'MYC-1.24')
     def test_unselected_non_utf8_git_tree_name_does_not_obstruct_selected_bytes(self):
         self.write(self.code,'visible.md','# Visible disk source\n')
         self.commit()
@@ -624,7 +587,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertTrue(all([file.primary.path for file in location.files]==['visible.md']
                             for location in result.locations))
 
-    @proves('MYC-1.6', 'MYC-1.24')
     def test_ascii_ignorecase_matches_native_git_and_invalidates_cached_locations(self):
         self.git('config','core.ignorecase','false')
         self.write(self.code,'.gitignore','HIDDEN.md\n[A-Z]ase.md\nÄ.md\n')
@@ -650,7 +612,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertTrue(all({file.primary.path for file in location.files}==
                             {'hidden.md','case.md','ä.md','visible.md'} for location in absent.locations))
 
-    @proves('MYC-1.6', 'MYC-1.24', 'MYC-13.3')
     def test_ignorecase_fault_or_changed_final_policy_refuses_complete_reconciliation(self):
         self.git('config','core.ignorecase','false')
         self.write(self.code,'visible.md','# Selected\n')
@@ -679,7 +640,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertEqual(raced.delta(first).removed,())
         self.assertTrue(any(item.code=='changed_during_capture' for item in raced.diagnostics))
 
-    @proves('MYC-1.6', 'MYC-1.24')
     def test_posix_bracket_classes_and_utf8_byte_wildcards_match_native_git(self):
         self.git('config','core.ignorecase','false')
         rules='[[:digit:]].md\n[[:alpha:]].md\n[[:lower:]]lower.md\n[[:punct:]]punct.md\n?.one.md\n??.two.md\n[Éé].bracket.md\n'
@@ -699,7 +659,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertTrue(all({file.primary.path for file in location.files}==set(selected)-native
                             for location in result.locations))
 
-    @proves('MYC-1.6', 'MYC-1.24')
     def test_bracket_escapes_inverted_ranges_and_directory_globstar_match_native_git(self):
         selected=('a.md','b.md','c.md','z.md','-.md','].md','foo/bar.md','foo/x/bar.md')
         for path in selected:
@@ -723,7 +682,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
                     self.assertTrue(all({file.primary.path for file in location.files}==set(selected)-native
                                         for location in result.locations))
 
-    @proves('MYC-1.6', 'MYC-1.24')
     def test_literal_trailing_controls_and_space_escaping_match_native_git_bytes(self):
         selected=('plain.md','tab.md\t','vtab.md\v','form.md\f','nbsp.md\u00a0','space.md ')
         for path in selected:
@@ -742,7 +700,6 @@ class TemporaryGitCaptureTests(_CaptureFixture, unittest.TestCase):
         self.assertTrue(result.complete,result.diagnostics)
         self.assertTrue(all(not location.files for location in result.locations))
 
-    @proves('MYC-1.6', 'MYC-1.24')
     def test_casefold_preserves_native_bracket_literal_and_escaped_uppercase_rules(self):
         self.git('config','core.ignorecase','true')
         selected={'a.md','b.md','z.md','_.md','fallback.md'}

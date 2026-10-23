@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from mycel._capture import capture_repository
 from mycel._cli import run
-from mycel._coverage import proves, require_check_database
+from mycel._coverage import require_check_database
 from mycel._ingest import _CompleteProducer
 from mycel._located_reconciliation import LocatedCaptureStore
 from mycel._locks import require_transaction_guards
@@ -27,7 +27,6 @@ except ImportError:
 class IngestConcurrencyStoreTests(unittest.TestCase):
     check_kind = "store"
 
-    @proves("MYC-1.23", kind="store")
     def test_public_ingest_survives_disjoint_publication_inside_its_producer_transaction(self):
         require_check_database(self.store_fixture.database)
         self.assertIs(self.store_fixture.backend.real_store, True)
@@ -111,7 +110,6 @@ class IngestCrossRepositoryStoreTests(unittest.TestCase):
         self.fixture.setUp()
         self.addCleanup(self.fixture.doCleanups)
 
-    @proves("MYC-1.23", kind="store")
     def test_foreign_refresh_and_requested_pass_share_cumulative_reply_and_final_activity(self):
         fixture = self.fixture
         fixture.add_repository("downstream",
@@ -171,7 +169,6 @@ class IngestCrossRepositoryStoreTests(unittest.TestCase):
             "WHERE repository='downstream' AND right_place LIKE 'fixture:%'").fetchone()[0]
         self.assertIn("related_changed", related["reasons"])
 
-    @proves("MYC-1.23", kind="store")
     def test_selected_source_pass_keeps_unrelated_pending_ref_in_same_foreign_chunk_exact(self):
         fixture = self.fixture
         third = self.prepare_two_sources()
@@ -191,7 +188,6 @@ class IngestCrossRepositoryStoreTests(unittest.TestCase):
             self.assertEqual(self.third_dependency(connection), before)
             self.selected_ref_changed(connection)
 
-    @proves("MYC-1.23", kind="store")
     def test_unindexed_unrelated_source_does_not_refuse_selected_foreign_ref_refresh(self):
         fixture = self.fixture
         third = self.prepare_two_sources()

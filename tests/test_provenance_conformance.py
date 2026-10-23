@@ -16,7 +16,6 @@ from unittest.mock import patch
 from mycel._classification_payload import LABELS, ReviewerRequest
 from mycel._classification_runner import ClassifyDependencies
 from mycel._cli import run
-from mycel._coverage import proves
 from mycel._jev import JevResponse, route_response
 from mycel._reviewer import ReviewerSuccess
 from mycel._resolver import SourceResolver
@@ -53,7 +52,6 @@ class ProvenanceConformanceStoreTests(unittest.TestCase):
     def repository(self, reply, name):
         return next(row['result'] for row in reply['repositories'] if row['repository'] == name)
 
-    @proves('MYC-2.23', kind='store')
     def test_public_cli_preserves_all_five_provenance_contracts_in_one_index(self):
         downstream = self.fixture.fixture.fixture.downstream
         warning = downstream / 'notice.md'

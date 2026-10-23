@@ -11,7 +11,7 @@ from psycopg.types.json import Jsonb
 
 from mycel._activity import MutationActivity
 from mycel._collection import CollectionStore
-from mycel._coverage import proves, require_check_database
+from mycel._coverage import require_check_database
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceStore
 from mycel._freshness import Deadline
@@ -161,7 +161,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
                     '(%s,0,\'fixture bundle\',\'fixture dependant\',\'done\')', (activity,))
         return dependency, version
 
-    @proves('MYC-1.27', 'MYC-6.18', 'MYC-16.11', kind='store')
     def test_removal_counts_complete_owned_state_and_preserves_files_and_foreign_rows(self):
         with self.connect() as connection:
             other_dependency, _ = self.seed(connection, 'other', complete=True)
@@ -176,7 +175,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
             self.assertEqual(self.state(connection), foreign)
             self.assertEqual(self.files(), before_files)
 
-    @proves('MYC-1.27', 'MYC-6.15', kind='store')
     def test_disabled_forgotten_and_receipt_only_repository_owners_are_removable(self):
         with self.connect() as connection:
             for known, enabled in ((True, False), (False, False)):
@@ -194,7 +192,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
             self.assertTrue(all(count == 0 for count in reply['removed'].values()))
             self.assertTrue(all(not rows for rows in self.state(connection).values()))
 
-    @proves('MYC-6.13', 'MYC-16.11', kind='store')
     def test_every_active_operation_and_evidence_mutation_refuses_without_feature_changes(self):
         with self.connect() as connection, self.connect() as peer:
             self.seed(connection, 'fixture')
@@ -212,7 +209,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
                     RepositoryRemovalStore(connection).remove(self.settings, 'fixture')
                 self.assertEqual(error.exception.code, 'busy')
 
-    @proves('MYC-6.13', 'MYC-16.11', kind='store')
     def test_live_lease_and_running_activity_prevent_removal_until_the_invocation_ends(self):
         with self.connect() as connection, self.connect() as peer:
             self.seed(connection, 'fixture')
@@ -236,7 +232,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
             RepositoryRemovalStore(connection).remove(self.settings, 'fixture')
             self.assertTrue(all(not rows for rows in self.state(connection).values()))
 
-    @proves('MYC-1.27', 'MYC-6.10', kind='store')
     def test_failure_after_cascading_deletion_rolls_back_every_feature_row_and_releases_guards(self):
         with self.connect() as connection, self.connect() as peer:
             self.seed(connection, 'fixture', complete=True)
@@ -252,7 +247,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
             reply = RepositoryRemovalStore(peer).remove(self.settings, 'fixture')
             self.assertEqual(reply['removed']['chunks'], 3)
 
-    @proves('MYC-1.27', 'MYC-6.13', kind='store')
     def test_busy_foreign_dependant_blocks_edge_cascade_without_partial_removal(self):
         with self.connect() as connection, self.connect() as peer:
             foreign, _ = self.seed(connection, 'other')
@@ -265,7 +259,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, 'busy')
                 self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.27', kind='store')
     def test_configured_empty_repository_is_noop_and_unknown_absent_name_is_refused(self):
         with self.connect() as connection:
             reply = RepositoryRemovalStore(connection).remove(self.settings, 'fixture')
@@ -280,7 +273,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
                 RepositoryRemovalStore(connection).remove(load_settings(path=self.config, home=self.root), '\0')
             self.assertEqual(error.exception.code, 'invalid_input')
 
-    @proves('MYC-1.27', 'MYC-16.13', kind='store')
     def test_settings_change_before_commit_rolls_back_the_whole_removal(self):
         with self.connect() as connection:
             self.seed(connection, 'fixture')
@@ -296,7 +288,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 'invalid_input')
             self.assertEqual(self.state(connection), before)
 
-    @proves('MYC-1.27', 'MYC-12.8', kind='store')
     def test_numbered_removal_records_exact_global_activity_and_audit_failure_rolls_back(self):
         with self.connect() as connection:
             self.seed(connection, 'fixture', complete=True)
@@ -312,7 +303,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
             self.assertIsNone(connection.execute('SELECT 1 FROM public.mycel_repository_state '
                 'WHERE repository=\'fixture\'').fetchone())
 
-    @proves('MYC-1.27', 'MYC-12.8', kind='store')
     def test_activity_close_failure_preserves_committed_counts_and_reports_error(self):
         with self.connect() as connection:
             self.seed(connection, 'fixture')
@@ -328,7 +318,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
             self.assertEqual(audit, [(None, 'remove', {key: value for key, value in reply.items()
                 if key not in {'error', 'countsState'}})])
 
-    @proves('MYC-1.27', 'MYC-12.8', kind='store')
     def test_interrupt_after_commit_preserves_removed_counts_and_reports_interruption(self):
         with self.connect() as connection:
             self.seed(connection, 'fixture')
@@ -345,7 +334,6 @@ class RepositoryRemovalStoreTests(unittest.TestCase):
 class RepositoryRemovalEvidenceStoreTests(unittest.TestCase):
     check_kind = "store"
 
-    @proves('MYC-1.27', 'MYC-6.18', 'MYC-16.11', kind='store')
     def test_removed_source_keeps_dependant_baseline_and_projects_missing_source_without_writing(self):
         try:
             from . import test_dependency_source_refresh as fixtures
@@ -376,7 +364,6 @@ class RepositoryRemovalEvidenceStoreTests(unittest.TestCase):
             self.assertEqual(read['dependencyCheck']['faults'][0]['ref'], dependency[3])
             self.assertEqual(foreign(), before)
 
-    @proves('MYC-6.18', 'MYC-16.11', 'MYC-16.13', kind='store')
     def test_repin_and_evidence_collection_roll_back_together_and_keep_protected_history(self):
         try:
             from . import test_dependency_source_refresh as fixtures

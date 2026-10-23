@@ -9,7 +9,6 @@ import unittest
 from unittest.mock import patch
 
 from mycel._cli import run
-from mycel._coverage import proves
 from mycel._errors import MycelError
 from mycel._settings import load_settings
 from mycel._store import InitResult, StoreInspection, STORE_FORMAT
@@ -31,7 +30,6 @@ class StoreCliTests(unittest.TestCase):
             status = run(arguments, stdout=out, stderr=err)
         return status, json.loads(out.getvalue()), err.getvalue()
 
-    @proves("MYC-6.2", "MYC-6.4", "MYC-5.11")
     def test_init_uses_one_snapshot_and_private_connection_without_child_forwarding(self):
         connection = object()
         @contextmanager
@@ -53,7 +51,6 @@ class StoreCliTests(unittest.TestCase):
         child.assert_not_called()
         self.assertEqual(error, "")
 
-    @proves("MYC-6.2", "MYC-5.11")
     def test_info_keeps_unavailable_and_newer_store_diagnostics_successful(self):
         with patch("mycel._database.store_connection", side_effect=MycelError("store_unavailable", "Store unavailable.")):
             status, result, error = self.invoke(["info"])
@@ -71,7 +68,6 @@ class StoreCliTests(unittest.TestCase):
         self.assertEqual(result["store"]["format"], STORE_FORMAT + 1)
         initialize.assert_not_called()
 
-    @proves("MYC-5.11", "MYC-6.4")
     def test_invalid_init_arguments_and_settings_stop_before_connection(self):
         with patch("mycel._database.store_connection") as connect:
             status, result, error = self.invoke(["init", "unexpected"])

@@ -8,7 +8,6 @@ from psycopg.types.json import Jsonb
 
 from mycel._activity import AppliedMutation, MutationActivity
 from mycel._cli import Invocation
-from mycel._coverage import proves
 from mycel._embedding_plan import document_place_line, plan_chunk
 from mycel._errors import MycelError
 from mycel._evidence import EvidenceError
@@ -70,7 +69,6 @@ class SummaryLifecycleStoreTests(unittest.TestCase):
                           'mycel_generated_state', 'mycel_embedding_plans', 'mycel_embedding_parts', 'mycel_vectors',
                           'mycel_evidence_owners', 'mycel_evidence_references', 'mycel_snapshots', 'mycel_manifests')}
 
-    @proves('MYC-8.21', 'MYC-8.28', 'MYC-8.29', kind='store')
     def test_complete_removal_atomically_drops_set_metadata_vectors_pins_and_only_unowned_evidence(self):
         with self.base.connect() as connection, self.base.connect() as reader:
             with invocation_guard(connection) as invocation, operation_guard(connection, 'fixture', 'summaries'):
@@ -106,7 +104,6 @@ class SummaryLifecycleStoreTests(unittest.TestCase):
                     self.assertNotIn('builtAt', snapshot.status())
                     self.assertEqual(snapshot.status()['levels'], [])
 
-    @proves('MYC-8.21', 'MYC-8.28', 'MYC-8.29', kind='store')
     def test_removal_without_command_or_model_credentials_records_one_done_audit_and_empty_removal_is_normal_noop(self):
         with self.base.connect() as connection:
             with invocation_guard(connection) as invocation, operation_guard(connection, 'fixture', 'summaries'):
@@ -125,7 +122,6 @@ class SummaryLifecycleStoreTests(unittest.TestCase):
                 self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_activity WHERE kind='summaries_remove'").fetchone(), (1,))
                 self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_evidence_owners WHERE invocation IS NOT NULL').fetchone(), (0,))
 
-    @proves('MYC-8.21', 'MYC-8.29', kind='store')
     def test_summary_and_pass_contention_and_interruption_refuse_without_partial_removal(self):
         with self.base.connect() as connection, self.base.connect() as other:
             with invocation_guard(connection) as invocation, operation_guard(connection, 'fixture', 'summaries'):
@@ -150,7 +146,6 @@ class SummaryLifecycleStoreTests(unittest.TestCase):
                         raise RuntimeError('late audit failed')
                 self.assertEqual(self.state(connection), original)
 
-    @proves('MYC-8.21', 'MYC-8.28', 'MYC-8.29', kind='store')
     def test_empty_set_metadata_removal_succeeds_and_corrupt_sentinel_refuses_without_deleting_other_chunk(self):
         with self.base.connect() as connection:
             with invocation_guard(connection) as invocation, operation_guard(connection, 'fixture', 'summaries'):
@@ -170,7 +165,6 @@ class SummaryLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 'store_format')
             self.assertEqual(self.state(connection), original)
 
-    @proves('MYC-8.21', 'MYC-8.28', 'MYC-8.29', kind='store')
     def test_post_commit_audit_close_faults_and_interruption_keep_acknowledged_removal_count(self):
         from mycel._activity import MutationActivity
         for failure in ('finish', 'close', 'signal'):
@@ -201,7 +195,6 @@ class SummaryLifecycleStoreTests(unittest.TestCase):
                 self.assertEqual(connection.execute("SELECT counts->>'removed',outcome FROM public.mycel_activity "
                     "WHERE kind='summaries_remove' ORDER BY id DESC LIMIT 1").fetchone(), ('1', 'done'))
 
-    @proves('MYC-8.21', 'MYC-8.29', kind='store')
     def test_settings_change_in_removal_audit_rolls_back_complete_set_and_audit(self):
         from mycel._activity import MutationActivity
         with self.base.connect() as connection:
@@ -222,7 +215,6 @@ class SummaryLifecycleStoreTests(unittest.TestCase):
             self.assertEqual(self.state(connection), original)
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_activity WHERE kind='summaries_remove'").fetchone(), (0,))
 
-    @proves('MYC-8.17', 'MYC-8.27', 'MYC-8.29', kind='store')
     def test_reserved_renewal_publishes_current_vectors_and_pins_in_place_atomically_releasing_old_owner(self):
         with self.base.connect() as connection, self.base.connect() as reader:
             with invocation_guard(connection) as invocation, operation_guard(connection, 'fixture', 'summaries'):
@@ -256,7 +248,6 @@ class SummaryLifecycleStoreTests(unittest.TestCase):
                     self.assertEqual(snapshot._generated_stale, frozenset({parent.member.chunk.identifier}))
                 connection.execute('DELETE FROM public.mycel_evidence_owners WHERE id=%s', (lease.owner_id,))
 
-    @proves('MYC-8.18', 'MYC-8.27', kind='store')
     def test_withdrawal_of_memberless_summary_preserves_parent_pins_and_recomposes_source_removed(self):
         with self.base.connect() as connection:
             with invocation_guard(connection) as invocation, operation_guard(connection, 'fixture', 'summaries'):
@@ -280,7 +271,6 @@ class SummaryLifecycleStoreTests(unittest.TestCase):
                     self.assertEqual(snapshot.regeneration_plan()['remove'][0]['address'], upper.member.place.address)
                     self.assertEqual(snapshot._generated_stale, frozenset({upper.member.chunk.identifier}))
 
-    @proves('MYC-8.27', 'MYC-8.29', kind='store')
     def test_changed_exact_inputs_and_late_vector_tampering_roll_back_text_vectors_and_pins(self):
         with self.base.connect() as connection:
             with invocation_guard(connection) as invocation, operation_guard(connection, 'fixture', 'summaries'):
