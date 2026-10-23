@@ -214,7 +214,6 @@ target/runtime; they claim no unmeasured startup threshold.
 mycel:@code/src/mycel_build/_automatic.py#run_automatic
 mycel:@code/src/mycel_build/_automatic_backend.py#InstalledFixtureBackend
 mycel:@code/src/mycel_build/_qualification.py#automatic_contract
-mycel:@code/src/mycel_build/_qualification.py#requirement_results
 -->
 
 
