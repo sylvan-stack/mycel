@@ -8,6 +8,7 @@ from ._drift_store import DriftStore
 from ._errors import MycelError
 from ._freshness import DeadlineExceeded
 from ._source_refs import parse_source_address
+from ._staleness import inactive_policy_links
 
 
 def reconcile_local(connection, settings, repository, *, activity=None, at=None):
@@ -24,8 +25,11 @@ def reconcile_local(connection, settings, repository, *, activity=None, at=None)
         check_deadline()
         listing = DriftStore(connection).list(repository, closed=True)
         store = ClassificationStore(connection)
+        inactive = inactive_policy_links(connection, settings)
         for drift in listing['drifts']:
             for source in drift['sources']:
+                if source['dependency'] in inactive:
+                    continue
                 if not source['active'] and source.get('closed', {}).get('because') != 'still_supported':
                     continue
                 check_deadline()

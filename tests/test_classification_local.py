@@ -19,7 +19,7 @@ except ImportError:
 
 def work(*sources):
     return {'id': 'drift', 'chunk': {'address': 'fixture:@artifact/guide.md#Guide'},
-            'sources': [{'id': source, 'active': True} for source in sources]}
+            'sources': [{'id': source, 'dependency': source, 'active': True} for source in sources]}
 
 
 class LocalClassificationTests(unittest.TestCase):
@@ -38,7 +38,7 @@ class LocalClassificationTests(unittest.TestCase):
             drifts.return_value.list.return_value = {'drifts': [work('first', 'second')]}
             stores.return_value.prepare.return_value = prepared
             stores.return_value.reuse.return_value = None
-            result = reconcile_local(object(), object(), 'fixture')
+            result = reconcile_local(object(), SimpleNamespace(values={'repos': {}}), 'fixture')
             self.assertEqual((result['pairs'], result['pendingDebounce'], result['reused']), (2, 2, 0))
             self.assertTrue(result['complete'])
             stores.return_value.apply.assert_not_called()
@@ -72,7 +72,7 @@ class LocalClassificationTests(unittest.TestCase):
             stores.return_value.prepare.side_effect = prepare
             stores.return_value.reuse.return_value = None
             with deadline_guard(Deadline(4.0, lambda: clock[0])):
-                result = reconcile_local(object(), object(), 'fixture')
+                result = reconcile_local(object(), SimpleNamespace(values={'repos': {}}), 'fixture')
             self.assertEqual((result['pairs'], result['pendingJev']), (1, 1))
             self.assertFalse(result['complete'])
             self.assertEqual(result['reason'], 'time_limit')
@@ -103,7 +103,7 @@ class LocalClassificationTests(unittest.TestCase):
             stores.return_value.prepare.return_value = prepared
             stores.return_value.reuse.return_value = {'judgement': 'still_supported', 'evidence': {'jev': 'retained'}}
             stores.return_value.apply.return_value = {'applied': False, 'obsolete': True}
-            result = reconcile_local(object(), object(), 'fixture')
+            result = reconcile_local(object(), SimpleNamespace(values={'repos': {}}), 'fixture')
             self.assertEqual(result['reused'], 0)
             self.assertIs(stores.return_value.apply.call_args.args[1], prepared)
             self.assertEqual(stores.return_value.apply.call_args.kwargs['evidence'], {'jev': 'retained'})
@@ -121,7 +121,7 @@ class LocalClassificationTests(unittest.TestCase):
             drifts.return_value.list.return_value = {'drifts': [drift]}
             stores.return_value.prepare.return_value = prepared
             stores.return_value.reuse.return_value = drift['sources'][0]['classification']
-            result = reconcile_local(object(), object(), 'fixture')
+            result = reconcile_local(object(), SimpleNamespace(values={'repos': {}}), 'fixture')
             self.assertEqual((result['reused'], result['pendingJev']), (0, 0))
             stores.return_value.apply.assert_not_called()
             stores.return_value.stage.assert_not_called()

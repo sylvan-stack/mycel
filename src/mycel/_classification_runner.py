@@ -476,6 +476,9 @@ def run_classification(store, settings, repository, *, k=None, dry_run=False,
             if hasattr(store, 'connection') else store.session(repository))
     try:
         with deadline_guard(deadline), (nullcontext() if dry_run else lock):
+            from ._staleness import inactive_policy_links
+            inactive = (inactive_policy_links(store.connection, settings)
+                        if isinstance(store, ClassificationStore) else frozenset())
             if not dry_run:
                 store.drifts.reconcile(settings, repository, at=dependencies.utc_now())
                 if isinstance(store, ClassificationStore):
@@ -484,6 +487,8 @@ def run_classification(store, settings, repository, *, k=None, dry_run=False,
                     # exact inactive reasons invalidated by current inputs.
                     for drift in store.drifts.list(repository, closed=True)['drifts']:
                         for source in drift['sources']:
+                            if source['dependency'] in inactive:
+                                continue
                             if (not source['active'] and
                                     source.get('closed', {}).get('because') == 'still_supported'):
                                 store.prepare(settings, drift['id'], source['id'],
@@ -496,6 +501,8 @@ def run_classification(store, settings, repository, *, k=None, dry_run=False,
                     continue
                 before_count = len(candidates)
                 for source in drift['sources']:
+                    if source['dependency'] in inactive:
+                        continue
                     inspect_closed_support = (dry_run and not source['active'] and
                         source.get('closed', {}).get('because') == 'still_supported')
                     if not source['active'] and not inspect_closed_support:

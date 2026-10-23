@@ -265,7 +265,8 @@ class RecoveryStore:
         return RecoveryPair(public_reference(selections[0]), public_reference(selections[1]), tuple(sorted(sources)),
             decision, tuple(files.values()), signatures, observations, eligible.status, eligible.eligible_at, previous_link)
 
-    def preview(self, settings, repository, *, chunk=None, paths=(), review=False, at, cancelled=lambda: False):
+    def preview(self, settings, repository, *, chunk=None, paths=(), review=False, at,
+                pair_limit=None, cancelled=lambda: False):
         paths = normalize_paths(paths)
         with checked_store(self.connection), read_snapshot(self.connection):
             catalog = SourceResolver.from_read_transaction(self.connection, settings)
@@ -274,6 +275,11 @@ class RecoveryStore:
                 (any(link['method'] in {'inferred', 'recovered'} for link in row['links']) if review else not row['links'])]
             mapping = {public_reference(_selection(file, member)): _selection(file, member)
                        for file in catalog.files for member in catalog._members(file, file.chunks)}
+            if chunk is None and not review:
+                targets = [row for row in targets if
+                    mapping[row['chunk']].members[0].chunk.kind not in {'req', 'dec'}
+                    and (mapping[row['chunk']].members[0].chunk.kind != 'document'
+                         or mapping[row['chunk']].file.document_declarations.role != 'authored')]
             documents = [(file, member) for file in catalog.files for member in catalog._members(file, file.chunks)
                          if member.chunk.kind in {'document', 'req', 'dec'}
                          and not _LINEAR.search(file.source.decode('utf-8'))]
@@ -282,7 +288,9 @@ class RecoveryStore:
             vectors = {item.key: item for item in retrieval}
             repo = RepositoryLocations(settings).named(repository)[0]
             pairs, chunks = [], []
-            for target in targets:
+            limit = settings.values['drifts']['candidates'] if pair_limit is None else pair_limit
+            attempted, capped = 0, False
+            for target_index, target in enumerate(targets):
                 check_deadline()
                 if cancelled():
                     raise MycelError('refused','Recovery was cancelled during local selection.')
@@ -358,6 +366,11 @@ class RecoveryStore:
                     chunk_reply['history'] = {**history, 'originAvailable': False, 'reason': 'commit_snapshot_unavailable'}
                 for origin in sorted(candidates):
                     record = {'origin': origin, 'sources': sorted(candidates[origin])}
+                    if attempted >= limit:
+                        capped = True
+                        chunk_reply['candidates'].append({**record, 'status': 'not_selected'})
+                        continue
+                    attempted += 1
                     try:
                         pair = self.prepare_pair(settings, catalog, target['chunk'], origin, candidates[origin],
                             history_texts, at=at, previous_link=next((link for link in target['links']
@@ -373,7 +386,10 @@ class RecoveryStore:
                     **({} if any(source in values for values in candidates.values()) else {'reason':reasons[source]})}
                     for source in SOURCES}
                 chunks.append(chunk_reply)
-            return pairs, {'repository': repository, 'chunks': chunks}
+                if attempted >= limit:
+                    capped |= target_index + 1 < len(targets)
+                    break
+            return pairs, {'repository': repository, 'chunks': chunks, 'capped': capped}
 
     def check(self, settings, pair, *, at, require_eligible=True):
         with self.guarded(settings) as catalog:
@@ -533,7 +549,7 @@ def run_recovery(store, settings, repository, *, chunk=None, paths=(), dry_run=F
     options = settings.values['drifts']
     deadline = deadline or Deadline.after(options['seconds'],clock=dependencies.monotonic)
     reply = {'repository':repository,'dryRun':dry_run,'review':review,'selected':0,'completed':0,
-             'jevCalls':0,'reviewCalls':0,'errors':0,'incomplete':False,'chunks':[],'pairs':[],'status':0}
+             'jevCalls':0,'reviewCalls':0,'errors':0,'incomplete':False,'capped':False,'chunks':[],'pairs':[],'status':0}
     policy = InvocationPolicy('recovery',dry_run=dry_run)
     store = RecoveryStore(DeadlineConnection(store.connection))
     stopped = threading.Event()
@@ -550,8 +566,10 @@ def run_recovery(store, settings, repository, *, chunk=None, paths=(), dry_run=F
             else:
                 invocation = None
             pairs, plan = store.preview(settings,repository,chunk=chunk,paths=paths,review=review,
-                                         at=dependencies.utc_now(),cancelled=dependencies.cancelled)
+                                         at=dependencies.utc_now(), pair_limit=options['candidates'] if k is None else k,
+                                         cancelled=dependencies.cancelled)
             reply['chunks'] = plan['chunks']
+            reply['capped'] = plan['capped']
             pairs.sort(key=lambda pair:(pair.eligible_at or '',pair.chunk,pair.origin,pair.decision.input_hash))
             selected = pairs[:options['candidates'] if k is None else k]
             reply['selected'] = len(selected)

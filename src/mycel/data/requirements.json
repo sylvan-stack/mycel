@@ -70,7 +70,7 @@
       "specification_status": "accepted"
     },
     "17-justification.md": {
-      "sha256": "e9dfaaf4b0fae23558a5d6a8321a4db65646cf5c784defac3257cb22c1c87793",
+      "sha256": "2f64e222b3bf705411fa5645427f8db1169f4b45464f8bbaa52452e738aa680c",
       "specification_status": "draft"
     }
   },
@@ -2950,7 +2950,7 @@
     {
       "id": "MYC-17.13",
       "specification": "MYC-17",
-      "text": "gather and name local document, test-call, introducing-commit/snapshotted-issue and existing-vector requirement/decision candidates for current unlinked chunks by chunk, path or repository; expose dry-run provenance, unavailable sources, exact byte counts and eligibility without writes or model calls",
+      "text": "gather and name local document, test-call, introducing-commit/snapshotted-issue and existing-vector requirement/decision candidates for current unlinked chunks by chunk, path or repository; limit exact preparation attempts before assembly, expose whether the selection is capped, and expose dry-run provenance, unavailable sources, exact byte counts and eligibility for prepared pairs without writes or model calls",
       "origin": "New",
       "kind": "store",
       "source": "17-justification.md"

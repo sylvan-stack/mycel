@@ -15,8 +15,11 @@ mycel origins --repo cellar --no-fresh
 
 A chunk reference selects its repository. Otherwise select one enabled
 repository explicitly or through the current folder. Paths repeat and match
-component boundaries. `--k` caps selected pairs, rather than chunks; one chunk
-can have several candidates. Repository and path scopes select unlinked chunks.
+component boundaries. `--k` caps exact preparation attempts, including unresolved
+pairs; one chunk can have several candidates. Repository and path scopes select
+unlinked code and non-authored document chunks. Requirement/decision rows and
+authored documents remain candidate Origins; an explicit chunk reference may
+select them.
 `--review` instead selects existing inferred/recovered links in that scope.
 
 ## Candidate sources
@@ -79,7 +82,10 @@ reviewer configuration remains `needs_llm_review` with its reason.
 no model adapter. It may read the store password when the store asks for one,
 and runs only permitted local Git reads. It lists source availability,
 candidates and provenance, quiet-period eligibility and exact payload/Jev byte
-counts. The reply's maximum-call figures are upper bounds, not a request to
+counts for prepared pairs. Canonical chunk/origin order bounds preparation before
+expensive evidence assembly. `capped: true` reports uninspected work; discovered
+candidates beyond the cap have `status: not_selected` and no preparation. Prepared
+pairs are ordered by eligibility within that prefix. The reply's maximum-call figures are upper bounds, not a request to
 execute those calls.
 
 Non-dry execution uses `[drifts]` candidate, quiet-period, confidence-floor,
@@ -101,7 +107,7 @@ before deployment; passing automatic stand-ins supplies no provider proof.
 
 `RecoveryReply` is one object with `repository`, `dryRun`, `review`,
 `selected`, `completed`, `jevCalls`, `reviewCalls`, `errors`, `incomplete`,
-`status`, `maxCalls`, `chunks` and `pairs`. Each chunk includes its history,
+`capped`, `status`, `maxCalls`, `chunks` and `pairs`. Each chunk includes its history,
 embedding and per-source availability and candidates. Selected pairs add their
 input hash, exact byte counts, eligibility, attempts, stage results, final
 judgement/score and applied `link` (null for unrelated). Pending debounce or

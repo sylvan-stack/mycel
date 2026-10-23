@@ -25,7 +25,7 @@ from ._locks import atomic_transaction, operation_guard, read_snapshot, require_
 from ._reconciliation import _place_payload
 from ._resolver import SourceResolver
 from ._source_refs import SourceAddressError, parse_source_address
-from ._staleness import _NODES, _eligible, _links, _raw, _resolve, _stored_link
+from ._staleness import _NODES, _eligible, _links, _raw, _resolve, _stored_link, inactive_policy_links
 from ._store import checked_store
 
 
@@ -468,8 +468,9 @@ class DriftStore:
         located = self.connection.execute(_NODES, (_eligible(settings), _eligible(settings))).fetchall()
         metadata = {version: file_meta for _, _, version, _, _, file_meta in located}
         generated = {str(row[0]) for row in self.connection.execute('SELECT chunk_id FROM public.mycel_generated_state').fetchall()}
+        inactive = inactive_policy_links(self.connection, settings)
         rows = [row for row in _links(self.connection, _eligible(settings)) if row[1] in repositories and row[5] != 'generated'
-                and row[2] in files and (versions is None or row[2] in versions)]
+                and str(row[0]) not in inactive and row[2] in files and (versions is None or row[2] in versions)]
         reasons = defaultdict(list)
         stale = self.connection.execute('SELECT id,repository,chunk_version,dependency,reason FROM public.mycel_stale_reasons '
             'WHERE repository=ANY(%s) ORDER BY id', (list(repositories),)).fetchall()
@@ -615,6 +616,9 @@ class DriftStore:
                 composed.append(source)
             ended = []
             for source in prior.values():
+                if source['dependency'] in inactive:
+                    composed.append(source)
+                    continue
                 if (not source['active'] and source.get('closed', {}).get('because') == 'still_supported'
                         and not source.get('historyBundle')):
                     # This suppressed exact input is no longer a current

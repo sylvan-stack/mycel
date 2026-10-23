@@ -527,3 +527,42 @@ print(json.dumps(v))
         entities=[link for link in self.origins() if REQ in link['origin']]
         self.assertEqual(len(entities),1,entities)
         self.assertEqual(entities[0]['method'],'stated')
+
+    @proves('MYC-17.13','MYC-14.28',kind='store')
+    def test_pair_cap_bounds_exact_preparation_and_repo_skips_authored_roots(self):
+        original=RecoveryStore.prepare_pair;calls=[]
+        def counted(*args,**kwargs):
+            calls.append(args[4]);return original(*args,**kwargs)
+        with patch.object(RecoveryStore,'prepare_pair',counted):
+            reply=self.run_recovery(k=1,dry_run=True)
+        self.assertEqual(reply['status'],0,reply)
+        self.assertEqual(reply['selected'],1)
+        self.assertEqual(len(calls),1,calls)
+        repository=self.run_recovery(chunk=None,k=1,dry_run=True)
+        self.assertEqual(repository['status'],0,repository)
+        self.assertTrue(repository['capped'])
+        for row in repository['chunks']:
+            self.assertFalse(any(path in row['chunk'] for path in ('ref.md','symbol.md','spec.md')),row)
+
+    @proves('MYC-1.38','MYC-14.15',kind='store')
+    def test_foreign_clone_ref_fault_does_not_make_unchanged_pass_mutate(self):
+        from mycel._cli import Invocation
+        from mycel._ingest import ingest
+        clone=self.base.base/'blue'
+        self.base.git('clone','--no-hardlinks',str(self.code),str(clone),cwd=self.base.base)
+        self.base.config.write_text(self.base.config.read_text()+'code_clones='+json.dumps([str(clone)])+'\n')
+        settings=load_settings(path=self.base.config,home=self.base.base)
+        primary=replace(settings,_cwd=self.code);secondary=replace(settings,_cwd=clone)
+        (self.artifact/'missing.md').write_text('# Missing source\n\n<!-- sources:\nfixture:@code/only.py#only\n-->\n')
+        (clone/'only.py').write_text('def only():\n    return 1\n')
+        def capture(selected):
+            with patch('mycel._build_identity.current_build',return_value=1):
+                result=ingest(Invocation('ingest',repositories=('fixture',),settings=selected))
+            self.assertEqual(result.status,0,result.value)
+            return result.value['repositories']['fixture']
+        capture(primary);capture(secondary)
+        again=capture(secondary)
+        self.assertFalse(again['changed'],again)
+        again=capture(primary)
+        self.assertFalse(again['changed'],again)
+        self.assertFalse(capture(secondary)['changed'])
