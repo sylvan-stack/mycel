@@ -1,22 +1,32 @@
-# Requirement checks
+# Automatic checks
 
-The packaged registry in `src/mycel/data/requirements.json` contains all 333 active requirements from the accepted MYC-0 through MYC-16 Requirements tables. It preserves each requirement's text, origin, check kind and source specification, plus the SHA-256 of each source chapter. MYC-9.10 remains active: its `Dropped` origin requires Mycel not to present code results as documented in the overview.
+Mycel's automatic checks are every `unit` and `store` method under `tests/`.
+A check's kind is its class's `check_kind`: `unit` unless the class says
+`store`, `eval` or `live`. A store class writes `check_kind = "store"` once,
+and every method of the class, inherited ones included, has that kind.
 
-Specification acceptance authorizes implementation. It does not establish runtime acceptance, provider qualification or a distributable working Build. The registry records accepted specifications; `checks/claims.json` separately names the requirements this implementation claims and the exact checks that prove each one.
+Which requirement a check rests on is no longer declared on the test. Since
+23 October 2026 (MYC-D56, SYL-261) each such claim is an Origin Link in the
+Index Store from the test chunk to the requirement's entity, method `proven`
+with a verification `how: check`; `mycel origins` reports them. The packaged
+requirement registry, `checks/claims.json`, the specification snapshot check,
+the `@proves` decorators and `make check-release` are retired.
 
-Run the staged automatic gate from this repository with its prepared environment:
+Specification acceptance authorizes implementation. It does not establish runtime acceptance, provider qualification or a distributable working Build.
+
+Run the automatic gate from this repository with its prepared environment:
 
 ```sh
 make check
 ```
 
-The command uses `.venv/bin/python`, discovers every test and runs all declared
-`unit` and `store` checks. Its terminal summary reports outcomes, check kinds,
-proven and pending requirements, elapsed time and named failures. Six workers
-run by default; `WORKERS=1` selects serial execution. Parallel runs use separate
-spawned processes so a unit check's network denial and a store check's private
-`MYCEL_CONFIG` cannot affect a concurrently executing check in another worker.
-Each worker executes one method at a time.
+The command uses `.venv/bin/python`, discovers every test and runs all `unit`
+and `store` checks. Its terminal summary reports outcomes, check kinds, elapsed
+time and named failures. Six workers run by default; `WORKERS=1` selects serial
+execution. Parallel runs use separate spawned processes so a unit check's
+network denial and a store check's private `MYCEL_CONFIG` cannot affect a
+concurrently executing check in another worker. Each worker executes one
+method at a time.
 
 Select a module, class or method for development, or combine selections in one
 space-separated value:
@@ -29,30 +39,29 @@ make check WORKERS=6 STORE_SETTINGS=/path/to/config.toml REPORT=/path/outside/re
 ```
 
 Selectors retain canonical test IDs and reject unknown selections. A focused
-run executes only those methods and retains a claim only when its entire proof
-list is selected. A passing focused run supplies development evidence; full
-requirement acceptance requires the complete `make check` run and any separate
+run executes only those methods. A passing focused run supplies development
+evidence; acceptance requires the complete `make check` run and any separate
 installed or live qualification required by the task.
 
-`REPORT` writes the complete JSON report; keep it outside the repository. The
-compatible coverage command uses the same runner and emits the original complete
-JSON report on standard output. Its `--select` option can be repeated:
+`REPORT` writes the complete JSON report; keep it outside the repository.
 
-```sh
-.venv/bin/python scripts/check_coverage.py --store-settings ~/.mycel/config.toml --workers 6
-.venv/bin/python scripts/check_coverage.py --store-settings ~/.mycel/config.toml --select test_store_gate --select test_check_store
-```
-
-Every check must name its requirements using `@proves("MYC-0.1", ...)`; the optional `kind` is `unit`, `store`, `eval` or `live`. A claim needs at least one named check that declares that requirement, has its required kind, executes in this run and passes. Missing declarations, duplicate check names, unknown requirements, wrong kinds, skipped checks, expected failures and ordinary failures reject the gate. A passing unrelated test does not qualify a claim.
+Duplicate check names, an unknown `check_kind`, skipped checks, expected
+failures and ordinary failures reject the gate. Eval and live checks are never
+selected by it.
 
 <!-- sources:
 mycel:@code/Makefile
 mycel:@code/scripts/run_checks.py#main
-mycel:@code/scripts/check_coverage.py
+mycel:@code/src/mycel/_coverage.py#check_kind
 mycel:@code/src/mycel/_coverage.py#select_checks
 mycel:@code/src/mycel/_coverage.py#run_checks
 mycel:@code/src/mycel/_coverage.py#_parallel_checks
 -->
+
+## Historical checkpoints before 23 October 2026
+
+The checkpoints below describe the registry, claims and decorator era and are
+kept as history; their counts and gates are not the current contract.
 
 The staged gate permits unclaimed requirements to remain pending. Its report lists all active requirements, their accepted specification status, runtime status and passing proof names. The current private prepared claims name 315 requirements with unit or configured real-store
 proofs. Scoped scan/identity acceptance includes trusted persisted parse reuse,
@@ -161,7 +170,6 @@ mycel:@code/tests/test_summary_publication_guards.py
 -->
 
 <!-- sources:
-mycel:@code/checks/claims.json
 mycel:@code/tests/test_activity_history.py
 mycel:@code/tests/test_activity_retention.py
 mycel:@code/tests/test_packaging_contract.py
@@ -301,35 +309,19 @@ ref-fault isolation, exact pending captured section/heading attribution,
 unverifiable tokenizer coverage, and busy/no-fresh/expired-check index fallback. Search
 performs no pending corpus embedding or semantic classification.
 
+## Store checks and the gate's boundaries
+
 The automatic gate discovers mandatory real PostgreSQL foundation,
 repository-fixture, product-schema, concurrency, evidence, embedding and activity
 checks. `make check` selects the configured dedicated local server from
 `~/.mycel/config.toml`; `STORE_SETTINGS` overrides that path. Each store method
 gets a new generated database; the owner's
-actual database is never opened. The complete staged gate can now pass;
-full contract/release acceptance still fails until all 333 requirements have
-passing proofs, packaged-runtime checks and explicit required live qualification.
-A run without a backend still fails its mandatory store checks.
+actual database is never opened. A run without a backend still fails its
+mandatory store checks.
 
 A task acceptance record may summarize its own executed proofs. Settings, private credential access and offline embedding plans have passing proofs for their owned unit requirements, and the configured automatic store checks now execute against the delegated local server. Task completion does not qualify a working Build, clear another requirement, or remove a native prerequisite. A separate public-dummy Keychain probe verifies the system reader without reading owner credentials; automatic unit checks use bounded child stand-ins.
 
-Verify the source snapshots explicitly when the authoritative specifications are available:
-
-```sh
-.venv/bin/python scripts/check_coverage.py --store-settings ~/.mycel/config.toml --specifications /path/to/mycel/specs
-```
-
-The packaged registry remains usable without that artifact checkout. Snapshot verification rejects a source chapter whose contents changed after extraction. Reconcile the registry and its checks with any accepted specification change before claiming the affected behavior.
-
-The stricter full contract gate additionally rejects every pending requirement:
-
-```sh
-make check-release
-```
-
-This gate intentionally fails while the implementation is incomplete. Passing the staged gate is not full contract acceptance or packaged-runtime qualification. The release check still executes only unit and store checks; it never starts evaluation or paid calls. It rejects focused selectors because full contract acceptance requires the complete inventory.
-
-Evaluation and live checks remain explicitly requested work. The internal `run_on_demand_checks` helper records their executed results with the immutable implementation identity and registry fingerprint. A release tool can give those records to `run_checks` for the same identity; stale records, failed checks and mismatched requirements cannot qualify a claim. The current command-line gate does not load external acceptance records or invoke that helper.
+Evaluation and live checks remain explicitly requested work. The internal `run_on_demand_checks` helper takes each check with its kind and the requirements it proves, executes it and records the result with the immutable implementation identity of the Build. The automatic gate never loads those records or invokes that helper.
 
 Unit checks reject Python socket and native PostgreSQL connection paths. Build checks use deterministic stand-ins rather than embedding, Jev or reviewer providers; provider qualification remains separate work. The test helper's simulated acceptance examples exercise gate behavior and make no service calls.
 
@@ -366,11 +358,10 @@ mycel:@code/scripts/run_checks.py#main
 
 The internal `initialize_store(backend, settings_file)` test hook supplies a per-check initialization callback. Without that hook, the backend runs the actual in-process `mycel init` command with its private config. The foundation's `test_store_gate.StoreGateTests.test_real_store_proofs_are_private_executed_and_discarded` retains a small SQL probe table to test the gate itself. It checks real database/config identity, insert/read, refusal of unsafe database names before connecting, cleanup after success, assertion failure, cancellation and failed initialization, and rejection of uncovered proofs and cleanup failures. Product-schema, dimension/migration and concurrent-lock acceptance checks use their own real generated stores. An explicit empty-store callback lets the store task test init itself. Callbacks are test code, with no product setting or option; a successful probe alone does not qualify another feature.
 
-Override the configured PostgreSQL server for either command:
+Override the configured PostgreSQL server:
 
 ```sh
 make check STORE_SETTINGS=/path/to/config.toml
-.venv/bin/python scripts/check_coverage.py --store-settings /path/to/config.toml
 ```
 
 The runner reads only `store.address`, discards the owner's database name for connections, and administers the generated database through `postgres` or `template1`. It never connects to the owner's database, even when that name itself begins `mycel_check_`. It accepts a password-free PostgreSQL URI with only `sslmode` and `connect_timeout` query options. The default backend uses the product's native connection inside each test worker and private challenge-only Keychain reader; it needs no `psql` executable. A reachable owner-configured server with database creation permission is still required.
@@ -380,11 +371,9 @@ and removes one disposable database through the same journal. Failure produces
 a short server diagnostic containing only a safe `host:port` label and the
 connection/creation fault, without authentication or provider bodies. Unit checks
 can still execute; store checks fail without repeating the unavailable connection.
-Real-store acceptance requires named passing methods against that configured
-server and registration in the claims report; the current source-bound checkpoint
-provides those proofs for completed foundation/store tasks. An exploratory SQL
-probe against an independently selected server is development evidence and does
-not satisfy the owner-configured-server contract.
+Real-store acceptance requires passing store methods against that configured
+server. An exploratory SQL probe against an independently selected server is
+development evidence and does not satisfy the owner-configured-server contract.
 
 For focused unit development, a test file can also run with the standard Python test runner:
 
@@ -393,10 +382,10 @@ PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -p test_coverage.p
 ```
 
 Plain `unittest` discovery retains the same canonical test IDs but supplies no
-store fixture. Store checks run through `make check` or the compatible coverage
-command to receive their private database. The complete automatic gate remains
-the acceptance check because it enforces declaration, execution and claim rules
-in addition to ordinary test assertions. Focused runs never replace it.
+store fixture. Store checks run through `make check` to receive their private
+database. The complete automatic gate remains the acceptance check because it
+enforces check kinds and execution rules in addition to ordinary test
+assertions. Focused runs never replace it.
 
 Installed automatic checks use the sealed pinned interpreter and installed
 product modules. Their ordinary generated-store fixture initializes only the
@@ -408,13 +397,11 @@ Temporary development-identity and mocked SQL tests explicitly select their
 development seams; installed identity, isolation and real initialization tests
 continue to exercise the numbered package.
 
-For a numbered Build, the parent derives the automatic method inventory, registry
-and ordered proof claims from frozen source without importing the tests. The
+For a numbered Build, the parent derives the automatic method inventory and each
+method's class kind from frozen source without importing the tests. The
 installed runner must discover that same complete inventory and return every
-named unit/store outcome plus the exact reconstructed 333-row requirement map.
-Omitted, substituted or extra methods, changed requirement order/kinds, forged
-provider acceptance, or missing named proofs refuse qualification. Records never
-turn a pending eval/live requirement into an automatic pass.
+named unit/store outcome. Omitted, substituted or extra methods or changed
+kinds refuse qualification. Eval/live checks never become an automatic pass.
 
 The packaged gate also exercises real selector and CLI execution at two private
 paths with source/developer access, downloads and writes denied. It checks CWD,
@@ -575,7 +562,6 @@ Focused diagnostics do not qualify this Build or publish a working selection.
 Actual full-Build results and independent review remain pending.
 
 <!-- sources:
-mycel:@code/checks/claims.json
 mycel:@code/src/mycel_build/_automatic.py#automatic_contract
 mycel:@code/src/mycel_build/_qualification.py#qualification_certificate
 -->

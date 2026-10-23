@@ -366,8 +366,8 @@ registry and hexadecimal number:
 ```
 
 This verifies actual installed product imports, interpreter, immutable program
-manifest, exact source and complete check-input manifest, requirement registry,
-suite, settings and command identity. A freeform Build label cannot stand in
+manifest, exact source and complete check-input manifest, suite, settings and
+command identity. A freeform Build label cannot stand in
 for staged execution. A complete unpublished stage may be inspected; the
 operation never marks it working, installs a launcher or changes a selection.
 Missing, changed, failed or withdrawn stage evidence refuses live execution.

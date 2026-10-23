@@ -146,8 +146,7 @@ foreign key. Cross-repository source copies belong to the dependant repository
 and survive source deletion through explicit surviving references. Reporting
 performs no collection. The ordinary native tests use seeded exact versions and
 the gate's default disposable product-store fixture, separate from scripted SQL
-seams and from owner-configured acceptance/Build claims. Pure comparison checks
-declare MYC-16.4; seam checks declare only MYC-13.15. No owner credential,
+seams and from owner-configured acceptance/Build qualification. No owner credential,
 provider endpoint or live database is accessed by those offline checks.
 
 ## Prospective input guard

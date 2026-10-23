@@ -181,7 +181,6 @@ an installed Mycel executable.
 PYTHONPATH=src .venv/bin/python -m mycel --help
 make check
 make check TESTS=test_store_gate
-make check-release
 ```
 
 `make check` uses the prepared `.venv/bin/python`, six worker processes and
