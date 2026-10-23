@@ -452,6 +452,10 @@ class DecisionPayload:
                     "routing": {"revision": routing_revision, "confidenceFloor": canonical_decimal(confidence_floor)}})
 
     @property
+    def question_spec(self):
+        return _PROMPTS
+
+    @property
     def canonical_bytes(self) -> bytes:
         return canonical_json(self.payload)
 
@@ -545,6 +549,10 @@ class OriginDecisionPayload(DecisionPayload):
                     'models': {'jev': {'provider': 'typesafe', 'model': jev_model}, 'review': review},
                     'routing': {'revision': 'mycel-origin-routing-v1',
                                 'confidenceFloor': canonical_decimal(confidence_floor)}})
+
+    @property
+    def question_spec(self):
+        return ORIGIN_QUESTION
 
     @property
     def evidence_locators(self):
@@ -769,3 +777,79 @@ def _decision_texts(decision: DecisionPayload) -> tuple[Mapping, ...]:
             result.extend(context["before"])
             result.extend(context["current"]["members"])
     return tuple(result)
+
+
+AUDIT_QUESTIONS = _PROMPTS['audit']
+AUDIT_LABELS = {
+    'conformance': ('conforms', 'nonconforming', 'insufficient_evidence'),
+    'consistency': ('consistent', 'contradictory', 'insufficient_evidence'),
+    'ambiguity': ('clear', 'ambiguous', 'insufficient_evidence'),
+}
+for _name, _labels in AUDIT_LABELS.items():
+    _question = AUDIT_QUESTIONS[_name]
+    if (_question.get('questionVersion') != f'mycel-audit-{_name}-v1'
+            or tuple(_question.get('labels', ())) != _labels
+            or not isinstance(_question.get('instruction'), str)
+            or len(_question.get('criteria', ())) != 3
+            or not all(isinstance(item, str) for item in _question['criteria'])):
+        raise RuntimeError('The packaged audit question has incompatible fixed data.')
+
+
+@dataclass(frozen=True)
+class AuditDecisionPayload(DecisionPayload):
+    """Three distinct questions; full exact text, never link scores or live guards."""
+    def __post_init__(self):
+        value = _copy(self.payload)
+        _keys(value, {'protocol', 'question', 'questionVersion', 'criteria', 'labels',
+                      'subject', 'origins', 'context', 'models', 'routing'})
+        name = _enum(value['question'], set(AUDIT_LABELS))
+        question = AUDIT_QUESTIONS[name]
+        criteria = question['instruction'] + '\n\n' + '\n'.join(
+            f'{label}: {criterion}' for label, criterion in zip(question['labels'], question['criteria'], strict=True))
+        if (type(value['protocol']) is not int or value['protocol'] != PROTOCOL
+                or value['questionVersion'] != question['questionVersion']
+                or value['labels'] != list(AUDIT_LABELS[name]) or value['criteria'] != criteria):
+            _fail()
+        DecisionText(value['subject'])
+        origins = [DecisionText(item) for item in _members(value['origins'])]
+        if len(origins) != {'conformance': 1, 'consistency': 2, 'ambiguity': 0}[name]:
+            _fail()
+        for texts in (origins, [DecisionText(item) for item in _members(value['context'])]):
+            addresses = [item.payload['snapshot']['place']['address'] for item in texts]
+            if addresses != sorted(set(addresses)):
+                _fail()
+        _keys(value['models'], {'jev', 'review'})
+        _keys(value['models']['jev'], {'provider', 'model'})
+        if (value['models']['jev']['provider'] != 'typesafe'
+                or not isinstance(value['models']['jev']['model'], str)
+                or not _JEV_MODEL.fullmatch(value['models']['jev']['model'])):
+            _fail()
+        _review_model(value['models']['review'])
+        _keys(value['routing'], {'revision', 'confidenceFloor'})
+        if (value['routing']['revision'] != f'mycel-audit-{name}-routing-v1'
+                or canonical_decimal(value['routing']['confidenceFloor']) != value['routing']['confidenceFloor']):
+            _fail()
+        object.__setattr__(self, 'payload', _frozen(value))
+
+    @classmethod
+    def create(cls, *, question, subject, origins=(), context=(), jev_model='jev-1.13.0',
+               review=None, confidence_floor='0.7'):
+        _enum(question, set(AUDIT_LABELS))
+        definition = AUDIT_QUESTIONS[question]
+        return cls({'protocol': PROTOCOL, 'question': question, 'questionVersion': definition['questionVersion'],
+            'criteria': definition['instruction'] + '\n\n' + '\n'.join(
+                f'{label}: {criterion}' for label, criterion in zip(definition['labels'], definition['criteria'], strict=True)),
+            'labels': definition['labels'], 'subject': subject.as_dict(),
+            'origins': [item.as_dict() for item in origins], 'context': [item.as_dict() for item in context],
+            'models': {'jev': {'provider': 'typesafe', 'model': jev_model}, 'review': review},
+            'routing': {'revision': f'mycel-audit-{question}-routing-v1',
+                        'confidenceFloor': canonical_decimal(confidence_floor)}})
+
+    @property
+    def question_spec(self):
+        return AUDIT_QUESTIONS[self.payload['question']]
+
+    @property
+    def evidence_locators(self):
+        return tuple(sorted({item['locator'] for item in
+            [self.payload['subject'], *self.payload['origins'], *self.payload['context']]}))

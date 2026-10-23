@@ -20,8 +20,7 @@ import threading
 import time
 from types import MappingProxyType
 
-from ._classification_payload import (OriginDecisionPayload, ORIGIN_QUESTION, CHOICE_CRITERIA, INSTRUCTION, LABELS,
-                                     DecisionPayload, ReviewerRequest)
+from ._classification_payload import LABELS, DecisionPayload, ReviewerRequest
 from ._credentials import Credentials, CredentialUnavailable, Secret
 from ._errors import MycelError
 from ._safeguards import InvocationPolicy, require_model_call
@@ -103,9 +102,9 @@ class JevRequest:
         # reorder production Choices and change the accepted question.
         return json.dumps({"state": self.decision.as_dict(),
             "model": self.decision.payload["models"]["jev"]["model"],
-            "questions": {"dependency": {"type": "choice", "instructions": ORIGIN_QUESTION["instruction"] if isinstance(self.decision, OriginDecisionPayload) else INSTRUCTION,
+            "questions": {"dependency": {"type": "choice", "instructions": self.decision.question_spec["instruction"],
                 "criteria": dict(zip(self.decision.payload["labels"],
-                    ORIGIN_QUESTION["criteria"] if isinstance(self.decision, OriginDecisionPayload) else CHOICE_CRITERIA, strict=True))}}},
+                    self.decision.question_spec["criteria"], strict=True))}}},
             ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
 
 

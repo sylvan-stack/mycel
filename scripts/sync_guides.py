@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render or check the 20 Mycel 2 guide copies in an explicit corpus folder."""
+"""Render or check the 21 Mycel 2 guide copies in an explicit corpus folder."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import tempfile
 
 
 GUIDES = (
-    "activity", "capture", "classification", "drifts", "embedding", "evidence",
+    "activity", "audit", "capture", "classification", "drifts", "embedding", "evidence",
     "generated", "identity", "origins", "overview", "parsing", "pin-observation", "reading",
     "reconciliation", "recovery", "relations", "retrieval", "source-refs", "store", "summaries",
 )

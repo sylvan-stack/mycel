@@ -339,6 +339,13 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "recovery":
         parser.add_argument("--path", action="append", default=[])
         parser.add_argument("--review", action="store_true")
+    if name == "audit":
+        parser.add_argument("--path", action="append", default=[])
+        parser.add_argument("--deterministic", action="store_true")
+        parser.add_argument("--closed", action="store_true")
+        parser.add_argument("--settle")
+        parser.add_argument("--reason")
+        parser.add_argument("--by")
     if name == "verifications":
         parser.add_argument("--history", action="store_true")
     if name == "overview":
@@ -346,9 +353,9 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "undocumented":
         parser.add_argument("--path", action="append", default=[])
         parser.add_argument("--no-fresh", action="store_true")
-    if name in {"embed", "summaries", "classify", "recovery"}:
+    if name in {"embed", "summaries", "classify", "recovery", "audit"}:
         parser.add_argument("--dry-run", action="store_true")
-    if name in {"classify", "recovery"}:
+    if name in {"classify", "recovery", "audit"}:
         parser.add_argument("--k", type=int)
     if name == "embed":
         parser.add_argument("--retry-failed", action="store_true")
@@ -411,6 +418,17 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "recovery" and (len(repos)>1 or len(parsed.arguments)>1 or
             (parsed.arguments and parsed.path) or (parsed.k is not None and parsed.k<1)):
         raise MycelError(ErrorCode.INVALID_INPUT, "Recovery takes one chunk or one repository with paths, --k, --dry-run and --review.")
+    if name == "audit":
+        from uuid import UUID
+        if (parsed.arguments or len(repos)>1 or parsed.k is not None and parsed.k<1
+                or parsed.by is not None and not parsed.by.strip()
+                or parsed.settle is None and (parsed.reason is not None or parsed.by is not None)
+                or parsed.settle is not None and (not parsed.reason or not parsed.reason.strip()
+                    or parsed.path or parsed.deterministic or parsed.dry_run or parsed.closed or parsed.k is not None)):
+            raise MycelError(ErrorCode.INVALID_INPUT, "Audit takes one repository with report options, or --settle UUID --reason text and optional --by.")
+        if parsed.settle is not None:
+            try: parsed.settle = str(UUID(parsed.settle))
+            except ValueError: raise MycelError(ErrorCode.INVALID_INPUT, "Audit settlement requires an exact finding UUID.") from None
     if name == "verifications" and (parsed.arguments or len(repos) > 1):
         raise MycelError(ErrorCode.INVALID_INPUT, "Verifications takes one repository and optional --history.")
     if name == "overview" and (parsed.arguments or len(repos) > 1):
@@ -481,6 +499,13 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         arguments = tuple(parsed.arguments) + tuple(value for path in normalize_paths(parsed.path) for value in ("--path",path)) + \
             (("--k",str(parsed.k)) if parsed.k is not None else ()) + \
             (("--dry-run",) if parsed.dry_run else ()) + (("--review",) if parsed.review else ())
+    if name == "audit":
+        from ._undocumented import normalize_paths
+        arguments = tuple(value for path in normalize_paths(parsed.path) for value in ("--path",path)) + \
+            (("--k",str(parsed.k)) if parsed.k is not None else ()) + \
+            tuple(flag for flag,value in (("--dry-run",parsed.dry_run),("--deterministic",parsed.deterministic),("--closed",parsed.closed)) if value) + \
+            tuple(value for flag,argument in (("--settle",parsed.settle),("--reason",parsed.reason),("--by",parsed.by))
+                  if argument is not None for value in (flag,argument))
     if name == "classify":
         arguments = (("--k", str(parsed.k)) if parsed.k is not None else ()) + \
                     (("--dry-run",) if parsed.dry_run else ())
@@ -561,6 +586,8 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
             selected_handlers["confirm"] = handle_confirm
             from ._justify import handle_justify
             selected_handlers["justify"] = handle_justify
+            from ._audit_semantic import handle_audit
+            selected_handlers["audit"] = handle_audit
             from ._recovery import handle_recovery
             selected_handlers["recovery"] = handle_recovery
             from ._origins import handle_origins

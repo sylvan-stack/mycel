@@ -1,6 +1,6 @@
 # Command line and settings
 
-This checkout implements the SYL-98 command boundary, SYL-99 strict settings and SYL-100 repository resolution/listing. Start it with `PYTHONPATH=src python3 -m mycel --help`, or install its `mycel` console command in a development environment. `info` reports settings/store diagnostics, `repos` lists configured repositories, `init` creates or explicitly changes the private store, `refs` reports retained declarations and faults, `derive` asserts or withdraws one guarded dependency selection, `relate` asserts or withdraws one exact directed relation, `confirm` records exact guarded verification, `justify` states an Origin Link with verification, `origins` reports Origin Coverage, `recovery` judges local Origin candidates and reviews model claims, `verifications` lists applicable records or retained history, `ingest` publishes complete scoped captures and their dependency/detection/collection changes, `activity` lists ordered history and reads exact entry details, `embed` runs finite scoped embedding, `evaluate` validates evaluation files, measures retrieval through normal search and exercises non-live Drift fixtures, `read` returns one current indexed chunk, `search` returns evidence-bearing schema3 results, `undocumented` lists code without describing sections, `overview` prints stored code directory outlines, `classify` explicitly executes bounded classification, `drifts`, `stale` and `status` report local provenance, and `grep` can append a read-only related search after literal system grep. Other accepted feature commands return `settings` when preflight fails, then `refused` until their implementation tasks supply handlers. A numbered staged package adds its lowercase hexadecimal `build` to `info` and records activity for actual mutations, including initialization and ingest. Unnumbered source development has no Build number and deliberately records no activity; a numbered package with a missing or damaged identity fails with `internal`. A changing ingest has one activity entry for its repository with the exact reply counts and file/identity details; a no-op has none. The independent installed launcher selects numbered Builds; see the [Build guide](builds.md) for installation, explicit selection and maintenance. No unavailable command returns an empty success reply. The [settings guide](settings.md) describes the complete validated schema, defaults and reviewer setup. The [store guide](store.md) describes configured acceptance for initialization, compatibility and connection-owned guards.
+This checkout implements the SYL-98 command boundary, SYL-99 strict settings and SYL-100 repository resolution/listing. Start it with `PYTHONPATH=src python3 -m mycel --help`, or install its `mycel` console command in a development environment. `info` reports settings/store diagnostics, `repos` lists configured repositories, `init` creates or explicitly changes the private store, `refs` reports retained declarations and faults, `derive` asserts or withdraws one guarded dependency selection, `relate` asserts or withdraws one exact directed relation, `confirm` records exact guarded verification, `justify` states an Origin Link with verification, `origins` reports Origin Coverage, `recovery` judges local Origin candidates and reviews model claims, `audit` disputes Origin claims and records human settlements, `verifications` lists applicable records or retained history, `ingest` publishes complete scoped captures and their dependency/detection/collection changes, `activity` lists ordered history and reads exact entry details, `embed` runs finite scoped embedding, `evaluate` validates evaluation files, measures retrieval through normal search and exercises non-live Drift fixtures, `read` returns one current indexed chunk, `search` returns evidence-bearing schema3 results, `undocumented` lists code without describing sections, `overview` prints stored code directory outlines, `classify` explicitly executes bounded classification, `drifts`, `stale` and `status` report local provenance, and `grep` can append a read-only related search after literal system grep. Other accepted feature commands return `settings` when preflight fails, then `refused` until their implementation tasks supply handlers. A numbered staged package adds its lowercase hexadecimal `build` to `info` and records activity for actual mutations, including initialization and ingest. Unnumbered source development has no Build number and deliberately records no activity; a numbered package with a missing or damaged identity fails with `internal`. A changing ingest has one activity entry for its repository with the exact reply counts and file/identity details; a no-op has none. The independent installed launcher selects numbered Builds; see the [Build guide](builds.md) for installation, explicit selection and maintenance. No unavailable command returns an empty success reply. The [settings guide](settings.md) describes the complete validated schema, defaults and reviewer setup. The [store guide](store.md) describes configured acceptance for initialization, compatibility and connection-owned guards.
 
 Help is one JSON object and works without settings. Use `--help` or `-h`, or `<command> --help` for a reserved command. With no arguments, Mycel returns help. The scope boundary preserves repeatable literal `--repo <name>` selections; `ingest`, `embed`, `classify`, `status` and `activity` also accept `--all`. Combining both is invalid. An absent selection resolves from the longest configured folder containing the current directory. Configured `code_clones` are locations of the same repository; a command inside one uses its checkout and policy. `readonly_root` selects the retained `main` baseline for Origin Coverage changes. Organization selectors and directories outside their member folders expand to enabled configured members; explicit repository selection preserves exact names. Folder faults affect the selected repository alone. The resolver has no special repository aliases; MYC-D37 explicitly permits only the prescribed named shared selections and scan exclusions as packaged data. Option abbreviation and unknown options are invalid.
 
@@ -247,6 +247,17 @@ unrelated proposal. A model result creates no verification or authoritative
 source dependency. The [recovery guide](recovery.md) gives source availability,
 exact evidence, reply fields, score caps and finite execution guards.
 
+`mycel audit --repo <name> [--path <path>] [--k <pairs>] [--deterministic]
+[--dry-run] [--closed]` discovers stored rule findings and explicitly executes
+bounded conformance, consistency and ambiguity questions. It inspects every
+link method/band; a negative conformance result can only lower the score.
+`--deterministic` makes no model call or source-file observation; `--dry-run`
+retains no state and buys no call. Settle with `--settle <finding-uuid>
+--reason <text> [--by <actor>]`. Open findings persist until that explicit
+human settlement; `--closed` includes retained settled history. Audit performs
+no ingest or embedding and preserves verifications and source policy. See the
+[audit guide](audit.md) for exact rules, evidence, finite limits and `AuditReply`.
+
 <!-- command-contract:start -->
 ```json
 {
@@ -409,6 +420,25 @@ exact evidence, reply fields, score caps and finite execution guards.
           "--k <pairs>",
           "--dry-run",
           "--review"
+        ]
+      },
+      {
+        "name": "audit",
+        "description": "Audit Origin claims and settle findings",
+        "available": true,
+        "rawArguments": false,
+        "options": [
+          "-h",
+          "--help",
+          "--repo <name>",
+          "--path <path>",
+          "--deterministic",
+          "--dry-run",
+          "--k <pairs>",
+          "--closed",
+          "--settle <uuid>",
+          "--reason <text>",
+          "--by <name>"
         ]
       },
       {
@@ -586,7 +616,7 @@ exact evidence, reply fields, score caps and finite execution guards.
       "--all (where supported)"
     ],
     "buildSelection": "Installed launcher: -v <number> must be first",
-    "stage": "CLI foundation, strict settings and diagnostics, repository listing and atomic removal, complete repository status, complete scoped ingest, read-only ordered activity history and exact entry details, retained reference reporting, guarded dependency and relation assertions, exact verification and read-only history, atomic stated justification and on-demand Origin Coverage, exact indexed chunk reading, evidence-bearing search, scoped embedding, atomic summary builds, summary regeneration and removal, read-only summary status and dry-runs, finite classification and guarded Origin recovery, local provenance reports, and private store initialization; system grep preserves its output and can append a read-only related search tail"
+    "stage": "CLI foundation, strict settings and diagnostics, repository listing and atomic removal, complete repository status, complete scoped ingest, read-only ordered activity history and exact entry details, retained reference reporting, guarded dependency and relation assertions, exact verification and read-only history, atomic stated justification and on-demand Origin Coverage, exact indexed chunk reading, evidence-bearing search, scoped embedding, atomic summary builds, summary regeneration and removal, read-only summary status and dry-runs, finite classification, guarded Origin recovery and human-settled Origin audit, local provenance reports, and private store initialization; system grep preserves its output and can append a read-only related search tail"
   },
   "errors": [
     "invalid_input",

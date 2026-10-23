@@ -170,7 +170,7 @@ class WorkerCrash(unittest.TestCase):
         self.assertEqual(len(registry), ACTIVE_REQUIREMENTS)
         counts = [sum(row.specification == f"MYC-{number}" for row in registry.values())
                   for number in range(SPECIFICATION_COUNT)]
-        self.assertEqual(counts, [12, 39, 27, 21, 29, 18, 23, 18, 29, 13, 14, 13, 15, 21, 28, 12, 15, 15])
+        self.assertEqual(counts, [12, 39, 27, 21, 29, 18, 23, 18, 29, 13, 14, 13, 15, 21, 29, 12, 15, 18])
         self.assertEqual(registry["MYC-9.10"].origin, "Dropped")
         self.assertEqual(registry["MYC-9.10"].kind, "store")
         self.assertIn("not show", registry["MYC-9.10"].text)

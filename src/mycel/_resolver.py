@@ -211,15 +211,15 @@ class SourceResolver:
                     prior.address
                 except SourceAddressError:
                     raise _bad_catalog() from None
-            chunk_ids, names = set(), set()
+            chunk_ids, names = set(), {}
             for chunk in file.chunks:
                 _validate_chunk(chunk)
-                if (not isinstance(chunk.name, str) or not chunk.name or chunk.name in names
+                if (not isinstance(chunk.name, str) or not chunk.name or chunk.name in names and (chunk.kind not in {'req','dec'} or names[chunk.name] not in {'req','dec'})
                         or chunk.identifier in chunk_ids or type(chunk.version) is not int or chunk.version < 1
                         or not _exact(chunk.source, chunk.snapshot_hash)):
                     raise _bad_catalog()
                 chunk_ids.add(chunk.identifier)
-                names.add(chunk.name)
+                names[chunk.name] = chunk.kind
                 if chunk.span is not None:
                     start, end = chunk.span
                     if (type(start) is not int or type(end) is not int or not 0 <= start <= end <= len(file.source)

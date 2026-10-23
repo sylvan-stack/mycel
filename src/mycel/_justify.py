@@ -34,6 +34,13 @@ def public_reference(selection):
     return selection.place.address
 
 
+def confidence_band(score, *, model_claim=False):
+    """One score-to-band policy; model claims cannot claim a human proof."""
+    if model_claim:
+        return 'inferred' if score >= .5 else 'candidate'
+    return 'asserted' if score > .9 else 'proven' if score >= .8 else 'inferred' if score >= .5 else 'candidate'
+
+
 def checked_link(value):
     """Validate retained statement data without turning the claim into a proof."""
     required = {'chunk', 'origin', 'method', 'confidenceScore', 'confidence', 'who', 'when'}
