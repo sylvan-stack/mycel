@@ -40,7 +40,7 @@ REQUIREMENT_ID = re.compile(r"MYC-(?:[0-9]|1[0-7])\.[1-9][0-9]*\Z")
 # appended on 20 October 2026 (SYL-232); nine clone and justification rows
 # were appended on 21 October 2026 (SYL-260). MYC-17 remains a draft.
 SPECIFICATION_COUNT = 18
-ACTIVE_REQUIREMENTS = 362
+ACTIVE_REQUIREMENTS = 366
 SPECIFICATION_STATUSES = frozenset({"accepted", "draft"})
 CHECK_DATABASE = re.compile(r"mycel_check_[a-z0-9_]+\Z")
 _WORKER_CANCEL_GRACE = 30

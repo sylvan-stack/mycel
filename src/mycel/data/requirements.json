@@ -58,7 +58,7 @@
       "specification_status": "accepted"
     },
     "14-drift-detection.md": {
-      "sha256": "0a9f4332fb82b92e565fe8950a7f073bce33167633cb67e8a78665a47a6d15c1",
+      "sha256": "ac9b9b8ee2f01eea1f2d06000958eda844e698eba96018405dac6a4c7087da80",
       "specification_status": "accepted"
     },
     "15-distribution-and-replacement.md": {
@@ -70,7 +70,7 @@
       "specification_status": "accepted"
     },
     "17-justification.md": {
-      "sha256": "2f64e222b3bf705411fa5645427f8db1169f4b45464f8bbaa52452e738aa680c",
+      "sha256": "49876bbdd4d4dd7b27ff43df2db23552c5f5c7f3b61a2cbff89ad6d23ef64522",
       "specification_status": "draft"
     }
   },
@@ -2970,6 +2970,38 @@
       "origin": "New",
       "kind": "store",
       "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.16",
+      "specification": "MYC-17",
+      "text": "produce the seven specified deterministic Origin audit findings from one current clone-scoped Index Store snapshot, name each disputed chunk/entity/link or diagnostic, honor path and reasoned needs-nothing scope, and make no model call or source-file access",
+      "origin": "New",
+      "kind": "store",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.17",
+      "specification": "MYC-17",
+      "text": "audit every Origin method and band for conformance, each pair of Origins for consistency and each current requirement for ambiguity under exact guarded finite classification; retain negative findings with confidence and evidence, and atomically lower only a nonconforming link score without changing verification or source policy",
+      "origin": "New",
+      "kind": "store",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-17.18",
+      "specification": "MYC-17",
+      "text": "keep audit findings visible until explicit reasoned operator settlement, retain settled history and exact unchanged-result reuse without another call, protect unsettled/in-flight evidence and bound settled bundles and unreferenced ended requests to the newest 1000 per repository",
+      "origin": "New",
+      "kind": "store",
+      "source": "17-justification.md"
+    },
+    {
+      "id": "MYC-14.29",
+      "specification": "MYC-14",
+      "text": "classify conformance, Origin consistency and requirement ambiguity with distinct fixed audit questions, exact complete evidence and isolated caches, canonical confidence routing and the same quiet period, finite budgets and strict score-bearing reviewer; refuse obsolete or incomplete effects",
+      "origin": "New",
+      "kind": "store",
+      "source": "14-drift-detection.md"
     }
   ]
 }
