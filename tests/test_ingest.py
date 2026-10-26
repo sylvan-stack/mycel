@@ -629,34 +629,74 @@ class IngestStepStoreTests(unittest.TestCase):
     def second(self, connection):
         return sorted(path for path, source in self.disk_text(connection).items() if source == b'# Note\nSecond.\n')
 
-    def test_steps_write_a_bounded_share_keep_it_and_retire_removed_files_only_in_the_last_step(self):
+    def progress(self):
+        with self.base.connect() as connection:
+            return connection.execute("SELECT pass_progress,last_pass_at FROM public.mycel_repository_state "
+                                      "WHERE repository='fixture'").fetchone()
+
+    def test_steps_handle_a_bounded_share_keep_it_and_retire_removed_files_once_none_changed_remains(self):
         (self.base.artifact / 'old.md').write_bytes(b'# Old\nRemoved on disk.\n')
         self.edited_notes()
         (self.base.artifact / 'old.md').unlink()
-        left, steps = [], 0
-        while True:
+        replies = []
+        while not replies or not replies[-1]['complete']:
             status, reply = self.invoke('--repo', 'fixture', '--files', '1')
             self.assertEqual(status, 0, reply)
             fixture = reply['repositories']['fixture']
-            steps += 1
-            self.assertEqual(fixture['files']['changed'], 1)
-            left.append(fixture['remaining']['files'])
-            self.assertEqual(fixture['complete'], left[-1] == 0)
-            self.assertEqual(fixture['files']['removed'], 0 if left[-1] else 1)
+            replies.append(fixture)
             with self.base.connect() as connection:
-                self.assertEqual('old.md' in self.disk_text(connection), bool(left[-1]))
-            if fixture['complete']:
-                break
-        # Each step writes one file and the next finds one fewer; removing a
-        # file also changes the recorded file count of every file beside it.
-        self.assertEqual(left, list(range(steps - 1, -1, -1)))
-        self.assertGreaterEqual(steps, 3)
+                self.assertEqual('old.md' in self.disk_text(connection), bool(fixture['remaining']['files']))
+            self.assertEqual(self.progress()[0] is None, fixture['complete'] or bool(fixture['remaining']['files']))
+        writing = [reply for reply in replies if reply['files']['changed']]
+        refreshing = replies[len(writing):]
+        # Each step writes one changed file and the next finds one fewer;
+        # removing a file also changes the recorded file count beside it.
+        self.assertEqual([reply['remaining']['files'] for reply in writing], list(range(len(writing) - 1, -1, -1)))
+        self.assertGreaterEqual(len(writing), 3)
+        self.assertEqual([reply['files']['removed'] for reply in writing], [0] * (len(writing) - 1) + [1])
+        # Then each step refreshes one unchanged file, resuming after the last.
+        self.assertTrue(refreshing)
+        self.assertEqual([reply['remaining'] for reply in refreshing],
+                         [{'files': 0, 'refresh': left} for left in range(len(refreshing) - 1, -1, -1)])
+        self.assertEqual(writing[-1]['remaining']['refresh'], len(refreshing))
+        self.assertTrue(all(reply['classificationCheck']['reason'] == 'step' for reply in replies))
+        self.assertIsNotNone(self.progress()[1])
         with self.base.connect() as connection:
             self.assertEqual(len(self.second(connection)), 3)
-        status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+        status, reply = self.invoke('--repo', 'fixture', '--files', '1000')
         self.assertEqual(status, 0, reply)
         fixture = reply['repositories']['fixture']
-        self.assertEqual((fixture['changed'], fixture['remaining'], fixture['complete']), (False, {'files': 0}, True))
+        self.assertEqual((fixture['changed'], fixture['remaining'], fixture['complete']),
+                         (False, {'files': 0, 'refresh': 0}, True))
+
+    def test_the_refresh_resumes_after_its_last_file_and_starts_again_after_a_change(self):
+        for number in range(4):
+            (self.base.artifact / f'note{number}.md').write_bytes(b'# Note\nFirst.\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        (self.base.artifact / 'note0.md').write_bytes(b'# Note\nSecond.\n')
+        status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+        self.assertEqual(status, 0, reply)
+        unchanged = reply['repositories']['fixture']['remaining']['refresh']
+        self.assertGreaterEqual(unchanged, 4)
+        self.assertIsNotNone(self.progress()[0])
+        from mycel import _ingest
+        for left in (unchanged - 1, unchanged - 2):
+            status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+            self.assertEqual((status, reply['repositories']['fixture']['remaining']), (0, {'files': 0, 'refresh': left}))
+            # An interrupted step keeps the place the last step reached.
+            with patch.object(_ingest._CompleteProducer, '__call__', side_effect=KeyboardInterrupt):
+                self.assertEqual(self.invoke('--repo', 'fixture', '--files', '1')[0], 2)
+        self.assertEqual(len(self.progress()[0]['refreshedThrough']), 3)
+        (self.base.artifact / 'note0.md').write_bytes(b'# Note\nThird.\n')
+        status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+        self.assertEqual((status, reply['repositories']['fixture']['remaining']), (0, {'files': 0, 'refresh': unchanged}))
+        status, reply = self.invoke('--repo', 'fixture', '--files', '2')
+        self.assertEqual((status, reply['repositories']['fixture']['remaining']),
+                         (0, {'files': 0, 'refresh': unchanged - 2}))
+        status, reply = self.invoke('--repo', 'fixture', '--files', '1000')
+        self.assertEqual((status, reply['repositories']['fixture']['complete']), (0, True))
+        self.assertIsNone(self.progress()[0])
 
     def test_an_interrupted_step_loses_only_itself(self):
         self.edited_notes()
@@ -669,7 +709,7 @@ class IngestStepStoreTests(unittest.TestCase):
             self.assertEqual(len(self.second(connection)), 1)
         status, reply = self.invoke('--repo', 'fixture', '--files', '1')
         self.assertEqual(status, 0, reply)
-        self.assertEqual(reply['repositories']['fixture']['remaining'], {'files': 1})
+        self.assertEqual(reply['repositories']['fixture']['remaining'], {'files': 1, 'refresh': 0})
         with self.base.connect() as connection:
             self.assertEqual(len(self.second(connection)), 2)
 
@@ -690,8 +730,8 @@ class IngestStepStoreTests(unittest.TestCase):
             status, reply = self.invoke('--repo', 'fixture', '--files', '1')
             self.assertEqual(status, 0, reply)
             replies.append(reply['repositories']['fixture'])
-        self.assertEqual(len(replies), 2)
-        self.assertEqual(replies[-1]['stale'], 0)
+        self.assertEqual([reply['files']['changed'] for reply in replies[:3]], [1, 1, 0])
+        self.assertTrue(all(reply['stale'] == 0 for reply in replies))
         with self.base.connect() as connection:
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_stale_reasons').fetchone()[0], 0)
 
@@ -701,14 +741,14 @@ class IngestStepStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             before = self.base.resolve(connection, 'fixture:@artifact/moved.md#Moved').selection.members[0].chunk.identifier
         os.rename(self.base.artifact / 'moved.md', self.base.artifact / 'zmoved.md')
-        steps = 0
+        writing = 0
         while True:
             status, reply = self.invoke('--repo', 'fixture', '--files', '1')
             self.assertEqual(status, 0, reply)
-            steps += 1
+            writing += bool(reply['repositories']['fixture']['files']['changed'])
             if reply['repositories']['fixture']['complete']:
                 break
-        self.assertEqual(steps, 3)
+        self.assertEqual(writing, 3)
         with self.base.connect() as connection:
             after = self.base.resolve(connection, 'fixture:@artifact/zmoved.md#Moved').selection.members[0].chunk.identifier
             self.assertNotIn('moved.md', self.disk_text(connection))

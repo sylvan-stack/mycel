@@ -77,6 +77,10 @@ def _file_edges(connection, repository: str) -> frozenset:
                      for row in connection.execute(_FILE_EDGES_SQL, (repository, repository)).fetchall())
 
 
+def _refresh_order(file):
+    return (location_key(file.location), file.binding.primary.root, file.binding.primary.path)
+
+
 def _sources_first(files, edges: frozenset) -> tuple:
     """Order captured files so a source precedes the files resting on it.
 
@@ -313,10 +317,12 @@ class LocatedCaptureStore:
         the mutations of MYC-16 require.
 
         With `file_limit` the publication is one step of a pass (SYL-286): it
-        writes at most that many changed files, sources before their dependants,
-        with their own dependency work, and replies with the changed files that
-        remain. Retiring absent locations, the read inventory and the refresh of
-        unchanged files wait for the step in which no changed file remains.
+        handles at most that many files. Changed files come first, sources
+        before their dependants, with their own dependency work. Once none
+        remains, absent locations retire and the unchanged files are refreshed
+        in their order, resuming after the last file an earlier step refreshed
+        (`pass_progress`). The read inventory waits for the step that ends the
+        pass. The reply names the changed and unrefreshed files that remain.
         """
         settings.require_valid(require_store=False)
         if not isinstance(manifest, (CaptureManifest, str)):
@@ -563,8 +569,8 @@ class LocatedCaptureStore:
                                                 key=lambda row: (str(row[0]), str(row[4])))
                 if used_moves != {move.identifier for move in recognized_moves}:
                     _invalid('Every recognized move must bind one captured disk destination.')
-                whole = remaining == 0
-                retired = tuple(str(row[4]) for row in rows if str(row[4]) not in kept) if whole else ()
+                settled = remaining == 0
+                retired = tuple(str(row[4]) for row in rows if str(row[4]) not in kept) if settled else ()
                 # Replaced locations were already removed by _write_file; old
                 # absent location rows retire here. Versions and owners survive.
                 for row in rows:
@@ -579,6 +585,35 @@ class LocatedCaptureStore:
                         counts['chunks']['removed'] += 1
                         decisions.append(IdentityChange(row[7].get('root', row[1]), row[7].get('path', row[2]), row[9],
                             UUID(chunk_id), 'removed', item[10].get('name', item[5]['name'])))
+                refreshing, refresh_left, through = (), 0, None
+                if file_limit is not None and settled:
+                    # The refresh of unchanged files is the rest of the pass. It
+                    # resumes after the last file an earlier step refreshed, and
+                    # starts again when this step wrote or retired a file.
+                    # A file this step wrote is refreshed with its writing; the
+                    # walk passes it and stops at the first unchanged file
+                    # beyond the step's share.
+                    ordered = sorted(applied, key=_refresh_order)
+                    progress = connection.execute('SELECT pass_progress FROM public.mycel_repository_state '
+                        'WHERE repository=%s', (repository.name,)).fetchone()
+                    if not written and not retired and progress is not None and progress[0] is not None:
+                        through = tuple(progress[0]['refreshedThrough'])
+                        ordered = [file for file in ordered if not through or _refresh_order(file) > through]
+                    walked, refreshing = 0, []
+                    for file in ordered:
+                        if not file.changed:
+                            if len(refreshing) == file_limit - written:
+                                break
+                            refreshing.append(file)
+                        walked += 1
+                        through = _refresh_order(file)
+                    refresh_left = len(ordered) - walked
+                whole = settled and refresh_left == 0
+                progress = ({'refreshedThrough': list(through or ())} if file_limit is not None and settled
+                            and not whole else None)
+                connection.execute('UPDATE public.mycel_repository_state SET pass_progress=%s WHERE repository=%s '
+                    'AND pass_progress IS DISTINCT FROM %s', (None if progress is None else Jsonb(progress),
+                    repository.name, None if progress is None else Jsonb(progress)))
                 inventory = [{'location': location.id.record(), 'commit': location.commit,
                               'policyHash': manifest.policy_hash} for location in manifest.locations]
                 inventory = sorted([*(item for item in (() if state is None else state[0])
@@ -590,10 +625,12 @@ class LocatedCaptureStore:
                         (repository.name, Jsonb(inventory)))
                 changed = bool(file_changes) or inventory_changed
                 if file_limit is not None:
-                    counts['remaining'] = {'files': remaining}
-                # A step before the last refreshes only the files it wrote; the
-                # last step refreshes every unchanged file as a whole pass does.
-                output = LocatedCaptureResult(tuple(applied if whole else (file for file in applied if file.changed)),
+                    counts['remaining'] = {'files': remaining, 'refresh': refresh_left}
+                # A step refreshes the files it wrote and its share of the
+                # unchanged files; a whole pass refreshes every file.
+                selected = {id(file) for file in refreshing}
+                output = LocatedCaptureResult(tuple(applied if file_limit is None else
+                                                    (file for file in applied if file.changed or id(file) in selected)),
                                               retired, changed, counts, repository.name, activity, reply_counts)
                 for file in output.files:
                     if file.changed and file_handoff is not None:

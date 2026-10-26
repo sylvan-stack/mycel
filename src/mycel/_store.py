@@ -30,7 +30,7 @@ from ._errors import ErrorCode, MycelError
 from ._locks import structure_guard
 
 
-STORE_FORMAT = 3
+STORE_FORMAT = 4
 REQUIRED_EXTENSIONS = frozenset({"pg_search", "vector"})
 _ALLOWED_EXTENSIONS = REQUIRED_EXTENSIONS | {"plpgsql"}
 _DIMENSIONS = frozenset({256, 512, 1024, 2048})
@@ -127,9 +127,10 @@ TABLES = (
           _c("backend_pid", "integer"), _c("backend_start", "timestamp with time zone"),
           _c("index_generation", "uuid")), ("id",), unique=(("liveness_key",),),
           foreign=(_fk("liveness_key", "mycel_lock_keys", "key", "RESTRICT"),)),
+    # A pass run in steps keeps how far it got in `pass_progress` (SYL-286).
     Table("mycel_repository_state", (_c("repository", "text"),
-          _c("last_pass_at", "timestamp with time zone", True), _c("read_locations", "jsonb")),
-          ("repository",)),
+          _c("last_pass_at", "timestamp with time zone", True), _c("read_locations", "jsonb"),
+          _c("pass_progress", "jsonb", True)), ("repository",)),
     # Address ownership belongs to a location. Retained branches and retargeted
     # disk roots can hold different physical files at the same portable place.
     Table("mycel_files", (_c("id", "uuid"), _c("repository", "text"), _c("root", "text"),
@@ -319,8 +320,12 @@ class Migration:
     validate: Callable[[Any], None]
 
 
-# The predecessor is exact and bounded: no older inspection grants permission
-# to reinterpret arbitrary records or accept a damaged catalogue.
+# The predecessors are exact and bounded: no older inspection grants permission
+# to reinterpret arbitrary records or accept a damaged catalogue. Formats 2 and
+# 3 share one structure; format 4 adds the repository's step progress.
+_FORMAT_3_TABLES = tuple(Table("mycel_repository_state", (_c("repository", "text"),
+    _c("last_pass_at", "timestamp with time zone", True), _c("read_locations", "jsonb")), ("repository",))
+    if table.name == "mycel_repository_state" else table for table in TABLES)
 _FORMAT_1_TABLES = tuple(Table("mycel_verifications", (
     _c("id", "uuid"), _c("repository", "text"), _c("chunk_version", "bigint"),
     _c("recorded_at", "timestamp with time zone"), _c("record", "jsonb"),
@@ -328,7 +333,7 @@ _FORMAT_1_TABLES = tuple(Table("mycel_verifications", (
         _fk("repository", "mycel_repository_state", "repository"),
         _fk("chunk_version", "mycel_chunk_versions"),
         _fk("evidence_owner", "mycel_evidence_owners", delete="RESTRICT")))
-    if table.name == "mycel_verifications" else table for table in TABLES)
+    if table.name == "mycel_verifications" else table for table in _FORMAT_3_TABLES)
 
 _RELATIONS_SQL = """SELECT n.nspname, c.relname, c.relkind
 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -505,7 +510,7 @@ def _migrate_verification_lifetime(connection) -> None:
 
 def _validate_verification_lifetime(connection) -> None:
     dimensions = connection.execute("SELECT dimensions FROM public.mycel_store").fetchone()[0]
-    fault = _shape_fault(connection, dimensions)
+    fault = _shape_fault(connection, dimensions, _FORMAT_3_TABLES)
     if fault is not None:
         raise MycelError("store_format", fault)
     from ._verification_reader import validate_verification_record
@@ -528,7 +533,7 @@ def _migrate_entity_kinds(connection) -> None:
     if len(metadata) != 1 or metadata[0][0] is not True or metadata[0][1] != 2:
         raise MycelError("store_format", "The entity migration requires store format 2.")
     dimensions = connection.execute("SELECT dimensions FROM public.mycel_store").fetchone()[0]
-    fault = _shape_fault(connection, dimensions)
+    fault = _shape_fault(connection, dimensions, _FORMAT_3_TABLES)
     if fault is not None:
         raise MycelError("store_format", "The entity migration found an incompatible predecessor catalogue.")
     kinds = connection.execute("SELECT count(*) FROM public.mycel_chunks WHERE kind = ANY(%s)",
@@ -539,6 +544,23 @@ def _migrate_entity_kinds(connection) -> None:
 
 def _validate_entity_kinds(connection) -> None:
     dimensions = connection.execute("SELECT dimensions FROM public.mycel_store").fetchone()[0]
+    fault = _shape_fault(connection, dimensions, _FORMAT_3_TABLES)
+    if fault is not None:
+        raise MycelError("store_format", fault)
+
+
+def _migrate_pass_progress(connection) -> None:
+    """Format 3 to 4: an empty step progress column; no record is reinterpreted."""
+    metadata = connection.execute("SELECT singleton, format, dimensions FROM public.mycel_store").fetchall()
+    if len(metadata) != 1 or metadata[0][0] is not True or metadata[0][1] != 3:
+        raise MycelError("store_format", "The step progress migration requires store format 3.")
+    if _shape_fault(connection, metadata[0][2], _FORMAT_3_TABLES) is not None:
+        raise MycelError("store_format", "The step progress migration found an incompatible predecessor catalogue.")
+    connection.execute("ALTER TABLE public.mycel_repository_state ADD COLUMN pass_progress jsonb")
+
+
+def _validate_pass_progress(connection) -> None:
+    dimensions = connection.execute("SELECT dimensions FROM public.mycel_store").fetchone()[0]
     fault = _shape_fault(connection, dimensions)
     if fault is not None:
         raise MycelError("store_format", fault)
@@ -547,6 +569,7 @@ def _validate_entity_kinds(connection) -> None:
 MIGRATIONS: Mapping[int, Migration] = MappingProxyType({
     1: Migration(_migrate_verification_lifetime, _validate_verification_lifetime),
     2: Migration(_migrate_entity_kinds, _validate_entity_kinds),
+    3: Migration(_migrate_pass_progress, _validate_pass_progress),
 })
 
 

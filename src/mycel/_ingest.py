@@ -181,7 +181,7 @@ class _CompleteProducer(LocatedDependencyProducer):
             changed = super().__call__(connection, result)
         except EvidenceError as error:
             raise _changed_since_ingest(error) from None
-        if not self.pending_repositories and not result.counts.get('remaining', {}).get('files'):
+        if not self.pending_repositories and not any(result.counts.get('remaining', {}).values()):
             # Successful observation time is operational metadata; a timestamp
             # alone creates no identity decision or activity entry.
             connection.execute('UPDATE public.mycel_repository_state SET last_pass_at=clock_timestamp() '
@@ -315,8 +315,8 @@ def _ingest(invocation, state):
                             {'ran': True, 'changed': applied.changed, 'stale': applied.counts.get('stale', 0), **applied.counts})
                         if file_limit is not None:
                             # One step of a pass: the pass is complete when no
-                            # changed file remains for a further step (SYL-286).
-                            reply['complete'] = not reply.get('remaining', {}).get('files')
+                            # changed or unrefreshed file remains (SYL-286).
+                            reply['complete'] = not any(reply.get('remaining', {}).values())
                         repositories[name] = reply
                         completed.append(name)
                         state['started'] = True
@@ -331,10 +331,16 @@ def _ingest(invocation, state):
                 # provider, saved plan or vector is requested without --embed.
                 reply['embedding'] = _embedding_counts(connection, settings, name)
                 reply['pending'] = reply['embedding']['versions']['pending']
-                from ._classification_local import reconcile_local
-                reply['classificationCheck'] = reconcile_local(connection, settings, name, activity=activity)
-                if reply['classificationCheck']['reused']:
-                    final_counts[name, 'classify'] = reply['classificationCheck']
+                if file_limit is not None:
+                    # The local check reads every Drift of the repository, so a
+                    # step leaves it to search and to a whole pass (SYL-286).
+                    reply['classificationCheck'] = {'checked': False, 'complete': False, 'reason': 'step',
+                                                    'reused': 0}
+                else:
+                    from ._classification_local import reconcile_local
+                    reply['classificationCheck'] = reconcile_local(connection, settings, name, activity=activity)
+                    if reply['classificationCheck']['reused']:
+                        final_counts[name, 'classify'] = reply['classificationCheck']
             except MycelError as error:
                 if name in completed:
                     repositories[name]['error'] = error.to_dict()['error']

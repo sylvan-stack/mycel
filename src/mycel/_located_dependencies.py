@@ -491,7 +491,7 @@ class LocatedDependencyProducer:
                     edited, because='edited', at=self.captured_at) or primary_changed
         # Collection follows the whole capture: a step that left changed files
         # for a later step collects nothing yet (SYL-286).
-        partial = bool(result.counts.get('remaining', {}).get('files'))
+        partial = any(result.counts.get('remaining', {}).values())
         if self.collection_manifest is not None and not self.pending_repositories and not partial:
             from ._collection import CollectionStore
             removed_edges = connection.execute("""SELECT d.repository,count(*) FROM public.mycel_edges e
