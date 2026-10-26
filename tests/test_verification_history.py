@@ -72,6 +72,7 @@ class VerificationHistoryStoreTests(unittest.TestCase):
                            'REFERENCES public.mycel_chunk_versions(id) ON DELETE CASCADE')
         connection.execute('ALTER TABLE public.mycel_verifications DROP COLUMN chunk_id')
         connection.execute('ALTER TABLE public.mycel_repository_state DROP COLUMN pass_progress')
+        connection.execute('DROP TABLE public.mycel_judgements')
         connection.execute('UPDATE public.mycel_store SET format=1')
 
     def test_old_exact_version_collects_but_history_and_owned_evidence_survive_and_exact_text_return_applies(self):
