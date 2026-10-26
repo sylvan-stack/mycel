@@ -649,8 +649,7 @@ class IngestStepStoreTests(unittest.TestCase):
             self.assertEqual(self.progress()[0] is None, fixture['complete'] or bool(fixture['remaining']['files']))
         writing = [reply for reply in replies if reply['files']['changed']]
         refreshing = replies[len(writing):]
-        # Each step writes one changed file and the next finds one fewer;
-        # removing a file also changes the recorded file count beside it.
+        # Each step writes one changed file and the next finds one fewer.
         self.assertEqual([reply['remaining']['files'] for reply in writing], list(range(len(writing) - 1, -1, -1)))
         self.assertGreaterEqual(len(writing), 3)
         self.assertEqual([reply['files']['removed'] for reply in writing], [0] * (len(writing) - 1) + [1])
@@ -668,6 +667,20 @@ class IngestStepStoreTests(unittest.TestCase):
         fixture = reply['repositories']['fixture']
         self.assertEqual((fixture['changed'], fixture['remaining'], fixture['complete']),
                          (False, {'files': 0, 'refresh': 0}, True))
+
+    def test_a_new_file_updates_the_file_count_of_its_neighbours_without_making_them_changed(self):
+        self.edited_notes(2)
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        (self.base.artifact / 'added.md').write_bytes(b'# Added\nNew.\n')
+        status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+        self.assertEqual(status, 0, reply)
+        fixture = reply['repositories']['fixture']
+        self.assertEqual((fixture['files']['changed'], fixture['remaining']['files']), (1, 0))
+        with self.base.connect() as connection:
+            counts = [row[0] for row in connection.execute("""SELECT l.metadata->'captureFileCount'
+                FROM public.mycel_file_locations l JOIN public.mycel_file_versions v ON v.id=l.file_version
+                JOIN public.mycel_files f ON f.id=v.file_id WHERE f.repository='fixture' AND l.kind='disk'""")]
+        self.assertEqual(set(counts), {len(counts)})
 
     def test_the_refresh_resumes_after_its_last_file_and_starts_again_after_a_change(self):
         for number in range(4):

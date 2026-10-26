@@ -77,6 +77,15 @@ def _file_edges(connection, repository: str) -> frozenset:
                      for row in connection.execute(_FILE_EDGES_SQL, (repository, repository)).fetchall())
 
 
+# Fields every file of a location shares; they change when another file of the
+# location is added or removed, or when its branch moves.
+_LOCATION_FIELDS = frozenset({'captureFileCount', 'commit', 'trees'})
+
+
+def _own_metadata(metadata):
+    return {key: value for key, value in metadata.items() if key not in _LOCATION_FIELDS}
+
+
 def _refresh_order(file):
     return (location_key(file.location), file.binding.primary.root, file.binding.primary.path)
 
@@ -405,7 +414,7 @@ class LocatedCaptureStore:
                 counts = {'files': {'scanned': sum(len(location.files) for location in manifest.locations),
                                    'changed': 0, 'removed': 0},
                           'chunks': {reason: 0 for reason in ('unchanged', 'edited', 'renamed', 'new', 'removed')}}
-                written, remaining = 0, 0
+                written, remaining, relabelled = 0, 0, 0
                 order = None if file_limit is None else _file_edges(connection, repository.name)
                 for location in manifest.locations:
                     key, used = location_key(location.id), set()
@@ -529,9 +538,17 @@ class LocatedCaptureStore:
                         plan = reconcile_file(_inputs(captured), known)
                         prior_ids = set() if old is None else {str(item[1]) for item in current_chunks if item[7] == old[4]}
                         plan = replace(plan, removed=tuple(item for item in plan.removed if item.chunk_id in prior_ids))
-                        unchanged = (old is not None and bytes(old[6]) == captured.source and old[3] == captured.corpus
-                            and old[7] == metadata and all(item.reason == 'unchanged' and item.version_action == 'reuse_existing'
-                                                         for item in plan.decisions) and not plan.removed)
+                        same = (old is not None and bytes(old[6]) == captured.source and old[3] == captured.corpus
+                            and all(item.reason == 'unchanged' and item.version_action == 'reuse_existing'
+                                    for item in plan.decisions) and not plan.removed)
+                        unchanged = same and old[7] == metadata
+                        if same and not unchanged and _own_metadata(old[7]) == _own_metadata(metadata):
+                            # Only fields of the whole location moved (its file
+                            # count, commit or trees): the file is updated in
+                            # place and stays unchanged (SYL-286).
+                            connection.execute('UPDATE public.mycel_file_locations SET metadata=%s WHERE id=%s',
+                                               (Jsonb(metadata), old[4]))
+                            unchanged, relabelled = True, relabelled + 1
                         if unchanged:
                             binding = FileBinding(identifier, str(old[5]), str(old[4]), primary, addresses)
                             versions = tuple((item.chunk_id, item.version_id) for item in plan.decisions)
@@ -623,7 +640,7 @@ class LocatedCaptureStore:
                     connection.execute('INSERT INTO public.mycel_repository_state VALUES (%s,NULL,%s) '
                         'ON CONFLICT(repository) DO UPDATE SET read_locations=EXCLUDED.read_locations',
                         (repository.name, Jsonb(inventory)))
-                changed = bool(file_changes) or inventory_changed
+                changed = bool(file_changes) or inventory_changed or bool(relabelled)
                 if file_limit is not None:
                     counts['remaining'] = {'files': remaining, 'refresh': refresh_left}
                 # A step refreshes the files it wrote and its share of the
