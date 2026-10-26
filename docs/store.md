@@ -34,7 +34,7 @@ contain sanitized reasons, and the successful connection closes on every exit.
 An empty private database needs server extensions `pg_search` and `vector`.
 Initialization creates the Mycel tables, a BM25 index over the guarded chunk-version
 search projection and a cosine HNSW index over embedding parts. It writes mandatory
-format 3, dimensions and a fresh index-generation UUID, with no repository,
+format 4, dimensions and a fresh index-generation UUID, with no repository,
 settings or feature-default rows. Numbered packages also record the exact
 invocation and a completed global `init` audit in that schema transaction;
 unnumbered development/fixture initialization writes the schema only. The generation stays fixed through normal
@@ -160,7 +160,19 @@ other, but never the chunk row itself, so a withdrawn id stays reserved. The
 format step from 2 to 3 changes no table: it validates the format-2 structure
 and that no entity chunk exists yet, then raises the number, so that an older
 Build, which would read those chunks as code, refuses the store. `mycel init`
-runs it in one transaction and `mycel info` reports `format: 3`.
+runs it in one transaction.
+
+## Format 4: step progress (MYC-1.40)
+
+Format 4 adds the nullable column `pass_progress` to `mycel_repository_state`.
+A pass run in steps (`mycel ingest --files <n>`) writes there how far its
+refresh of unchanged files got, as `{"refreshedThrough": [location, root,
+path]}`, in the same transaction as the step's work, and clears it when the
+pass completes or a pass runs without steps. The format step from 3 to 4
+validates the format-3 structure and adds the empty column; no record is
+reinterpreted, and an older Build refuses the store. `mycel init` runs every
+missing step in order, each in its own transaction, and `mycel info` reports
+`format: 4`.
 
 ## Origin Links and durability
 

@@ -59,6 +59,69 @@ class LocatedDependencyProducer:
             JOIN public.mycel_files p ON p.id=v.file_id WHERE p.repository=%s
             ORDER BY l.file_location,l.chunk_version,l.id""", (repository,)).fetchall()
 
+    @staticmethod
+    def _origin_only_scopes(connection, repository):
+        """Scopes whose own dependencies are all Origin Links to requirements or decisions."""
+        return {(str(location), version) for location, version in connection.execute("""
+            SELECT l.file_location,l.chunk_version
+            FROM public.mycel_locations l JOIN public.mycel_file_locations f ON f.id=l.file_location
+            JOIN public.mycel_file_versions v ON v.id=f.file_version
+            JOIN public.mycel_files p ON p.id=v.file_id WHERE p.repository=%s AND l.metadata->>'role' IS NOT NULL
+            AND EXISTS (SELECT 1 FROM public.mycel_dependencies d WHERE d.dependant_version=l.chunk_version
+                AND (d.state->'declarationLocation'->>'file' IS NULL
+                     OR d.state->'declarationLocation'->>'file'=l.file_location::text))
+            AND NOT EXISTS (SELECT 1 FROM public.mycel_dependencies d WHERE d.dependant_version=l.chunk_version
+                AND (d.state->'declarationLocation'->>'file' IS NULL
+                     OR d.state->'declarationLocation'->>'file'=l.file_location::text)
+                AND NOT (d.kind=ANY(ARRAY['asserted','origin']) AND d.state ? 'originLink'
+                    AND EXISTS (SELECT 1 FROM public.mycel_edges e WHERE e.dependency=d.id)
+                    AND NOT EXISTS (SELECT 1 FROM public.mycel_edges e
+                        JOIN public.mycel_chunk_versions sv ON sv.id=e.source_version
+                        JOIN public.mycel_chunks s ON s.id=sv.chunk_id
+                        WHERE e.dependency=d.id AND s.kind<>ALL(ARRAY['req','dec']))))
+            AND NOT EXISTS (SELECT 1 FROM public.mycel_relations r WHERE r.left_version=l.chunk_version
+                AND (r.state->'declarationLocation'->>'file' IS NULL
+                     OR r.state->'declarationLocation'->>'file'=l.file_location::text))""", (repository,)).fetchall()}
+
+    def _settled_origin_scopes(self, connection, result, catalogs, quiet):
+        """Unchanged scopes resting only on Origin Links to requirements or decisions.
+
+        An entity Origin resolves by its UUID, so a pass cannot re-target it; a
+        changed or removed requirement is staleness detection's work. Such a
+        scope needs no re-application while its file is unchanged and it
+        declares no Source Ref or relation of its own (SYL-286).
+        """
+        if catalogs is None or self.collection_manifest is None or self.pending_repositories:
+            return frozenset()
+        unchanged = [located for located in result.files if not located.changed]
+        candidates = {(located.binding.location, version) for located in unchanged
+                      for _, version in located.chunk_versions} - set(quiet)
+        if not candidates:
+            return frozenset()
+        settled = candidates & self._origin_only_scopes(connection, result.repository)
+        from ._resolver import SourceResolver
+        for located in unchanged:
+            catalog = SourceResolver.from_transaction(connection, self.settings,
+                kind=located.location.kind, location=location_key(located.location),
+                guarded_repositories=self.guarded_repositories, catalogs=catalogs)
+            files = [file for file in catalog.files if file.identifier == located.binding.identifier]
+            for identifier, version in located.chunk_versions:
+                scope = (located.binding.location, version)
+                if scope not in settled:
+                    continue
+                chunks = [chunk for file in files for chunk in file.chunks
+                          if chunk.identifier == identifier and chunk.version == version]
+                if len(files) != 1 or len(chunks) != 1:
+                    settled.discard(scope)
+                    continue
+                if chunks[0].kind == 'document':
+                    declarations = files[0].document_declarations
+                    if (any(group.sources for group in declarations.chunk_sources if group.chunk == chunks[0].name)
+                            or any(group.relations for group in declarations.chunk_relations
+                                   if group.chunk == chunks[0].name)):
+                        settled.discard(scope)
+        return frozenset(settled)
+
     def _empty_policy_scopes(self, connection, result, catalogs):
         """Prove empty policy scopes together under publication guards.
 
@@ -156,30 +219,46 @@ class LocatedDependencyProducer:
 
     @staticmethod
     def _edited_entity_scopes(connection, result):
-        """Select this location's prior UUID-owned policy for a new row version."""
+        """Select this location's prior UUID-owned policy for a new row version.
+
+        Three small reads replace one join: inside a pass the new row versions
+        have no planner statistics yet, and the single join exceeded the
+        store's minute on the owner's mycel repository (SYL-286).
+        """
         keys = sorted({location_key(file.location) for file in result.files})
-        rows = connection.execute("""WITH policy AS (
-            SELECT dependant_version version,repository,state FROM public.mycel_dependencies
-            WHERE kind IN ('declared','asserted')
-            UNION SELECT left_version,repository,state FROM public.mycel_relations)
-            SELECT DISTINCT l.file_location,l.chunk_version,f.metadata,p.version,
-                p.state->'declarationLocation'->>'file'
+        candidates = connection.execute("""SELECT l.file_location,l.chunk_version,c.id,l.kind,l.location,f.metadata
             FROM public.mycel_locations l JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version
             JOIN public.mycel_chunks c ON c.id=v.chunk_id AND c.kind IN ('req','dec')
             JOIN public.mycel_file_locations f ON f.id=l.file_location
-            JOIN public.mycel_chunk_versions old ON old.chunk_id=c.id AND old.id<>v.id
-            JOIN policy p ON p.version=old.id AND p.repository=c.repository
-              AND p.state->'declarationLocation'->>'kind'=l.kind
-              AND p.state->'declarationLocation'->>'location'=l.location
             WHERE c.repository=%s AND l.location=ANY(%s)
-              AND NOT EXISTS (SELECT 1 FROM policy current WHERE current.version=v.id
-                  AND current.state->'declarationLocation'->>'file'=l.file_location::text)
-              AND NOT EXISTS (SELECT 1 FROM public.mycel_locations kept
-                  WHERE kept.chunk_version=old.id AND kept.kind=l.kind AND kept.location=l.location)
-            ORDER BY l.file_location,l.chunk_version,p.version DESC""",(result.repository,keys)).fetchall()
+              AND NOT EXISTS (SELECT 1 FROM public.mycel_dependencies d WHERE d.dependant_version=v.id
+                  AND d.kind IN ('declared','asserted')
+                  AND d.state->'declarationLocation'->>'file'=l.file_location::text)
+              AND NOT EXISTS (SELECT 1 FROM public.mycel_relations r WHERE r.left_version=v.id
+                  AND r.state->'declarationLocation'->>'file'=l.file_location::text)""",
+            (result.repository, keys)).fetchall()
+        if not candidates:
+            return {}
+        policies = connection.execute("""SELECT old.chunk_id,old.id,p.place->>'kind',p.place->>'location',p.place->>'file'
+            FROM public.mycel_chunk_versions old JOIN (
+                SELECT dependant_version version,repository,state->'declarationLocation' place
+                FROM public.mycel_dependencies WHERE kind IN ('declared','asserted')
+                UNION ALL SELECT left_version,repository,state->'declarationLocation' FROM public.mycel_relations) p
+              ON p.version=old.id AND p.repository=%s
+            WHERE old.chunk_id=ANY(%s)""", (result.repository, sorted({row[2] for row in candidates}))).fetchall()
+        if not policies:
+            return {}
+        kept = set(connection.execute("SELECT chunk_version,kind,location FROM public.mycel_locations "
+                                      "WHERE chunk_version=ANY(%s)", (sorted({row[1] for row in policies}),)).fetchall())
+        rows = sorted({(str(location), version, previous, reference): metadata
+                       for location, version, chunk, kind, key, metadata in candidates
+                       for owner, previous, place_kind, place_location, reference in policies
+                       if owner == chunk and previous != version and (place_kind, place_location) == (kind, key)
+                       and (previous, kind, key) not in kept}.items(),
+                      key=lambda item: (item[0][0], item[0][1], -item[0][2], item[0][3] or ''))
         selected = {}
-        for location,version,metadata,previous,reference in rows:
-            scope = (str(location),version)
+        for (location, version, previous, reference), metadata in rows:
+            scope = (location, version)
             if scope in selected:
                 if selected[scope][0] == previous and selected[scope][1] != reference:
                     raise MycelError('invalid_input','An entity edit has ambiguous prior location policy.')
@@ -218,6 +297,10 @@ class LocatedDependencyProducer:
         totals['declarationMetadataChanged'] += retargeted
         quiet, initialized = self._empty_policy_scopes(connection, result, catalogs)
         totals['rolesChanged'] = initialized
+        settled = self._settled_origin_scopes(connection, result, catalogs, quiet)
+        if settled:
+            totals['originScopesSettled'] = len(settled)
+        quiet = quiet | settled
         quiet_rows = tuple(row for row in self._policy_scope_rows(connection, result.repository)
                            if (str(row[0]), row[1]) in quiet) if quiet else ()
         own_scopes = tuple((file.binding.location, version) for file in result.files for _, version in file.chunk_versions
@@ -406,7 +489,10 @@ class LocatedDependencyProducer:
             if edited:
                 primary_changed = drifts.close_versions_in_transaction(located.binding.primary.repository,
                     edited, because='edited', at=self.captured_at) or primary_changed
-        if self.collection_manifest is not None and not self.pending_repositories:
+        # Collection follows the whole capture: a step that left changed files
+        # for a later step collects nothing yet (SYL-286).
+        partial = any(result.counts.get('remaining', {}).values())
+        if self.collection_manifest is not None and not self.pending_repositories and not partial:
             from ._collection import CollectionStore
             removed_edges = connection.execute("""SELECT d.repository,count(*) FROM public.mycel_edges e
                 JOIN public.mycel_dependencies d ON d.id=e.dependency
@@ -425,7 +511,7 @@ class LocatedDependencyProducer:
                 else:
                     downstream.setdefault(owner, {})['sourceEdgesCollected'] = count
                     downstream_changed.add(owner)
-        elif self.collection_manifest is not None:
+        elif self.collection_manifest is not None and not partial:
             # A source deletion would cascade an unheld owner's edge. Keep its
             # unlocated rows for this explicitly incomplete pass and retry on
             # the next unchanged pass after every affected guard is available.

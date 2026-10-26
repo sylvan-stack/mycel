@@ -209,7 +209,17 @@ _ROWS_SQL = """SELECT id,repository,dependant_version,declaration,source_place,k
 FROM public.mycel_dependencies WHERE repository=%s AND dependant_version=%s
 AND state->'declarationLocation'->>'file'=%s AND kind=ANY(ARRAY['declared','asserted','generated'])
 ORDER BY id FOR UPDATE NOWAIT"""
-_GRAPH_SQL = """SELECT d.id,d.repository,d.dependant_version,d.state,s.id,c.id,e.source_version
+# Rows this transaction has written so far to the tables the graph reads.
+_GRAPH_WRITES_SQL = """SELECT c.relname,pg_stat_get_xact_tuples_inserted(c.oid),
+pg_stat_get_xact_tuples_updated(c.oid),pg_stat_get_xact_tuples_deleted(c.oid)
+FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='public' AND c.relname=ANY(ARRAY['mycel_dependencies','mycel_edges','mycel_chunk_versions',
+'mycel_chunks']) ORDER BY c.relname"""
+# The graph needs each row's declaration location, read as text; the digest of
+# its complete state still lets a second read detect any change (SYL-286).
+_GRAPH_SQL = """SELECT d.id,d.repository,d.dependant_version,
+jsonb_typeof(d.state->'declarationLocation')='object',d.state->'declarationLocation'->>'kind',
+d.state->'declarationLocation'->>'location',md5(d.state::text),s.id,c.id,e.source_version
 FROM public.mycel_dependencies d JOIN public.mycel_chunk_versions v ON v.id=d.dependant_version
 JOIN public.mycel_chunks c ON c.id=v.chunk_id JOIN public.mycel_edges e ON e.dependency=d.id
 JOIN public.mycel_chunk_versions sv ON sv.id=e.source_version JOIN public.mycel_chunks s ON s.id=sv.chunk_id
@@ -234,12 +244,11 @@ class DependencyApplicationStore:
         rows = self.connection.execute(_GRAPH_SQL, (eligible,)).fetchall()
         selected_location, selectors = _location_selectors(settings, kind, location)
         graph, complete = [], []
-        for dependency, owner, version, state, source, dependant, source_version in rows:
+        for dependency, owner, version, owned, owned_kind, owned_location, _, source, dependant, _ in rows:
             if version not in current or str(source) not in current_ids:
                 continue
-            owned = state.get('declarationLocation')
             expected_location = selected_location if selectors is None else selectors.get(owner)
-            if owned is not None and (owned.get('kind'), owned.get('location')) != (kind, expected_location):
+            if owned and (owned_kind, owned_location) != (kind, expected_location):
                 continue
             # Generated/asserted consumers without a declaration location use
             # their current exact dependant version in the selected catalog.
@@ -513,6 +522,7 @@ class DependencyApplicationStore:
                 desired[index] = replace(request, absent_state='away' if elsewhere else 'deleted')
         graph, graph_rows = self._graph(settings, catalog, kind, location, exclusions=exclusions,
                                        guarded_repositories=guarded_repositories)
+        graph_writes = self.connection.execute(_GRAPH_WRITES_SQL).fetchall()
         planner_records = tuple(records.values())
         planner_mode, planner_version = mode, pin_version
         if mode == 'inherit':
@@ -580,9 +590,12 @@ class DependencyApplicationStore:
                     decision.resolution, resolver, guard.guards)
                 with checked_transaction_input_guard(self.connection, observation, lambda: reread(observation)):
                     pass
+            # The graph rows that matter are guarded; only this transaction's
+            # own writes can change them, so a second read follows one.
             if (self.connection.execute(_ROWS_SQL, (owner, pin_version, reference_location)).fetchall() != all_rows
-                    or self._graph(settings, catalog, kind, location,
-                                   guarded_repositories=guarded_repositories)[1] != graph_rows):
+                    or self.connection.execute(_GRAPH_WRITES_SQL).fetchall() != graph_writes
+                    and self._graph(settings, catalog, kind, location,
+                                    guarded_repositories=guarded_repositories)[1] != graph_rows):
                 raise EvidenceError('changed_since_ingest', (dependant.place.address,))
         row_by_id = {str(row[0]): row for row in rows}
         identities, changed, captured_count, inherited_count, released = [], 0, 0, 0, 0

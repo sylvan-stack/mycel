@@ -362,6 +362,7 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "ingest":
         parser.add_argument("--embed", action="store_true")
         parser.add_argument("--confirm-empty", action="store_true")
+        parser.add_argument("--files", type=int)
     if name == "activity":
         from ._activity import KINDS
         parser.add_argument("--entry")
@@ -455,7 +456,10 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
                 (("--dry-run",) if getattr(parsed, "dry_run", False) else ()) + \
                 (("--retry-failed",) if getattr(parsed, "retry_failed", False) else ()) + tuple(parsed.arguments)
     if name == 'ingest':
-        arguments = (("--embed",) if parsed.embed else ()) + (("--confirm-empty",) if parsed.confirm_empty else ())
+        if parsed.files is not None and parsed.files < 1:
+            raise MycelError(ErrorCode.INVALID_INPUT, "Ingest --files takes a positive number of changed files for one step.")
+        arguments = (("--embed",) if parsed.embed else ()) + (("--confirm-empty",) if parsed.confirm_empty else ()) + \
+                    (("--files", str(parsed.files)) if parsed.files is not None else ())
     if name == 'activity':
         arguments = (('--entry', str(activity_entry)) if activity_entry is not None else ()) + \
                     (('--kind', parsed.kind) if parsed.kind is not None else ()) + \

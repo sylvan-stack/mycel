@@ -420,17 +420,19 @@ class EntityStoreTests(unittest.TestCase):
     def test_init_brings_a_format_2_store_forward_in_one_step_and_info_reports_the_format(self):
         with self.base.connect() as connection:
             before = store.require_store(connection)
-            self.assertEqual(before.format, 3)
+            self.assertEqual(before.format, 4)
+            # Formats 2 and 3 share one structure; format 4 adds step progress.
+            connection.execute("ALTER TABLE public.mycel_repository_state DROP COLUMN pass_progress")
             connection.execute("UPDATE public.mycel_store SET format=2")
             connection.commit() if hasattr(connection, "commit") else None
             self.assertEqual(store.inspect_store(connection).state, "older")
             result = store.initialize_store(connection, dimensions=before.dimensions)
             self.assertTrue(result.changed)
-            self.assertEqual((result.before.format, result.after.format), (2, 3))
+            self.assertEqual((result.before.format, result.after.format), (2, 4))
             self.assertEqual(result.after.index_generation, before.index_generation)
-            self.assertEqual(store.require_store(connection).format, 3)
+            self.assertEqual(store.require_store(connection).format, 4)
         output, diagnostic = io.StringIO(), io.StringIO()
         with patch.dict(os.environ, {"MYCEL_CONFIG": str(self.base.config)}):
             status = run(["info"], stdout=output, stderr=diagnostic)
         self.assertEqual(status, 0)
-        self.assertEqual(json.loads(output.getvalue())["store"]["format"], 3)
+        self.assertEqual(json.loads(output.getvalue())["store"]["format"], 4)

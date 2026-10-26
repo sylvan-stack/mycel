@@ -40,6 +40,7 @@ from ._source_refs import SourceAddress, SourceAddressError
 CAPTURE_REVISION = "mycel-capture-v1"
 GIT_METADATA_LIMIT = STDOUT_LIMIT
 GIT_READ_SECONDS = 10.0
+GIT_BATCH_BYTES = 32 * 1024 * 1024
 _OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z", re.ASCII)
 Root = Literal["code", "artifact"]
 Corpus = Literal["documents", "code"]
@@ -916,6 +917,41 @@ class _Capture:
             raise _CaptureFailure("git_tree", "A Git tree could not be enumerated completely.") from None
         return result
 
+    def prefetch(self, checkout: Path, files) -> None:
+        """Read many blobs through one `cat-file --batch` per share (SYL-286).
+
+        Any fault leaves the blobs unread; `blob` then reads each one alone
+        and reports its own exact failure.
+        """
+        pending = sorted({file.oid: file for file in files if (checkout, file.oid) not in self.blobs}.values(),
+                         key=lambda file: file.oid)
+        while pending:
+            share, size = [], 0
+            while pending and (not share or size + pending[0].size <= GIT_BATCH_BYTES):
+                share.append(pending.pop(0))
+                size += share[-1].size
+            request = b"".join(file.oid.encode("ascii") + b"\n" for file in share)
+            limit = size + 64 * len(share)
+            self.cancel()
+            try:
+                child = self.git(("cat-file", "--batch"), cwd=checkout, request=request, stdout_limit=limit,
+                                 timeout_seconds=GIT_READ_SECONDS, cancelled=self.cancelled)
+            except (MycelError, TypeError):
+                return
+            if child.returncode != 0 or len(child.stdout) > limit:
+                return
+            output, offset, read = child.stdout, 0, {}
+            for file in share:
+                end = output.find(b"\n", offset)
+                if end < 0 or output[offset:end] != f"{file.oid} blob {file.size}".encode("ascii") \
+                        or output[end + 1 + file.size:end + 2 + file.size] != b"\n":
+                    return
+                read[(checkout, file.oid)] = output[end + 1:end + 1 + file.size]
+                offset = end + 2 + file.size
+            if offset != len(output):
+                return
+            self.blobs.update(read)
+
     def blob(self, checkout: Path, file: _TreeFile) -> bytes:
         key = (checkout, file.oid)
         if key not in self.blobs:
@@ -961,6 +997,8 @@ class _Capture:
             if any(not binding.prefix or base == binding.prefix or base.startswith(binding.prefix + "/")
                    or binding.prefix.startswith(base + "/") or not base for binding in bindings):
                 rules.add(base, self.blob(checkout, file))
+        self.prefetch(checkout, [file for path, file in files.items()
+                                 if not self.skipped(path) and not rules.ignored(path)])
         captured = []
         for path, file in sorted(files.items()):
             self.cancel()
