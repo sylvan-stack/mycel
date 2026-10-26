@@ -284,7 +284,11 @@ class RecoveryStore:
                          if member.chunk.kind in {'document', 'req', 'dec'}
                          and not _LINEAR.search(file.source.decode('utf-8'))]
             links = document_links(self.connection, catalog)
-            retrieval = _disk_inputs(self.connection, catalog)
+            # Only the targets' and the entities' vectors are decoded (SYL-289).
+            retrieval = _disk_inputs(self.connection, catalog, versions=frozenset(
+                {mapping[row['chunk']].members[0].chunk.version for row in targets}
+                | {member.chunk.version for file in catalog.files for member in catalog._members(file, file.chunks)
+                   if member.chunk.kind in {'req', 'dec'}}))
             vectors = {item.key: item for item in retrieval}
             repo = RepositoryLocations(settings).named(repository)[0]
             pairs, chunks = [], []

@@ -188,13 +188,16 @@ class RecoveryStoreTests(unittest.TestCase):
     def test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri(self):
         from mycel._resolver import SourceResolver
         from test_retrieval_store import RetrievalStoreTests
+        from mycel import _retrieval_store
         with self.base.connect() as connection:
             catalog=SourceResolver.from_store(connection,self.settings)
-            for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1'):
+            for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1','fixture:@code/tests/test_value.py#test_value'):
                 selected=catalog.resolve(ref,purpose='endpoint').selection
                 chunk=selected.members[0].chunk
                 RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
-        reply=self.run_recovery(dry_run=True)
+        with patch('mycel._retrieval_store._decode_plan',wraps=_retrieval_store._decode_plan) as decoded:
+            reply=self.run_recovery(dry_run=True)
+        self.assertEqual(decoded.call_count,2)  # the target and the requirement, not the test's vector
         self.assertEqual(reply['status'],0,reply)
         self.assertTrue(reply['chunks'][0]['embedding']['available'])
         entities=[item for item in reply['chunks'][0]['candidates'] if 'embedding' in item['sources']]
