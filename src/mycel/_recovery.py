@@ -147,6 +147,7 @@ class RecoveryPair:
 class RecoveryStore:
     def __init__(self, connection):
         self.connection = connection
+        self.step_captures = {}  # One step re-reads bytes but parses only what changed.
 
     @contextmanager
     def guarded(self, settings, *, require_current=True):
@@ -224,7 +225,8 @@ class RecoveryStore:
             raise EvidenceError('obsolete')
         context, context_files = self.context(catalog, selections)
         files.update(context_files)
-        fault = DriftStore(self.connection)._physical(settings, tuple(files.values()), (), {}, catalog)
+        fault = DriftStore(self.connection)._physical(settings, tuple(files.values()), (), {}, catalog,
+                                                      previous=self.step_captures)
         if fault:
             raise EvidenceError(fault)
         options = settings.values['drifts']
@@ -500,7 +502,7 @@ class RecoveryStore:
                         from ._activity import AppliedMutation
                         activity.record_in_transaction(endpoint.place.repository,'recovery',AppliedMutation(True,
                             {'chunk':pair.chunk,'origin':pair.origin,'action':'withdraw','inputHash':pair.decision.input_hash}))
-                    fault = DriftStore(self.connection)._physical(settings,pair.files,(),{},catalog)
+                    fault = DriftStore(self.connection)._physical(settings,pair.files,(),{},catalog,previous=self.step_captures)
                     if fault:
                         raise EvidenceError(fault)
                 return None
@@ -532,7 +534,7 @@ class RecoveryStore:
                 from ._activity import AppliedMutation
                 activity.record_in_transaction(endpoint.place.repository,'recovery',AppliedMutation(True,
                     {'chunk':pair.chunk,'origin':pair.origin,'link':link,'inputHash':pair.decision.input_hash}))
-            fault = DriftStore(self.connection)._physical(settings,pair.files,(),{},catalog)
+            fault = DriftStore(self.connection)._physical(settings,pair.files,(),{},catalog,previous=self.step_captures)
             if fault:
                 raise EvidenceError(fault)
             return link

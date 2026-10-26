@@ -92,7 +92,8 @@ class SemanticAuditStore(AuditStore):
             _require_confirmable(self.connection, selection.members[0], metadata)
         context, context_files = self.context(catalog, selections)
         files.update(context_files)
-        fault = DriftStore(self.connection)._physical(settings, tuple(files.values()), (), {}, catalog)
+        fault = DriftStore(self.connection)._physical(settings, tuple(files.values()), (), {}, catalog,
+                                                      previous=self.step_captures)
         if fault:
             raise EvidenceError(fault)
         options = settings.values['drifts']

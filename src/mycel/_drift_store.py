@@ -325,11 +325,12 @@ class DriftStore:
                     (owner, repository, *ref, ordinal))
                 ordinal += 1
 
-    def _physical(self, settings, files, declarations, captures, catalog):
+    def _physical(self, settings, files, declarations, captures, catalog, previous=None):
         # Reuse the complete no-substitution observation that Detection uses.
         from ._staleness import MechanicalStalenessStore
         try:
-            values = MechanicalStalenessStore(self.connection)._physical_inputs(settings, files, declarations, captures)
+            values = MechanicalStalenessStore(self.connection)._physical_inputs(settings, files, declarations, captures,
+                                                                                 previous)
             if any((len(value) == 5 and (value[3] != (value[2],) or not value[4]))
                    or (len(value) == 4 and not value[3]) for value in values):
                 return 'changed_since_ingest'

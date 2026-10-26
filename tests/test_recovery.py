@@ -233,6 +233,27 @@ class RecoveryStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
 
+    def test_a_step_parses_each_unchanged_file_at_most_once(self):
+        # On the owner's store the stored parse history had another capture
+        # policy, so every check parsed the whole repository again.
+        from mycel import _capture
+        with patch('mycel._capture.chunk_code',wraps=_capture.chunk_code) as parsed, \
+             patch('mycel._disk_reconciliation._parse_history',return_value=None):
+            reply=self.run_recovery(dependencies=self.dependencies())
+        self.assertEqual(reply['status'],0,reply)
+        self.assertGreater(reply['selected'],1,reply)
+        self.assertLessEqual(parsed.call_count,4)  # two code files, on disk and on branch main, once
+
+    def test_an_edit_with_restored_mtime_during_a_step_is_still_caught(self):
+        before=self.source.stat()
+        def changed(request):
+            self.source.write_text('def value():\n    return 3\n')
+            os.utime(self.source,ns=(before.st_atime_ns,before.st_mtime_ns))
+        reply=self.run_recovery(k=2,dependencies=self.dependencies(changed=changed))
+        self.assertEqual(reply['completed'],0,reply)
+        self.assertEqual(self.origins(),[])
+        self.assertIn(reply['pairs'][0]['reason'],{'obsolete','changed_since_ingest'})
+
     def reviewer_settings(self,unrelated=False):
         adapter=self.base.base/'reviewer'
         adapter.write_text('#!'+sys.executable+'\n'+'''import json,sys
