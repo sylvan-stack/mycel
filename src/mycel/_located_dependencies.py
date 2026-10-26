@@ -219,30 +219,46 @@ class LocatedDependencyProducer:
 
     @staticmethod
     def _edited_entity_scopes(connection, result):
-        """Select this location's prior UUID-owned policy for a new row version."""
+        """Select this location's prior UUID-owned policy for a new row version.
+
+        Three small reads replace one join: inside a pass the new row versions
+        have no planner statistics yet, and the single join exceeded the
+        store's minute on the owner's mycel repository (SYL-286).
+        """
         keys = sorted({location_key(file.location) for file in result.files})
-        rows = connection.execute("""WITH policy AS (
-            SELECT dependant_version version,repository,state FROM public.mycel_dependencies
-            WHERE kind IN ('declared','asserted')
-            UNION SELECT left_version,repository,state FROM public.mycel_relations)
-            SELECT DISTINCT l.file_location,l.chunk_version,f.metadata,p.version,
-                p.state->'declarationLocation'->>'file'
+        candidates = connection.execute("""SELECT l.file_location,l.chunk_version,c.id,l.kind,l.location,f.metadata
             FROM public.mycel_locations l JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version
             JOIN public.mycel_chunks c ON c.id=v.chunk_id AND c.kind IN ('req','dec')
             JOIN public.mycel_file_locations f ON f.id=l.file_location
-            JOIN public.mycel_chunk_versions old ON old.chunk_id=c.id AND old.id<>v.id
-            JOIN policy p ON p.version=old.id AND p.repository=c.repository
-              AND p.state->'declarationLocation'->>'kind'=l.kind
-              AND p.state->'declarationLocation'->>'location'=l.location
             WHERE c.repository=%s AND l.location=ANY(%s)
-              AND NOT EXISTS (SELECT 1 FROM policy current WHERE current.version=v.id
-                  AND current.state->'declarationLocation'->>'file'=l.file_location::text)
-              AND NOT EXISTS (SELECT 1 FROM public.mycel_locations kept
-                  WHERE kept.chunk_version=old.id AND kept.kind=l.kind AND kept.location=l.location)
-            ORDER BY l.file_location,l.chunk_version,p.version DESC""",(result.repository,keys)).fetchall()
+              AND NOT EXISTS (SELECT 1 FROM public.mycel_dependencies d WHERE d.dependant_version=v.id
+                  AND d.kind IN ('declared','asserted')
+                  AND d.state->'declarationLocation'->>'file'=l.file_location::text)
+              AND NOT EXISTS (SELECT 1 FROM public.mycel_relations r WHERE r.left_version=v.id
+                  AND r.state->'declarationLocation'->>'file'=l.file_location::text)""",
+            (result.repository, keys)).fetchall()
+        if not candidates:
+            return {}
+        policies = connection.execute("""SELECT old.chunk_id,old.id,p.place->>'kind',p.place->>'location',p.place->>'file'
+            FROM public.mycel_chunk_versions old JOIN (
+                SELECT dependant_version version,repository,state->'declarationLocation' place
+                FROM public.mycel_dependencies WHERE kind IN ('declared','asserted')
+                UNION ALL SELECT left_version,repository,state->'declarationLocation' FROM public.mycel_relations) p
+              ON p.version=old.id AND p.repository=%s
+            WHERE old.chunk_id=ANY(%s)""", (result.repository, sorted({row[2] for row in candidates}))).fetchall()
+        if not policies:
+            return {}
+        kept = set(connection.execute("SELECT chunk_version,kind,location FROM public.mycel_locations "
+                                      "WHERE chunk_version=ANY(%s)", (sorted({row[1] for row in policies}),)).fetchall())
+        rows = sorted({(str(location), version, previous, reference): metadata
+                       for location, version, chunk, kind, key, metadata in candidates
+                       for owner, previous, place_kind, place_location, reference in policies
+                       if owner == chunk and previous != version and (place_kind, place_location) == (kind, key)
+                       and (previous, kind, key) not in kept}.items(),
+                      key=lambda item: (item[0][0], item[0][1], -item[0][2], item[0][3] or ''))
         selected = {}
-        for location,version,metadata,previous,reference in rows:
-            scope = (str(location),version)
+        for (location, version, previous, reference), metadata in rows:
+            scope = (location, version)
             if scope in selected:
                 if selected[scope][0] == previous and selected[scope][1] != reference:
                     raise MycelError('invalid_input','An entity edit has ambiguous prior location policy.')
