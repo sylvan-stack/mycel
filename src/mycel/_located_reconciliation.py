@@ -78,12 +78,16 @@ def _file_edges(connection, repository: str) -> frozenset:
 
 
 # Fields every file of a location shares; they change when another file of the
-# location is added or removed, or when its branch moves.
-_LOCATION_FIELDS = frozenset({'captureFileCount', 'commit', 'trees'})
+# location is added or removed, when its branch moves, or when the capture
+# policy changes without changing the file's parse.
+_LOCATION_FIELDS = frozenset({'captureFileCount', 'commit', 'trees', 'policyHash'})
 
 
 def _own_metadata(metadata):
-    return {key: value for key, value in metadata.items() if key not in _LOCATION_FIELDS}
+    own = {key: value for key, value in metadata.items() if key not in _LOCATION_FIELDS}
+    if isinstance(own.get('parseHistory'), dict):
+        own['parseHistory'] = {key: value for key, value in own['parseHistory'].items() if key != 'policyHash'}
+    return own
 
 
 def _refresh_order(file):
@@ -544,8 +548,8 @@ class LocatedCaptureStore:
                         unchanged = same and old[7] == metadata
                         if same and not unchanged and _own_metadata(old[7]) == _own_metadata(metadata):
                             # Only fields of the whole location moved (its file
-                            # count, commit or trees): the file is updated in
-                            # place and stays unchanged (SYL-286).
+                            # count, commit, trees or policy fingerprint): the
+                            # file is updated in place and stays unchanged.
                             connection.execute('UPDATE public.mycel_file_locations SET metadata=%s WHERE id=%s',
                                                (Jsonb(metadata), old[4]))
                             unchanged, relabelled = True, relabelled + 1

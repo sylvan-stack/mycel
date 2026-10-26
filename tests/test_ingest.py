@@ -681,6 +681,16 @@ class IngestStepStoreTests(unittest.TestCase):
                 FROM public.mycel_file_locations l JOIN public.mycel_file_versions v ON v.id=l.file_version
                 JOIN public.mycel_files f ON f.id=v.file_id WHERE f.repository='fixture' AND l.kind='disk'""")]
         self.assertEqual(set(counts), {len(counts)})
+        # A file recorded under another capture policy, with the same parse,
+        # is updated in place as well.
+        with self.base.connect() as connection:
+            connection.execute("""UPDATE public.mycel_file_locations SET metadata=jsonb_set(jsonb_set(metadata,
+                '{policyHash}','"earlier"'),'{parseHistory,policyHash}','"earlier"') WHERE kind='disk'""")
+        status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+        self.assertEqual((status, reply['repositories']['fixture']['files']['changed']), (0, 0), reply)
+        with self.base.connect() as connection:
+            self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_file_locations "
+                                                "WHERE metadata->>'policyHash'='earlier'").fetchone()[0], 0)
 
     def test_the_refresh_resumes_after_its_last_file_and_starts_again_after_a_change(self):
         for number in range(4):

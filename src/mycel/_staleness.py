@@ -506,9 +506,12 @@ class MechanicalStalenessStore:
             return versions is None or selection is None or any(member.chunk.identifier in seeds
                                                                 for member in selection.members)
         seeds.update(by_version[row[2]] for row in rows if row[5] != 'related' and into(row))
-        affected = _closure(seeds | (set(guards.original_affected) & {node.identifier for node in nodes}), edges)
+        # The guards' original sets cover the whole repository before the
+        # pass; a scoped step retired nothing, so its own seeds suffice.
+        original = (set(guards.original_affected), set(guards.original_related)) if versions is None else (set(), set())
+        affected = _closure(seeds | (original[0] & {node.identifier for node in nodes}), edges)
         affected.update(by_version[row[2]] for row in rows if row[5] == 'related' and into(row))
-        affected.update(set(guards.original_related) & {node.identifier for node in nodes})
+        affected.update(original[1] & {node.identifier for node in nodes})
         exemptions = {node.identifier for node in nodes if node.exempt}
         # Relevant ancestors supply the complete reasons for affected nodes.
         # An unrelated component's physical files never qualify this pass.
