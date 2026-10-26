@@ -276,3 +276,4 @@ preparation supplies no actual owner replacement or native qualification.
 | Repository | Package | Version | Artifact corpus | Artifact repository |
 |---|---|---|---|---|
 | `arbol-pi-driver` | `@sylvan-stack/arbol-pi-driver` | 1.0.0 | `~/Artifacts/arbol-pi-driver` | `sylvan-stack/arbol-pi-driver-artifacts` |
+| `workspace-ledger` | `workspace-ledger` (planned) | 1.0.0 | `~/Artifacts/sylvan-stack/repos/workspace-ledger` | `sylvan-stack/workspace-ledger-artifacts` |
