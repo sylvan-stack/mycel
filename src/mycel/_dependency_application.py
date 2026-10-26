@@ -341,6 +341,16 @@ class DependencyApplicationStore:
         finally:
             token.active = False
 
+    def keep_in_transaction(self, batch, settings: SettingsSnapshot, scope: tuple[str, int]) -> None:
+        """Leave one prepared scope's existing rows as they are (SYL-287).
+
+        A step of a pass whose source copies are not all written yet keeps the
+        chunk's rows for the refresh of unchanged files, which applies it with
+        the complete checks. The batch's final graph check still covers them.
+        """
+        self._batch_exclusions(batch, settings, scope)
+        batch.completed.add(scope)
+
     def _batch_exclusions(self, batch, settings, scope):
         if batch is None:
             return frozenset()

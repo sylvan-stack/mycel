@@ -776,6 +776,34 @@ class IngestStepStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertGreaterEqual(connection.execute('SELECT count(*) FROM public.mycel_stale_reasons').fetchone()[0], 1)
 
+    def test_a_step_defers_a_section_whose_source_copies_are_not_all_written(self):
+        code = self.base.code / 'answer.py'
+        note = self.base.artifact / 'note.md'
+        code.write_text('def answer():\n    return 42\n')
+        note.write_text('# Note\nFirst.\n\n<!-- sources:\nfixture:@code/answer.py#missing\n-->\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        # The branch moves too: its copy of answer.py is written by a later
+        # step than the disk section that names the absent symbol (SYL-287).
+        code.write_text('def answer():\n    return 43\n')
+        note.write_text('# Note\nSecond.\n\n<!-- sources:\nfixture:@code/answer.py#missing\n-->\n')
+        self.base.commit()
+        replies = []
+        while not replies or not replies[-1]['complete']:
+            status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+            self.assertEqual(status, 0, reply)
+            replies.append(reply['repositories']['fixture'])
+            self.assertLess(len(replies), 40)
+        self.assertGreaterEqual(sum(reply.get('dependencyDeferred', 0) for reply in replies), 1)
+        self.assertFalse(any(reply.get('dependencyDeferred') for reply in replies
+                             if not reply['remaining']['files']))
+        with self.base.connect() as connection:
+            declared = connection.execute("""SELECT count(*) FROM public.mycel_dependencies d
+                JOIN public.mycel_locations l ON l.chunk_version=d.dependant_version
+                JOIN public.mycel_file_locations fl ON fl.id=l.file_location AND fl.kind='disk'
+                WHERE d.kind='declared' AND fl.metadata->>'path'='note.md'""").fetchone()[0]
+        self.assertGreaterEqual(declared, 1)
+
     def test_a_file_moved_during_a_series_keeps_its_identity(self):
         (self.base.artifact / 'moved.md').write_bytes(b'# Moved\nKept body.\n')
         self.edited_notes(2)

@@ -14,6 +14,7 @@ from ._activity import MutationActivity
 from ._capture import CaptureManifest, LocationId
 from ._declared_refs import _text
 from ._errors import MycelError
+from ._evidence import EvidenceError
 from ._located_reconciliation import location_key
 from ._settings import SettingsSnapshot
 from ._source_refs import SourceAddressError, parse_source_address
@@ -285,6 +286,7 @@ class LocatedDependencyProducer:
 
         store = DependencyApplicationStore(connection)
         relations = RelationApplicationStore(connection)
+        unsettled = bool(result.counts.get('remaining', {}).get('files'))
 
         self._publication = None
         activity = self.activity if self.activity is not None else result.activity
@@ -432,12 +434,23 @@ class LocatedDependencyProducer:
                     else:
                         mode, pin_version = 'edit', prior.get(identifier)
                         authorization = 'normalized_equivalent_edit'
-                    applied = store.apply_in_transaction(
-                        self.settings, located.binding.location, version, mode=mode,
-                        pin_version=pin_version, reference_location=located.binding.location,
-                        captured_at=self.captured_at, reread=reread,
-                        inheritance_authorization=authorization, batch=batch,
-                        guarded_repositories=self.guarded_repositories, catalogs=catalogs)
+                    try:
+                        applied = store.apply_in_transaction(
+                            self.settings, located.binding.location, version, mode=mode,
+                            pin_version=pin_version, reference_location=located.binding.location,
+                            captured_at=self.captured_at, reread=reread,
+                            inheritance_authorization=authorization, batch=batch,
+                            guarded_repositories=self.guarded_repositories, catalogs=catalogs)
+                    except EvidenceError as error:
+                        # While changed files remain, a copy of a source this
+                        # series has not written yet fails the source check. The
+                        # refresh of unchanged files applies the chunk with the
+                        # complete checks; nothing of it was written (SYL-287).
+                        if not unsettled or error.status != 'changed_since_ingest':
+                            raise
+                        store.keep_in_transaction(batch, self.settings, (located.binding.location, version))
+                        totals['dependencyDeferred'] = totals.get('dependencyDeferred', 0) + 1
+                        continue
                     primary_changed = primary_changed or applied.mutated
                     for name, value in applied.counts.items():
                         totals[name] = totals.get(name, 0) + value
