@@ -247,6 +247,43 @@ class RecoveryStoreTests(unittest.TestCase):
         self.assertGreater(reply['selected'],1,reply)
         self.assertLessEqual(parsed.call_count,4)  # two code files, on disk and on branch main, once
 
+    def test_a_series_of_steps_keeps_its_work_and_never_sends_a_pair_twice(self):
+        dependencies=self.dependencies(label='unrelated')
+        replies=[]
+        for _ in range(20):
+            replies.append(self.run_recovery(chunk=None,k=2,dependencies=dependencies))
+            self.assertEqual(replies[-1]['status'],0,replies[-1])
+            if replies[-1]['complete']:
+                break
+        self.assertTrue(replies[-1]['complete'],replies[-1])
+        self.assertGreater(len(replies),2)
+        self.assertEqual([reply['remaining'] for reply in replies],
+                         sorted((reply['remaining'] for reply in replies),reverse=True))
+        sent=[json.dumps(request['state'],sort_keys=True) for request in self.calls]
+        self.assertEqual(len(sent),len(set(sent)))
+        self.assertEqual(sum(reply['jevCalls'] for reply in replies),len(self.calls))
+        again=self.run_recovery(chunk=None,k=2,dependencies=dependencies)
+        self.assertEqual((again['jevCalls'],again['selected'],again['remaining'],again['complete']),(0,0,0,True),again)
+        self.assertEqual(self.origins(),[])
+        # A judged candidate whose text changes is judged again; its section only.
+        before=len(self.calls)
+        (self.artifact/'symbol.md').write_text('---\nrole: authored\n---\n# Symbol contract\nThe symbol value returns one, always.\n')
+        self.ingest();self.old_files()
+        observed=self.run_recovery(chunk=None,k=20,dependencies=dependencies)
+        self.assertEqual((observed['jevCalls'],observed['complete']),(0,False),observed)
+        later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+        after=self.run_recovery(chunk=None,k=20,dependencies=replace(dependencies,utc_now=lambda:later))
+        self.assertEqual(after['status'],0,after)
+        self.assertTrue(after['complete'],after)
+        self.assertEqual(after['jevCalls'],len(self.calls)-before)
+        self.assertTrue(after['jevCalls']>=1 and all('symbol.md' in request['state']['candidate']['snapshot']['place']['path']
+                                                     for request in self.calls[before:]),self.calls[before:])
+        # New settings judge everything again.
+        self.base.config.write_text(self.base.config.read_text()+'\n[drifts]\nconfidence_floor=0.6\n')
+        changed=self.run_recovery(chunk=None,k=1,dependencies=dependencies,
+                                  settings=load_settings(path=self.base.config,home=self.base.base))
+        self.assertEqual((changed['jevCalls'],changed['complete']),(1,False),changed)
+
     def test_an_edit_with_restored_mtime_during_a_step_is_still_caught(self):
         before=self.source.stat()
         def changed(request):
@@ -413,6 +450,11 @@ print(json.dumps(v))
         first=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
         self.assertEqual(first['status'],0,first)
         self.assertEqual(self.origins(),[])
+        # A result retained without its judgement, as before store format 5,
+        # is validated and reused.
+        forget="DELETE FROM public.mycel_judgements"
+        with self.base.connect() as connection:
+            connection.execute(forget)
         second=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
         self.assertEqual(second['status'],0,second)
         self.assertEqual(second['jevCalls'],0)
@@ -422,6 +464,7 @@ print(json.dumps(v))
             metadata['record']['confidenceScore']=.99
             connection.execute('UPDATE public.mycel_manifests SET metadata=%s WHERE repository=%s AND hash=%s',
                                (Jsonb(metadata),'fixture',digest))
+            connection.execute(forget)
         corrupt=self.run_recovery(k=1,dependencies=self.dependencies())
         self.assertEqual(corrupt['status'],1,corrupt)
         self.assertEqual(corrupt['jevCalls'],0)
