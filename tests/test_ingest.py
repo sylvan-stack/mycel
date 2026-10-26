@@ -748,6 +748,24 @@ class IngestStepStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_stale_reasons').fetchone()[0], 0)
 
+    def test_a_step_that_writes_a_source_marks_its_unchanged_dependant_stale(self):
+        from mycel._derive import DeriveStore
+        (self.base.code / 'answer.py').write_text('def answer():\n    return 42\n')
+        (self.base.artifact / 'source.md').write_text('# Source\nStable source.\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        with self.base.connect() as connection:
+            DeriveStore(connection).apply(self.base.settings, 'fixture:@code/answer.py#answer',
+                                          'fixture:@artifact/source.md#Source', settings_home=self.base.base, build=1)
+        (self.base.artifact / 'source.md').write_text('# Source\nEdited source.\n')
+        status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+        self.assertEqual(status, 0, reply)
+        fixture = reply['repositories']['fixture']
+        self.assertEqual((fixture['files']['changed'], fixture['remaining']['files']), (1, 0))
+        self.assertGreaterEqual(fixture['stale'], 1)
+        with self.base.connect() as connection:
+            self.assertGreaterEqual(connection.execute('SELECT count(*) FROM public.mycel_stale_reasons').fetchone()[0], 1)
+
     def test_a_file_moved_during_a_series_keeps_its_identity(self):
         (self.base.artifact / 'moved.md').write_bytes(b'# Moved\nKept body.\n')
         self.edited_notes(2)

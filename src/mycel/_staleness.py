@@ -444,15 +444,20 @@ class MechanicalStalenessStore:
             output.append((address.repository, address.address, actual, manifest.deletion_safe))
         return tuple(output)
 
-    def apply_in_transaction(self, settings, repository, guards: DetectionGuards, *, targeted=False):
+    def apply_in_transaction(self, settings, repository, guards: DetectionGuards, *, targeted=False,
+                             versions: frozenset | None = None):
         """Compare prospective complete corpora and apply guarded owners only.
 
         A busy owner keeps every existing mark; its exact pending places are
         returned. Other acquired descendants use the complete prospective graph.
         Missing/corrupt/unsupported baseline comparisons retain old marks and
         are visibly pending, never a newly invented fresh result.
+
+        ``versions`` limits the seeds to the chunk versions one step of a pass
+        handled (SYL-286); earlier steps handled the rest of the repository.
+        Unresolved links into the repository remain seeds.
         """
-        if type(targeted) is not bool:
+        if type(targeted) is not bool or versions is not None and type(versions) is not frozenset:
             raise MycelError('invalid_input', 'Mechanical detection requires a typed observation scope.')
         require_transaction_guards(self.connection, guards.writable)
         settings.require_current()
@@ -492,10 +497,17 @@ class MechanicalStalenessStore:
             if resolution.selection is not None and row[5] != 'related':
                 edges.extend(StaleEdge(member.chunk.identifier, by_version[row[2]], str(row[0]), row[5])
                              for member in resolution.selection.members)
-        seeds = {node.identifier for node in nodes if node.place.repository == repository}
-        seeds.update(by_version[row[2]] for row in rows if row[5] != 'related' and _target(row) == repository)
+        seeds = {node.identifier for node in nodes if node.place.repository == repository
+                 and (versions is None or node.version in versions)}
+        def into(row):
+            if _target(row) != repository:
+                return False
+            selection = resolutions[str(row[0])].selection
+            return versions is None or selection is None or any(member.chunk.identifier in seeds
+                                                                for member in selection.members)
+        seeds.update(by_version[row[2]] for row in rows if row[5] != 'related' and into(row))
         affected = _closure(seeds | (set(guards.original_affected) & {node.identifier for node in nodes}), edges)
-        affected.update(by_version[row[2]] for row in rows if row[5] == 'related' and _target(row) == repository)
+        affected.update(by_version[row[2]] for row in rows if row[5] == 'related' and into(row))
         affected.update(set(guards.original_related) & {node.identifier for node in nodes})
         exemptions = {node.identifier for node in nodes if node.exempt}
         # Relevant ancestors supply the complete reasons for affected nodes.

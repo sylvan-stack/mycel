@@ -660,7 +660,11 @@ class LocatedCaptureStore:
                         _invalid('A complete producer must return a typed mutation decision.')
                     changed = changed or refresh_unchanged and dependency_changed is True
                 stale_counts, stale_changed, pending_stale = detector.apply_in_transaction(
-                    settings, repository.name, stale_guards, targeted=targeted_detection)
+                    settings, repository.name, stale_guards, targeted=targeted_detection,
+                    # A step that retired no file seeds detection with the
+                    # versions it handled; a retirement checks the whole graph.
+                    versions=None if file_limit is None or retired else frozenset(
+                        version for file in output.files for _, version in file.chunk_versions))
                 counts.update(stale_counts.pop(repository.name, {}))
                 counts['stalePending'] = list(pending_stale)
                 downstream = counts.setdefault('dependencyRepositories', {})
