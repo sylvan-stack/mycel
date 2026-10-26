@@ -588,3 +588,164 @@ class IngestPublishesItsCaptureStoreTests(IngestStoreTests):
         # detector read; never one per chunk.
         self.assertLess(len(reads), chunks)
         self.assertLessEqual(len(reads), 2 * len({location for location in reads}) + 4)
+
+
+class IngestStepUnitTests(unittest.TestCase):
+    def test_sources_come_before_their_dependants_and_a_cycle_keeps_capture_order(self):
+        from types import SimpleNamespace
+        from mycel._located_reconciliation import _sources_first
+        files = tuple(SimpleNamespace(primary=SimpleNamespace(root='code', path=path))
+                      for path in ('a.py', 'b.md', 'c.py', 'd.py', 'e.py'))
+        edges = frozenset({(('code', 'b.md'), ('code', 'a.py')), (('code', 'd.py'), ('code', 'e.py')),
+                           (('code', 'e.py'), ('code', 'd.py')), (('code', 'x.py'), ('code', 'c.py'))})
+        self.assertEqual([file.primary.path for file in _sources_first(files, edges)],
+                         ['b.md', 'c.py', 'a.py', 'd.py', 'e.py'])
+        self.assertEqual(parse(['ingest', '--repo', 'a', '--files', '3']).arguments, ('--files', '3'))
+        for arguments in (['ingest', '--files', '0'], ['ingest', '--files', 'x'], ['ingest', '--files']):
+            with self.assertRaises((MycelError, SystemExit)):
+                parse(arguments)
+
+
+class IngestStepStoreTests(unittest.TestCase):
+    """One small step of a pass keeps its work for the next (SYL-286)."""
+    check_kind = "store"
+
+    setUp = IngestStoreTests.setUp
+    invoke = IngestStoreTests.invoke
+
+    def disk_text(self, connection):
+        rows = connection.execute("""SELECT l.metadata->>'path',v.source_bytes FROM public.mycel_file_locations l
+            JOIN public.mycel_file_versions v ON v.id=l.file_version WHERE l.kind='disk'""").fetchall()
+        return {path: bytes(source) for path, source in rows}
+
+    def edited_notes(self, count=3):
+        for number in range(count):
+            (self.base.artifact / f'note{number}.md').write_bytes(b'# Note\nFirst.\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        for number in range(count):
+            (self.base.artifact / f'note{number}.md').write_bytes(b'# Note\nSecond.\n')
+
+    def second(self, connection):
+        return sorted(path for path, source in self.disk_text(connection).items() if source == b'# Note\nSecond.\n')
+
+    def test_steps_write_a_bounded_share_keep_it_and_retire_removed_files_only_in_the_last_step(self):
+        (self.base.artifact / 'old.md').write_bytes(b'# Old\nRemoved on disk.\n')
+        self.edited_notes()
+        (self.base.artifact / 'old.md').unlink()
+        left, steps = [], 0
+        while True:
+            status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+            self.assertEqual(status, 0, reply)
+            fixture = reply['repositories']['fixture']
+            steps += 1
+            self.assertEqual(fixture['files']['changed'], 1)
+            left.append(fixture['remaining']['files'])
+            self.assertEqual(fixture['complete'], left[-1] == 0)
+            self.assertEqual(fixture['files']['removed'], 0 if left[-1] else 1)
+            with self.base.connect() as connection:
+                self.assertEqual('old.md' in self.disk_text(connection), bool(left[-1]))
+            if fixture['complete']:
+                break
+        # Each step writes one file and the next finds one fewer; removing a
+        # file also changes the recorded file count of every file beside it.
+        self.assertEqual(left, list(range(steps - 1, -1, -1)))
+        self.assertGreaterEqual(steps, 3)
+        with self.base.connect() as connection:
+            self.assertEqual(len(self.second(connection)), 3)
+        status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+        self.assertEqual(status, 0, reply)
+        fixture = reply['repositories']['fixture']
+        self.assertEqual((fixture['changed'], fixture['remaining'], fixture['complete']), (False, {'files': 0}, True))
+
+    def test_an_interrupted_step_loses_only_itself(self):
+        self.edited_notes()
+        self.assertEqual(self.invoke('--repo', 'fixture', '--files', '1')[0], 0)
+        from mycel import _ingest
+        with patch.object(_ingest._CompleteProducer, '__call__', side_effect=KeyboardInterrupt):
+            status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+        self.assertEqual(status, 2, reply)
+        with self.base.connect() as connection:
+            self.assertEqual(len(self.second(connection)), 1)
+        status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+        self.assertEqual(status, 0, reply)
+        self.assertEqual(reply['repositories']['fixture']['remaining'], {'files': 1})
+        with self.base.connect() as connection:
+            self.assertEqual(len(self.second(connection)), 2)
+
+    def test_a_series_takes_sources_first_and_leaves_no_stale_mark_a_single_pass_would_not(self):
+        from mycel._derive import DeriveStore
+        code = self.base.code / 'answer.py'
+        code.write_text('def answer():\n    return 42\n')
+        (self.base.artifact / 'source.md').write_text('# Source\nStable source.\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        with self.base.connect() as connection:
+            DeriveStore(connection).apply(self.base.settings, 'fixture:@code/answer.py#answer',
+                                          'fixture:@artifact/source.md#Source', settings_home=self.base.base, build=1)
+        code.write_text('def answer():\n    return 43\n')
+        (self.base.artifact / 'source.md').write_text('# Source\nEdited source.\n')
+        replies = []
+        while not replies or not replies[-1]['complete']:
+            status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+            self.assertEqual(status, 0, reply)
+            replies.append(reply['repositories']['fixture'])
+        self.assertEqual(len(replies), 2)
+        self.assertEqual(replies[-1]['stale'], 0)
+        with self.base.connect() as connection:
+            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_stale_reasons').fetchone()[0], 0)
+
+    def test_a_file_moved_during_a_series_keeps_its_identity(self):
+        (self.base.artifact / 'moved.md').write_bytes(b'# Moved\nKept body.\n')
+        self.edited_notes(2)
+        with self.base.connect() as connection:
+            before = self.base.resolve(connection, 'fixture:@artifact/moved.md#Moved').selection.members[0].chunk.identifier
+        os.rename(self.base.artifact / 'moved.md', self.base.artifact / 'zmoved.md')
+        steps = 0
+        while True:
+            status, reply = self.invoke('--repo', 'fixture', '--files', '1')
+            self.assertEqual(status, 0, reply)
+            steps += 1
+            if reply['repositories']['fixture']['complete']:
+                break
+        self.assertEqual(steps, 3)
+        with self.base.connect() as connection:
+            after = self.base.resolve(connection, 'fixture:@artifact/zmoved.md#Moved').selection.members[0].chunk.identifier
+            self.assertNotIn('moved.md', self.disk_text(connection))
+        self.assertEqual(after, before)
+
+    def test_unchanged_origin_link_dependants_are_not_reapplied_and_still_go_stale(self):
+        from mycel._dependency_application import DependencyApplicationStore
+        from mycel._justify import JustifyStore
+        from mycel._source_refs import format_entity_uri
+        requirement = '6b2f8c1e-3a4d-4e5f-9a6b-7c8d9e0f1a2b'
+        spec = self.base.artifact / 'spec.md'
+        spec.write_text('---\nstatus: accepted\n---\n# Spec\n\n## Requirements\n\n'
+                        '| ID | Mycel must… | From v1 | Verified by |\n|---|---|---|---|\n'
+                        f'| FIX-1.1 <!-- {requirement} --> | keep the answer | New | unit |\n')
+        (self.base.code / 'answer.py').write_text('def answer():\n    return 42\n')
+        self.base.commit()
+        self.assertEqual(self.invoke('--repo', 'fixture')[0], 0)
+        with self.base.connect() as connection:
+            JustifyStore(connection).apply(self.base.settings, 'fixture:@code/answer.py#answer',
+                                           format_entity_uri('req', requirement, 'keep the answer'), by='owner', build=1)
+        original = DependencyApplicationStore.apply_in_transaction
+        applied = []
+
+        def counting(store, settings, file_location, version, **kwargs):
+            applied.append((file_location, version))
+            return original(store, settings, file_location, version, **kwargs)
+
+        with patch.object(DependencyApplicationStore, 'apply_in_transaction', counting):
+            status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        self.assertGreaterEqual(reply['repositories']['fixture'].get('originScopesSettled', 0), 1)
+        with self.base.connect() as connection:
+            scope = connection.execute("""SELECT l.file_location::text,l.chunk_version FROM public.mycel_dependencies d
+                JOIN public.mycel_locations l ON l.chunk_version=d.dependant_version
+                WHERE d.state ? 'originLink' AND l.kind='disk'""").fetchone()
+        self.assertNotIn((scope[0], scope[1]), [(str(location), version) for location, version in applied])
+        spec.write_text(spec.read_text().replace('keep the answer', 'keep the answer exact'))
+        status, reply = self.invoke('--repo', 'fixture')
+        self.assertEqual(status, 0, reply)
+        self.assertGreaterEqual(reply['repositories']['fixture']['stale'], 1)

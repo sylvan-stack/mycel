@@ -60,6 +60,44 @@ class LocatedCaptureResult:
     dependency_changes: set[str] = field(default_factory=set)
 
 
+_FILE_EDGES_SQL = """SELECT DISTINCT sl.metadata->>'root',sl.metadata->>'path',dl.metadata->>'root',dl.metadata->>'path'
+FROM public.mycel_dependencies d JOIN public.mycel_edges e ON e.dependency=d.id
+JOIN public.mycel_locations dc ON dc.chunk_version=d.dependant_version
+JOIN public.mycel_file_locations dl ON dl.id=dc.file_location AND dl.kind='disk'
+JOIN public.mycel_file_versions dv ON dv.id=dl.file_version JOIN public.mycel_files df ON df.id=dv.file_id
+JOIN public.mycel_locations sc ON sc.chunk_version=e.source_version
+JOIN public.mycel_file_locations sl ON sl.id=sc.file_location AND sl.kind='disk'
+JOIN public.mycel_file_versions sv ON sv.id=sl.file_version JOIN public.mycel_files sf ON sf.id=sv.file_id
+WHERE df.repository=%s AND sf.repository=%s"""
+
+
+def _file_edges(connection, repository: str) -> frozenset:
+    """Stored dependencies between a repository's disk files, as (source, dependant) places."""
+    return frozenset(((row[0], row[1]), (row[2], row[3]))
+                     for row in connection.execute(_FILE_EDGES_SQL, (repository, repository)).fetchall())
+
+
+def _sources_first(files, edges: frozenset) -> tuple:
+    """Order captured files so a source precedes the files resting on it.
+
+    Places come from the stored dependencies; a cycle, and a file without
+    stored dependencies, keeps its capture order.
+    """
+    position = {(file.primary.root, file.primary.path): index for index, file in enumerate(files)}
+    sources = {place: set() for place in position}
+    for source, dependant in edges:
+        if source in position and dependant in position and source != dependant:
+            sources[dependant].add(source)
+    pending, done, ordered = list(position), set(), []
+    while pending:
+        ready = [place for place in pending if sources[place] <= done] or pending[:1]
+        for place in ready:
+            ordered.append(files[position[place]])
+            done.add(place)
+        pending = [place for place in pending if place not in done]
+    return tuple(ordered)
+
+
 _FILES_SQL = """SELECT f.id,f.root,f.path,l.metadata->>'corpus',l.id,v.id,v.source_bytes,l.metadata,l.kind,l.location
 FROM public.mycel_files f JOIN public.mycel_file_versions v ON v.file_id=f.id
 JOIN public.mycel_file_locations l ON l.file_version=v.id
@@ -263,7 +301,8 @@ class LocatedCaptureStore:
               recognized_moves: tuple[GitFileMove, ...] = (), confirm_empty: bool = False,
               file_handoff: Callable | None = None, batch_handoff: Callable | None = None,
               activity: MutationActivity | None = None, reply_counts: Callable | None = None,
-              targeted_detection: bool = False, publish_capture: bool = False) -> LocatedCaptureResult:
+              targeted_detection: bool = False, publish_capture: bool = False,
+              file_limit: int | None = None) -> LocatedCaptureResult:
         """Publish one complete capture.
 
         With `publish_capture` the pass publishes the capture it read (MYC-1.37,
@@ -272,6 +311,12 @@ class LocatedCaptureStore:
         producers observe the pass's own repository through the capture. Without
         it every reread must match the capture exactly, as internal callers and
         the mutations of MYC-16 require.
+
+        With `file_limit` the publication is one step of a pass (SYL-286): it
+        writes at most that many changed files, sources before their dependants,
+        with their own dependency work, and replies with the changed files that
+        remain. Retiring absent locations, the read inventory and the refresh of
+        unchanged files wait for the step in which no changed file remains.
         """
         settings.require_valid(require_store=False)
         if not isinstance(manifest, (CaptureManifest, str)):
@@ -285,6 +330,7 @@ class LocatedCaptureStore:
                 or len({move.identifier for move in recognized_moves}) != len(recognized_moves)
                 or len({move.destination for move in recognized_moves}) != len(recognized_moves)
                 or type(targeted_detection) is not bool or type(publish_capture) is not bool
+                or file_limit is not None and (type(file_limit) is not int or file_limit < 1 or recognized_moves)
                 or any(callback is not None and not callable(callback)
                        for callback in (file_handoff, batch_handoff, reply_counts))
                 or (activity is not None and activity.connection is not self.connection)):
@@ -353,9 +399,11 @@ class LocatedCaptureStore:
                 counts = {'files': {'scanned': sum(len(location.files) for location in manifest.locations),
                                    'changed': 0, 'removed': 0},
                           'chunks': {reason: 0 for reason in ('unchanged', 'edited', 'renamed', 'new', 'removed')}}
+                written, remaining = 0, 0
+                order = None if file_limit is None else _file_edges(connection, repository.name)
                 for location in manifest.locations:
                     key, used = location_key(location.id), set()
-                    for captured in location.files:
+                    for captured in (location.files if order is None else _sources_first(location.files, order)):
                         addresses = tuple(SourceAddress(repository.name, alias.root, alias.path) for alias in captured.aliases)
                         logical = _bindings(captured, scopes)
                         matching = []
@@ -481,7 +529,13 @@ class LocatedCaptureStore:
                         if unchanged:
                             binding = FileBinding(identifier, str(old[5]), str(old[4]), primary, addresses)
                             versions = tuple((item.chunk_id, item.version_id) for item in plan.decisions)
+                        elif file_limit is not None and written >= file_limit:
+                            # This step's share is written; the next step finds
+                            # this file still changed and takes it.
+                            remaining += 1
+                            continue
                         else:
+                            written += 1
                             binding, versions = self._write_file(connection, repository.name, captured, old, identifier,
                                                                primary, addresses, metadata, plan, location.id.kind, key)
                             counts['files']['changed'] += 1
@@ -509,7 +563,8 @@ class LocatedCaptureStore:
                                                 key=lambda row: (str(row[0]), str(row[4])))
                 if used_moves != {move.identifier for move in recognized_moves}:
                     _invalid('Every recognized move must bind one captured disk destination.')
-                retired = tuple(str(row[4]) for row in rows if str(row[4]) not in kept)
+                whole = remaining == 0
+                retired = tuple(str(row[4]) for row in rows if str(row[4]) not in kept) if whole else ()
                 # Replaced locations were already removed by _write_file; old
                 # absent location rows retire here. Versions and owners survive.
                 for row in rows:
@@ -528,13 +583,18 @@ class LocatedCaptureStore:
                               'policyHash': manifest.policy_hash} for location in manifest.locations]
                 inventory = sorted([*(item for item in (() if state is None else state[0])
                     if item['location'].get('clone') != repository.location), *inventory], key=_inventory_order)
-                inventory_changed = state is None or state[0] != inventory
+                inventory_changed = whole and (state is None or state[0] != inventory)
                 if inventory_changed:
                     connection.execute('INSERT INTO public.mycel_repository_state VALUES (%s,NULL,%s) '
                         'ON CONFLICT(repository) DO UPDATE SET read_locations=EXCLUDED.read_locations',
                         (repository.name, Jsonb(inventory)))
                 changed = bool(file_changes) or inventory_changed
-                output = LocatedCaptureResult(tuple(applied), retired, changed, counts, repository.name, activity, reply_counts)
+                if file_limit is not None:
+                    counts['remaining'] = {'files': remaining}
+                # A step before the last refreshes only the files it wrote; the
+                # last step refreshes every unchanged file as a whole pass does.
+                output = LocatedCaptureResult(tuple(applied if whole else (file for file in applied if file.changed)),
+                                              retired, changed, counts, repository.name, activity, reply_counts)
                 for file in output.files:
                     if file.changed and file_handoff is not None:
                         file_handoff(connection, file)

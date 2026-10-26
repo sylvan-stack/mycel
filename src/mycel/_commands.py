@@ -20,7 +20,7 @@ class CommandSpec:
 COMMANDS = (
     CommandSpec("search", "Search by meaning or exact wording", extra_options=("--k <count>", "--only code|docs", "--no-fresh")),
     CommandSpec("ingest", "Bring repository knowledge up to date", all_repositories=True,
-                extra_options=("--embed", "--confirm-empty")),
+                extra_options=("--files <n>", "--embed", "--confirm-empty")),
     CommandSpec("embed", "Embed pending chunk text", all_repositories=True, extra_options=("--dry-run", "--retry-failed")),
     CommandSpec("status", "Report repository counts", all_repositories=True),
     CommandSpec("repos", "List repositories or remove indexed rows", scope=False),

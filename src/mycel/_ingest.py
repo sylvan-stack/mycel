@@ -181,7 +181,7 @@ class _CompleteProducer(LocatedDependencyProducer):
             changed = super().__call__(connection, result)
         except EvidenceError as error:
             raise _changed_since_ingest(error) from None
-        if not self.pending_repositories:
+        if not self.pending_repositories and not result.counts.get('remaining', {}).get('files'):
             # Successful observation time is operational metadata; a timestamp
             # alone creates no identity decision or activity entry.
             connection.execute('UPDATE public.mycel_repository_state SET last_pass_at=clock_timestamp() '
@@ -243,9 +243,17 @@ def ingest(invocation):
 def _ingest(invocation, state):
     from ._build_identity import current_build
     from ._cli import Result, invocation_store, repository_result
-    if (len(set(invocation.arguments)) != len(invocation.arguments)
-            or any(argument not in {'--embed', '--confirm-empty'} for argument in invocation.arguments)):
-        raise MycelError('invalid_input', 'Use mycel ingest [--repo <name> | --all] [--embed] [--confirm-empty].')
+    flags, file_limit = list(invocation.arguments), None
+    if '--files' in flags:
+        index = flags.index('--files')
+        value = flags[index + 1] if index + 1 < len(flags) else ''
+        if not value.isdigit() or int(value) < 1:
+            raise MycelError('invalid_input', 'Ingest --files takes a positive number of changed files for one step.')
+        file_limit = int(value)
+        del flags[index:index + 2]
+    if len(set(flags)) != len(flags) or any(argument not in {'--embed', '--confirm-empty'} for argument in flags):
+        raise MycelError('invalid_input',
+                         'Use mycel ingest [--repo <name> | --all] [--files <n>] [--embed] [--confirm-empty].')
     settings = invocation.settings
     if settings is None:
         raise MycelError('internal', 'Settings were not loaded for ingest.')
@@ -302,9 +310,13 @@ def _ingest(invocation, state):
                             confirm_empty='--confirm-empty' in invocation.arguments, activity=activity,
                             targeted_detection=True, publish_capture=True,
                             reply_counts=lambda owner, portion: _cumulative(
-                                final_counts.get((owner, 'ingest'), {}), portion))
+                                final_counts.get((owner, 'ingest'), {}), portion), file_limit=file_limit)
                         reply = _cumulative(final_counts.get((name, 'ingest'), {}),
                             {'ran': True, 'changed': applied.changed, 'stale': applied.counts.get('stale', 0), **applied.counts})
+                        if file_limit is not None:
+                            # One step of a pass: the pass is complete when no
+                            # changed file remains for a further step (SYL-286).
+                            reply['complete'] = not reply.get('remaining', {}).get('files')
                         repositories[name] = reply
                         completed.append(name)
                         state['started'] = True
@@ -362,8 +374,11 @@ def _ingest(invocation, state):
         if embedding is not None:
             state['reply']['embedding'] = embedding
         failures = [reply['error'] for reply in repositories.values() if 'error' in reply]
-        pending = any(reply.get('dependencyPending') or reply.get('stalePending') or
-                      reply.get('collectionPending') for reply in repositories.values())
+        # A step that leaves changed files rechecks the dependants it could not
+        # check yet in a later step; only a complete pass reports them as work.
+        pending = any(reply.get('dependencyPending') or reply.get('collectionPending') or
+                      reply.get('stalePending') and reply.get('complete', True)
+                      for reply in repositories.values())
         embedding_failed = embedding is not None and (embedding.get('error') is not None or
             any(portion.get('error') is not None or portion.get('failed', 0)
                 for portion in embedding.get('repositories', {}).values()))
