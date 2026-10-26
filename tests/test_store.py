@@ -447,8 +447,8 @@ class StoreUnitTests(unittest.TestCase):
         self.error("store_format", lambda: store._migrate(connection, store.STORE_FORMAT, store.STORE_FORMAT + 2, generation, {store.STORE_FORMAT: step}))
         self.assertFalse(connection.mutations)
         self.assertFalse(connection.transactions)
-        self.assertEqual(store.STORE_FORMAT, 3)
-        self.assertEqual(set(store.MIGRATIONS), {1, 2})
+        self.assertEqual(store.STORE_FORMAT, 4)
+        self.assertEqual(set(store.MIGRATIONS), {1, 2, 3})
 
     def test_failed_migration_rolls_back_only_failed_step_and_generation_change_refuses(self):
         for change_generation in (False, True):
