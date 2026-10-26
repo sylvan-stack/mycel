@@ -329,8 +329,11 @@ def _ingest(invocation, state):
                         final_counts[(name, 'ingest')] = reply
                 # Planning is local and read-only: no embedding credential,
                 # provider, saved plan or vector is requested without --embed.
-                reply['embedding'] = _embedding_counts(connection, settings, name)
-                reply['pending'] = reply['embedding']['versions']['pending']
+                # It reads the whole repository, so only the step that
+                # completes a pass counts it (SYL-286).
+                if reply.get('complete', True):
+                    reply['embedding'] = _embedding_counts(connection, settings, name)
+                    reply['pending'] = reply['embedding']['versions']['pending']
                 if file_limit is not None:
                     # The local check reads every Drift of the repository, so a
                     # step leaves it to search and to a whole pass (SYL-286).
