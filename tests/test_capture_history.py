@@ -41,6 +41,32 @@ class CaptureHistoryStoreTests(unittest.TestCase):
             self.source.write_bytes(b'def value():\n    return 2\n')
             self.git('stash', 'push', '--message', 'Saved')
 
+    def test_branch_and_stash_blobs_are_read_in_one_batch_and_a_failed_batch_reads_each_alone(self):
+        self.populate()
+        calls = []
+
+        def counting(args, **kwargs):
+            calls.append(tuple(args[:2]))
+            return _capture.run_git(args, **kwargs)
+
+        first = _capture.capture_repository(self.settings, 'fixture', _git=counting)
+        self.assertTrue(first.deletion_safe)
+        self.assertIn(('cat-file', '--batch'), calls)
+        # Only the stash's own commit header is read alone.
+        self.assertEqual(calls.count(('cat-file', '-p')), 1)
+
+        def no_batch(args, **kwargs):
+            calls.append(tuple(args[:2]))
+            if tuple(args[:2]) == ('cat-file', '--batch'):
+                return _capture.CompletedChild(1, b'', b'', 0.0)
+            return _capture.run_git(args, **kwargs)
+
+        calls.clear()
+        second = _capture.capture_repository(self.settings, 'fixture', _git=no_batch)
+        self.assertGreater(calls.count(('cat-file', '-p')), 1)
+        self.assertEqual([[file.source for file in location.files] for location in second.locations],
+                         [[file.source for file in location.files] for location in first.locations])
+
     def test_unchanged_disk_and_located_repeat_from_persisted_history_never_splits(self):
         self.populate()
         with self.connect() as connection:
