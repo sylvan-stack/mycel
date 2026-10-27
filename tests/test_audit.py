@@ -268,7 +268,7 @@ class SemanticAuditStoreTests(AuditFixture):
         self.assertEqual(reply['completed'],6,reply)
         links=self.links();lowered=next(link for link in links if REQ in link['origin'])
         conforming=next(link for link in links if OTHER in link['origin'])
-        self.assertEqual((lowered['confidenceScore'],lowered['confidence'],lowered['method']),(.15,'candidate','stated'))
+        self.assertEqual((lowered['confidenceScore'],lowered['confidence'],lowered['method']),(.1,'candidate','stated'))
         self.assertEqual(conforming['confidenceScore'],1)
         self.assertEqual(lowered['who'],'fixture-owner')
         self.assertEqual(lowered['review']['outcome'],'nonconforming')
@@ -379,7 +379,7 @@ print(json.dumps(v))
             rows=connection.execute("SELECT id,state FROM public.mycel_dependencies WHERE state ? 'originLink'").fetchall()
             self.assertEqual({state['originLink']['method'] for _,state in rows},{'stated','proven','inferred','recovered'})
             for identifier,state in rows:
-                old=expected[str(identifier)];self.assertEqual(state['originLink']['confidenceScore'],min(old['originLink']['confidenceScore'],.15))
+                old=expected[str(identifier)];self.assertEqual(state['originLink']['confidenceScore'],min(old['originLink']['confidenceScore'],.1))
                 self.assertEqual({k:v for k,v in state.items() if k!='originLink'},{k:v for k,v in old.items() if k!='originLink'})
                 for key in ('chunk','origin','method','who','when'):self.assertEqual(state['originLink'][key],old['originLink'][key])
             self.assertEqual(connection.execute('SELECT to_jsonb(t),xmin::text FROM public.mycel_verifications t ORDER BY id').fetchall(),verifications)
@@ -395,9 +395,10 @@ print(json.dumps(v))
         oversized=self.audit(k=1,dependencies=small)
         self.assertEqual(oversized['status'],0,oversized);self.assertEqual(oversized['jevCalls'],0)
         self.assertEqual(oversized['pairs'][0]['status'],'needs_llm_review')
-        uncertain=self.audit(k=1,dependencies=replace(self.dependencies(top=.7),utc_now=lambda:later))
+        uncertain=self.audit(k=1,dependencies=replace(self.dependencies(top=.4),utc_now=lambda:later))
         self.assertEqual(uncertain['status'],0,uncertain);self.assertEqual(uncertain['jevCalls'],1)
-        self.assertEqual(uncertain['pairs'][0]['reason'],'reviewer_unconfigured')
+        # Without a reviewer, nonconforming at probability .4 is below its floor: no finding, nothing pending.
+        self.assertEqual((uncertain['pairs'][0]['status'],uncertain['pairs'][0]['decided']),('complete','effect'))
         self.assertEqual(self.links()[0]['confidenceScore'],1)
 
     def test_candidate_cap_bounds_unresolved_preparation_before_assembly(self):
@@ -507,13 +508,13 @@ print(json.dumps(v))
         second=self.audit(k=1,dependencies=replace(self.dependencies(),utc_now=lambda:later))
         self.assertEqual(second['status'],0,second)
         self.assertEqual((second['jevCalls'],second['reused'],second['completed']),(0,1,1))
-        self.assertEqual(self.links()[0]['confidenceScore'],.15)
+        self.assertEqual(self.links()[0]['confidenceScore'],.1)
         with self.base.connect() as connection:
             with self.assertRaises(MycelError):
                 AuditStore(connection).settle(secondary,'fixture',primary_findings[0],reason='Wrong clone.',by='fixture-owner')
         self.settings=primary
         retained,_=self.deterministic();self.assertEqual([r['id'] for r in retained],primary_findings)
-        self.assertEqual(self.links()[0]['confidenceScore'],.15)
+        self.assertEqual(self.links()[0]['confidenceScore'],.1)
 
     def test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence(self):
         from psycopg.types.json import Jsonb

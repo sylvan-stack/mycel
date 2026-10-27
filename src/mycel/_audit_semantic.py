@@ -29,7 +29,7 @@ from ._jev import JevFailure, JevRequest
 from ._justify import checked_link, confidence_band, public_reference
 from ._locks import (read_snapshot, operation_guard, mutation_guard, invocation_guard)
 from ._origins import _selection
-from ._recovery import _text, _checked_result, judgement_policy
+from ._recovery import _text, _checked_result, effect_decision, has_effect, judgement_policy
 from ._resolver import SourceResolver
 from ._reviewer import ReviewerFailure
 from ._safeguards import InvocationPolicy
@@ -266,7 +266,7 @@ class SemanticAuditStore(AuditStore):
                                 key=lambda item: item['id'])) != tuple(sorted(pair.claims, key=lambda item: item['id'])):
                     raise EvidenceError('obsolete')
             negative = {'conformance': 'nonconforming', 'consistency': 'contradictory', 'ambiguity': 'ambiguous'}[pair.question]
-            if record['judgement'] != negative:
+            if not has_effect(settings, pair.question, record):
                 return {'finding': None, 'lowered': 0, 'created': False}
             observed = observation(pair.repository, pair.location, negative, pair.subject, pair.path,
                 facts={'question': pair.question, 'questionVersion': pair.decision.payload['questionVersion']},
@@ -375,7 +375,10 @@ def run_audit(store, settings, repository, *, paths=(), dry_run=False, determini
                                 if outcome.decision != pair.decision:
                                     raise EvidenceError('obsolete')
                                 record['jev'] = outcome.as_dict()
-                            if outcome is not None and outcome.status == 'complete':
+                            decided = None if outcome is None else effect_decision(pair.decision,outcome)
+                            if decided is not None:
+                                record.update(decided)
+                            elif outcome is not None and outcome.status == 'complete':
                                 record.update(status='complete',judgement=outcome.judgement,
                                     confidenceScore=float(outcome.response.confidence),model=outcome.response.model)
                             else:

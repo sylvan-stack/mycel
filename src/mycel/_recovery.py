@@ -52,6 +52,34 @@ _ORIGIN_ROWS = """SELECT id,state,kind FROM public.mycel_dependencies WHERE repo
     AND state ? 'originLink' ORDER BY id FOR UPDATE NOWAIT"""
 
 
+# The label whose judgement has an effect: a link, or a finding (SYL-289).
+EFFECT_LABELS = {'origin': 'governs', 'conformance': 'nonconforming', 'consistency': 'contradictory',
+                 'ambiguity': 'ambiguous'}
+
+
+def _question(decision):
+    return decision.payload.get('question', 'origin')
+
+
+def effect_decision(decision, outcome):
+    """Without a reviewer, Jev's probability of the label with an effect decides.
+
+    The question's floor is applied where the effect is written, so a changed
+    floor reuses the same answer instead of paying for it again.
+    """
+    response = outcome.response
+    if response is None or decision.payload['models']['review'] is not None:
+        return None
+    return {'status': 'complete', 'judgement': response.label, 'decided': 'effect', 'model': response.model,
+            'confidenceScore': float(response.probabilities[EFFECT_LABELS[_question(decision)]])}
+
+
+def has_effect(settings, question, record):
+    """Only the label with an effect has one, and by effect only at its floor."""
+    return (record['judgement'] == EFFECT_LABELS[question] and (record.get('decided') != 'effect'
+            or record['confidenceScore'] >= settings.values['drifts'][question + '_floor']))
+
+
 def judgement_policy(settings, question):
     """A judgement of no effect holds while these settings hold (SYL-289)."""
     options = settings.values['drifts']
@@ -60,7 +88,7 @@ def judgement_policy(settings, question):
         review = {'command': list(options['review_command']), 'provider': options['review_provider'],
                   'model': options['review_model'], 'revision': options['review_revision']}
     value = {'question': question, 'jev': options['model'], 'floor': str(options['confidence_floor']),
-             'bytes': options['max_input_bytes'], 'review': review}
+             'effect': str(options[question + '_floor']), 'bytes': options['max_input_bytes'], 'review': review}
     return sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
@@ -129,10 +157,19 @@ def _checked_result(pair, record):
                 {key:Decimal(number) for key,number in exact['probabilities'].items()},
                 Decimal(exact['confidence']),value['usage'],value['tied'],
                 reported_confidence=Decimal(exact['reportedConfidence']),labels=tuple(pair.decision.payload['labels']))
-            if (stage['inputHash'] != pair.decision.input_hash or stage['status'] != 'complete'
-                    or response.as_dict() != value or route_response(pair.decision,response).status != 'complete'):
+            routed = route_response(pair.decision,response)
+            if (stage['inputHash'] != pair.decision.input_hash or response.as_dict() != value
+                    or stage['status'] != routed.status):
                 raise ValueError()
-            label,score,model = response.label,float(response.confidence),response.model
+            if record.get('decided') == 'effect':
+                decided = effect_decision(pair.decision,routed)
+                if decided is None:
+                    raise ValueError()
+                label,score,model = decided['judgement'],decided['confidenceScore'],decided['model']
+            elif routed.status != 'complete':
+                raise ValueError()
+            else:
+                label,score,model = response.label,float(response.confidence),response.model
         if (record['judgement'],record['confidenceScore'],record['model']) != (label,score,model):
             raise ValueError()
     except (KeyError,TypeError,ValueError,ArithmeticError,JevFailure,ReviewerFailure):
@@ -561,7 +598,7 @@ class RecoveryStore:
             if len(prior)>1 or prior and prior[0][1]['originLink']['method'] not in {'inferred','recovered'}:
                 raise EvidenceError('obsolete')
             judgement = record['judgement']
-            if judgement == 'unrelated':
+            if not has_effect(settings,'origin',record):
                 if review and prior:
                     self.connection.execute("DELETE FROM public.mycel_dependencies WHERE id=%s AND kind='origin'",
                                             (prior[0][0],))
@@ -712,7 +749,10 @@ def run_recovery(store, settings, repository, *, chunk=None, paths=(), dry_run=F
                                 if outcome.decision != pair.decision:
                                     raise EvidenceError('obsolete')
                                 record['jev'] = outcome.as_dict()
-                            if outcome is not None and outcome.status == 'complete':
+                            decided = None if outcome is None else effect_decision(pair.decision,outcome)
+                            if decided is not None:
+                                record.update(decided)
+                            elif outcome is not None and outcome.status == 'complete':
                                 record.update(status='complete',judgement=outcome.judgement,
                                     confidenceScore=float(outcome.response.confidence),model=outcome.response.model)
                             else:

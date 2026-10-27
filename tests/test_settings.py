@@ -198,7 +198,8 @@ class SettingsTests(unittest.TestCase):
             "debounce_seconds": 300, "model": "jev-1.13.0", "confidence_floor": 0.7,
             "candidates": 100, "at_once": 2, "seconds": 300, "jev_timeout_seconds": 10,
             "review_timeout_seconds": 120, "attempts": 2, "max_input_bytes": 24000,
-            "review_max_input_bytes": 1048576,
+            "review_max_input_bytes": 1048576, "origin_floor": 0.5, "conformance_floor": 0.5,
+            "consistency_floor": 0.5, "ambiguity_floor": 0.5,
         })
         self.assertEqual(values["summaries"]["at_once"], 4)
         self.assertNotIn("command", values["summaries"])
