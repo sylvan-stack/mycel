@@ -378,7 +378,7 @@ class RecoveryStore:
                     skipped += 1
                     continue
                 keys['chunks'][target['chunk']] = member.chunk.version
-                candidates, versions = {}, {}
+                candidates, versions, similarity = {}, {}, {}
                 def add(reference, source):
                     origin = mapping.get(reference)
                     if origin is None:
@@ -440,6 +440,7 @@ class RecoveryStore:
                             resolved = catalog.resolve(item.place.address, purpose='endpoint')
                             if resolved.state == 'resolved':
                                 add(public_reference(resolved.selection), 'embedding')
+                                similarity[public_reference(resolved.selection)] = round(float(scores[key]), 4)
                 embedded = vectors.get((member.chunk.identifier,member.chunk.version))
                 chunk_reply = {'chunk': target['chunk'], 'history': history,
                     'embedding': {'available': bool(embedded and embedded.fully_embedded)}, 'candidates': []}
@@ -449,6 +450,8 @@ class RecoveryStore:
                     chunk_reply['history'] = {**history, 'originAvailable': False, 'reason': 'commit_snapshot_unavailable'}
                 for origin in sorted(candidates):
                     record = {'origin': origin, 'sources': sorted(candidates[origin])}
+                    if origin in similarity:
+                        record['similarity'] = similarity[origin]
                     key = f'{versions[origin]}:{origin}'
                     keys['candidates'][(target['chunk'], origin)] = (versions[origin], key)
                     if (member.chunk.version, key) in judged:

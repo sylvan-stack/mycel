@@ -204,6 +204,7 @@ class RecoveryStoreTests(unittest.TestCase):
         self.assertTrue(entities,reply)
         entity=entities[0]
         self.assertEqual(entity['status'],'pending_jev',entity)
+        self.assertTrue(-1<=entity['similarity']<=1,entity)
         self.assertIn(':req:'+REQ+':',entity['origin'])
         self.assertEqual((reply['jevCalls'],reply['reviewCalls']),(0,0))
 
