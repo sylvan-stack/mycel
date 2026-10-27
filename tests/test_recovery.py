@@ -195,6 +195,16 @@ class RecoveryStoreTests(unittest.TestCase):
         named=self.run_recovery(dry_run=True,chunk='fixture:@code/tests/test_value.py#test_value')
         self.assertEqual((named['status'],named['error']['code']),(1,'invalid_input'),named)
 
+    def test_a_name_found_in_many_document_sections_gives_no_name_candidates(self):
+        # value names ref.md and symbol.md (linear.md is never a document); ref.md also cites it.
+        with patch('mycel._recovery._NAME_MATCHES',1):
+            reply=self.run_recovery(dry_run=True)
+        self.assertEqual(reply['status'],0,reply)
+        origins={item['origin'] for item in reply['chunks'][0]['candidates']}
+        self.assertFalse(any('symbol.md' in origin for origin in origins),origins)
+        self.assertTrue(any('ref.md' in origin for origin in origins),origins)
+        self.assertTrue(any('symbol.md' in item['origin'] for item in self.run_recovery(dry_run=True)['chunks'][0]['candidates']))
+
     def test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri(self):
         from mycel._resolver import SourceResolver
         from test_retrieval_store import RetrievalStoreTests

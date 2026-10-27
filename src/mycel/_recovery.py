@@ -42,6 +42,11 @@ from ._verification import _located, _require_confirmable
 SOURCES = ('document', 'commit', 'issue', 'embedding')
 _TEXT_KINDS = frozenset({'document', 'req', 'dec', 'summary', 'overview'})
 _TEST_PATH = re.compile(r'(^|/)(?:tests?|__tests__)(/|_)|(^|/)test_')
+# Candidate counts that fit the owner's budget and a 24-hour series (SYL-289):
+# the nearest requirements and decisions by rank, since similarity did not
+# predict governs; a name found in more document sections is not distinctive.
+_EMBEDDING_CANDIDATES = 4
+_NAME_MATCHES = 10
 
 
 def _is_test(member):
@@ -415,8 +420,10 @@ class RecoveryStore:
                         if resolved.state == 'resolved':
                             add(public_reference(resolved.selection), 'document')
                     symbol = member.chunk.name
-                    for file, item in documents:
-                        if _match_symbol(item.chunk.source.decode('utf-8'), symbol):
+                    named = [(file, item) for file, item in documents
+                             if _match_symbol(item.chunk.source.decode('utf-8'), symbol)]
+                    if len(named) <= _NAME_MATCHES:
+                        for file, item in named:
                             add(public_reference(_selection(file, item)), 'document')
                     if history.get('available'):
                         message = history['message']
@@ -437,9 +444,9 @@ class RecoveryStore:
                         scores = {}
                         entities = tuple(item for item in retrieval if item.kind in {'req','dec'})
                         for vector in embedded.part_vectors:
-                            for candidate in meaning_candidates(vector, entities, k=10):
+                            for candidate in meaning_candidates(vector, entities, k=_EMBEDDING_CANDIDATES):
                                 scores[candidate.chunk.key] = max(scores.get(candidate.chunk.key,-2),candidate.score)
-                        for key in sorted(scores, key=lambda key:(-scores[key],key))[:10]:
+                        for key in sorted(scores, key=lambda key:(-scores[key],key))[:_EMBEDDING_CANDIDATES]:
                             item = next(item for item in entities if item.key == key)
                             resolved = catalog.resolve(item.place.address, purpose='endpoint')
                             if resolved.state == 'resolved':
