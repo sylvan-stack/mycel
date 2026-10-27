@@ -217,7 +217,9 @@ class RecoveryStore:
         self.step_captures = {}  # One step re-reads bytes but parses only what changed.
 
     @contextmanager
-    def guarded(self, settings, *, require_current=True):
+    def guarded(self, settings, *, require_current=True, catalog=True):
+        """``catalog=False`` serves writes that resolve no source: the guards and
+        the transaction stay, the catalog of every section is not read (SYL-289)."""
         with ExitStack() as stack:
             stack.enter_context(checked_store(self.connection))
             for owner in sorted(settings.values['repos']):
@@ -225,7 +227,7 @@ class RecoveryStore:
             with atomic_transaction(self.connection):
                 if require_current:
                     settings.require_current()
-                yield SourceResolver.from_transaction(self.connection, settings)
+                yield SourceResolver.from_transaction(self.connection, settings) if catalog else None
                 if require_current:
                     settings.require_current()
 
@@ -510,7 +512,7 @@ class RecoveryStore:
     def retain(self, settings, pair, *, at, invocation, record=None):
         repository = pair.decision.payload['chunk']['snapshot']['place']['repository']
         digest, raw = pair.decision.input_hash, pair.decision.canonical_bytes
-        with self.guarded(settings,require_current=False):
+        with self.guarded(settings,require_current=False,catalog=False):
             previous = self.connection.execute('SELECT kind,bytes,metadata FROM public.mycel_manifests '
                 'WHERE repository=%s AND hash=%s FOR UPDATE NOWAIT', (repository,digest)).fetchone()
             if previous is not None and (previous[0] != 'origin_recovery' or bytes(previous[1]) != raw):
@@ -555,7 +557,7 @@ class RecoveryStore:
 
     def judge(self, settings, repository, question, version, candidate, policy, outcome, *, at):
         """Keep one judgement of no effect; a row under another policy for the same pair goes."""
-        with self.guarded(settings, require_current=False):
+        with self.guarded(settings, require_current=False, catalog=False):
             self.connection.execute('DELETE FROM public.mycel_judgements WHERE repository=%s AND question=%s '
                 'AND chunk_version=%s AND candidate=%s', (repository, question, version, candidate))
             self.connection.execute('INSERT INTO public.mycel_judgements VALUES (%s,%s,%s,%s,%s,%s,%s)',
@@ -563,7 +565,7 @@ class RecoveryStore:
 
     def finish(self, settings, repository, invocation):
         """Release ended leases, retaining a finite request/result history."""
-        with self.guarded(settings,require_current=False):
+        with self.guarded(settings,require_current=False,catalog=False):
             self.connection.execute("UPDATE public.mycel_evidence_owners SET invocation=NULL WHERE repository=%s "
                 "AND kind='origin_recovery' AND invocation=%s", (repository,invocation.id))
             older = self.connection.execute("SELECT o.id,o.identity FROM public.mycel_evidence_owners o "
@@ -725,14 +727,15 @@ def run_recovery(store, settings, repository, *, chunk=None, paths=(), dry_run=F
                         def guard():
                             ensure(); store.check(settings,pair,at=dependencies.utc_now()); ensure()
                         def call(stage,client):
+                            # The client checks before its call and the application before
+                            # it writes; a check here only repeated them (SYL-289).
                             for attempt in range(options['attempts']):
-                                guard()
                                 try:
                                     def count():
                                         ensure();reply['jevCalls' if stage=='jev' else 'reviewCalls']+=1
                                     result = client.classify(pair.decision,deadline=deadline.expires_at,
                                         before_call=guard,cancelled=lambda: dependencies.cancelled() or deadline.cancelled(),on_call=count)
-                                    ensure();guard()
+                                    ensure()
                                     attempts.append({'stage':stage,'attempt':attempt+1,'status':'complete'})
                                     return result
                                 except (JevFailure,ReviewerFailure) as error:

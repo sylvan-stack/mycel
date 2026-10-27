@@ -94,7 +94,7 @@ class JevTests(unittest.TestCase):
         self.assertEqual(question, {"type": "choice", "instructions": INSTRUCTION,
             "criteria": dict(zip(LABELS, CHOICE_CRITERIA, strict=True))})
         self.assertEqual(tuple(question["criteria"]), LABELS)
-        self.assertEqual(self.guards, [0, 1])
+        self.assertEqual(self.guards, [1])  # once, after the key, before transmission
         argv, acquisition = self.key_reads[0]
         self.assertEqual(argv[:6], ("/usr/bin/security", "find-generic-password", "-s", "mycel", "-a", "jev-api-key"))
         self.assertEqual(argv[-1], str(self.root / "Library/Keychains/login.keychain-db"))
@@ -465,7 +465,7 @@ class JevTests(unittest.TestCase):
         self.assertEqual(self.classify(self.client(policy=InvocationPolicy('evaluate', kind='drift', live=True))).status,
                          'complete')
 
-    def test_expired_cancelled_missing_input_and_failed_guard_do_not_acquire_credentials(self):
+    def test_expired_cancelled_and_missing_input_do_not_acquire_credentials_and_a_failed_guard_sends_nothing(self):
         with self.assertRaises(JevFailure) as caught:
             self.classify(deadline=time.monotonic() - 1)
         self.assertEqual(caught.exception.code, 'timeout')
@@ -476,9 +476,9 @@ class JevTests(unittest.TestCase):
             self.client().classify(None, deadline=time.monotonic() + 1, before_call=self.guard)
         def obsolete():
             raise MycelError('invalid_input', 'The exact pair is obsolete.')
+        self.assertEqual(self.key_reads, [])
         with self.assertRaises(MycelError):
             self.classify(before_call=obsolete)
-        self.assertEqual(self.key_reads, [])
         self.assertEqual(self.requests, [])
 
     def test_guard_after_keychain_and_acquisition_deadline_prevent_transmission(self):

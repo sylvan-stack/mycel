@@ -214,7 +214,7 @@ class SemanticAuditStore(AuditStore):
     def retain(self, settings, pair, *, at, invocation, record=None):
         repository = pair.repository
         digest, raw = pair.decision.input_hash, pair.decision.canonical_bytes
-        with self.guarded(settings, require_current=False):
+        with self.guarded(settings, require_current=False, catalog=False):
             previous = self.connection.execute('SELECT kind,bytes,metadata FROM public.mycel_manifests '
                 'WHERE repository=%s AND hash=%s FOR UPDATE NOWAIT', (repository, digest)).fetchone()
             if previous is not None and (previous[0] != 'origin_audit_request' or bytes(previous[1]) != raw):
@@ -249,7 +249,7 @@ class SemanticAuditStore(AuditStore):
         return metadata.get('record')
 
     def finish(self, settings, repository, invocation):
-        with self.guarded(settings, require_current=False):
+        with self.guarded(settings, require_current=False, catalog=False):
             self.connection.execute("UPDATE public.mycel_evidence_owners SET invocation=NULL WHERE repository=%s "
                 "AND kind='origin_audit_request' AND invocation=%s", (repository, invocation.id))
             self.prune_in_transaction(repository)
@@ -346,14 +346,15 @@ def run_audit(store, settings, repository, *, paths=(), dry_run=False, determini
                         def guard():
                             ensure(); store.check(settings,pair,at=dependencies.utc_now()); ensure()
                         def call(stage,client):
+                            # The client checks before its call and the application before
+                            # it writes; a check here only repeated them (SYL-289).
                             for attempt in range(options['attempts']):
-                                guard()
                                 try:
                                     def count():
                                         ensure();reply['jevCalls' if stage=='jev' else 'reviewCalls']+=1
                                     result = client.classify(pair.decision,deadline=deadline.expires_at,
                                         before_call=guard,cancelled=lambda: dependencies.cancelled() or deadline.cancelled(),on_call=count)
-                                    ensure();guard()
+                                    ensure()
                                     attempts.append({'stage':stage,'attempt':attempt+1,'status':'complete'})
                                     return result
                                 except (JevFailure,ReviewerFailure) as error:
