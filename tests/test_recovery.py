@@ -284,6 +284,14 @@ class RecoveryStoreTests(unittest.TestCase):
                                   settings=load_settings(path=self.base.config,home=self.base.base))
         self.assertEqual((changed['jevCalls'],changed['complete']),(1,False),changed)
 
+    def test_a_guide_candidate_carries_no_code_it_cites(self):
+        reply=self.run_recovery(dependencies=self.dependencies(label='unrelated'))
+        self.assertEqual(reply['status'],0,reply)
+        guide=[request for request in self.calls if request['state']['candidate']['snapshot']['place']['path']=='ref.md']
+        self.assertEqual(len(guide),1,self.calls)
+        self.assertEqual([item['snapshot']['place']['root'] for item in guide[0]['state']['context']
+                          if item['snapshot']['place']['root']=='code'],[])
+
     def test_an_edit_with_restored_mtime_during_a_step_is_still_caught(self):
         before=self.source.stat()
         def changed(request):

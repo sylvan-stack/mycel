@@ -40,6 +40,7 @@ from ._undocumented import normalize_paths
 from ._verification import _located, _require_confirmable
 
 SOURCES = ('document', 'test', 'commit', 'issue', 'embedding')
+_TEXT_KINDS = frozenset({'document', 'req', 'dec', 'summary', 'overview'})
 _LINEAR = re.compile(r'https?://(?:[^/\s]+\.)?linear\.app(?:/|\b)|\bLinear issue\b|^#\s+SYL-\d+', re.I | re.M)
 _URL = re.compile(r'https?://[^\s<>"\[\]()]+')
 _ISSUE = re.compile(r'(?<![\w/])#([1-9][0-9]*)\b')
@@ -184,7 +185,11 @@ class RecoveryStore:
                     settings.require_current()
 
     def context(self, catalog, selections):
-        """Complete current direct governors and document ancestors; one hop only."""
+        """Complete current direct governors and document ancestors; one hop only.
+
+        Code a governor names is left out: the question needs what ordered a
+        text, and a guide's cited code made requests too large for Jev (SYL-289).
+        """
         current, files = {}, {}
         for selection in selections:
             member = selection.members[0]
@@ -199,8 +204,10 @@ class RecoveryStore:
                 if resolved.state != 'resolved' or resolved.selection.file is None:
                     raise EvidenceError('context_missing')
                 source = resolved.selection
-                files[source.file.identifier] = source.file
-                for item in source.members:
+                kept = [item for item in source.members if item.chunk.kind in _TEXT_KINDS]
+                if kept:
+                    files[source.file.identifier] = source.file
+                for item in kept:
                     current[item.place.address] = _text(source.file, item)
             if member.chunk.kind in {'document', 'req', 'dec'}:
                 from ._markdown import split_markdown
