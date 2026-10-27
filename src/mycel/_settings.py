@@ -129,7 +129,11 @@ _DEFAULTS = {
                "confidence_floor": 0.7, "candidates": 100, "at_once": 2,
                "seconds": 300, "jev_timeout_seconds": 10,
                "review_timeout_seconds": 120, "attempts": 2,
-               "max_input_bytes": 24000, "review_max_input_bytes": 1048576},
+               "max_input_bytes": 24000, "review_max_input_bytes": 1048576,
+               # Without a reviewer, the probability of the label with an
+               # effect must reach the question's floor (SYL-289).
+               "origin_floor": 0.7, "conformance_floor": 0.7, "consistency_floor": 0.7,
+               "ambiguity_floor": 0.8},
     "summaries": {"at_once": 4},
     "organizations": {},
     "repos": {},
@@ -146,7 +150,9 @@ _SCHEMA = {
                "at_once": "positive_int", "seconds": "positive_number",
                "jev_timeout_seconds": "positive_number", "review_timeout_seconds": "positive_number",
                "attempts": "positive_int", "max_input_bytes": "positive_int",
-               "review_max_input_bytes": "positive_int", "review_command": "review_command",
+               "review_max_input_bytes": "positive_int", "origin_floor": "fraction",
+               "conformance_floor": "fraction", "consistency_floor": "fraction", "ambiguity_floor": "fraction",
+               "review_command": "review_command",
                "review_provider": "identity", "review_model": "review_model",
                "review_revision": "revision"},
     "summaries": {"command": "texts", "at_once": "positive_int", "instructions": "folder"},

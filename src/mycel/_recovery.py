@@ -5,6 +5,7 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
+from hashlib import sha256
 import json
 import re
 import threading
@@ -38,13 +39,75 @@ from ._store import checked_store
 from ._undocumented import normalize_paths
 from ._verification import _located, _require_confirmable
 
-SOURCES = ('document', 'test', 'commit', 'issue', 'embedding')
+SOURCES = ('document', 'commit', 'issue', 'embedding')
+_TEXT_KINDS = frozenset({'document', 'req', 'dec', 'summary', 'overview'})
+_TEST_PATH = re.compile(r'(^|/)(?:tests?|__tests__)(/|_)|(^|/)test_')
+# Candidate counts that fit the owner's budget and a 24-hour series (SYL-289):
+# the nearest requirements and decisions by rank, since similarity did not
+# predict governs; a name found in more document sections is not distinctive.
+_EMBEDDING_CANDIDATES = 4
+_NAME_MATCHES = 10
+
+
+def _is_test(member):
+    """Tests leave recovery, as candidates and as sections to recover (SYL-289):
+    a test's Origin is the requirement it checks, stated with `justify`."""
+    return (member.chunk.kind not in {'document', 'req', 'dec'}
+            and bool(_TEST_PATH.search(member.place.path) or member.chunk.name.split('.')[-1].startswith('test_')))
 _LINEAR = re.compile(r'https?://(?:[^/\s]+\.)?linear\.app(?:/|\b)|\bLinear issue\b|^#\s+SYL-\d+', re.I | re.M)
 _URL = re.compile(r'https?://[^\s<>"\[\]()]+')
 _ISSUE = re.compile(r'(?<![\w/])#([1-9][0-9]*)\b')
+# A preparation that fails for one of these reasons may succeed in a later step.
+_TRANSIENT = frozenset({'obsolete', 'changed_since_ingest', 'read_failed', 'pending_debounce', 'busy',
+                        'deadline', 'cancelled', 'internal', 'refused'})
 _ORIGIN_ROWS = """SELECT id,state,kind FROM public.mycel_dependencies WHERE repository=%s
     AND dependant_version=%s AND state->'declarationLocation'->>'file'=%s
     AND state ? 'originLink' ORDER BY id FOR UPDATE NOWAIT"""
+
+
+# The label whose judgement has an effect: a link, or a finding (SYL-289).
+EFFECT_LABELS = {'origin': 'governs', 'conformance': 'nonconforming', 'consistency': 'contradictory',
+                 'ambiguity': 'ambiguous'}
+
+
+def _question(decision):
+    return decision.payload.get('question', 'origin')
+
+
+def effect_decision(decision, outcome):
+    """Without a reviewer, Jev's probability of the label with an effect decides.
+
+    The question's floor is applied where the effect is written, so a changed
+    floor reuses the same answer instead of paying for it again.
+    """
+    response = outcome.response
+    if response is None or decision.payload['models']['review'] is not None:
+        return None
+    return {'status': 'complete', 'judgement': response.label, 'decided': 'effect', 'model': response.model,
+            'confidenceScore': float(response.probabilities[EFFECT_LABELS[_question(decision)]])}
+
+
+def has_effect(settings, question, record):
+    """Only the label with an effect has one, and by effect only at its floor."""
+    return (record['judgement'] == EFFECT_LABELS[question] and (record.get('decided') != 'effect'
+            or record['confidenceScore'] >= settings.values['drifts'][question + '_floor']))
+
+
+def judgement_policy(settings, question):
+    """A judgement of no effect holds while these settings hold (SYL-289)."""
+    options = settings.values['drifts']
+    review = None
+    if options.get('review_command'):
+        review = {'command': list(options['review_command']), 'provider': options['review_provider'],
+                  'model': options['review_model'], 'revision': options['review_revision']}
+    value = {'question': question, 'jev': options['model'], 'floor': str(options['confidence_floor']),
+             'effect': str(options[question + '_floor']), 'bytes': options['max_input_bytes'], 'review': review}
+    return sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def _no_effect(record):
+    return (record.get('status') == 'complete' and record.get('link') is None
+            or record.get('status') == 'needs_llm_review')
 
 
 def confidence_band(score):
@@ -107,10 +170,19 @@ def _checked_result(pair, record):
                 {key:Decimal(number) for key,number in exact['probabilities'].items()},
                 Decimal(exact['confidence']),value['usage'],value['tied'],
                 reported_confidence=Decimal(exact['reportedConfidence']),labels=tuple(pair.decision.payload['labels']))
-            if (stage['inputHash'] != pair.decision.input_hash or stage['status'] != 'complete'
-                    or response.as_dict() != value or route_response(pair.decision,response).status != 'complete'):
+            routed = route_response(pair.decision,response)
+            if (stage['inputHash'] != pair.decision.input_hash or response.as_dict() != value
+                    or stage['status'] != routed.status):
                 raise ValueError()
-            label,score,model = response.label,float(response.confidence),response.model
+            if record.get('decided') == 'effect':
+                decided = effect_decision(pair.decision,routed)
+                if decided is None:
+                    raise ValueError()
+                label,score,model = decided['judgement'],decided['confidenceScore'],decided['model']
+            elif routed.status != 'complete':
+                raise ValueError()
+            else:
+                label,score,model = response.label,float(response.confidence),response.model
         if (record['judgement'],record['confidenceScore'],record['model']) != (label,score,model):
             raise ValueError()
     except (KeyError,TypeError,ValueError,ArithmeticError,JevFailure,ReviewerFailure):
@@ -147,9 +219,12 @@ class RecoveryPair:
 class RecoveryStore:
     def __init__(self, connection):
         self.connection = connection
+        self.step_captures = {}  # One step re-reads bytes but parses only what changed.
 
     @contextmanager
-    def guarded(self, settings, *, require_current=True):
+    def guarded(self, settings, *, require_current=True, catalog=True):
+        """``catalog=False`` serves writes that resolve no source: the guards and
+        the transaction stay, the catalog of every section is not read (SYL-289)."""
         with ExitStack() as stack:
             stack.enter_context(checked_store(self.connection))
             for owner in sorted(settings.values['repos']):
@@ -157,12 +232,16 @@ class RecoveryStore:
             with atomic_transaction(self.connection):
                 if require_current:
                     settings.require_current()
-                yield SourceResolver.from_transaction(self.connection, settings)
+                yield SourceResolver.from_transaction(self.connection, settings) if catalog else None
                 if require_current:
                     settings.require_current()
 
     def context(self, catalog, selections):
-        """Complete current direct governors and document ancestors; one hop only."""
+        """Complete current direct governors and document ancestors; one hop only.
+
+        Code a governor names is left out: the question needs what ordered a
+        text, and a guide's cited code made requests too large for Jev (SYL-289).
+        """
         current, files = {}, {}
         for selection in selections:
             member = selection.members[0]
@@ -177,8 +256,10 @@ class RecoveryStore:
                 if resolved.state != 'resolved' or resolved.selection.file is None:
                     raise EvidenceError('context_missing')
                 source = resolved.selection
-                files[source.file.identifier] = source.file
-                for item in source.members:
+                kept = [item for item in source.members if item.chunk.kind in _TEXT_KINDS]
+                if kept:
+                    files[source.file.identifier] = source.file
+                for item in kept:
                     current[item.place.address] = _text(source.file, item)
             if member.chunk.kind in {'document', 'req', 'dec'}:
                 from ._markdown import split_markdown
@@ -224,7 +305,8 @@ class RecoveryStore:
             raise EvidenceError('obsolete')
         context, context_files = self.context(catalog, selections)
         files.update(context_files)
-        fault = DriftStore(self.connection)._physical(settings, tuple(files.values()), (), {}, catalog)
+        fault = DriftStore(self.connection)._physical(settings, tuple(files.values()), (), {}, catalog,
+                                                      previous=self.step_captures)
         if fault:
             raise EvidenceError(fault)
         options = settings.values['drifts']
@@ -264,7 +346,8 @@ class RecoveryStore:
             decision, tuple(files.values()), signatures, observations, eligible.status, eligible.eligible_at, previous_link)
 
     def preview(self, settings, repository, *, chunk=None, paths=(), review=False, at,
-                pair_limit=None, cancelled=lambda: False):
+                pair_limit=None, cancelled=lambda: False, policy=None):
+        """With ``policy``, judged pairs are skipped; a series (no chunk) skips judged sections too."""
         paths = normalize_paths(paths)
         with checked_store(self.connection), read_snapshot(self.connection):
             catalog = SourceResolver.from_read_transaction(self.connection, settings)
@@ -278,23 +361,43 @@ class RecoveryStore:
                     mapping[row['chunk']].members[0].chunk.kind not in {'req', 'dec'}
                     and (mapping[row['chunk']].members[0].chunk.kind != 'document'
                          or mapping[row['chunk']].file.document_declarations.role != 'authored')]
+            if not review:
+                if chunk is not None and any(_is_test(mapping[row['chunk']].members[0]) for row in targets):
+                    raise MycelError('invalid_input', "Recovery leaves tests out; state a test's Origin with justify.")
+                targets = [row for row in targets if not _is_test(mapping[row['chunk']].members[0])]
             documents = [(file, member) for file in catalog.files for member in catalog._members(file, file.chunks)
                          if member.chunk.kind in {'document', 'req', 'dec'}
                          and not _LINEAR.search(file.source.decode('utf-8'))]
             links = document_links(self.connection, catalog)
-            retrieval = _disk_inputs(self.connection, catalog)
+            # Only the targets' and the entities' vectors are decoded (SYL-289).
+            retrieval = _disk_inputs(self.connection, catalog, versions=frozenset(
+                {mapping[row['chunk']].members[0].chunk.version for row in targets}
+                | {member.chunk.version for file in catalog.files for member in catalog._members(file, file.chunks)
+                   if member.chunk.kind in {'req', 'dec'}}))
             vectors = {item.key: item for item in retrieval}
             repo = RepositoryLocations(settings).named(repository)[0]
             pairs, chunks = [], []
             limit = settings.values['drifts']['candidates'] if pair_limit is None else pair_limit
             attempted, capped = 0, False
+            judged = {} if policy is None else self.judgements(repository, 'origin', policy)
+            current = {item.members[0].chunk.version for item in mapping.values()}
+            series = policy is not None and chunk is None and not review
+            def settled(version):
+                marker = judged.get((version, ''))
+                return marker is not None and all(item['version'] in current for item in marker['candidates'])
+            remaining = sum(1 for row in targets if not settled(mapping[row['chunk']].members[0].chunk.version))
+            skipped, keys = 0, {'chunks': {}, 'candidates': {}}
             for target_index, target in enumerate(targets):
                 check_deadline()
                 if cancelled():
                     raise MycelError('refused','Recovery was cancelled during local selection.')
                 selected = mapping[target['chunk']]
                 member = selected.members[0]
-                candidates = {}
+                if series and settled(member.chunk.version):
+                    skipped += 1
+                    continue
+                keys['chunks'][target['chunk']] = member.chunk.version
+                candidates, versions, similarity = {}, {}, {}
                 def add(reference, source):
                     origin = mapping.get(reference)
                     if origin is None:
@@ -305,6 +408,7 @@ class RecoveryStore:
                     if (origin is not None and origin.members[0].chunk.identifier != member.chunk.identifier
                             and not _LINEAR.search(origin.file.source.decode('utf-8'))):
                         candidates.setdefault(reference, set()).add(source)
+                        versions[reference] = origin.members[0].chunk.version
                 history, history_texts = _history(repo, selected, cancelled=cancelled)
                 if review:
                     for link in target['links']:
@@ -316,19 +420,11 @@ class RecoveryStore:
                         if resolved.state == 'resolved':
                             add(public_reference(resolved.selection), 'document')
                     symbol = member.chunk.name
-                    leaf = symbol.split('.')[-1]
-                    for file, item in documents:
-                        if _match_symbol(item.chunk.source.decode('utf-8'), symbol):
+                    named = [(file, item) for file, item in documents
+                             if _match_symbol(item.chunk.source.decode('utf-8'), symbol)]
+                    if len(named) <= _NAME_MATCHES:
+                        for file, item in named:
                             add(public_reference(_selection(file, item)), 'document')
-                    for file in catalog.files:
-                        if file.repository != repository:
-                            continue
-                        for item in catalog._members(file, file.chunks):
-                            if (item.chunk.kind not in {'document','req','dec'}
-                                    and (re.search(r'(^|/)(?:tests?|__tests__)(/|_)|(^|/)test_', item.place.path)
-                                         or item.chunk.name.split('.')[-1].startswith('test_'))
-                                    and re.search(r'(?<!\w)'+re.escape(leaf)+r'\s*\(', item.chunk.source.decode('utf-8'))):
-                                add(public_reference(_selection(file,item)), 'test')
                     if history.get('available'):
                         message = history['message']
                         urls = [url.rstrip('.,:;') for url in _URL.findall(message) if not _LINEAR.search(url)]
@@ -348,13 +444,14 @@ class RecoveryStore:
                         scores = {}
                         entities = tuple(item for item in retrieval if item.kind in {'req','dec'})
                         for vector in embedded.part_vectors:
-                            for candidate in meaning_candidates(vector, entities, k=10):
+                            for candidate in meaning_candidates(vector, entities, k=_EMBEDDING_CANDIDATES):
                                 scores[candidate.chunk.key] = max(scores.get(candidate.chunk.key,-2),candidate.score)
-                        for key in sorted(scores, key=lambda key:(-scores[key],key))[:10]:
+                        for key in sorted(scores, key=lambda key:(-scores[key],key))[:_EMBEDDING_CANDIDATES]:
                             item = next(item for item in entities if item.key == key)
                             resolved = catalog.resolve(item.place.address, purpose='endpoint')
                             if resolved.state == 'resolved':
                                 add(public_reference(resolved.selection), 'embedding')
+                                similarity[public_reference(resolved.selection)] = round(float(scores[key]), 4)
                 embedded = vectors.get((member.chunk.identifier,member.chunk.version))
                 chunk_reply = {'chunk': target['chunk'], 'history': history,
                     'embedding': {'available': bool(embedded and embedded.fully_embedded)}, 'candidates': []}
@@ -364,6 +461,15 @@ class RecoveryStore:
                     chunk_reply['history'] = {**history, 'originAvailable': False, 'reason': 'commit_snapshot_unavailable'}
                 for origin in sorted(candidates):
                     record = {'origin': origin, 'sources': sorted(candidates[origin])}
+                    if origin in similarity:
+                        record['similarity'] = similarity[origin]
+                    key = f'{versions[origin]}:{origin}'
+                    keys['candidates'][(target['chunk'], origin)] = (versions[origin], key)
+                    if (member.chunk.version, key) in judged:
+                        outcome = judged[(member.chunk.version, key)]
+                        record.update(status='judged', judgement=outcome.get('judgement'), reason=outcome.get('reason'))
+                        chunk_reply['candidates'].append(record)
+                        continue
                     if attempted >= limit:
                         capped = True
                         chunk_reply['candidates'].append({**record, 'status': 'not_selected'})
@@ -377,7 +483,7 @@ class RecoveryStore:
                     except (EvidenceError, MycelError) as error:
                         record.update(status='unresolved', reason=error.status if isinstance(error,EvidenceError) else error.code.value)
                     chunk_reply['candidates'].append(record)
-                reasons = {'document':'no_matching_document_sections','test':'no_calling_tests',
+                reasons = {'document':'no_matching_document_sections',
                            'commit':'commit_snapshot_unavailable','issue':'upstream_snapshot_unavailable',
                            'embedding':'chunk_vectors_unavailable' if not chunk_reply['embedding']['available'] else 'no_embedded_entities'}
                 chunk_reply['sourceAvailability'] = {source: {'available':any(source in values for values in candidates.values()),
@@ -387,7 +493,8 @@ class RecoveryStore:
                 if attempted >= limit:
                     capped |= target_index + 1 < len(targets)
                     break
-            return pairs, {'repository': repository, 'chunks': chunks, 'capped': capped}
+            return pairs, {'repository': repository, 'chunks': chunks, 'capped': capped,
+                           'remaining': remaining if series else None, 'skipped': skipped, '_keys': keys}
 
     def check(self, settings, pair, *, at, require_eligible=True):
         with self.guarded(settings) as catalog:
@@ -412,7 +519,7 @@ class RecoveryStore:
     def retain(self, settings, pair, *, at, invocation, record=None):
         repository = pair.decision.payload['chunk']['snapshot']['place']['repository']
         digest, raw = pair.decision.input_hash, pair.decision.canonical_bytes
-        with self.guarded(settings,require_current=False):
+        with self.guarded(settings,require_current=False,catalog=False):
             previous = self.connection.execute('SELECT kind,bytes,metadata FROM public.mycel_manifests '
                 'WHERE repository=%s AND hash=%s FOR UPDATE NOWAIT', (repository,digest)).fetchone()
             if previous is not None and (previous[0] != 'origin_recovery' or bytes(previous[1]) != raw):
@@ -450,9 +557,22 @@ class RecoveryStore:
                         (owner,repository,snapshot_hash,manifest_hash,ordinal))
         return metadata.get('record')
 
+    def judgements(self, repository, question, policy):
+        rows = self.connection.execute('SELECT chunk_version,candidate,outcome FROM public.mycel_judgements '
+            'WHERE repository=%s AND question=%s AND policy=%s', (repository, question, policy)).fetchall()
+        return {(version, candidate): outcome for version, candidate, outcome in rows}
+
+    def judge(self, settings, repository, question, version, candidate, policy, outcome, *, at):
+        """Keep one judgement of no effect; a row under another policy for the same pair goes."""
+        with self.guarded(settings, require_current=False, catalog=False):
+            self.connection.execute('DELETE FROM public.mycel_judgements WHERE repository=%s AND question=%s '
+                'AND chunk_version=%s AND candidate=%s', (repository, question, version, candidate))
+            self.connection.execute('INSERT INTO public.mycel_judgements VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                (repository, question, version, candidate, policy, Jsonb(outcome), at))
+
     def finish(self, settings, repository, invocation):
         """Release ended leases, retaining a finite request/result history."""
-        with self.guarded(settings,require_current=False):
+        with self.guarded(settings,require_current=False,catalog=False):
             self.connection.execute("UPDATE public.mycel_evidence_owners SET invocation=NULL WHERE repository=%s "
                 "AND kind='origin_recovery' AND invocation=%s", (repository,invocation.id))
             older = self.connection.execute("SELECT o.id,o.identity FROM public.mycel_evidence_owners o "
@@ -492,7 +612,7 @@ class RecoveryStore:
             if len(prior)>1 or prior and prior[0][1]['originLink']['method'] not in {'inferred','recovered'}:
                 raise EvidenceError('obsolete')
             judgement = record['judgement']
-            if judgement == 'unrelated':
+            if not has_effect(settings,'origin',record):
                 if review and prior:
                     self.connection.execute("DELETE FROM public.mycel_dependencies WHERE id=%s AND kind='origin'",
                                             (prior[0][0],))
@@ -500,7 +620,7 @@ class RecoveryStore:
                         from ._activity import AppliedMutation
                         activity.record_in_transaction(endpoint.place.repository,'recovery',AppliedMutation(True,
                             {'chunk':pair.chunk,'origin':pair.origin,'action':'withdraw','inputHash':pair.decision.input_hash}))
-                    fault = DriftStore(self.connection)._physical(settings,pair.files,(),{},catalog)
+                    fault = DriftStore(self.connection)._physical(settings,pair.files,(),{},catalog,previous=self.step_captures)
                     if fault:
                         raise EvidenceError(fault)
                 return None
@@ -532,10 +652,32 @@ class RecoveryStore:
                 from ._activity import AppliedMutation
                 activity.record_in_transaction(endpoint.place.repository,'recovery',AppliedMutation(True,
                     {'chunk':pair.chunk,'origin':pair.origin,'link':link,'inputHash':pair.decision.input_hash}))
-            fault = DriftStore(self.connection)._physical(settings,pair.files,(),{},catalog)
+            fault = DriftStore(self.connection)._physical(settings,pair.files,(),{},catalog,previous=self.step_captures)
             if fault:
                 raise EvidenceError(fault)
             return link
+
+
+def _judge_sections(store, settings, repository, policy, reply, keys, *, at):
+    """A section all of whose candidates ended without effect is judged as a whole."""
+    final = {(item['chunk'], item['origin']): item for item in reply['pairs']}
+    marked = 0
+    for section in reply['chunks']:
+        version = keys['chunks'].get(section['chunk'])
+        settled = version is not None
+        for candidate in section['candidates']:
+            record = final.get((section['chunk'], candidate['origin']), candidate)
+            if record.get('link'):
+                settled = False
+                break
+            settled &= (record.get('status') == 'judged' or _no_effect(record)
+                        or record.get('status') == 'unresolved' and record.get('reason') not in _TRANSIENT)
+        if settled:
+            store.judge(settings, repository, 'origin', version, '', policy, {'candidates': [
+                {'origin': origin, 'version': keys['candidates'][(section['chunk'], origin)][0]}
+                for origin in sorted(item['origin'] for item in section['candidates'])]}, at=at)
+            marked += 1
+    return marked
 
 
 def run_recovery(store, settings, repository, *, chunk=None, paths=(), dry_run=False, review=False,
@@ -563,11 +705,15 @@ def run_recovery(store, settings, repository, *, chunk=None, paths=(), dry_run=F
                 invocation = stack.enter_context(invocation_guard(store.connection))
             else:
                 invocation = None
+            judgement = None if review else judgement_policy(settings, 'origin')
             pairs, plan = store.preview(settings,repository,chunk=chunk,paths=paths,review=review,
                                          at=dependencies.utc_now(), pair_limit=options['candidates'] if k is None else k,
-                                         cancelled=dependencies.cancelled)
+                                         cancelled=dependencies.cancelled, policy=judgement)
+            keys = plan.pop('_keys')
             reply['chunks'] = plan['chunks']
             reply['capped'] = plan['capped']
+            if plan['remaining'] is not None:
+                reply.update(remaining=plan['remaining'], complete=plan['remaining'] == 0, skipped=plan['skipped'])
             pairs.sort(key=lambda pair:(pair.eligible_at or '',pair.chunk,pair.origin,pair.decision.input_hash))
             selected = pairs[:options['candidates'] if k is None else k]
             reply['selected'] = len(selected)
@@ -588,14 +734,15 @@ def run_recovery(store, settings, repository, *, chunk=None, paths=(), dry_run=F
                         def guard():
                             ensure(); store.check(settings,pair,at=dependencies.utc_now()); ensure()
                         def call(stage,client):
+                            # The client checks before its call and the application before
+                            # it writes; a check here only repeated them (SYL-289).
                             for attempt in range(options['attempts']):
-                                guard()
                                 try:
                                     def count():
                                         ensure();reply['jevCalls' if stage=='jev' else 'reviewCalls']+=1
                                     result = client.classify(pair.decision,deadline=deadline.expires_at,
                                         before_call=guard,cancelled=lambda: dependencies.cancelled() or deadline.cancelled(),on_call=count)
-                                    ensure();guard()
+                                    ensure()
                                     attempts.append({'stage':stage,'attempt':attempt+1,'status':'complete'})
                                     return result
                                 except (JevFailure,ReviewerFailure) as error:
@@ -617,7 +764,10 @@ def run_recovery(store, settings, repository, *, chunk=None, paths=(), dry_run=F
                                 if outcome.decision != pair.decision:
                                     raise EvidenceError('obsolete')
                                 record['jev'] = outcome.as_dict()
-                            if outcome is not None and outcome.status == 'complete':
+                            decided = None if outcome is None else effect_decision(pair.decision,outcome)
+                            if decided is not None:
+                                record.update(decided)
+                            elif outcome is not None and outcome.status == 'complete':
                                 record.update(status='complete',judgement=outcome.judgement,
                                     confidenceScore=float(outcome.response.confidence),model=outcome.response.model)
                             else:
@@ -651,10 +801,20 @@ def run_recovery(store, settings, repository, *, chunk=None, paths=(), dry_run=F
                         # Even expired/obsolete attempts retain their original immutable request.
                         with deadline_suspended():
                             store.retain(settings,pair,at=dependencies.utc_now(),invocation=invocation,record=record)
+                            key = keys['candidates'].get((pair.chunk,pair.origin))
+                            if judgement is not None and key is not None and _no_effect(record):
+                                store.judge(settings,repository,'origin',keys['chunks'][pair.chunk],key[1],judgement,
+                                    {name:record.get(name) for name in ('status','judgement','confidenceScore','reason')}
+                                    | {'inputHash':pair.decision.input_hash},at=dependencies.utc_now())
                     if stopped.is_set():
                         break
             finally:
                 with deadline_suspended():
+                    if judgement is not None:
+                        marked = _judge_sections(store,settings,repository,judgement,reply,keys,at=dependencies.utc_now())
+                        if 'remaining' in reply:
+                            reply['remaining'] -= marked
+                            reply['complete'] = reply['remaining'] == 0
                     store.finish(settings,repository,invocation)
             return reply
     except (MycelError,EvidenceError,_BoundaryFailure,KeyboardInterrupt) as error:

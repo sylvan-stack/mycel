@@ -413,7 +413,12 @@ class MechanicalStalenessStore:
         return (tuple(file for file in catalog.files if file.identifier in files),
                 tuple(selected), current, evidence, snapshots, related)
 
-    def _physical_inputs(self, settings, files, declarations, captures=None):
+    def _physical_inputs(self, settings, files, declarations, captures=None, previous=None):
+        """``previous`` holds a step's last capture of each repository (SYL-289).
+
+        Disk bytes are read again every time; only bytes equal to that
+        capture skip parsing, and unchanged Git locations are reused.
+        """
         from ._located_reconciliation import _catalog
         from ._disk_reconciliation import _parse_history
         if self._captures is not None:
@@ -425,9 +430,13 @@ class MechanicalStalenessStore:
         captures = {} if captures is None else captures
         for owner in sorted({file.repository for file in files} | {address.repository for address in declarations}):
             if owner not in captures:
-                rows, _, _, state, _ = _catalog(self.connection, owner)
-                history = _parse_history(owner, rows, () if state is None else state[0])
-                captures[owner] = capture_repository(settings, owner, previous=history)
+                prior = None if previous is None else previous.get(owner)
+                if prior is None:
+                    rows, _, _, state, _ = _catalog(self.connection, owner)
+                    prior = _parse_history(owner, rows, () if state is None else state[0])
+                captures[owner] = capture_repository(settings, owner, previous=prior)
+                if previous is not None:
+                    previous[owner] = captures[owner]
         output = []
         for file in sorted({file.identifier: file for file in files}.values(), key=lambda item: (item.repository, item.identifier)):
             manifest = captures[file.repository]

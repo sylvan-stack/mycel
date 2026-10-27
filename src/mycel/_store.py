@@ -30,7 +30,7 @@ from ._errors import ErrorCode, MycelError
 from ._locks import structure_guard
 
 
-STORE_FORMAT = 4
+STORE_FORMAT = 5
 REQUIRED_EXTENSIONS = frozenset({"pg_search", "vector"})
 _ALLOWED_EXTENSIONS = REQUIRED_EXTENSIONS | {"plpgsql"}
 _DIMENSIONS = frozenset({256, 512, 1024, 2048})
@@ -274,6 +274,15 @@ TABLES = (
     Table("mycel_activity_classifications", (_c("activity", "bigint"), _c("ordinal", "integer"),
           _c("bundle", "text"), _c("dependant", "text"), _c("outcome", "text")),
           ("activity", "ordinal"), foreign=(_fk("activity", "mycel_activity"),)),
+    # A recovery or audit judgement that changed nothing, so that a series of
+    # steps never judges the same pair again while its texts and policy hold
+    # (SYL-289). It goes with its chunk version.
+    Table("mycel_judgements", (_c("repository", "text"), _c("question", "text"),
+          _c("chunk_version", "bigint"), _c("candidate", "text"), _c("policy", "text"),
+          _c("outcome", "jsonb"), _c("judged_at", "timestamp with time zone")),
+          ("repository", "question", "chunk_version", "candidate", "policy"),
+          foreign=(_fk("repository", "mycel_repository_state", "repository"),
+                   _fk("chunk_version", "mycel_chunk_versions"))),
 )
 _TABLE_MAP = MappingProxyType({table.name: table for table in TABLES})
 _SEQUENCES = frozenset(f"{table.name}_{column.name}_seq" for table in TABLES for column in table.columns
@@ -322,10 +331,12 @@ class Migration:
 
 # The predecessors are exact and bounded: no older inspection grants permission
 # to reinterpret arbitrary records or accept a damaged catalogue. Formats 2 and
-# 3 share one structure; format 4 adds the repository's step progress.
+# 3 share one structure; format 4 adds the repository's step progress and
+# format 5 the judgements of no effect.
+_FORMAT_4_TABLES = tuple(table for table in TABLES if table.name != "mycel_judgements")
 _FORMAT_3_TABLES = tuple(Table("mycel_repository_state", (_c("repository", "text"),
     _c("last_pass_at", "timestamp with time zone", True), _c("read_locations", "jsonb")), ("repository",))
-    if table.name == "mycel_repository_state" else table for table in TABLES)
+    if table.name == "mycel_repository_state" else table for table in _FORMAT_4_TABLES)
 _FORMAT_1_TABLES = tuple(Table("mycel_verifications", (
     _c("id", "uuid"), _c("repository", "text"), _c("chunk_version", "bigint"),
     _c("recorded_at", "timestamp with time zone"), _c("record", "jsonb"),
@@ -480,7 +491,7 @@ def _migrate_verification_lifetime(connection) -> None:
         raise MycelError("store_format", "The verification migration requires store format 1.")
     relations = connection.execute(_RELATIONS_SQL).fetchall()
     if ({name for namespace, name, kind in relations if namespace == "public" and kind == "r"}
-            != set(_TABLE_MAP) or any(namespace != "public" or kind not in {"r", "S"}
+            != {table.name for table in _FORMAT_1_TABLES} or any(namespace != "public" or kind not in {"r", "S"}
                                      for namespace, _, kind in relations)
             or {name for _, name, kind in relations if kind == "S"} != _SEQUENCES
             or _shape_fault(connection, metadata[0][2], _FORMAT_1_TABLES) is not None):
@@ -561,6 +572,23 @@ def _migrate_pass_progress(connection) -> None:
 
 def _validate_pass_progress(connection) -> None:
     dimensions = connection.execute("SELECT dimensions FROM public.mycel_store").fetchone()[0]
+    fault = _shape_fault(connection, dimensions, _FORMAT_4_TABLES)
+    if fault is not None:
+        raise MycelError("store_format", fault)
+
+
+def _migrate_judgements(connection) -> None:
+    """Format 4 to 5: an empty table of judgements; no record is reinterpreted."""
+    metadata = connection.execute("SELECT singleton, format, dimensions FROM public.mycel_store").fetchall()
+    if len(metadata) != 1 or metadata[0][0] is not True or metadata[0][1] != 4:
+        raise MycelError("store_format", "The judgements migration requires store format 4.")
+    if _shape_fault(connection, metadata[0][2], _FORMAT_4_TABLES) is not None:
+        raise MycelError("store_format", "The judgements migration found an incompatible predecessor catalogue.")
+    connection.execute(_TABLE_MAP["mycel_judgements"].sql(metadata[0][2]))
+
+
+def _validate_judgements(connection) -> None:
+    dimensions = connection.execute("SELECT dimensions FROM public.mycel_store").fetchone()[0]
     fault = _shape_fault(connection, dimensions)
     if fault is not None:
         raise MycelError("store_format", fault)
@@ -570,6 +598,7 @@ MIGRATIONS: Mapping[int, Migration] = MappingProxyType({
     1: Migration(_migrate_verification_lifetime, _validate_verification_lifetime),
     2: Migration(_migrate_entity_kinds, _validate_entity_kinds),
     3: Migration(_migrate_pass_progress, _validate_pass_progress),
+    4: Migration(_migrate_judgements, _validate_judgements),
 })
 
 

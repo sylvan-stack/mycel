@@ -492,7 +492,9 @@ class JevClient:
         """Run at most one provider call; the caller owns guard/lease and retry.
 
         ``before_call`` must raise if the exact prepared inputs are no longer
-        eligible. It runs before Keychain access and again before transmission.
+        eligible. It runs once, after Keychain access, immediately before
+        transmission (MYC-14). An earlier run before Keychain access only
+        repeated it, at a full check's cost per call (SYL-289).
         The absolute monotonic invocation deadline bounds the entire attempt.
         """
         require_model_call(self.policy, "jev")
@@ -503,8 +505,6 @@ class JevClient:
         _check(attempt_deadline, cancelled)
         request = JevRequest(decision)
         body = request.body
-        _check(attempt_deadline, cancelled)
-        before_call()
         _check(attempt_deadline, cancelled)
         if len(body) > self.limits.max_input_bytes:
             return JevOutcome(decision, None, "needs_llm_review", "jev_input_too_large")

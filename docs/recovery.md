@@ -19,18 +19,19 @@ component boundaries. `--k` caps exact preparation attempts, including unresolve
 pairs; one chunk can have several candidates. Repository and path scopes select
 unlinked code and non-authored document chunks. Requirement/decision rows and
 authored documents remain candidate Origins; an explicit chunk reference may
-select them.
+select them. Tests are neither selected nor candidates: a test's Origin is the
+requirement it checks, stated with `mycel justify`, and naming a test chunk is
+refused with `invalid_input`.
 `--review` instead selects existing inferred/recovered links in that scope.
 
 ## Candidate sources
 
 | Source | Local evidence |
 |---|---|
-| `document` | Document sections joined by a direct Source Ref in either direction, or whose text names the complete symbol |
-| `test` | Test chunks that call the symbol |
+| `document` | Document sections joined by a direct Source Ref in either direction, or whose text names the complete symbol; a symbol that more than ten document sections name is not distinctive and gives no name matches |
 | `commit` | The introducing commit found by local Git symbol pickaxe, plus an indexed snapshot naming its full hash |
 | `issue` | An indexed time-pinned snapshot naming an upstream issue/PR URL in that commit; a bare #number matches only issue/PR URLs in the same repository's corpus |
-| `embedding` | Requirement/decision chunks nearest to existing complete current-model vectors of the selected chunk |
+| `embedding` | The four requirement/decision chunks nearest to existing complete current-model vectors of the selected chunk, by rank |
 
 An entity candidate uses its Entity URI; another uses its qualified address.
 Duplicates merge their source categories and receive one judgement. No vector
@@ -51,13 +52,15 @@ The packaged `mycel-origin-v1` question asks whether a candidate `governs`, is
 `related` to, or is `unrelated` to the selected chunk. It is distinct from the
 question about continued support in [drift classification](classification.md).
 The request contains complete exact chunk/candidate texts, direct-governor and
-ancestor context, local history, source categories and actual model/reviewer
-identities. Its canonical input hash binds all those semantic inputs. Inputs
+ancestor context (without the code a governor cites), local history, source
+categories and actual model/reviewer identities. Its canonical input hash binds all those semantic inputs. Inputs
 are data, never instructions; required text is never truncated.
 
-A complete `governs` or `related` result writes a link with the model's score.
-Its method is `recovered` for commit/issue provenance and `inferred` otherwise.
-An `unrelated` result writes none. Scores at least 0.5 have band `inferred`;
+Only a complete `governs` result writes a link, with the model's score. Its
+method is `recovered` for commit/issue provenance and `inferred` otherwise. A
+`related` or `unrelated` result writes none. Without a configured reviewer,
+Jev's probability of `governs` decides: it must reach `drifts.origin_floor`
+(0.7) and is the link's score; a lower probability ends the pair without effect. Scores at least 0.5 have band `inferred`;
 lower ones have band `candidate`. Recovery and review keep these bands even
 when a model returns a high score. They do not produce a statement, a check
 proof, a verification or a freshness confirmation.
@@ -69,12 +72,13 @@ matching model proposal, applying its ordinary guarded assertion/verification
 rules. `origins` lists both kinds of link through the same report.
 
 `--review` calls only the configured independent smarter reviewer. Its strict
-protocol-1 reply includes `confidenceScore` in [0,1]. A `governs`/`related`
-review raises or lowers the score, recomputes its capped band and records
-`review: {who, when, outcome}`. An `unrelated` review withdraws only the model's
-proposal; it never withdraws a statement. Ordinary recovery also routes low
-canonical confidence, ties and oversized Jev input to this reviewer. Missing
-reviewer configuration remains `needs_llm_review` with its reason.
+protocol-1 reply includes `confidenceScore` in [0,1]. A `governs` review
+raises or lowers the score, recomputes its capped band and records
+`review: {who, when, outcome}`. A `related` or `unrelated` review withdraws only
+the model's proposal; it never withdraws a statement. With a reviewer
+configured, ordinary recovery also routes low canonical confidence, ties and
+oversized Jev input to it. Without one, oversized input remains
+`needs_llm_review` with its reason.
 
 ## Guards, budgets and reply
 
@@ -94,7 +98,7 @@ byte, attempt and deadline settings. It runs one pair at a time, within
 invocation; cancellation ends the active transport/process and retains the
 completed prefix. There is no worker waiting for debounce expiry.
 
-Every call and application rechecks complete files, current clone/version,
+The check immediately before each call and before each application covers complete files, current clone/version,
 local history, enablement, required context and the actual reviewer executable
 fingerprint. New bytes with a restored mtime retain their first observed quiet
 period. Obsolete, corrupt or missing inputs produce no link. Final input guards
@@ -105,12 +109,29 @@ newest 1,000 per repository. Reuse validates the original stages and identities,
 not just a matching hash. The new question requires its own live qualification
 before deployment; passing automatic stand-ins supplies no provider proof.
 
+## A series of steps
+
+A repository or path run is one step of a series. Each step keeps every
+judgement that changed nothing under its exact chunk version, candidate version
+and judgement policy (question, model, floor, byte limit and reviewer
+identity), beyond the 1,000-request retention. The next step skips those pairs,
+and skips a section all of whose candidates were judged, until its text, a
+candidate or the policy changes; a changed floor alone reuses them. Repeat the
+command until the reply says `complete: true`:
+
+```sh
+mycel recovery --repo cellar --k 50
+```
+
 `RecoveryReply` is one object with `repository`, `dryRun`, `review`,
 `selected`, `completed`, `jevCalls`, `reviewCalls`, `errors`, `incomplete`,
-`capped`, `status`, `maxCalls`, `chunks` and `pairs`. Each chunk includes its history,
+`capped`, `status`, `maxCalls`, `chunks` and `pairs`; a step of a series adds
+`remaining`, `complete` and `skipped`. Each chunk includes its history,
 embedding and per-source availability and candidates. Selected pairs add their
 input hash, exact byte counts, eligibility, attempts, stage results, final
-judgement/score and applied `link` (null for unrelated). Pending debounce or
+judgement/score and applied `link` (null for `related`, `unrelated` or a
+probability below the floor). A candidate an earlier step judged shows
+`status: judged`. Pending debounce or
 missing reviewer configuration is ordinary pending work. An operational fault
 sets status 1; interruption sets 2. Completed applications remain in the reply.
 Numbered Builds record committed link writes/withdrawals in activity history.

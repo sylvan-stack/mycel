@@ -144,13 +144,16 @@ def candidate_snapshot_in_transaction(connection, resolver: SourceResolver,
                              connection, resolver.settings, lease)
 
 
-def _disk_inputs(connection, resolver: SourceResolver) -> tuple[RetrievalChunk, ...]:
+def _disk_inputs(connection, resolver: SourceResolver, *,
+                 versions: frozenset | None = None) -> tuple[RetrievalChunk, ...]:
+    """``versions`` limits the result, and the vectors decoded, to those chunk versions."""
     files = tuple(sorted(resolver.files, key=lambda file: file.identifier))
     identifiers = [file.identifier for file in files]
     corpora = {str(identifier): corpus for identifier, corpus in connection.execute(
         "SELECT id,corpus FROM public.mycel_files WHERE id=ANY(%s::uuid[])", (identifiers,)).fetchall()}
-    versions = sorted({chunk.version for file in files for chunk in file.chunks}
-                      | {chunk.version for _, chunk in resolver.index})
+    known = {chunk.version for file in files for chunk in file.chunks} | {chunk.version for _, chunk in resolver.index}
+    wanted = versions
+    versions = sorted(known if wanted is None else known & wanted)
     model = resolver.settings.values["embedding"]["model"]
     dimensions = resolver.settings.values["embedding"]["dimensions"]
     plans = {row[1]: row for row in connection.execute("""SELECT id,chunk_version,plan_hash,
@@ -184,6 +187,8 @@ def _disk_inputs(connection, resolver: SourceResolver) -> tuple[RetrievalChunk, 
             raise MycelError('store_format', 'The generated retrieval catalog has an incompatible origin.')
         inputs.append((place.repository, place, chunk, chunk.kind, ()))
     for repository, place, chunk, origin, aliases in inputs:
+        if wanted is not None and chunk.version not in wanted:
+            continue
         text = exact_text(chunk.source)
         complete, vectors = False, ()
         row = plans.get(chunk.version)

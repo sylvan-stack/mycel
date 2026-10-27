@@ -177,7 +177,7 @@ class RecoveryStoreTests(unittest.TestCase):
         self.assertTrue(reply['chunks'][0]['history']['available'],reply['chunks'][0]['history'])
         candidates=reply['chunks'][0]['candidates']
         self.assertTrue(candidates,reply)
-        self.assertEqual({source for item in candidates for source in item['sources']},{'document','test','commit','issue'})
+        self.assertEqual({source for item in candidates for source in item['sources']},{'document','commit','issue'})
         self.assertEqual(reply['chunks'][0]['embedding'],{'available':False,'reason':'chunk_vectors_unavailable'})
         self.assertTrue(all(item['origin'].startswith('fixture:@') for item in candidates))
         self.assertTrue(all(item['status']=='pending_jev' for item in candidates),candidates)
@@ -185,22 +185,46 @@ class RecoveryStoreTests(unittest.TestCase):
         self.assertEqual(before,self.state())
         self.assertEqual({call.args[0][0] for call in git.call_args_list},{'rev-parse','log'})
 
+    def test_tests_are_neither_candidates_nor_sections_to_recover(self):
+        reply=self.run_recovery(dry_run=True,chunk=None)
+        self.assertEqual(reply['status'],0,reply)
+        self.assertTrue(reply['chunks'],reply)
+        self.assertFalse(any('tests/test_value.py' in item['chunk'] for item in reply['chunks']),reply)
+        self.assertFalse(any('test_value.py' in candidate['origin']
+                             for item in reply['chunks'] for candidate in item['candidates']),reply)
+        named=self.run_recovery(dry_run=True,chunk='fixture:@code/tests/test_value.py#test_value')
+        self.assertEqual((named['status'],named['error']['code']),(1,'invalid_input'),named)
+
+    def test_a_name_found_in_many_document_sections_gives_no_name_candidates(self):
+        # value names ref.md and symbol.md (linear.md is never a document); ref.md also cites it.
+        with patch('mycel._recovery._NAME_MATCHES',1):
+            reply=self.run_recovery(dry_run=True)
+        self.assertEqual(reply['status'],0,reply)
+        origins={item['origin'] for item in reply['chunks'][0]['candidates']}
+        self.assertFalse(any('symbol.md' in origin for origin in origins),origins)
+        self.assertTrue(any('ref.md' in origin for origin in origins),origins)
+        self.assertTrue(any('symbol.md' in item['origin'] for item in self.run_recovery(dry_run=True)['chunks'][0]['candidates']))
+
     def test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri(self):
         from mycel._resolver import SourceResolver
         from test_retrieval_store import RetrievalStoreTests
+        from mycel import _retrieval_store
         with self.base.connect() as connection:
             catalog=SourceResolver.from_store(connection,self.settings)
-            for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1'):
+            for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1','fixture:@code/tests/test_value.py#test_value'):
                 selected=catalog.resolve(ref,purpose='endpoint').selection
                 chunk=selected.members[0].chunk
                 RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
-        reply=self.run_recovery(dry_run=True)
+        with patch('mycel._retrieval_store._decode_plan',wraps=_retrieval_store._decode_plan) as decoded:
+            reply=self.run_recovery(dry_run=True)
+        self.assertEqual(decoded.call_count,2)  # the target and the requirement, not the test's vector
         self.assertEqual(reply['status'],0,reply)
         self.assertTrue(reply['chunks'][0]['embedding']['available'])
         entities=[item for item in reply['chunks'][0]['candidates'] if 'embedding' in item['sources']]
         self.assertTrue(entities,reply)
         entity=entities[0]
         self.assertEqual(entity['status'],'pending_jev',entity)
+        self.assertTrue(-1<=entity['similarity']<=1,entity)
         self.assertIn(':req:'+REQ+':',entity['origin'])
         self.assertEqual((reply['jevCalls'],reply['reviewCalls']),(0,0))
 
@@ -209,9 +233,12 @@ class RecoveryStoreTests(unittest.TestCase):
         self.assertEqual(reply['status'],0,reply)
         self.assertEqual(reply['completed'],reply['selected'])
         self.assertEqual(reply['jevCalls'],len(self.calls))
-        links=self.origins();self.assertEqual(len(links),4,links)
+        # Only governs writes a link (MYC-D66): the related symbol.md candidate writes none.
+        links=self.origins();self.assertEqual(len(links),3,links)
+        self.assertFalse(any('symbol.md' in link['origin'] for link in links))
         self.assertEqual({link['method'] for link in links},{'inferred','recovered'})
-        self.assertTrue(all(link['confidenceScore']==.85 and link['confidence']=='inferred' for link in links))
+        # Without a reviewer the score is Jev's probability of governs.
+        self.assertTrue(all(link['confidenceScore']==.9 and link['confidence']=='inferred' for link in links))
         self.assertFalse(any('test_value' in link['origin'] for link in links))
         with self.base.connect() as connection:
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
@@ -233,13 +260,79 @@ class RecoveryStoreTests(unittest.TestCase):
         with self.base.connect() as connection:
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
 
+    def test_a_step_parses_each_unchanged_file_at_most_once(self):
+        # On the owner's store the stored parse history had another capture
+        # policy, so every check parsed the whole repository again.
+        from mycel import _capture
+        with patch('mycel._capture.chunk_code',wraps=_capture.chunk_code) as parsed, \
+             patch('mycel._disk_reconciliation._parse_history',return_value=None):
+            reply=self.run_recovery(dependencies=self.dependencies())
+        self.assertEqual(reply['status'],0,reply)
+        self.assertGreater(reply['selected'],1,reply)
+        self.assertLessEqual(parsed.call_count,4)  # two code files, on disk and on branch main, once
+
+    def test_a_series_of_steps_keeps_its_work_and_never_sends_a_pair_twice(self):
+        dependencies=self.dependencies(label='unrelated')
+        replies=[]
+        for _ in range(20):
+            replies.append(self.run_recovery(chunk=None,k=2,dependencies=dependencies))
+            self.assertEqual(replies[-1]['status'],0,replies[-1])
+            if replies[-1]['complete']:
+                break
+        self.assertTrue(replies[-1]['complete'],replies[-1])
+        self.assertGreater(len(replies),1)
+        self.assertEqual([reply['remaining'] for reply in replies],
+                         sorted((reply['remaining'] for reply in replies),reverse=True))
+        sent=[json.dumps(request['state'],sort_keys=True) for request in self.calls]
+        self.assertEqual(len(sent),len(set(sent)))
+        self.assertEqual(sum(reply['jevCalls'] for reply in replies),len(self.calls))
+        again=self.run_recovery(chunk=None,k=2,dependencies=dependencies)
+        self.assertEqual((again['jevCalls'],again['selected'],again['remaining'],again['complete']),(0,0,0,True),again)
+        self.assertEqual(self.origins(),[])
+        # A judged candidate whose text changes is judged again; its section only.
+        before=len(self.calls)
+        (self.artifact/'symbol.md').write_text('---\nrole: authored\n---\n# Symbol contract\nThe symbol value returns one, always.\n')
+        self.ingest();self.old_files()
+        observed=self.run_recovery(chunk=None,k=20,dependencies=dependencies)
+        self.assertEqual((observed['jevCalls'],observed['complete']),(0,False),observed)
+        later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+        after=self.run_recovery(chunk=None,k=20,dependencies=replace(dependencies,utc_now=lambda:later))
+        self.assertEqual(after['status'],0,after)
+        self.assertTrue(after['complete'],after)
+        self.assertEqual(after['jevCalls'],len(self.calls)-before)
+        self.assertTrue(after['jevCalls']>=1 and all('symbol.md' in request['state']['candidate']['snapshot']['place']['path']
+                                                     for request in self.calls[before:]),self.calls[before:])
+        # New settings judge everything again.
+        self.base.config.write_text(self.base.config.read_text()+'\n[drifts]\nconfidence_floor=0.6\n')
+        changed=self.run_recovery(chunk=None,k=1,dependencies=replace(dependencies,utc_now=lambda:later),
+                                  settings=load_settings(path=self.base.config,home=self.base.base))
+        self.assertEqual((changed['jevCalls'],changed['complete']),(1,False),changed)
+
+    def test_a_guide_candidate_carries_no_code_it_cites(self):
+        reply=self.run_recovery(dependencies=self.dependencies(label='unrelated'))
+        self.assertEqual(reply['status'],0,reply)
+        guide=[request for request in self.calls if request['state']['candidate']['snapshot']['place']['path']=='ref.md']
+        self.assertEqual(len(guide),1,self.calls)
+        self.assertEqual([item['snapshot']['place']['root'] for item in guide[0]['state']['context']
+                          if item['snapshot']['place']['root']=='code'],[])
+
+    def test_an_edit_with_restored_mtime_during_a_step_is_still_caught(self):
+        before=self.source.stat()
+        def changed(request):
+            self.source.write_text('def value():\n    return 3\n')
+            os.utime(self.source,ns=(before.st_atime_ns,before.st_mtime_ns))
+        reply=self.run_recovery(k=2,dependencies=self.dependencies(changed=changed))
+        self.assertEqual(reply['completed'],0,reply)
+        self.assertEqual(self.origins(),[])
+        self.assertIn(reply['pairs'][0]['reason'],{'obsolete','changed_since_ingest'})
+
     def reviewer_settings(self,unrelated=False):
         adapter=self.base.base/'reviewer'
         adapter.write_text('#!'+sys.executable+'\n'+'''import json,sys
 r=json.load(sys.stdin)
 p=r['payload']['candidate']['snapshot']['place']['path']
 v={k:r[k] for k in ('protocol','inputHash','provider','model','adapterRevision','commandHash')}
-v.update(judgement='governs',rationale='Fixture contract review.',evidence=r['evidenceLocators'][:1],confidenceScore=.35 if p=='symbol.md' else .95)
+v.update(judgement='governs',rationale='Fixture contract review.',evidence=r['evidenceLocators'][:1],confidenceScore=.35 if p in ('symbol.md','commit.md') else .95)
 print(json.dumps(v))
 ''');adapter.chmod(0o700)
         if unrelated:adapter.write_text(adapter.read_text().replace("judgement='governs'","judgement='unrelated'"))
@@ -254,9 +347,9 @@ print(json.dumps(v))
         reviewed=self.run_recovery(review=True,dependencies=self.dependencies())
         self.assertEqual(reviewed['status'],0,reviewed)
         self.assertEqual(reviewed['jevCalls'],0)
-        self.assertEqual(reviewed['reviewCalls'],4,reviewed)
-        links=self.origins();self.assertEqual(len(links),4)
-        lowered=next(link for link in links if 'symbol.md' in link['origin'])
+        self.assertEqual(reviewed['reviewCalls'],3,reviewed)
+        links=self.origins();self.assertEqual(len(links),3)
+        lowered=next(link for link in links if 'commit.md' in link['origin'])
         raised=next(link for link in links if 'ref.md' in link['origin'])
         self.assertEqual((lowered['confidenceScore'],lowered['confidence']),(.35,'candidate'))
         self.assertEqual((raised['confidenceScore'],raised['confidence']),(.95,'inferred'))
@@ -289,11 +382,11 @@ print(json.dumps(v))
         observed=self.run_recovery(k=1,dependencies=self.dependencies(top=.7))
         self.assertEqual(observed['pairs'][0]['status'],'pending_debounce')
         later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
-        dependencies=replace(self.dependencies(top=.7),utc_now=lambda:later)
-        uncertain=self.run_recovery(k=1,dependencies=dependencies)
+        uncertain=self.run_recovery(k=1,dependencies=replace(self.dependencies(top=.4),utc_now=lambda:later))
         self.assertEqual(uncertain['status'],0,uncertain)
-        self.assertEqual(uncertain['pairs'][0]['status'],'needs_llm_review')
-        self.assertEqual(uncertain['pairs'][0]['reason'],'reviewer_unconfigured')
+        # Without a reviewer, governs at probability .4 is below the origin floor: no link, nothing pending.
+        self.assertEqual((uncertain['pairs'][0]['status'],uncertain['pairs'][0]['decided']),('complete','effect'))
+        self.assertEqual(uncertain['pairs'][0]['confidenceScore'],.4)
         self.assertEqual((uncertain['jevCalls'],uncertain['reviewCalls']),(1,0))
         self.assertEqual(self.origins(),[])
 
@@ -317,7 +410,7 @@ print(json.dumps(v))
         reply=self.run_recovery(dependencies=self.dependencies())
         self.assertEqual(reply['status'],0,reply)
         self.ingest()
-        self.assertEqual(len(self.origins()),4)
+        self.assertEqual(len(self.origins()),3)
         with self.base.connect() as connection:
             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_stale_reasons').fetchone(),(0,))
             result=JustifyStore(connection).apply(self.settings,self.ref,'fixture:@artifact/symbol.md#Symbol%20contract')
@@ -348,7 +441,7 @@ print(json.dumps(v))
         self.assertEqual(result['status'],0,result)
         self.assertEqual(self.origins(),[])
         self.settings=secondary
-        self.assertEqual(len(self.origins()),4)
+        self.assertEqual(len(self.origins()),3)
 
     def test_byte_budget_and_terminal_fault_never_write_a_link(self):
         oversized=self.run_recovery(k=1,dependencies=self.dependencies(limits=JevLimits(max_input_bytes=1)))
@@ -389,6 +482,11 @@ print(json.dumps(v))
         first=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
         self.assertEqual(first['status'],0,first)
         self.assertEqual(self.origins(),[])
+        # A result retained without its judgement, as before store format 5,
+        # is validated and reused.
+        forget="DELETE FROM public.mycel_judgements"
+        with self.base.connect() as connection:
+            connection.execute(forget)
         second=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
         self.assertEqual(second['status'],0,second)
         self.assertEqual(second['jevCalls'],0)
@@ -398,6 +496,7 @@ print(json.dumps(v))
             metadata['record']['confidenceScore']=.99
             connection.execute('UPDATE public.mycel_manifests SET metadata=%s WHERE repository=%s AND hash=%s',
                                (Jsonb(metadata),'fixture',digest))
+            connection.execute(forget)
         corrupt=self.run_recovery(k=1,dependencies=self.dependencies())
         self.assertEqual(corrupt['status'],1,corrupt)
         self.assertEqual(corrupt['jevCalls'],0)
@@ -409,7 +508,7 @@ print(json.dumps(v))
         self.settings=self.reviewer_settings(unrelated=True)
         result=self.run_recovery(dependencies=self.dependencies())
         self.assertEqual(result['status'],0,result)
-        self.assertEqual(len(self.origins()),4)
+        self.assertEqual(len(self.origins()),3)
         with self.base.connect() as connection,MutationActivity(connection,build=1).session() as activity:
             reviewed=run_recovery(RecoveryStore(connection),self.settings,'fixture',chunk=self.ref,
                                  review=True,dependencies=self.dependencies(),activity=activity)
@@ -428,13 +527,13 @@ print(json.dumps(v))
              patch('mycel._build_identity.current_build',return_value=1):
             status=run(('recovery',self.ref),stdout=output,stderr=diagnostic)
         self.assertEqual(status,0,output.getvalue())
-        reply=json.loads(output.getvalue());self.assertEqual(reply['completed'],5,reply)
+        reply=json.loads(output.getvalue());self.assertEqual(reply['completed'],4,reply)
         self.assertEqual(diagnostic.getvalue(),'')
         with self.base.connect() as connection:
             counts,outcome=connection.execute("SELECT counts,outcome FROM public.mycel_activity WHERE kind='recovery'").fetchone()
             self.assertEqual(outcome,'done')
-            self.assertEqual(counts['completed'],5)
-        self.assertEqual(len(self.origins()),4)
+            self.assertEqual(counts['completed'],4)
+        self.assertEqual(len(self.origins()),3)
 
     def test_busy_and_expired_deadline_make_no_model_call(self):
         from mycel._locks import operation_guard
@@ -469,7 +568,7 @@ print(json.dumps(v))
                 RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
         initial=self.run_recovery(dependencies=self.dependencies())
         self.assertEqual(initial['status'],0,initial)
-        self.assertEqual(len(self.origins()),5)
+        self.assertEqual(len(self.origins()),4)
         spec=self.artifact/'spec.md';spec.write_text(spec.read_text().replace('retain a stable return result','retain an unchanged return result'))
         self.ingest();self.old_files()
         with self.base.connect() as connection,read_snapshot(connection):

@@ -217,7 +217,7 @@ class AuditProtocolTests(unittest.TestCase):
 class SemanticAuditStoreTests(AuditFixture):
     check_kind = "store"
 
-    def dependencies(self, *, changed=None, top=.9, label=None, limits=None, failure=None):
+    def dependencies(self, *, changed=None, top=.9, label=None, limits=None, failure=None, positive=False):
         from mycel._jev import JevClient, JevLimits, HTTPResult
         from mycel._classification_runner import ClassifyDependencies
         from mycel._credentials import Credentials
@@ -230,7 +230,7 @@ class SemanticAuditStoreTests(AuditFixture):
                 if failure:raise failure
                 state=request['state'];question=state['question']
                 labels=state['labels'];chosen=label or labels[0]
-                if label is None:
+                if label is None and not positive:
                     if question=='conformance' and state['origins'][0]['snapshot']['place']['path']=='spec.md':chosen='nonconforming'
                     elif question=='consistency':chosen='contradictory'
                     elif question=='ambiguity' and REQ in json.dumps(state['subject']):chosen='ambiguous'
@@ -268,7 +268,7 @@ class SemanticAuditStoreTests(AuditFixture):
         self.assertEqual(reply['completed'],6,reply)
         links=self.links();lowered=next(link for link in links if REQ in link['origin'])
         conforming=next(link for link in links if OTHER in link['origin'])
-        self.assertEqual((lowered['confidenceScore'],lowered['confidence'],lowered['method']),(.15,'candidate','stated'))
+        self.assertEqual((lowered['confidenceScore'],lowered['confidence'],lowered['method']),(.1,'candidate','stated'))
         self.assertEqual(conforming['confidenceScore'],1)
         self.assertEqual(lowered['who'],'fixture-owner')
         self.assertEqual(lowered['review']['outcome'],'nonconforming')
@@ -281,7 +281,8 @@ class SemanticAuditStoreTests(AuditFixture):
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_audit_request' AND invocation IS NOT NULL").fetchone(),(0,))
         again=self.audit(dependencies=self.dependencies())
         self.assertEqual(again['status'],0,again);self.assertEqual(again['jevCalls'],0,again)
-        self.assertEqual(again['reused'],6);self.assertEqual(again['newFindings'],0)
+        # The three findings' results are reused; the three without effect are judged already.
+        self.assertEqual((again['reused'],again['skipped']),(3,3));self.assertEqual(again['newFindings'],0)
         disputed=next(row for row in negatives if row['kind']=='nonconforming')
         with self.base.connect() as connection:
             from psycopg.types.json import Jsonb
@@ -296,6 +297,23 @@ class SemanticAuditStoreTests(AuditFixture):
         self.assertEqual(settled['status'],0,settled);self.assertEqual(settled['jevCalls'],0)
         self.assertNotIn(disputed['id'],[r['id'] for r in settled['findings']])
         self.assertEqual(next(link for link in self.links() if REQ in link['origin'])['confidenceScore'],1)
+
+    def test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice(self):
+        self.two_origins()
+        dependencies=self.dependencies(positive=True)
+        replies=[]
+        for _ in range(10):
+            replies.append(self.audit(k=1,dependencies=dependencies))
+            self.assertEqual(replies[-1]['status'],0,replies[-1])
+            if replies[-1]['complete']:
+                break
+        self.assertTrue(replies[-1]['complete'],replies[-1])
+        self.assertGreater(len(replies),2)
+        sent=[json.dumps(request['state'],sort_keys=True) for request in self.calls]
+        self.assertEqual(len(sent),len(set(sent)))
+        again=self.audit(k=1,dependencies=dependencies)
+        self.assertEqual((again['jevCalls'],again['selected'],again['remaining'],again['complete']),(0,0,0,True),again)
+        self.assertFalse([row for row in again['findings'] if row['mode']=='semantic'])
 
     def test_changed_input_and_late_activity_edit_roll_back_findings_and_score(self):
         self.justify()
@@ -361,7 +379,7 @@ print(json.dumps(v))
             rows=connection.execute("SELECT id,state FROM public.mycel_dependencies WHERE state ? 'originLink'").fetchall()
             self.assertEqual({state['originLink']['method'] for _,state in rows},{'stated','proven','inferred','recovered'})
             for identifier,state in rows:
-                old=expected[str(identifier)];self.assertEqual(state['originLink']['confidenceScore'],min(old['originLink']['confidenceScore'],.15))
+                old=expected[str(identifier)];self.assertEqual(state['originLink']['confidenceScore'],min(old['originLink']['confidenceScore'],.1))
                 self.assertEqual({k:v for k,v in state.items() if k!='originLink'},{k:v for k,v in old.items() if k!='originLink'})
                 for key in ('chunk','origin','method','who','when'):self.assertEqual(state['originLink'][key],old['originLink'][key])
             self.assertEqual(connection.execute('SELECT to_jsonb(t),xmin::text FROM public.mycel_verifications t ORDER BY id').fetchall(),verifications)
@@ -377,9 +395,10 @@ print(json.dumps(v))
         oversized=self.audit(k=1,dependencies=small)
         self.assertEqual(oversized['status'],0,oversized);self.assertEqual(oversized['jevCalls'],0)
         self.assertEqual(oversized['pairs'][0]['status'],'needs_llm_review')
-        uncertain=self.audit(k=1,dependencies=replace(self.dependencies(top=.7),utc_now=lambda:later))
+        uncertain=self.audit(k=1,dependencies=replace(self.dependencies(top=.4),utc_now=lambda:later))
         self.assertEqual(uncertain['status'],0,uncertain);self.assertEqual(uncertain['jevCalls'],1)
-        self.assertEqual(uncertain['pairs'][0]['reason'],'reviewer_unconfigured')
+        # Without a reviewer, nonconforming at probability .4 is below its floor: no finding, nothing pending.
+        self.assertEqual((uncertain['pairs'][0]['status'],uncertain['pairs'][0]['decided']),('complete','effect'))
         self.assertEqual(self.links()[0]['confidenceScore'],1)
 
     def test_candidate_cap_bounds_unresolved_preparation_before_assembly(self):
@@ -436,6 +455,8 @@ print(json.dumps(v))
             digest,metadata=connection.execute("SELECT hash,metadata FROM public.mycel_manifests WHERE kind='origin_audit_request'").fetchone()
             metadata['record']['confidenceScore']=.99
             connection.execute('UPDATE public.mycel_manifests SET metadata=%s WHERE repository=%s AND hash=%s',(Jsonb(metadata),'fixture',digest))
+            # A result retained without its judgement, as before store format 5.
+            connection.execute('DELETE FROM public.mycel_judgements')
         reply=self.audit(k=1,dependencies=self.dependencies())
         self.assertEqual(reply['status'],1,reply);self.assertEqual(reply['jevCalls'],0)
         self.assertEqual(reply['pairs'][0]['reason'],'snapshot_corrupt')
@@ -487,13 +508,13 @@ print(json.dumps(v))
         second=self.audit(k=1,dependencies=replace(self.dependencies(),utc_now=lambda:later))
         self.assertEqual(second['status'],0,second)
         self.assertEqual((second['jevCalls'],second['reused'],second['completed']),(0,1,1))
-        self.assertEqual(self.links()[0]['confidenceScore'],.15)
+        self.assertEqual(self.links()[0]['confidenceScore'],.1)
         with self.base.connect() as connection:
             with self.assertRaises(MycelError):
                 AuditStore(connection).settle(secondary,'fixture',primary_findings[0],reason='Wrong clone.',by='fixture-owner')
         self.settings=primary
         retained,_=self.deterministic();self.assertEqual([r['id'] for r in retained],primary_findings)
-        self.assertEqual(self.links()[0]['confidenceScore'],.15)
+        self.assertEqual(self.links()[0]['confidenceScore'],.1)
 
     def test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence(self):
         from psycopg.types.json import Jsonb

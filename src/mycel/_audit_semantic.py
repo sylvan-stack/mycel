@@ -5,7 +5,9 @@ from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from decimal import Decimal
+from hashlib import sha256
 from itertools import combinations
+import json
 import threading
 from uuid import uuid4
 
@@ -27,7 +29,7 @@ from ._jev import JevFailure, JevRequest
 from ._justify import checked_link, confidence_band, public_reference
 from ._locks import (read_snapshot, operation_guard, mutation_guard, invocation_guard)
 from ._origins import _selection
-from ._recovery import _text, _checked_result
+from ._recovery import _text, _checked_result, effect_decision, has_effect, judgement_policy
 from ._resolver import SourceResolver
 from ._reviewer import ReviewerFailure
 from ._safeguards import InvocationPolicy
@@ -92,7 +94,8 @@ class SemanticAuditStore(AuditStore):
             _require_confirmable(self.connection, selection.members[0], metadata)
         context, context_files = self.context(catalog, selections)
         files.update(context_files)
-        fault = DriftStore(self.connection)._physical(settings, tuple(files.values()), (), {}, catalog)
+        fault = DriftStore(self.connection)._physical(settings, tuple(files.values()), (), {}, catalog,
+                                                      previous=self.step_captures)
         if fault:
             raise EvidenceError(fault)
         options = settings.values['drifts']
@@ -130,10 +133,23 @@ class SemanticAuditStore(AuditStore):
                          tuple(claims), decision, tuple(files.values()), signatures, observations,
                          eligible.status, eligible.eligible_at)
 
-    def preview(self, settings, repository, *, paths=(), at, pair_limit, cancelled=lambda: False):
+    def preview(self, settings, repository, *, paths=(), at, pair_limit, cancelled=lambda: False, judged=False):
+        """With ``judged``, a pair judged without effect under the current policy is skipped (SYL-289)."""
         paths = normalize_paths(paths)
         with checked_store(self.connection), read_snapshot(self.connection):
             catalog, _, selected, links, _ = current_graph(self.connection, settings, repository, paths=paths)
+            policies = {question: judgement_policy(settings, question)
+                        for question in ('conformance', 'consistency', 'ambiguity')}
+            known = set() if not judged else {(question, version, identity) for question in policies
+                     for (version, identity) in self.judgements(repository, question, policies[question])}
+            def key(items):
+                # The disputed claims and the exact versions of their Origins.
+                versions = []
+                for item in items:
+                    resolved = catalog.resolve(item['link']['origin'], purpose='endpoint')
+                    versions.append(resolved.selection.members[0].chunk.version if resolved.state == 'resolved' else None)
+                return sha256(json.dumps([[item['claim'] for item in items], versions], sort_keys=True,
+                                         default=str).encode()).hexdigest()
             # Bounds apply before exact preparation, including unresolved pairs.
             # Descriptor generation itself is finite and never calls a model.
             def descriptors():
@@ -144,7 +160,7 @@ class SemanticAuditStore(AuditStore):
                         own = sorted(links.get(version, ()), key=lambda item: (item['link']['origin'], item['id']))
                         if question == 'conformance':
                             for item in own:
-                                yield question, subject, (item['claim'],)
+                                yield question, subject, (item['claim'],), version, key((item,))
                         elif question == 'consistency':
                             unique = {}
                             for item in own:
@@ -153,24 +169,33 @@ class SemanticAuditStore(AuditStore):
                                             else item['link']['origin'])
                                 unique.setdefault(identity, item)
                             for a, b in combinations(unique.values(), 2):
-                                yield question, subject, tuple(sorted((a['claim'], b['claim']), key=lambda claim: claim['id']))
+                                pair = sorted((a, b), key=lambda item: item['claim']['id'])
+                                yield question, subject, tuple(item['claim'] for item in pair), version, key(pair)
                         elif member.chunk.kind == 'req' and (member.chunk.entity or {}).get('status') != 'withdrawn':
-                            yield question, subject, ()
+                            yield question, subject, (), version, ''
             pairs, unresolved, capped, attempted = [], [], False, 0
-            for question, subject, claims in descriptors():
+            remaining, skipped, keys = 0, 0, {}
+            for question, subject, claims, version, identity in descriptors():
                 check_deadline()
                 if cancelled():
                     raise MycelError('refused', 'Audit was cancelled during local selection.')
+                if (question, version, identity) in known:
+                    skipped += 1
+                    continue
+                remaining += 1
                 if attempted >= pair_limit:
                     capped = True
-                    break
+                    continue
                 attempted += 1
                 try:
-                    pairs.append(self.prepare_pair(settings, catalog, repository, question, subject, claims, at=at))
+                    pair = self.prepare_pair(settings, catalog, repository, question, subject, claims, at=at)
+                    keys[pair.decision.input_hash] = (question, version, identity, policies[question])
+                    pairs.append(pair)
                 except (EvidenceError, MycelError) as error:
                     unresolved.append({'question': question, 'subject': subject, 'links': list(claims),
                         'status': 'unresolved', 'reason': error.status if isinstance(error, EvidenceError) else error.code.value})
-            return pairs, {'capped': capped, 'attempted': attempted, 'unresolved': unresolved}
+            return pairs, {'capped': capped, 'attempted': attempted, 'unresolved': unresolved,
+                           'remaining': remaining, 'skipped': skipped, '_keys': keys}
 
     def check_in_transaction(self, settings, catalog, pair, *, at):
         current = self.prepare_pair(settings, catalog, pair.repository, pair.question,
@@ -189,7 +214,7 @@ class SemanticAuditStore(AuditStore):
     def retain(self, settings, pair, *, at, invocation, record=None):
         repository = pair.repository
         digest, raw = pair.decision.input_hash, pair.decision.canonical_bytes
-        with self.guarded(settings, require_current=False):
+        with self.guarded(settings, require_current=False, catalog=False):
             previous = self.connection.execute('SELECT kind,bytes,metadata FROM public.mycel_manifests '
                 'WHERE repository=%s AND hash=%s FOR UPDATE NOWAIT', (repository, digest)).fetchone()
             if previous is not None and (previous[0] != 'origin_audit_request' or bytes(previous[1]) != raw):
@@ -224,7 +249,7 @@ class SemanticAuditStore(AuditStore):
         return metadata.get('record')
 
     def finish(self, settings, repository, invocation):
-        with self.guarded(settings, require_current=False):
+        with self.guarded(settings, require_current=False, catalog=False):
             self.connection.execute("UPDATE public.mycel_evidence_owners SET invocation=NULL WHERE repository=%s "
                 "AND kind='origin_audit_request' AND invocation=%s", (repository, invocation.id))
             self.prune_in_transaction(repository)
@@ -241,7 +266,7 @@ class SemanticAuditStore(AuditStore):
                                 key=lambda item: item['id'])) != tuple(sorted(pair.claims, key=lambda item: item['id'])):
                     raise EvidenceError('obsolete')
             negative = {'conformance': 'nonconforming', 'consistency': 'contradictory', 'ambiguity': 'ambiguous'}[pair.question]
-            if record['judgement'] != negative:
+            if not has_effect(settings, pair.question, record):
                 return {'finding': None, 'lowered': 0, 'created': False}
             observed = observation(pair.repository, pair.location, negative, pair.subject, pair.path,
                 facts={'question': pair.question, 'questionVersion': pair.decision.payload['questionVersion']},
@@ -301,8 +326,10 @@ def run_audit(store, settings, repository, *, paths=(), dry_run=False, determini
             if deterministic:
                 return reply
             pairs,plan=store.preview(settings,repository,paths=paths,at=dependencies.utc_now(),
-                pair_limit=options['candidates'] if k is None else k,cancelled=dependencies.cancelled)
+                pair_limit=options['candidates'] if k is None else k,cancelled=dependencies.cancelled,judged=True)
+            keys=plan.pop('_keys')
             reply['capped']=plan['capped'];reply['attempted']=plan['attempted']
+            reply.update(remaining=plan['remaining'],complete=plan['remaining']==0,skipped=plan['skipped'])
             reply['selected']=len(pairs);reply['pairs']=[pair.as_dict() for pair in pairs]+plan['unresolved']
             reply['maxCalls']={'jev':len(pairs)*options['attempts'],'review':len(pairs)*options['attempts']}
             if dry_run:
@@ -319,14 +346,15 @@ def run_audit(store, settings, repository, *, paths=(), dry_run=False, determini
                         def guard():
                             ensure(); store.check(settings,pair,at=dependencies.utc_now()); ensure()
                         def call(stage,client):
+                            # The client checks before its call and the application before
+                            # it writes; a check here only repeated them (SYL-289).
                             for attempt in range(options['attempts']):
-                                guard()
                                 try:
                                     def count():
                                         ensure();reply['jevCalls' if stage=='jev' else 'reviewCalls']+=1
                                     result = client.classify(pair.decision,deadline=deadline.expires_at,
                                         before_call=guard,cancelled=lambda: dependencies.cancelled() or deadline.cancelled(),on_call=count)
-                                    ensure();guard()
+                                    ensure()
                                     attempts.append({'stage':stage,'attempt':attempt+1,'status':'complete'})
                                     return result
                                 except (JevFailure,ReviewerFailure) as error:
@@ -348,7 +376,10 @@ def run_audit(store, settings, repository, *, paths=(), dry_run=False, determini
                                 if outcome.decision != pair.decision:
                                     raise EvidenceError('obsolete')
                                 record['jev'] = outcome.as_dict()
-                            if outcome is not None and outcome.status == 'complete':
+                            decided = None if outcome is None else effect_decision(pair.decision,outcome)
+                            if decided is not None:
+                                record.update(decided)
+                            elif outcome is not None and outcome.status == 'complete':
                                 record.update(status='complete',judgement=outcome.judgement,
                                     confidenceScore=float(outcome.response.confidence),model=outcome.response.model)
                             else:
@@ -384,6 +415,14 @@ def run_audit(store, settings, repository, *, paths=(), dry_run=False, determini
                         # Even expired/obsolete attempts retain their original immutable request.
                         with deadline_suspended():
                             store.retain(settings,pair,at=dependencies.utc_now(),invocation=invocation,record=record)
+                            if (record.get('status')=='complete' and not (record.get('effects') or {}).get('finding')
+                                    and 'effects' in record or record.get('status')=='needs_llm_review'):
+                                question,version,identity,judgement=keys[pair.decision.input_hash]
+                                store.judge(settings,repository,question,version,identity,judgement,
+                                    {name:record.get(name) for name in ('status','judgement','confidenceScore','reason')}
+                                    | {'inputHash':pair.decision.input_hash},at=dependencies.utc_now())
+                                reply['remaining']-=1
+                                reply['complete']=reply['remaining']==0
                     if stopped.is_set():
                         break
             finally:
