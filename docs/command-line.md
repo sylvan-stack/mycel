@@ -237,13 +237,15 @@ atomic pass reconciliation and stable vectors on body-only edits.
 ## Recovering Origin Links
 
 `mycel recovery [<chunk>] [--repo <name>] [--path <path>] [--k <pairs>] [--dry-run] [--review]`
-selects unlinked current chunks, gathers local document/test/history/snapshot
-and existing-vector candidates and applies the separate Origin judgement.
+selects unlinked current chunks other than tests, gathers local
+document/history/snapshot and existing-vector candidates and applies the
+separate Origin judgement; only `governs` writes a link. A repository or path
+run is one step of a series that keeps its judgements and reports `remaining`.
 It reads the indexed snapshot and calling clone without ingesting, embedding
 or reading a remote. `--dry-run` has no model credential, call or state write.
 `--review` instead selects existing inferred/recovered links and calls the
-configured independent reviewer to update their scores/bands or withdraw an
-unrelated proposal. A model result creates no verification or authoritative
+configured independent reviewer to update their scores/bands or withdraw a
+related or unrelated proposal. A model result creates no verification or authoritative
 source dependency. The [recovery guide](recovery.md) gives source availability,
 exact evidence, reply fields, score caps and finite execution guards.
 

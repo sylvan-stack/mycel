@@ -63,8 +63,12 @@ instructions. Missing or changed inputs remain unresolved and authorize no effec
 
 A complete negative judgement opens a finding with its confidence, exact input
 hash, validated stages and retained text evidence. Positive results open none.
-Insufficient evidence, ties and confidence below the configured floor route to
-the isolated reviewer, or remain `needs_llm_review` when none is configured.
+With a reviewer configured, insufficient evidence, ties and confidence below
+the configured floor route to it. Without one, the probability of the
+question's negative label decides against its own floor:
+`drifts.conformance_floor` and `drifts.consistency_floor` (0.7),
+`drifts.ambiguity_floor` (0.8). A lower probability ends the pair without effect
+and is kept as a judgement; oversized input remains `needs_llm_review`.
 Audit reviewer successes require `confidenceScore` in [0,1] and citations drawn
 from the request's exact evidence locators.
 
@@ -87,8 +91,8 @@ then ambiguity, with subjects and links ordered canonically within each question
 No background job or timer is installed.
 
 Each configured clone keeps its own complete-file quiet observations. Inputs,
-settings and model/reviewer identities are rechecked before credentials, each
-call and final application. HTTP or child-process work holds no pass lock or
+settings and model/reviewer identities are rechecked immediately before each
+call and before final application. HTTP or child-process work holds no pass lock or
 writing transaction. Only typed transient failures retry. Cancellation preserves
 completed effects and ends outstanding leases. Unchanged complete results are
 validated and reused without another model call, after the invoking clone's own
@@ -115,12 +119,19 @@ texts. Other ended, unreferenced semantic requests have a separate newest-1,000
 bound. Collection removes only the expired record's ownership and unreferenced
 evidence in that repository; shared evidence stays retained.
 
+A semantic run is one step of a series, as in [recovery](recovery.md). Each step
+keeps every judgement that changed nothing under its exact inputs and policy,
+and the next step skips it until an input or the policy changes; a changed
+floor alone reuses it. Repeat the command until the reply says
+`complete: true`.
+
 ## Reply
 
 `AuditReply` includes `repository`, `location`, `paths`, `deterministic`, `dryRun`,
 `findings`, `newFindings`, `settled`, `selected`, `completed`, `reused`, `capped`,
 `jevCalls`, `reviewCalls`, `errors`, `incomplete`, `pairs` and `status`. Semantic
-selection also reports `attempted` and bounded `maxCalls`. Findings name their
+selection also reports `attempted`, bounded `maxCalls`, and for the series
+`remaining`, `complete` and `skipped`. Findings name their
 UUID, kind, subject, disputed links, observation hash, source mode and first
 observation time; semantic findings add confidence and exact input/result
 evidence. Settled findings add actor, time and reason. Pairs report question,
