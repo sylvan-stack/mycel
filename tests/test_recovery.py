@@ -177,13 +177,23 @@ class RecoveryStoreTests(unittest.TestCase):
         self.assertTrue(reply['chunks'][0]['history']['available'],reply['chunks'][0]['history'])
         candidates=reply['chunks'][0]['candidates']
         self.assertTrue(candidates,reply)
-        self.assertEqual({source for item in candidates for source in item['sources']},{'document','test','commit','issue'})
+        self.assertEqual({source for item in candidates for source in item['sources']},{'document','commit','issue'})
         self.assertEqual(reply['chunks'][0]['embedding'],{'available':False,'reason':'chunk_vectors_unavailable'})
         self.assertTrue(all(item['origin'].startswith('fixture:@') for item in candidates))
         self.assertTrue(all(item['status']=='pending_jev' for item in candidates),candidates)
         self.assertFalse(any('linear.md' in item['origin'] for item in candidates))
         self.assertEqual(before,self.state())
         self.assertEqual({call.args[0][0] for call in git.call_args_list},{'rev-parse','log'})
+
+    def test_tests_are_neither_candidates_nor_sections_to_recover(self):
+        reply=self.run_recovery(dry_run=True,chunk=None)
+        self.assertEqual(reply['status'],0,reply)
+        self.assertTrue(reply['chunks'],reply)
+        self.assertFalse(any('tests/test_value.py' in item['chunk'] for item in reply['chunks']),reply)
+        self.assertFalse(any('test_value.py' in candidate['origin']
+                             for item in reply['chunks'] for candidate in item['candidates']),reply)
+        named=self.run_recovery(dry_run=True,chunk='fixture:@code/tests/test_value.py#test_value')
+        self.assertEqual((named['status'],named['error']['code']),(1,'invalid_input'),named)
 
     def test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri(self):
         from mycel._resolver import SourceResolver
@@ -260,7 +270,7 @@ class RecoveryStoreTests(unittest.TestCase):
             if replies[-1]['complete']:
                 break
         self.assertTrue(replies[-1]['complete'],replies[-1])
-        self.assertGreater(len(replies),2)
+        self.assertGreater(len(replies),1)
         self.assertEqual([reply['remaining'] for reply in replies],
                          sorted((reply['remaining'] for reply in replies),reverse=True))
         sent=[json.dumps(request['state'],sort_keys=True) for request in self.calls]
@@ -284,7 +294,7 @@ class RecoveryStoreTests(unittest.TestCase):
                                                      for request in self.calls[before:]),self.calls[before:])
         # New settings judge everything again.
         self.base.config.write_text(self.base.config.read_text()+'\n[drifts]\nconfidence_floor=0.6\n')
-        changed=self.run_recovery(chunk=None,k=1,dependencies=dependencies,
+        changed=self.run_recovery(chunk=None,k=1,dependencies=replace(dependencies,utc_now=lambda:later),
                                   settings=load_settings(path=self.base.config,home=self.base.base))
         self.assertEqual((changed['jevCalls'],changed['complete']),(1,False),changed)
 
@@ -507,12 +517,12 @@ print(json.dumps(v))
              patch('mycel._build_identity.current_build',return_value=1):
             status=run(('recovery',self.ref),stdout=output,stderr=diagnostic)
         self.assertEqual(status,0,output.getvalue())
-        reply=json.loads(output.getvalue());self.assertEqual(reply['completed'],5,reply)
+        reply=json.loads(output.getvalue());self.assertEqual(reply['completed'],4,reply)
         self.assertEqual(diagnostic.getvalue(),'')
         with self.base.connect() as connection:
             counts,outcome=connection.execute("SELECT counts,outcome FROM public.mycel_activity WHERE kind='recovery'").fetchone()
             self.assertEqual(outcome,'done')
-            self.assertEqual(counts['completed'],5)
+            self.assertEqual(counts['completed'],4)
         self.assertEqual(len(self.origins()),3)
 
     def test_busy_and_expired_deadline_make_no_model_call(self):

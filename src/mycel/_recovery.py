@@ -39,8 +39,16 @@ from ._store import checked_store
 from ._undocumented import normalize_paths
 from ._verification import _located, _require_confirmable
 
-SOURCES = ('document', 'test', 'commit', 'issue', 'embedding')
+SOURCES = ('document', 'commit', 'issue', 'embedding')
 _TEXT_KINDS = frozenset({'document', 'req', 'dec', 'summary', 'overview'})
+_TEST_PATH = re.compile(r'(^|/)(?:tests?|__tests__)(/|_)|(^|/)test_')
+
+
+def _is_test(member):
+    """Tests leave recovery, as candidates and as sections to recover (SYL-289):
+    a test's Origin is the requirement it checks, stated with `justify`."""
+    return (member.chunk.kind not in {'document', 'req', 'dec'}
+            and bool(_TEST_PATH.search(member.place.path) or member.chunk.name.split('.')[-1].startswith('test_')))
 _LINEAR = re.compile(r'https?://(?:[^/\s]+\.)?linear\.app(?:/|\b)|\bLinear issue\b|^#\s+SYL-\d+', re.I | re.M)
 _URL = re.compile(r'https?://[^\s<>"\[\]()]+')
 _ISSUE = re.compile(r'(?<![\w/])#([1-9][0-9]*)\b')
@@ -346,6 +354,10 @@ class RecoveryStore:
                     mapping[row['chunk']].members[0].chunk.kind not in {'req', 'dec'}
                     and (mapping[row['chunk']].members[0].chunk.kind != 'document'
                          or mapping[row['chunk']].file.document_declarations.role != 'authored')]
+            if not review:
+                if chunk is not None and any(_is_test(mapping[row['chunk']].members[0]) for row in targets):
+                    raise MycelError('invalid_input', "Recovery leaves tests out; state a test's Origin with justify.")
+                targets = [row for row in targets if not _is_test(mapping[row['chunk']].members[0])]
             documents = [(file, member) for file in catalog.files for member in catalog._members(file, file.chunks)
                          if member.chunk.kind in {'document', 'req', 'dec'}
                          and not _LINEAR.search(file.source.decode('utf-8'))]
@@ -401,19 +413,9 @@ class RecoveryStore:
                         if resolved.state == 'resolved':
                             add(public_reference(resolved.selection), 'document')
                     symbol = member.chunk.name
-                    leaf = symbol.split('.')[-1]
                     for file, item in documents:
                         if _match_symbol(item.chunk.source.decode('utf-8'), symbol):
                             add(public_reference(_selection(file, item)), 'document')
-                    for file in catalog.files:
-                        if file.repository != repository:
-                            continue
-                        for item in catalog._members(file, file.chunks):
-                            if (item.chunk.kind not in {'document','req','dec'}
-                                    and (re.search(r'(^|/)(?:tests?|__tests__)(/|_)|(^|/)test_', item.place.path)
-                                         or item.chunk.name.split('.')[-1].startswith('test_'))
-                                    and re.search(r'(?<!\w)'+re.escape(leaf)+r'\s*\(', item.chunk.source.decode('utf-8'))):
-                                add(public_reference(_selection(file,item)), 'test')
                     if history.get('available'):
                         message = history['message']
                         urls = [url.rstrip('.,:;') for url in _URL.findall(message) if not _LINEAR.search(url)]
@@ -472,7 +474,7 @@ class RecoveryStore:
                     except (EvidenceError, MycelError) as error:
                         record.update(status='unresolved', reason=error.status if isinstance(error,EvidenceError) else error.code.value)
                     chunk_reply['candidates'].append(record)
-                reasons = {'document':'no_matching_document_sections','test':'no_calling_tests',
+                reasons = {'document':'no_matching_document_sections',
                            'commit':'commit_snapshot_unavailable','issue':'upstream_snapshot_unavailable',
                            'embedding':'chunk_vectors_unavailable' if not chunk_reply['embedding']['available'] else 'no_embedded_entities'}
                 chunk_reply['sourceAvailability'] = {source: {'available':any(source in values for values in candidates.values()),
