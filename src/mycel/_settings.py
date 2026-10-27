@@ -132,8 +132,8 @@ _DEFAULTS = {
                "max_input_bytes": 24000, "review_max_input_bytes": 1048576,
                # Without a reviewer, the probability of the label with an
                # effect must reach the question's floor (SYL-289).
-               "origin_floor": 0.5, "conformance_floor": 0.5, "consistency_floor": 0.5,
-               "ambiguity_floor": 0.5},
+               "origin_floor": 0.7, "conformance_floor": 0.7, "consistency_floor": 0.7,
+               "ambiguity_floor": 0.8},
     "summaries": {"at_once": 4},
     "organizations": {},
     "repos": {},
