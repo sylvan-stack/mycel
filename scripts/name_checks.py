@@ -2,7 +2,9 @@
 """Name each requirement's passing checks in its specification, and set the specification statuses.
 
 fill   reads the Origin report of the tests (`mycel origins --repo mycel --path tests
-       --no-fresh`) and complete passing check reports, then writes the Named checks
+       --no-fresh`) and complete passing check reports (a schema 2 report of
+       `make check`, or a Build's `checks.json` whose complete installed gate passed),
+       then writes the Named checks
        section of every accepted or implemented chapter, its front matter status and
        its status in the specifications index.
 check  confirms against complete check reports that every named check exists and
@@ -44,7 +46,7 @@ INDEX_ROW = re.compile(r"^\| \[(?P<spec>[A-Z]+-[0-9]+)\]\((?P<file>[^)]+)\) \| (
 NAMED = re.compile(r"`([A-Za-z0-9_.]+)`")
 MORE = re.compile(r" and [1-9][0-9]* more$")
 INTRODUCTION = (
-    "Written by `scripts/name_checks.py` from the `proven` Origin Links of the tests and "
+    "Written by `scripts/name_checks.py` from the `proven` and `stated` Origin Links of the tests and "
     "a complete check report in which they passed. Each requirement keeps its kind in its "
     "Verified by cell and names here up to three of its passing checks: those of its own "
     "kind first, then those that rest on the fewest requirements. `mycel origins --repo "
@@ -72,14 +74,27 @@ class Chapter:
     requirements: tuple[Requirement, ...]
 
 
+GATE = "installed_automatic_unit_store_gate"
+
+
+def report_checks(path, report) -> list:
+    """The checks of a complete passing report: a schema 2 check report, or a Build's
+    checks record whose complete installed unit and store gate passed (MYC-D72)."""
+    if isinstance(report, dict) and report.get("schema_version") == 2 and report.get("passed") is True:
+        return report["checks"]
+    if isinstance(report, dict) and report.get("schemaVersion") == 1:
+        gates = [result for result in report.get("results", ()) if result.get("name") == GATE]
+        if len(gates) == 1 and gates[0].get("passed") is True and gates[0].get("completeFrozenInventory") is True:
+            return gates[0]["checks"]
+    raise NamingError(f"{path}: not a passing schema 2 check report or Build installed gate")
+
+
 def passed_checks(paths) -> dict[str, str]:
     """Each passing check of the complete reports, with its kind."""
     passed = {}
     for path in paths:
         report = json.loads(Path(path).read_text(encoding="utf-8"))
-        if not isinstance(report, dict) or report.get("schema_version") != 2 or report.get("passed") is not True:
-            raise NamingError(f"{path}: not a passing schema 2 check report")
-        for check in report["checks"]:
+        for check in report_checks(path, report):
             if check["status"] == "passed":
                 if check["kind"] not in KINDS:
                     raise NamingError(f"{path}: {check['name']} has unknown kind {check['kind']!r}")
@@ -88,15 +103,21 @@ def passed_checks(paths) -> dict[str, str]:
 
 
 def proven_links(path) -> dict[str, set[str]]:
-    """Requirement UUID -> the checks that the Origin report says prove it."""
+    """Requirement UUID -> the checks that the Origin report says prove it.
+
+    A test's Origin is the requirement it checks, `proven` by the one-time `@proves`
+    import or `stated` with `justify` (MYC-D70, MYC-D72); a stated Origin that is not a
+    test's requirement names no check."""
     report = json.loads(Path(path).read_text(encoding="utf-8"))
     links: dict[str, set[str]] = {}
     for chunk in report["chunks"]:
         for link in chunk["links"]:
-            if link["method"] != "proven":
+            if link["method"] not in ("proven", "stated"):
                 continue
             test, origin = TEST_CHUNK.fullmatch(link["chunk"]), REQUIREMENT_URI.fullmatch(link["origin"])
             if test is None or origin is None:
+                if link["method"] == "stated":
+                    continue
                 raise NamingError(f"{path}: {link['chunk']} -> {link['origin']} is not a test proving a requirement")
             name = test["path"].replace("/", ".") + "." + test["symbol"]
             links.setdefault(origin["uuid"], set()).add(name)

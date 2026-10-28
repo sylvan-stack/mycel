@@ -69,8 +69,9 @@ class NameChecksTests(unittest.TestCase):
                  link("test_light.LightTests.test_reports", SHARED), link("test_soil.SoilTests.test_tests", DRAFTED),
                  link("test_gone.GoneTests.test_removed", SHARED)]
         links += [link(f"test_shared.ReportTests.test_{letter}", SHARED) for letter in "abcd"]
+        # A person may state any Origin; one that is not a test's requirement names no check.
         links += [link("test_shared.ReportTests.test_a", DRAFTED), {**link("test_level.LevelTests.test_rounds", SHARED),
-                                                                    "method": "stated"}]
+                  "method": "stated", "origin": "[fix:dec:66666666-6666-4666-8666-666666666666:dGl0bGU=]"}]
         self.origins = root / "origins.json"
         self.origins.write_text(json.dumps({"scope": {"repository": "fix"},
                                             "chunks": [{"chunk": item["chunk"], "links": [item]} for item in links]}))
@@ -169,6 +170,30 @@ class NameChecksTests(unittest.TestCase):
         status, out, err = self.check(self.report, on_demand)
         self.assertEqual((status, err), (0, ""))
         self.assertIn("2 of 2 specifications implemented", out)
+
+    def test_a_stated_test_origin_names_its_check_from_a_build_installed_gate(self):
+        # MYC-D72: `justify` states a test's Origin (MYC-D70), and a Build's passing
+        # complete installed gate is a complete check report.
+        report = json.loads(self.origins.read_text(encoding="utf-8"))
+        for chunk in report["chunks"]:
+            for item in chunk["links"]:
+                if item["chunk"].endswith("#LevelStoreTests.test_keeps"):
+                    item["method"] = "stated"
+        self.origins.write_text(json.dumps(report), encoding="utf-8")
+        gate = {"name": "installed_automatic_unit_store_gate", "passed": True, "completeFrozenInventory": True,
+                "checks": [{"name": name, "kind": kind, "passed": True, "status": "passed", "detail": None}
+                           for name, kind in self.checks.items()]}
+        build = Path(self.directory.name) / "checks.json"
+        build.write_text(json.dumps({"schemaVersion": 1, "results": [gate], "pending": []}), encoding="utf-8")
+        status, out, err = self.run_script("fill", "--specifications", str(self.specs), "--origins", str(self.origins),
+                                           "--report", str(build))
+        self.assertEqual((status, err), (0, ""))
+        self.assertIn("1 of 2 specifications implemented", out)
+        self.assertIn("| `FIX-1.1` | store | `test_level.LevelStoreTests.test_keeps`, ",
+                      (self.specs / "01-water.md").read_text(encoding="utf-8"))
+        build.write_text(json.dumps({"schemaVersion": 1, "results": [{**gate, "completeFrozenInventory": False}]}),
+                         encoding="utf-8")
+        self.assertIn("not a passing schema 2 check report or Build installed gate", self.check(build)[2])
 
     def test_fill_refuses_a_failed_report_or_a_row_without_one_kind_and_writes_nothing(self):
         failed = self.write_report(Path(self.directory.name) / "failed.json", self.checks, passed=False)
