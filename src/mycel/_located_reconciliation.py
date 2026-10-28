@@ -31,9 +31,9 @@ from ._safeguards import run_git
 from ._scope import RepositoryLocations
 from ._settings import SettingsSnapshot
 from ._source_bindings import FileBinding, _observe
-from ._source_refs import SourceAddress
+from ._source_refs import SourceAddress, SourceAddressError, parse_source_address
 from ._source_refs import read_document_declarations
-from ._declared_refs import _safe_json
+from ._declared_refs import _safe_json, _text
 from ._store import checked_store, search_text
 
 
@@ -75,6 +75,58 @@ def _file_edges(connection, repository: str) -> frozenset:
     """Stored dependencies between a repository's disk files, as (source, dependant) places."""
     return frozenset(((row[0], row[1]), (row[2], row[3]))
                      for row in connection.execute(_FILE_EDGES_SQL, (repository, repository)).fetchall())
+
+
+_RESTING_SQL = """SELECT l.file_location::text,d.declaration,d.source_place,d.state,
+    ARRAY(SELECT c.file_id::text FROM public.mycel_edges e JOIN public.mycel_chunk_versions cv ON cv.id=e.source_version
+          JOIN public.mycel_chunks c ON c.id=cv.chunk_id WHERE e.dependency=d.id AND c.file_id IS NOT NULL)
+FROM public.mycel_dependencies d JOIN public.mycel_locations l ON l.chunk_version=d.dependant_version
+JOIN public.mycel_file_locations f ON f.id=l.file_location JOIN public.mycel_file_versions v ON v.id=f.file_version
+JOIN public.mycel_files p ON p.id=v.file_id WHERE p.repository=%s
+  AND (d.state->'declarationLocation'->>'file' IS NULL OR d.state->'declarationLocation'->>'file'=l.file_location::text)
+UNION ALL SELECT l.file_location::text,NULL,r.right_place,r.state,ARRAY[]::text[]
+FROM public.mycel_relations r JOIN public.mycel_locations l ON l.chunk_version=r.left_version
+JOIN public.mycel_file_locations f ON f.id=l.file_location JOIN public.mycel_file_versions v ON v.id=f.file_version
+JOIN public.mycel_files p ON p.id=v.file_id WHERE p.repository=%s
+  AND (r.state->'declarationLocation'->>'file' IS NULL OR r.state->'declarationLocation'->>'file'=l.file_location::text)"""
+
+
+def _resting_on(connection, repository: str, files: frozenset, places: frozenset) -> frozenset:
+    """File locations of a repository whose dependencies or relations rest on the given files.
+
+    A dependency rests on a file through a stored edge to one of its chunks,
+    an anchor in it, or a declared target or natural place naming one of its
+    paths; a target without a root names that path in every root. These are
+    the inputs the source checks of a refresh compare (SYL-315).
+    """
+    from ._relations import _relation_raw
+    anchors = files | {str(row[0]) for row in connection.execute(
+        'SELECT id FROM public.mycel_chunks WHERE file_id::text=ANY(%s)', (sorted(files),)).fetchall()}
+    paths = {path for _, path in places}
+    resting = set()
+    for location, declaration, place, state, sources in connection.execute(
+            _RESTING_SQL, (repository, repository)).fetchall():
+        if location in resting:
+            continue
+        anchor = state.get('anchor')
+        if files.intersection(sources) or isinstance(anchor, str) and anchor in anchors:
+            resting.add(location)
+            continue
+        try:
+            raw = (_text(state['rawRef']) if declaration is not None else _relation_raw(state)) \
+                if 'rawRef' in state or 'rawRefHex' in state else declaration
+        except (KeyError, ValueError):
+            raw = declaration
+        for value in (raw, place):
+            try:
+                address = parse_source_address(value)
+            except (SourceAddressError, TypeError):
+                continue
+            if address.repository == repository and address.path in paths and (
+                    address.root is None or (address.root, address.path) in places):
+                resting.add(location)
+                break
+    return frozenset(resting)
 
 
 # Fields every file of a location shares; they change when another file of the
@@ -609,18 +661,34 @@ class LocatedCaptureStore:
                 refreshing, refresh_left, through = (), 0, None
                 if file_limit is not None and settled:
                     # The refresh of unchanged files is the rest of the pass. It
-                    # resumes after the last file an earlier step refreshed, and
-                    # starts again when this step wrote or retired a file.
+                    # resumes after the last file an earlier step refreshed. A
+                    # step that wrote or retired files keeps that place and, in
+                    # its share, refreshes again the refreshed files resting on
+                    # them; when they do not fit, it starts again (SYL-315).
                     # A file this step wrote is refreshed with its writing; the
                     # walk passes it and stops at the first unchanged file
                     # beyond the step's share.
                     ordered = sorted(applied, key=_refresh_order)
                     progress = connection.execute('SELECT pass_progress FROM public.mycel_repository_state '
                         'WHERE repository=%s', (repository.name,)).fetchone()
-                    if not written and not retired and progress is not None and progress[0] is not None:
-                        through = tuple(progress[0]['refreshedThrough'])
-                        ordered = [file for file in ordered if not through or _refresh_order(file) > through]
-                    walked, refreshing = 0, []
+                    again = []
+                    if progress is not None and progress[0] is not None:
+                        through = tuple(progress[0]['refreshedThrough']) or None
+                    if through is not None and (written or retired):
+                        gone = [row for row in rows if str(row[4]) in retired]
+                        touched = [file.binding for file in applied if file.changed]
+                        resting = _resting_on(connection, repository.name,
+                            frozenset({binding.identifier for binding in touched} | {str(row[0]) for row in gone}),
+                            frozenset({(alias.root, alias.path) for binding in touched for alias in binding.aliases}
+                                      | {(item['root'], item['path']) for row in gone
+                                         for item in row[7].get('aliases', ())}))
+                        again = [file for file in ordered if not file.changed
+                                 and file.binding.location in resting and _refresh_order(file) <= through]
+                        if len(again) > file_limit - written:
+                            again, through = [], None
+                    if through is not None:
+                        ordered = [file for file in ordered if _refresh_order(file) > through]
+                    walked, refreshing = 0, list(again)
                     for file in ordered:
                         if not file.changed:
                             if len(refreshing) == file_limit - written:
