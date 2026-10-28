@@ -535,6 +535,23 @@ print(json.dumps(v))
             self.assertEqual(counts['completed'],4)
         self.assertEqual(len(self.origins()),3)
 
+    def test_a_pair_in_error_keeps_the_step_reply_and_closes_its_activity_failed(self):
+        # Regression (SYL-289): the step closed its activity `refused` without an
+        # error, the record of work refused that, and the reply was lost.
+        from mycel._cli import run
+        def fail_second(request):
+            if len(self.calls)==2:raise JevFailure('provider_result_invalid')
+        output,diagnostic=StringIO(),StringIO()
+        with patch('mycel._cli.load_settings',return_value=self.settings), \
+             patch('mycel._recovery.ClassifyDependencies',return_value=self.dependencies(changed=fail_second)), \
+             patch('mycel._build_identity.current_build',return_value=1):
+            status=run(('recovery',self.ref),stdout=output,stderr=diagnostic)
+        reply=json.loads(output.getvalue())
+        self.assertEqual((status,reply['status'],reply['errors'],reply['completed']),(1,1,1,3),reply)
+        with self.base.connect() as connection:
+            counts,outcome,error=connection.execute("SELECT counts,outcome,error FROM public.mycel_activity WHERE kind='recovery'").fetchone()
+        self.assertEqual((outcome,error['code'],counts['completed']),('failed','refused',3))
+
     def test_busy_and_expired_deadline_make_no_model_call(self):
         from mycel._locks import operation_guard
         from mycel._freshness import Deadline

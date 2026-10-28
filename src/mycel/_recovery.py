@@ -680,6 +680,23 @@ def _judge_sections(store, settings, repository, policy, reply, keys, *, at):
     return marked
 
 
+def activity_ending(reply, unfinished):
+    """The record-of-work outcome and error of a step's reply (MYC-12).
+
+    A step with a pair in error ends `failed` with the closed `refused` code, as
+    classify does, so its reply and what its pairs applied stay readable; a
+    reply that carries its own error keeps it (SYL-289)."""
+    status = reply['status']
+    if status == 0:
+        return 'done', None
+    own = reply.get('error')
+    error = ({'code': own['code'], 'message': own['message']} if own else
+             {'code': 'refused', 'message': 'Stopped by the caller.' if status == 2 else unfinished})
+    if status == 2:
+        return 'stopped', error
+    return ('refused' if own and own['code'] in {'refused', 'busy'} else 'failed'), error
+
+
 def run_recovery(store, settings, repository, *, chunk=None, paths=(), dry_run=False, review=False,
                  k=None, dependencies=None, activity=None, deadline=None):
     settings.require_valid()
@@ -864,5 +881,6 @@ def handle_recovery(invocation, dependencies=None):
         reply = run_recovery(RecoveryStore(connection),settings,repository,chunk=refs[0] if refs else None,
             paths=paths,dry_run=dry_run,review='--review' in flags,k=k,dependencies=dependencies,activity=activity,deadline=deadline)
         if activity is not None:
-            activity.finish('done' if reply['status']==0 else 'refused',counts={(repository,'recovery'):reply})
+            outcome,error = activity_ending(reply,'Some selected recovery pairs remain unfinished.')
+            activity.finish(outcome,error=error,counts={(repository,'recovery'):reply})
         return Result(reply,reply['status'])
