@@ -29,7 +29,7 @@ from ._jev import JevFailure, JevRequest
 from ._justify import checked_link, confidence_band, public_reference
 from ._locks import (read_snapshot, operation_guard, mutation_guard, invocation_guard)
 from ._origins import _selection
-from ._recovery import _text, _checked_result, effect_decision, has_effect, judgement_policy
+from ._recovery import _text, _checked_result, activity_ending, effect_decision, has_effect, judgement_policy
 from ._resolver import SourceResolver
 from ._reviewer import ReviewerFailure
 from ._safeguards import InvocationPolicy
@@ -479,5 +479,6 @@ def handle_audit(invocation, dependencies=None):
                 deterministic='--deterministic' in flags, closed='--closed' in flags,
                 k=int(values['--k']) if '--k' in values else None, dependencies=dependencies, activity=activity, deadline=deadline)
         if activity is not None:
-            activity.finish('done' if reply['status'] == 0 else 'refused', counts={(repository, 'audit'): reply})
+            outcome, error = activity_ending(reply, 'Some selected audit pairs remain unfinished.')
+            activity.finish(outcome, error=error, counts={(repository, 'audit'): reply})
         return Result(reply, reply['status'])
