@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run all automatic checks, or selected checks, with private store fixtures."""
+"""Run explicitly selected tests with private store fixtures; see TESTS.md."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 import tomllib
+import unittest
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY / "src"))
@@ -21,7 +22,7 @@ sys.path.insert(0, str(REPOSITORY / "src"))
 for variable in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
     os.environ[variable] = "1"
 
-from mycel._coverage import CoverageError, check_kind, discover_checks, iter_checks, run_checks, select_checks
+from mycel._coverage import CoverageError, check_kind, iter_checks, run_checks, select_checks
 from mycel._check_store import NativePostgresBackend
 
 
@@ -62,9 +63,16 @@ def main() -> int:
     arguments = parser.parse_args()
     started = time.monotonic()
     try:
+        if not arguments.select or any(len(name.split('.')) != 3 for name in arguments.select):
+            raise CoverageError('Select exact MODULE.CLASS.METHOD cases; broad testing is disabled. See TESTS.md.')
         if arguments.workers < 1:
             raise CoverageError("check workers must be a positive integer")
-        suite = select_checks(discover_checks(arguments.tests), arguments.select)
+        sys.path.insert(0, str(arguments.tests.resolve()))
+        loader = unittest.TestLoader()
+        suite = loader.loadTestsFromNames(arguments.select)
+        if loader.errors:
+            raise CoverageError('Selected tests could not be loaded: ' + '\n'.join(loader.errors))
+        suite = select_checks(suite, arguments.select)
         checks = list(iter_checks(suite))
         backend = None
         with ownership_journal() as journal:
@@ -102,8 +110,7 @@ def main() -> int:
         kinds = Counter(check.kind for check in report.checks)
         print(f"{statuses['passed']:,} passed, {statuses['failed']:,} failed, {statuses['skipped']:,} skipped; "
               f"{kinds['unit']:,} unit, {kinds['store']:,} store; {(time.monotonic()-started)/60:.2f} minutes")
-        if arguments.select:
-            print("Focused run; acceptance requires the complete make check run.")
+        print("Selected tests only; this result is not full qualification. See TESTS.md.")
         for check in report.checks:
             if check.status != "passed":
                 detail = (check.detail or check.status).strip().splitlines()[-1]

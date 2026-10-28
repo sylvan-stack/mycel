@@ -7,7 +7,6 @@ objects or a result list as its expected inventory.
 from __future__ import annotations
 
 import ast
-import json
 import re
 
 from ._core import BuildError, digest, json_bytes
@@ -82,6 +81,8 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
         for path, raw in sorted(frozen.items()):
             if not re.fullmatch(r'tests/test_[A-Za-z0-9_]+\.py', path):
                 continue
+            if b'# TEST-TIER-DISABLED-BEGIN ' in raw:
+                raise BuildError('refused', 'Mid-tier tests are commented. Full qualification requires an explicitly requested testing task; see TESTS.md.')
             module = path.removeprefix('tests/').removesuffix('.py')
             for class_name, (methods, kind) in _test_classes(ast.parse(raw)).items():
                 if kind not in {'unit', 'store', 'eval', 'live'}:

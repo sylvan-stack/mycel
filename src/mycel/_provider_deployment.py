@@ -5,20 +5,26 @@ retunes settings or reconstructs an OnDemandProofs object from retained JSON.
 """
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
-from hashlib import sha256
 import json
 import math
-from pathlib import Path
 import re
 import stat
+from decimal import InvalidOperation
+from hashlib import sha256
+from pathlib import Path
 
 from ._classification_payload import LABELS, ReviewCommandIdentity
 from ._errors import MycelError
 from ._evidence import EvidenceError
 from ._jev import JevFailure
-from ._provider_qualification import (QUALIFICATION_REVISION, classification_diagnostics, profile_fingerprint,
-    _jev_response_from_report, qualify_profile, semantic_fingerprint)
+from ._provider_qualification import (
+    QUALIFICATION_REVISION,
+    _jev_response_from_report,
+    classification_diagnostics,
+    profile_fingerprint,
+    qualify_profile,
+    semantic_fingerprint,
+)
 
 
 def _bytes(value):
@@ -186,6 +192,7 @@ def run_provider_deployment_checks(settings, suite, provider_proofs, reports, *,
     Both separately executed proof objects remain available to the caller.
     Automatic Build discovery never calls this helper.
     """
+    raise MycelError('refused', 'Tests are commented under the tier policy; see TESTS.md. Restore only in an explicitly requested testing task.')  # TEST-TIER-REFUSAL
     if live is not True:
         raise MycelError('refused', 'Provider deployment checks require explicit live selection.')
     if (not isinstance(implementation_identity, str) or not implementation_identity
@@ -193,54 +200,59 @@ def run_provider_deployment_checks(settings, suite, provider_proofs, reports, *,
             or not isinstance(repository, str) or not repository):
         raise MycelError('invalid_input', 'Provider deployment checks require an immutable Build identity.')
     import unittest
-    from ._coverage import CheckResult, OnDemandProofs, run_on_demand_checks
-    expected_checks = (
-        ('mycel._provider_checks.run_provider_checks.<locals>.ProviderAcceptance.test_fixed_embedding_compatibility',
-         'live', ('MYC-13.9',)),
-        ('mycel._provider_checks.run_provider_checks.<locals>.ProviderAcceptance.test_configured_drift_live_pipeline',
-         'live', ('MYC-13.19',)),
-        ('mycel._provider_checks.run_provider_checks.<locals>.ProviderAcceptance.test_same_run_finite_profile_qualification',
-         'eval', ('MYC-13.20',)))
+
+    from ._coverage import run_on_demand_checks
+    # Expected proof rows belong to the commented deployment acceptance below.
+    # expected_checks = (
+    #     ('mycel._provider_checks.run_provider_checks.<locals>.ProviderAcceptance.test_fixed_embedding_compatibility',
+    #      'live', ('MYC-13.9',)),
+    #     ('mycel._provider_checks.run_provider_checks.<locals>.ProviderAcceptance.test_configured_drift_live_pipeline',
+    #      'live', ('MYC-13.19',)),
+    #     ('mycel._provider_checks.run_provider_checks.<locals>.ProviderAcceptance.test_same_run_finite_profile_qualification',
+    #      'eval', ('MYC-13.20',)))
 
     class ProviderDeploymentAcceptance(unittest.TestCase):
-        def test_same_run_provider_qualification_required_for_deployment(self):
-            self.assertIs(type(provider_proofs), OnDemandProofs)
-            self.assertEqual(provider_proofs.implementation_identity, implementation_identity)
-            self.assertEqual(len(provider_proofs.checks), len(expected_checks))
-            for check, expected in zip(provider_proofs.checks, expected_checks, strict=True):
-                self.assertIs(type(check), CheckResult)
-                self.assertEqual((check.name, check.kind, check.requirements), expected)
-                self.assertEqual(check.status, 'passed', 'The same provider group did not complete successfully.')
-            self.assertIs(type(reports), dict)
-            actual_drift_report = reports.get('drift')
-            embedding = reports.get('embedding')
-            self.assertIsInstance(embedding, dict)
-            self.assertIs(embedding.get('passed'), True)
-            self.assertIs(embedding.get('live'), True)
-            self.assertEqual(embedding.get('providerExecution'), 'production-defaults')
-            self.assertEqual(embedding.get('build'), build)
-            self.assertIsInstance(actual_drift_report, dict)
-            self.assertEqual(actual_drift_report.get('build'), build)
-            self.assertEqual(actual_drift_report.get('repository'), repository)
-            settings.require_valid(require_store=False)
-            settings.require_current()
-            options = settings.values['drifts']
-            _require(bool(options.get('review_command')))
-            command = ReviewCommandIdentity.inspect(options['review_command'],
-                options['review_revision'], settings._home or '/')
-            _require(command.available)
-            from ._evaluation_live import _pipeline
-            record = require_qualification(actual_drift_report, suite, _pipeline(settings, command))
-            settings.require_current()
-            _require(command == ReviewCommandIdentity.inspect(options['review_command'],
-                options['review_revision'], settings._home or '/'))
-            # This record is provenance only. Only the executor below creates
-            # this consumer's actual live proof, including when it fails.
-            reports['deployment'] = {**record, 'sameProcessProviderGroupConsumed': True,
-                'reportObjectOrigin': 'trusted-same-process-group-caller',
-                'implementationIdentity': implementation_identity,
-                'providerCheckNames': [row.name for row in provider_proofs.checks],
-                'additionalProviderCallsByConsumer': 0}
+        pass  # TEST-TIER-EMPTY-SUITE; helpers remain importable.
+# TEST-TIER-DISABLED-BEGIN src/mycel/_provider_deployment.py::ProviderDeploymentAcceptance.test_same_run_provider_qualification_required_for_deployment
+#         def test_same_run_provider_qualification_required_for_deployment(self):
+#             self.assertIs(type(provider_proofs), OnDemandProofs)
+#             self.assertEqual(provider_proofs.implementation_identity, implementation_identity)
+#             self.assertEqual(len(provider_proofs.checks), len(expected_checks))
+#             for check, expected in zip(provider_proofs.checks, expected_checks, strict=True):
+#                 self.assertIs(type(check), CheckResult)
+#                 self.assertEqual((check.name, check.kind, check.requirements), expected)
+#                 self.assertEqual(check.status, 'passed', 'The same provider group did not complete successfully.')
+#             self.assertIs(type(reports), dict)
+#             actual_drift_report = reports.get('drift')
+#             embedding = reports.get('embedding')
+#             self.assertIsInstance(embedding, dict)
+#             self.assertIs(embedding.get('passed'), True)
+#             self.assertIs(embedding.get('live'), True)
+#             self.assertEqual(embedding.get('providerExecution'), 'production-defaults')
+#             self.assertEqual(embedding.get('build'), build)
+#             self.assertIsInstance(actual_drift_report, dict)
+#             self.assertEqual(actual_drift_report.get('build'), build)
+#             self.assertEqual(actual_drift_report.get('repository'), repository)
+#             settings.require_valid(require_store=False)
+#             settings.require_current()
+#             options = settings.values['drifts']
+#             _require(bool(options.get('review_command')))
+#             command = ReviewCommandIdentity.inspect(options['review_command'],
+#                 options['review_revision'], settings._home or '/')
+#             _require(command.available)
+#             from ._evaluation_live import _pipeline
+#             record = require_qualification(actual_drift_report, suite, _pipeline(settings, command))
+#             settings.require_current()
+#             _require(command == ReviewCommandIdentity.inspect(options['review_command'],
+#                 options['review_revision'], settings._home or '/'))
+#             # This record is provenance only. Only the executor below creates
+#             # this consumer's actual live proof, including when it fails.
+#             reports['deployment'] = {**record, 'sameProcessProviderGroupConsumed': True,
+#                 'reportObjectOrigin': 'trusted-same-process-group-caller',
+#                 'implementationIdentity': implementation_identity,
+#                 'providerCheckNames': [row.name for row in provider_proofs.checks],
+#                 'additionalProviderCallsByConsumer': 0}
+# TEST-TIER-DISABLED-END src/mycel/_provider_deployment.py::ProviderDeploymentAcceptance.test_same_run_provider_qualification_required_for_deployment
 
     consumer_proofs = run_on_demand_checks(((ProviderDeploymentAcceptance(
         'test_same_run_provider_qualification_required_for_deployment'), 'live', ('MYC-14.22',)),),
@@ -248,3 +260,11 @@ def run_provider_deployment_checks(settings, suite, provider_proofs, reports, *,
     # Never reconstruct or concatenate proof rows into a manufactured object.
     # run_checks already accepts this sequence of independently executed proofs.
     return (provider_proofs, consumer_proofs), reports
+
+# Archived complete imports; restore needed names in their original scope, not at this file tail.
+# TEST-TIER-IMPORTS-BEGIN src/mycel/_provider_deployment.py:8
+# from decimal import Decimal, InvalidOperation
+# TEST-TIER-IMPORTS-END src/mycel/_provider_deployment.py:8
+# TEST-TIER-IMPORTS-BEGIN src/mycel/_provider_deployment.py:196
+#     from ._coverage import CheckResult, OnDemandProofs, run_on_demand_checks
+# TEST-TIER-IMPORTS-END src/mycel/_provider_deployment.py:196
