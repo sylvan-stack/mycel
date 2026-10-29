@@ -1,0 +1,5 @@
+{
+  "task": "SYL-327",
+  "fullQualification": "requires-explicit-review",
+  "reason": "The retained test selection has changed substantially. A separately requested qualification task must review the requirement mapping before full Build qualification is restored."
+}

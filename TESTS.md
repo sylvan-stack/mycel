@@ -4,11 +4,11 @@ Both tiers have uncommented source. Only the top-tier cases below may be selecte
 
 [Mid-tier descriptions and justifications](MID_TIER.md) · [Complete inventory and tier justifications](docs/test-inventory.md) · [Machine-readable inventory](test-tiers.json)
 
-Reviewed revision: `a80c617dd535d6e8142ce940ff73b7825f7e6c6c` (28 October 2026), plus the preceding local pruning changes. No tests were run for this reset. On 29 October 2026 SYL-315 added two individually reviewed top-tier ingest cases.
+Reviewed revision: `560e2e2b1623066240ebd128bfa1e552f0a4f25f` under SYL-327 (29 October 2026). No tests were run.
 
 ## Selection and limits
 
-8 top-tier inventory entries and 1788 mid-tier entries are available. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Mid-tier source remains uncommented at the owner's request. Provisional classifications are execution decisions, not semantic approval. Low-tier removals remain removed.
+8 top-tier inventory entries and 135 mid-tier entries are available after the higher-bar review. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Top-tier bodies are unchanged. Retained mid-tier sources remain uncommented.
 
 ## Active top tier
 
@@ -44,3 +44,9 @@ PYTHONPATH=src python scripts/run_checks.py --select test_top_source_refs.Source
 For a Python method, use the same fixture setup as the top tier, put the mid folder on PYTHONPATH, and select `test_mid_<module>.Class.test_method`. Mycel's fixture-aware runner accepts `--tests tests/mid --select test_mid_<module>.Class.test_method`; store cases require explicit disposable-store settings. Archived scenarios and programs retain their original compatibility entry paths.
 
 Restoration under SYL-326 used static checks only. No tests, Builds, provider calls, Origin migrations or corpus ingest were performed. Original prerequisites and environment limits still apply.
+
+## Qualification after SYL-327
+
+The source runner continues to require exact selections. The historical full Build qualification gate now refuses while `tests/qualification-status.json` is present. A separately requested qualification task must review the requirement mapping before restoring that gate. Reduced selections are not historical full qualification. No tests, Builds, provider calls or owner-store operations ran during this pruning.
+
+The review used an AST census of calls, assertions and patch boundaries, followed by targeted inspection of retained case bodies and fixtures. This is risk-based retention, not a runtime proof that the removed coverage is redundant.

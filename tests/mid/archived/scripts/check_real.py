@@ -1,6 +1,6 @@
 """Ingest real repositories into a throwaway store, twice, while a file changes.
 
-The check any Beat can run (SYL-232). It works on copies of the `readonly`
+Run only as a separately requested testing task (SYL-327). It works on copies of the `readonly`
 clones of the repositories it names and of their corpora, writes only to a database
 of its own named `mycel_check_real_<id>` on the configured check server, and
 drops it at the end. During the first pass of the last repository a helper

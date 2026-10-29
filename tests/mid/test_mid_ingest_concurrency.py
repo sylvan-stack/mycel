@@ -2,28 +2,7 @@
 from __future__ import annotations
 
 import test_ingest_concurrency as _support
-from test_ingest_concurrency import (
-    IngestConcurrencyStoreTests,
-    IngestCrossRepositoryStoreTests,
-    LocatedCaptureStore,
-    Path,
-    SourceResolver,
-    StringIO,
-    _CATALOG_SQL,
-    _CompleteProducer,
-    capture_repository,
-    contextmanager,
-    ingest_fixtures,
-    json,
-    load_settings,
-    os,
-    patch,
-    require_check_database,
-    require_transaction_guards,
-    run,
-    tempfile,
-    unittest,
-)
+from test_ingest_concurrency import (LocatedCaptureStore ,Path ,SourceResolver ,StringIO ,_CATALOG_SQL ,_CompleteProducer ,capture_repository ,contextmanager ,json ,load_settings ,os ,patch ,require_check_database ,require_transaction_guards ,run ,tempfile)
 
 
 class IngestConcurrencyStoreTests(_support.IngestConcurrencyStoreTests):
@@ -101,75 +80,3 @@ class IngestConcurrencyStoreTests(_support.IngestConcurrencyStoreTests):
                     self.assertEqual(member.chunk.source, exact)
                     self.assertEqual((base / name / "guide.md").read_bytes(), exact)
 # TEST-TIER-END tests/test_ingest_concurrency.py::IngestConcurrencyStoreTests.test_public_ingest_survives_disjoint_publication_inside_its_producer_transaction
-
-
-
-class IngestCrossRepositoryStoreTests(_support.IngestCrossRepositoryStoreTests):
-# TEST-TIER-BEGIN tests/test_ingest_concurrency.py::IngestCrossRepositoryStoreTests.test_foreign_refresh_and_requested_pass_share_cumulative_reply_and_final_activity
-    def test_foreign_refresh_and_requested_pass_share_cumulative_reply_and_final_activity(self):
-        fixture = self.fixture
-        fixture.add_repository("downstream",
-            b'---\nsources: ["fixture:@artifact/guide.md#Guide"]\n---\n# Answer\nStable answer.\n')
-        status, initial = fixture.invoke("--repo", "fixture", "--repo", "downstream")
-        self.assertEqual(status, 0, initial)
-        (fixture.base.artifact / "guide.md").write_bytes(b"# Guide\nChanged selected source.\n")
-        status, reply = fixture.invoke("--repo", "fixture", "--repo", "downstream")
-        self.assertEqual(status, 0, reply)
-        foreign = reply["repositories"]["fixture"]["dependencyRepositories"]["downstream"]
-        direct = reply["repositories"]["downstream"]
-        self.assertEqual(foreign["refsChecked"], 1)
-        self.assertEqual(direct["refsChecked"], 2)
-        self.assertEqual(direct["refsChanged"], 1)
-        self.assertEqual(direct["files"]["changed"], 0)
-        self.assertEqual(direct["pending"], direct["embedding"]["versions"]["pending"])
-        from mycel._activity import activity_state
-        with fixture.base.connect() as connection:
-            entries = {}
-            for repository in ("fixture", "downstream"):
-                identifier = connection.execute("SELECT id FROM public.mycel_activity "
-                    "WHERE repository=%s ORDER BY id DESC LIMIT 1", (repository,)).fetchone()[0]
-                entries[repository] = activity_state(connection, identifier)
-                self.assertEqual(entries[repository]["counts"], reply["repositories"][repository])
-            self.assertEqual(entries["fixture"]["invocation"], entries["downstream"]["invocation"])
-            self.assertEqual(entries["downstream"]["files"], [])
-            self.assertEqual(entries["downstream"]["decisions"], [])
-# TEST-TIER-END tests/test_ingest_concurrency.py::IngestCrossRepositoryStoreTests.test_foreign_refresh_and_requested_pass_share_cumulative_reply_and_final_activity
-
-# TEST-TIER-BEGIN tests/test_ingest_concurrency.py::IngestCrossRepositoryStoreTests.test_selected_source_pass_keeps_unrelated_pending_ref_in_same_foreign_chunk_exact
-    def test_selected_source_pass_keeps_unrelated_pending_ref_in_same_foreign_chunk_exact(self):
-        fixture = self.fixture
-        third = self.prepare_two_sources()
-        (third / "answer.md").write_bytes(b"# Answer\nChanged third source.\n")
-        with fixture.base.connect() as connection:
-            # A complete C publication deliberately leaves its dependency
-            # observations to the later owning producer. A must observe only
-            # its own affected ref, even though B also declares a ref to C.
-            LocatedCaptureStore(connection).apply(fixture.base.settings,
-                capture_repository(fixture.base.settings, "third"))
-            before = self.third_dependency(connection)
-        (fixture.base.artifact / "guide.md").write_bytes(b"# Guide\nChanged selected source.\n")
-        status, reply = fixture.invoke("--repo", "fixture")
-        self.assertEqual(status, 0, reply)
-        self.assertTrue(reply["repositories"]["fixture"]["ran"])
-        with fixture.base.connect() as connection:
-            self.assertEqual(self.third_dependency(connection), before)
-            self.selected_ref_changed(connection)
-# TEST-TIER-END tests/test_ingest_concurrency.py::IngestCrossRepositoryStoreTests.test_selected_source_pass_keeps_unrelated_pending_ref_in_same_foreign_chunk_exact
-
-# TEST-TIER-BEGIN tests/test_ingest_concurrency.py::IngestCrossRepositoryStoreTests.test_unindexed_unrelated_source_does_not_refuse_selected_foreign_ref_refresh
-    def test_unindexed_unrelated_source_does_not_refuse_selected_foreign_ref_refresh(self):
-        fixture = self.fixture
-        third = self.prepare_two_sources()
-        with fixture.base.connect() as connection:
-            before = self.third_dependency(connection)
-        (third / "answer.md").write_bytes(b"# Answer\nUnindexed unrelated third edit.\n")
-        (fixture.base.artifact / "guide.md").write_bytes(b"# Guide\nChanged selected source.\n")
-        status, reply = fixture.invoke("--repo", "fixture")
-        self.assertEqual(status, 0, reply)
-        self.assertTrue(reply.get("repositories", {}).get("fixture", {}).get("ran"), reply)
-        self.assertNotIn("refused", reply["repositories"]["fixture"])
-        self.assertEqual(reply["repositories"]["fixture"]["stalePending"], [])
-        with fixture.base.connect() as connection:
-            self.assertEqual(self.third_dependency(connection), before)
-            self.selected_ref_changed(connection)
-# TEST-TIER-END tests/test_ingest_concurrency.py::IngestCrossRepositoryStoreTests.test_unindexed_unrelated_source_does_not_refuse_selected_foreign_ref_refresh
