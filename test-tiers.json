@@ -6,7 +6,7 @@
   "counting": "Static definitions and separately labelled programs/scenario functions; not runtime-discovered cases.",
   "mid_review": "Provisional execution classification unless marked individually reviewed; not a completed quality endorsement.",
   "counts": {
-    "python_active": 6,
+    "python_active": 8,
     "python_commented": 1785,
     "programs_active": 0,
     "node_cases_commented": 0,
@@ -13374,7 +13374,7 @@
       "reason": "Scenario: explicit ingest options and cumulative reply preview. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 20,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13390,7 +13390,7 @@
       "reason": "Scenario: unchanged empty policy is batched but role repairs and new refs run. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 76,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13406,7 +13406,7 @@
       "reason": "Scenario: late empty policy mutation refuses and rolls back. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 114,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13422,7 +13422,7 @@
       "reason": "Scenario: empty scope mutation during active policy refuses. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 133,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13438,7 +13438,7 @@
       "reason": "Scenario: edited chunks keep prior asserted sources and relations. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 158,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13454,7 +13454,7 @@
       "reason": "Scenario: restored historical chunk inherits assertions absent from current file. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 193,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13470,7 +13470,7 @@
       "reason": "Scenario: complete disk local branches stash and exact quiet activity. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 216,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13486,7 +13486,7 @@
       "reason": "Scenario: failed complete capture and late audit leave retryable file and no deletion. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 268,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13502,7 +13502,7 @@
       "reason": "Scenario: every document and code identity decision is public and transaction bound. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 312,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13518,7 +13518,7 @@
       "reason": "Scenario: busy selected affected and disjoint owners have exact pending and retry. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 342,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13534,7 +13534,7 @@
       "reason": "Scenario: named repeated cwd organization and all scopes with local faults. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 374,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13550,7 +13550,7 @@
       "reason": "Scenario: busy required source refuses selected publication without half file. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 403,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13566,7 +13566,7 @@
       "reason": "Scenario: disabled foreign edge owner gets collection guard and exact activity. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 422,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13582,7 +13582,7 @@
       "reason": "Scenario: final activity close failure retains committed ingest reply. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 447,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13598,7 +13598,7 @@
       "reason": "Scenario: guard cleanup failure and interrupt keep acknowledged publication. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 460,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13614,7 +13614,7 @@
       "reason": "Scenario: optional embedding uses ingest policy only after scoped publication. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 477,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13630,7 +13630,7 @@
       "reason": "Scenario: file changed during pass is saved as captured named and taken by the next pass. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 518,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13646,7 +13646,7 @@
       "reason": "Scenario: pass takes a foreign source from the index and its own pass marks the dependant stale. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 570,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13662,7 +13662,7 @@
       "reason": "Scenario: pass reads each location catalog once for its dependency run. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 598,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13678,7 +13678,7 @@
       "reason": "Scenario: sources come before their dependants and a cycle keeps capture order. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 627,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13694,7 +13694,7 @@
       "reason": "Scenario: steps handle a bounded share keep it and retire removed files once none changed remains. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 672,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13710,23 +13710,55 @@
       "reason": "Scenario: a new file updates the file count of its neighbours without making them changed. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 708,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
       "file": "tests/test_ingest.py",
-      "id": "tests/test_ingest.py::IngestStepStoreTests.test_the_refresh_resumes_after_its_last_file_and_starts_again_after_a_change",
-      "name": "test_the_refresh_resumes_after_its_last_file_and_starts_again_after_a_change",
+      "id": "tests/test_ingest.py::IngestStepStoreTests.test_the_refresh_resumes_after_its_last_file_and_keeps_its_place_after_a_change",
+      "name": "test_the_refresh_resumes_after_its_last_file_and_keeps_its_place_after_a_change",
       "class": "IngestStepStoreTests",
       "kind": "python",
       "tier": "mid",
       "status": "commented",
       "line_before": 695,
       "end_before": 722,
-      "reason": "Scenario: the refresh resumes after its last file and starts again after a change. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: the refresh resumes after its last file and keeps its place after a change. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 734,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/test_ingest.py",
+      "id": "tests/test_ingest.py::IngestStepStoreTests.test_a_series_completes_while_a_file_changes_before_every_step",
+      "name": "test_a_series_completes_while_a_file_changes_before_every_step",
+      "class": "IngestStepStoreTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "line_before": null,
+      "end_before": null,
+      "reason": "Documented SYL-315 regression of SYL-289 run 3: while another agent edited a file before every step, each step that wrote it started the refresh of unchanged files again, so a stepped pass never completed. Edits a file before every step of a series and requires the pass to complete within a bounded number of steps.",
+      "review": "individual",
+      "line": 767,
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/test_ingest.py",
+      "id": "tests/test_ingest.py::IngestStepStoreTests.test_a_refreshed_file_resting_on_a_written_file_is_refreshed_again",
+      "name": "test_a_refreshed_file_resting_on_a_written_file_is_refreshed_again",
+      "class": "IngestStepStoreTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "line_before": null,
+      "end_before": null,
+      "reason": "Non-obvious edge of the SYL-315 fix: a file the refresh already passed rests, through a Source Ref, on a section a later step writes. Requires that step to refresh it again, and the finished series to leave the dependency, edge, relation and stale rows exactly as one whole pass does.",
+      "review": "individual",
+      "line": 788,
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13741,8 +13773,8 @@
       "end_before": 737,
       "reason": "Scenario: an interrupted step loses only itself. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 765,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "line": 833,
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13757,8 +13789,8 @@
       "end_before": 759,
       "reason": "Scenario: a series takes sources first and leaves no stale mark a single pass would not. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 782,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "line": 850,
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13773,8 +13805,8 @@
       "end_before": 777,
       "reason": "Scenario: a step that writes a source marks its unchanged dependant stale. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 806,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "line": 874,
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13789,8 +13821,8 @@
       "end_before": 805,
       "reason": "Scenario: a step defers a section whose source copies are not all written. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 826,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "line": 894,
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13805,8 +13837,8 @@
       "end_before": 824,
       "reason": "Scenario: a file moved during a series keeps its identity. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 856,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "line": 924,
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",
@@ -13821,8 +13853,8 @@
       "end_before": 860,
       "reason": "Scenario: unchanged origin link dependants are not reapplied and still go stale. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 877,
-      "file_sha256": "03affd550f01de2e7d43390eb8673ab5830f307af5c0084f03b2295580214881"
+      "line": 945,
+      "file_sha256": "2b9927ada129b45b9afbf033b60371ad51a879459acbc35ec1e848196c2c4bf7"
     },
     {
       "repo": "mycel",

@@ -4,11 +4,11 @@ Only the top-tier cases below are active. They may be selected when useful durin
 
 [Complete inventory and tier justifications](docs/test-inventory.md) · [Machine-readable inventory](test-tiers.json)
 
-Reviewed revision: `a80c617dd535d6e8142ce940ff73b7825f7e6c6c` (28 October 2026), plus the preceding local pruning changes. No tests were run for this reset.
+Reviewed revision: `a80c617dd535d6e8142ce940ff73b7825f7e6c6c` (28 October 2026), plus the preceding local pruning changes. No tests were run for this reset. On 29 October 2026 SYL-315 added two individually reviewed top-tier ingest cases.
 
 ## Selection and limits
 
-6 active Python definitions and 0 active standalone programs; 1785 commented Python definitions. Also disabled: 0 named Node cases, 0 custom scenario functions and 2 standalone check programs. 1 broad entry points explicitly refuse. 26 low-tier cases remain removed from the prior review. These categories overlap in execution and must not be added into a runtime suite size.
+8 active Python definitions and 0 active standalone programs; 1785 commented Python definitions. Also disabled: 0 named Node cases, 0 custom scenario functions and 2 standalone check programs. 1 broad entry points explicitly refuse. 26 low-tier cases remain removed from the prior review. These categories overlap in execution and must not be added into a runtime suite size.
 
 Top-tier cases were individually read for the failure they observe. The remaining mid-tier labels are provisional execution decisions, not a claim that thousands of tests have passed a complete semantic review. Reassess value before restoring any of them. A browser program may contain many assertions; it is inventoried as one indivisible program, not as one asserted behavior.
 
@@ -16,6 +16,8 @@ Top-tier cases were individually read for the failure they observe. The remainin
 
 | Exact test selector | Why this case earns a place |
 | --- | --- |
+| [`test_ingest.IngestStepStoreTests.test_a_series_completes_while_a_file_changes_before_every_step`](tests/test_ingest.py#L767) | Documented SYL-315 regression of SYL-289 run 3: while another agent edited a file before every step, each step that wrote it started the refresh of unchanged files again, so a stepped pass never completed. Edits a file before every step of a series and requires the pass to complete within a bounded number of steps. |
+| [`test_ingest.IngestStepStoreTests.test_a_refreshed_file_resting_on_a_written_file_is_refreshed_again`](tests/test_ingest.py#L788) | Non-obvious edge of the SYL-315 fix: a file the refresh already passed rests, through a Source Ref, on a section a later step writes. Requires that step to refresh it again, and the finished series to leave the dependency, edge, relation and stale rows exactly as one whole pass does. |
 | [`test_recovery.RecoveryStoreTests.test_edit_during_final_audit_rolls_back_the_origin_claim_and_edge`](tests/test_recovery.py#L506) | Edits source during the final audit callback after a provider result exists. Requires transaction rollback of both the origin claim and its dependency edge, preventing publication against changed evidence. |
 | [`test_recovery.RecoveryStoreTests.test_a_pair_in_error_keeps_the_step_reply_and_closes_its_activity_failed`](tests/test_recovery.py#L582) | Documented SYL-289 regression: a provider error previously closed activity as refused without an error and lost the recovery reply. Checks both the emitted partial-progress reply and persisted failed activity. |
 | [`test_relation_occurrence_regressions.RelationOccurrenceRegressionStoreTests.test_mixed_closed_and_unclosed_same_ref_pins_valid_occurrence_and_reports_only_invalid_fault`](tests/test_relation_occurrence_regressions.py#L83) | Places valid and unclosed declarations of the same source in one document. Checks that occurrence-local validity creates one legitimate pin, reports only the malformed occurrence as faulty, and leaves reads non-mutating. |
