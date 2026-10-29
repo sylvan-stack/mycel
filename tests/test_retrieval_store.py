@@ -1,5 +1,9 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured disposable-store proofs for disk scope and candidate production."""
+
+from mycel._errors import MycelError
+from mycel._retrieval_store import StoreCandidates
+
 
 import unittest
 from dataclasses import replace

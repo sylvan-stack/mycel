@@ -1,5 +1,9 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Initial declared sources remain unresolved until a named source pass."""
+
+from mycel import _dependency_inputs as inputs
+from mycel._capture import capture_repository
+
 
 import json
 import os
@@ -37,7 +41,6 @@ class InitialSourceIngestStoreTests(ClassificationStoreFixture):
 
     def dependencies(self, connection):
         return self.fixture.fixture.dependencies(connection)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

@@ -1,10 +1,17 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Versioned-file acceptance and real offline evaluator regression checks.
 
 The injected search replies test accounting rather than implement a ranking.
 MYC-13.11 through .17 additionally need genuine disposable-store proofs; these
 unit checks cannot establish production search or MYC-4.25 ranking quality.
 """
+from dataclasses import FrozenInstanceError
+
+from mycel._evaluation import (EvaluationSet, PreparedQueryVector, RetrievalPlace,
+                               RetrievalQuery, RetrievalReply, comparison_failures,
+                               empty_retrieval_report, load_evaluation_file,
+                               run_retrieval_evaluation)
+
 
 import tempfile
 import unittest
@@ -133,7 +140,6 @@ class RetrievalEvaluationUnitTests(unittest.TestCase):
                     model='voyage-code-4', query_vectors=Vectors(events, fallbacks),
                     retrieval=Adapter(events, snapshot))
         return report, events
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

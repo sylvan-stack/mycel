@@ -1,5 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Current-store proofs for the complete, query-independent document relation."""
+from uuid import uuid4
+
+from psycopg.types.json import Jsonb
+from mycel._declared_refs import DeclaredRefStore
+from mycel._search_store import search_from_store
+try:
+    from . import test_declared_refs as declared_fixtures
+except ImportError:
+    import test_declared_refs as declared_fixtures
+
 
 import unittest
 

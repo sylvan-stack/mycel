@@ -1,5 +1,19 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Public repository inventory and offline coverage on disposable PostgreSQL."""
+from dataclasses import replace
+from types import SimpleNamespace
+
+from psycopg import pq
+from mycel._embed import retained_contexts
+from mycel._embedding_plan import load_tokenizer
+from mycel._embedding_store import EmbeddingStore
+from mycel._errors import MycelError
+from mycel._locks import operation_guard
+from mycel._provenance_reports import ProvenanceReports, handle_status
+from mycel._repository_status import RepositoryReports
+from mycel._settings import load_settings
+from mycel._voyage import PartFailure, PartIdentity, VectorWrite
+
 
 import json
 import os

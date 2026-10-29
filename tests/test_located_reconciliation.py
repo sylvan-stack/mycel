@@ -1,8 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Partial configured-store proofs for complete located publication.
 
 Collection, dependency application and public command requirements remain open.
 """
+from dataclasses import replace
+from unittest.mock import patch
+
+from mycel._activity import MutationActivity, activity_state
+from mycel._capture import LocationId, capture_repository
+from mycel._errors import MycelError
+
 import json
 import os
 import subprocess

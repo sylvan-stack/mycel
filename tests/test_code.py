@@ -1,5 +1,10 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Structural code proofs over exact, complete local source fixtures."""
+from importlib.metadata import version
+from unittest.mock import patch
+
+from mycel._code import chunk_code, language_for_path
+
 
 import re
 import unittest
@@ -26,7 +31,6 @@ class CodeTests(unittest.TestCase):
             cursor = chunk.byte_end
         self.assertEqual(cursor, len(raw))
         return chunks
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

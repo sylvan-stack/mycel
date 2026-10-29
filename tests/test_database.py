@@ -1,5 +1,17 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """The native store boundary with only private, injected connections."""
+from io import StringIO
+from functools import partial
+import os
+from pathlib import Path
+import threading
+import time
+from unittest.mock import patch
+
+import psycopg
+from psycopg import conninfo, pq
+from mycel._database import _native_connect, _without_libpq_environment, store_connection
+
 
 import unittest
 
@@ -50,7 +62,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertNotIn(SENTINEL, str(raised.exception))
         self.assertNotIn(ADDRESS, str(raised.exception))
         return raised.exception
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

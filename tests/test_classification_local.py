@@ -1,5 +1,19 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Local classification bookkeeping shares the caller's finite allowance."""
+from contextlib import contextmanager, ExitStack
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+from mycel._classification_local import reconcile_freshness, reconcile_local
+from mycel._cli import Invocation, classification_store, parse
+from mycel._deadline import deadline_guard
+from mycel._errors import MycelError
+from mycel._freshness import Deadline, FreshnessResult, FreshnessScope, RepositoryStatus
+try:
+    from .test_classification_store import ClassificationStoreFixture, AT
+except ImportError:
+    from test_classification_store import ClassificationStoreFixture, AT
+
 import unittest
 from contextlib import ExitStack
 from unittest.mock import patch

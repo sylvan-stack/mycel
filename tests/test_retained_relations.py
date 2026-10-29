@@ -1,9 +1,16 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured acceptance for deleted-source relation retention and withdrawal.
 
 Initial links are seeded with the real guarded evidence writer. Future relate,
 verification and declaration producers retain ownership of their public flows.
 """
+from hashlib import sha256
+from unittest.mock import patch
+
+from mycel._activity import MutationActivity, activity_state
+from mycel._evidence import (CaptureLocation, EvidenceError, EvidenceStore, PinInputs,
+    capture_baseline, checked_transaction_input_guard)
+
 import unittest
 from uuid import uuid4
 

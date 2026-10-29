@@ -1,5 +1,16 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured relation identity, located pins, exact faults and eligibility."""
+
+from mycel._capture import LocationId
+from mycel._dependency_inputs import DependencyCaptureInputs
+from mycel._locks import atomic_transaction
+from mycel._relate import RelateStore
+from mycel._relations import RelationApplicationStore
+try:
+    from .test_refs import invoke, store_state
+except ImportError:
+    from test_refs import invoke, store_state
+
 import json
 import unittest
 
@@ -56,7 +67,6 @@ class RelationIdentityStoreTests(unittest.TestCase):
         self.base.config.write_text(text)
         self.base.settings = load_settings(path=self.base.config, home=self.base.base)
         return path
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

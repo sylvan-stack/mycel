@@ -1,7 +1,18 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Executed checks for the automatic gate machinery and on-demand checks."""
 
 from __future__ import annotations
+import multiprocessing
+from pathlib import Path
+import socket
+import sys
+import tempfile
+from unittest.mock import patch
+from types import SimpleNamespace
+
+from mycel._coverage import AUTOMATIC_KINDS, CoverageError, PostgresBackend, check_kind, disposable_store, discover_checks, iter_checks, select_checks, require_check_database, run_checks, run_on_demand_checks, no_network
+from mycel._database import _native_connect as _CAPTURED_NATIVE_CONNECT
+
 
 import os
 import tomllib
@@ -55,7 +66,6 @@ class SimulatedBackend:
 
 class CoverageTests(unittest.TestCase):
     pass  # TEST-TIER-EMPTY-SUITE; helpers remain importable.
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

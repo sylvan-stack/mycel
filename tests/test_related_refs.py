@@ -1,5 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Read-only projections of declared relation occurrences and their faults."""
+from contextlib import contextmanager
+from copy import deepcopy
+from dataclasses import replace
+from unittest.mock import patch
+
+from mycel._cli import Invocation
+from mycel._errors import MycelError
+from mycel._settings import _freeze
+import test_resolver as resolver_fixtures
+
 import unittest
 
 from mycel import _refs
@@ -46,7 +56,6 @@ class _ReadOnlyRows:
 
 class RelatedRefTests(unittest.TestCase):
     pass  # TEST-TIER-EMPTY-SUITE; helpers remain importable.
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

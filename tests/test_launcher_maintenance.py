@@ -1,5 +1,22 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Real OS lock handoff, explicit maintenance and interrupted pruning proofs."""
+import fcntl
+import json
+import os
+from pathlib import Path
+import tempfile
+import time
+from unittest.mock import patch
+
+from mycel_build import _launcher_runtime as launcher
+from mycel_build import _maintenance as maintenance_api
+from mycel_build._core import BuildError, atomic_json
+from mycel_build._registry import maintenance, read_record, run_guard
+try:
+    from .test_launcher_selection import LauncherFixture, ROOT, ready_line, thaw, tree_state
+except ImportError:
+    from test_launcher_selection import LauncherFixture, ROOT, ready_line, thaw, tree_state
+
 
 import subprocess
 import sys

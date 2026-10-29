@@ -1,10 +1,12 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Catalogue/transaction unit checks, not PostgreSQL store acceptance proofs.
 
 The scripted connection proves safe sequencing and refusal paths. Actual table
 constraints and BM25/HNSW execution must still pass native disposable-store
 checks; no store requirement is claimed by these stand-ins.
 """
+from uuid import UUID, uuid4
+
 
 import unittest
 from contextlib import contextmanager
@@ -209,7 +211,6 @@ class StoreUnitTests(unittest.TestCase):
     def enter_checked(connection):
         with store.checked_store(connection):
             pass
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

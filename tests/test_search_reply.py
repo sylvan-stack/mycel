@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Public search contract proofs without stores, providers or file reads."""
+from dataclasses import replace
+import json
+
+from mycel._errors import MycelError
+from mycel._freshness import (ChunkRequirement, DependencyFault, FreshnessResult,
+                             FreshnessScope, RepositoryStatus)
+from mycel._search_reply import search_reply
+
 
 import unittest
 

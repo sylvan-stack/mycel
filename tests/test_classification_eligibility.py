@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Quiet-period fixtures; store producers prove the owned store claims."""
+from datetime import datetime, timedelta, timezone
+from hashlib import sha256
+import json
+
+from mycel._errors import MycelError
+
 import unittest
 from contextlib import ExitStack
 from datetime import datetime, timezone
@@ -25,7 +31,6 @@ class ClassificationEligibilityTests(unittest.TestCase):
 
     def eligible(self, observation, *, at=NOW, seconds=300):
         return classification_eligibility((observation,), at=at, debounce_seconds=seconds)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

@@ -1,9 +1,28 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Independent frozen inventory, check kinds and real process boundary regressions.
 
 Protocol fixture outcomes test receiver validation, not a native Build pass.
 The process fixtures execute real OS processes without credentials or a store.
 """
+import json
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from unittest.mock import patch
+
+from mycel_build._automatic import _sanitize_report
+from mycel_build._core import BuildError, digest, json_bytes
+from mycel_build import _process
+from mycel_build._process import _defer_cleanup_signals, owned_process, run_group
+from mycel_build._qualification import automatic_contract, qualification_certificate
+try:
+    from .test_offline_build import relocation_results
+except ImportError:
+    from test_offline_build import relocation_results
+
 import copy
 import unittest
 from pathlib import Path

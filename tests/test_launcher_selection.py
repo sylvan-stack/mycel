@@ -1,10 +1,17 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Selection and actual exec proofs; fixture runtimes are not release qualification.
 
 The tiny runtime adapter uses a real exec chain and the current test interpreter.
 It deliberately makes no claim about the separately checked pinned distribution.
 Product-mode fixtures copy genuine Mycel modules and package-local Build identity.
 """
+import io
+import signal
+import tempfile
+from unittest.mock import patch
+
+from mycel_build import _launcher_runtime as launcher
+
 
 import json
 import os

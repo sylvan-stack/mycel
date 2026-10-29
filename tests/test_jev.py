@@ -1,5 +1,21 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Jev contract proofs using public stand-ins; no provider or real credential."""
+from copy import deepcopy
+from dataclasses import replace
+from decimal import Decimal
+import os
+import threading
+
+from mycel._classification_payload import (CHOICE_CRITERIA, INSTRUCTION, LABELS,
+    CurrentSelection, DecisionPayload, DecisionText, ancestor_context, governor_context)
+from mycel._credentials import Credentials, Secret
+from mycel._errors import MycelError
+from mycel._evidence import exact_comparison, snapshot
+from mycel._jev import (ENDPOINT, HTTPResult, JevClient, JevFailure, JevLimits,
+                        JevRequest, MAX_RESPONSE_BYTES, _https_request, _retry_after,
+                        route_response, validate_response)
+from mycel._source_refs import SourceAddress
+
 
 import json
 import tempfile
@@ -70,7 +86,6 @@ class JevTests(unittest.TestCase):
         return (client or self.client()).classify(decision or self.decision,
             deadline=kwargs.pop("deadline", time.monotonic() + 2),
             before_call=kwargs.pop("before_call", self.guard), **kwargs)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

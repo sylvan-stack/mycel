@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Verification option validation at the public command boundary."""
+from io import StringIO
+import json
+from unittest.mock import patch
+
+from mycel._cli import run
+
 
 import unittest
 

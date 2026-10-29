@@ -1,9 +1,19 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured proofs for the location-owned guarded dependency executor.
 
 Complete command behavior remains separate; these producers join one checked
 publication or explicit caller transaction without spending provider quota.
 """
+from hashlib import sha256
+from unittest.mock import patch
+from uuid import uuid4
+
+from psycopg.types.json import Jsonb
+from mycel._errors import MycelError
+from mycel._locks import atomic_transaction, operation_guard
+from mycel._reconciliation import AssertedRemoval, ReconciliationError
+from mycel._source_refs import SourceAddress
+
 import unittest
 from contextlib import ExitStack
 from dataclasses import replace

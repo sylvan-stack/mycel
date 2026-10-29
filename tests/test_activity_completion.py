@@ -1,5 +1,12 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Complete injected mutation accounting on configured disposable stores."""
+from uuid import uuid4
+from unittest.mock import patch
+
+from mycel import _locks as locks
+from mycel._errors import MycelError
+from mycel._source_refs import SourceAddress
+
 
 import unittest
 

@@ -1,4 +1,10 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
+from contextlib import redirect_stderr, redirect_stdout
+import io
+import os
+import tempfile
+
+
 import runpy
 import unittest
 from pathlib import Path

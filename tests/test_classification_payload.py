@@ -1,5 +1,12 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Supplemental pure checks; native store tests own classifier acceptance claims."""
+from copy import deepcopy
+import json
+from pathlib import Path
+import tempfile
+
+from mycel._markdown import COMPARISON_REVISION, UNICODE_VERSION, comparison_hash
+
 
 import unittest
 from contextlib import ExitStack
@@ -68,7 +75,6 @@ class ClassificationPayloadTests(unittest.TestCase):
                       'urllib.request.urlopen', 'socket.create_connection', 'socket.socket.connect',
                       'subprocess.Popen', 'subprocess.run'):
             blocked.enter_context(patch(entry, side_effect=AssertionError('preparation must not call or spawn')))
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

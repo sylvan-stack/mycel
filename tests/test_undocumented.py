@@ -1,5 +1,20 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Disposable-store proofs for path-scoped undocumented code and freshness."""
+from io import StringIO
+from dataclasses import replace
+import json
+import os
+from unittest.mock import patch
+
+from mycel._capture import _Capture
+from mycel._cli import parse, run
+from mycel._errors import MycelError
+from mycel._undocumented import handle_undocumented, normalize_paths, undocumented_from_store
+try:
+    from . import test_overview_cli as scope_fixtures
+except ImportError:
+    import test_overview_cli as scope_fixtures
+
 
 import unittest
 

@@ -1,5 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Disposable filesystem/finite-catalog rehearsals, never an owner cutover or PG proof."""
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
+import io
+import tempfile
+from contextlib import redirect_stdout
+from unittest.mock import patch
+
+from mycel_build._core import BuildError
+from mycel_build.__main__ import main
+
 import hashlib
 import json
 import unittest

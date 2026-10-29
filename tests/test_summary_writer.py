@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Summary command acceptance using real local executable fixtures."""
+from concurrent.futures import Future, ThreadPoolExecutor
+
+from mycel._errors import MycelError
+from mycel._safeguards import SYSTEM_PATH
+from mycel._summary_writer import (
+    MAX_STDERR_BYTES, MAX_STDOUT_BYTES, SummaryWriter, WRITER_TIMEOUT_SECONDS, WriterResult,
+)
+
 
 import json
 import os
@@ -98,7 +106,6 @@ class SummaryWriterTests(unittest.TestCase):
             processes.append(process)
             return process
         return patch.object(writer_module.subprocess, "Popen", side_effect=record)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

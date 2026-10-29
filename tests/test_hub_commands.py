@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Portable command-audit regressions; no owner corpus or installed CLI needed."""
+from contextlib import redirect_stderr, redirect_stdout
+import io
+from subprocess import CompletedProcess
+import tempfile
+from unittest.mock import patch
+
 
 import runpy
 import unittest

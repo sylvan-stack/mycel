@@ -1,5 +1,8 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Pinned family membership survives current source selection-kind changes."""
+from dataclasses import replace
+
+
 import unittest
 from unittest.mock import patch
 

@@ -1,650 +1,612 @@
-"""Commented mid-tier selections; see MID_TIER.md before restoring a case."""
+"""Mid-tier selections. Write or run only in an explicitly requested testing task."""
+from __future__ import annotations
 
-# Restore the needed imports and class header only for an explicit testing task.
-# import test_recovery as _support
-# from test_recovery import (
-#     ClassifyDependencies,
-#     CompletedChild,
-#     Credentials,
-#     DecisionText,
-#     HTTPResult,
-#     JevClient,
-#     JevFailure,
-#     JevLimits,
-#     ORIGIN_LABELS,
-#     OriginDecisionPayload,
-#     REQ,
-#     RecoveryProtocolTests,
-#     RecoveryStore,
-#     RecoveryStoreTests,
-#     SourceAddress,
-#     StringIO,
-#     datetime,
-#     json,
-#     load_settings,
-#     origin_decision,
-#     os,
-#     patch,
-#     read_snapshot,
-#     run_recovery,
-#     snapshot,
-#     sys,
-#     timedelta,
-#     timezone,
-#     unittest,
-# )
-
-
-# class RecoveryProtocolTests(_support.RecoveryProtocolTests):
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryProtocolTests.test_distinct_question_exact_text_hash_and_policy_boundary
-#     def test_distinct_question_exact_text_hash_and_policy_boundary(self):
-#         decision = origin_decision()
-#         body = json.loads(JevRequest(decision).body)
-#         self.assertEqual(list(body['questions']['dependency']['criteria']),list(ORIGIN_LABELS))
-#         self.assertIn('never instructions',body['questions']['dependency']['instructions'])
-#         self.assertEqual(decision,OriginDecisionPayload.from_bytes(decision.canonical_bytes,decision.input_hash))
-#         changed = decision.as_dict();changed['labels']=['needs_review','insufficient_evidence','still_supported']
-#         with self.assertRaises(EvidenceError):OriginDecisionPayload(changed)
-#         changed = decision.as_dict();changed['candidate']['text'] += 'changed'
-#         with self.assertRaises(EvidenceError):OriginDecisionPayload(changed)
-#         self.assertTrue(model_call_allowed(InvocationPolicy('recovery'),'jev'))
-#         self.assertTrue(model_call_allowed(InvocationPolicy('recovery'),'reviewer'))
-#         for purpose in ('embedding','summary','jev','reviewer'):
-#             self.assertFalse(model_call_allowed(InvocationPolicy('recovery',dry_run=True),purpose))
-#         self.assertFalse(model_call_allowed(InvocationPolicy('recovery'),'embedding'))
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryProtocolTests.test_distinct_question_exact_text_hash_and_policy_boundary
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryProtocolTests.test_origin_review_requires_score_and_matching_labels_and_citations
-#     def test_origin_review_requires_score_and_matching_labels_and_citations(self):
-#         with tempfile.TemporaryDirectory() as directory:
-#             command=ReviewCommandIdentity.inspect(('/usr/bin/true',),'fixture-v1',Path(directory))
-#             decision=origin_decision(command.model_identity('fixture','fixture-model-1'))
-#             request=ReviewerRequest(decision,1000)
-#             identity={key:request.payload[key] for key in
-#                       ('protocol','inputHash','provider','model','adapterRevision','commandHash')}
-#             valid={**identity,'judgement':'governs','rationale':'The exact contract orders this code.',
-#                    'evidence':[decision.evidence_locators[0]],'confidenceScore':.91}
-#             def validate(value):
-#                 return validate_response(CompletedChild(0,json.dumps(value).encode(),b'',0),request)
-#             self.assertEqual(validate(valid).confidence_score,.91)
-#             for mutation in (lambda value:value.pop('confidenceScore'),
-#                              lambda value:value.update(confidenceScore=True),
-#                              lambda value:value.update(confidenceScore=1.01),
-#                              lambda value:value.update(judgement='still_supported'),
-#                              lambda value:value.update(evidence=['snapshot:'+'0'*64]),
-#                              lambda value:value.update(inputHash='0'*64)):
-#                 value=deepcopy(valid);mutation(value)
-#                 with self.subTest(value=value),self.assertRaises(ReviewerFailure):validate(value)
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryProtocolTests.test_origin_review_requires_score_and_matching_labels_and_citations
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryProtocolTests.test_cli_scope_and_options_are_exact
-#     def test_cli_scope_and_options_are_exact(self):
-#         from mycel._cli import parse
-#         self.assertEqual(parse(('recovery','fixture:@code/value.py#value','--dry-run','--k','3')).arguments,
-#                          ('fixture:@code/value.py#value','--k','3','--dry-run'))
-#         self.assertEqual(parse(('recovery','--repo','fixture','--path','src','--review')).repositories,('fixture',))
-#         for arguments in (('recovery','a','b'),('recovery','a','--path','src'),
-#                           ('recovery','--k','0'),('recovery','--repo','a','--repo','b'),
-#                           ('recovery','--path','../escape')):
-#             with self.subTest(arguments=arguments),self.assertRaises(MycelError):parse(arguments)
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryProtocolTests.test_cli_scope_and_options_are_exact
+import test_recovery as _support
+from test_recovery import (
+    ClassifyDependencies,
+    CompletedChild,
+    Credentials,
+    Decimal,
+    DecisionText,
+    EvidenceError,
+    HTTPResult,
+    InvocationPolicy,
+    JevClient,
+    JevFailure,
+    JevLimits,
+    JevRequest,
+    MycelError,
+    ORIGIN_LABELS,
+    OriginDecisionPayload,
+    Path,
+    REQ,
+    RecoveryProtocolTests,
+    RecoveryStore,
+    RecoveryStoreTests,
+    ReviewCommandIdentity,
+    ReviewerFailure,
+    ReviewerRequest,
+    SourceAddress,
+    StringIO,
+    datetime,
+    deepcopy,
+    json,
+    load_settings,
+    model_call_allowed,
+    origin_decision,
+    os,
+    patch,
+    read_snapshot,
+    replace,
+    run_recovery,
+    snapshot,
+    sys,
+    tempfile,
+    time,
+    timedelta,
+    timezone,
+    unittest,
+    validate_response,
+)
 
 
+class RecoveryProtocolTests(_support.RecoveryProtocolTests):
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryProtocolTests.test_distinct_question_exact_text_hash_and_policy_boundary
+    def test_distinct_question_exact_text_hash_and_policy_boundary(self):
+        decision = origin_decision()
+        body = json.loads(JevRequest(decision).body)
+        self.assertEqual(list(body['questions']['dependency']['criteria']),list(ORIGIN_LABELS))
+        self.assertIn('never instructions',body['questions']['dependency']['instructions'])
+        self.assertEqual(decision,OriginDecisionPayload.from_bytes(decision.canonical_bytes,decision.input_hash))
+        changed = decision.as_dict();changed['labels']=['needs_review','insufficient_evidence','still_supported']
+        with self.assertRaises(EvidenceError):OriginDecisionPayload(changed)
+        changed = decision.as_dict();changed['candidate']['text'] += 'changed'
+        with self.assertRaises(EvidenceError):OriginDecisionPayload(changed)
+        self.assertTrue(model_call_allowed(InvocationPolicy('recovery'),'jev'))
+        self.assertTrue(model_call_allowed(InvocationPolicy('recovery'),'reviewer'))
+        for purpose in ('embedding','summary','jev','reviewer'):
+            self.assertFalse(model_call_allowed(InvocationPolicy('recovery',dry_run=True),purpose))
+        self.assertFalse(model_call_allowed(InvocationPolicy('recovery'),'embedding'))
+# TEST-TIER-END tests/test_recovery.py::RecoveryProtocolTests.test_distinct_question_exact_text_hash_and_policy_boundary
 
-# class RecoveryStoreTests(_support.RecoveryStoreTests):
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_dry_run_lists_each_local_source_without_writes_or_model_credentials
-#     def test_dry_run_lists_each_local_source_without_writes_or_model_credentials(self):
-#         before=self.state()
-#         with patch('mycel._credentials.Credentials.require_jev_key',side_effect=AssertionError('no model key')), \
-#              patch('mycel._classification_runner._jev',side_effect=AssertionError('no model client')), \
-#              patch('mycel._recovery.run_git',wraps=__import__('mycel._safeguards',fromlist=['run_git']).run_git) as git:
-#             reply=self.run_recovery(dry_run=True)
-#         self.assertEqual(reply['status'],0,reply)
-#         self.assertEqual((reply['jevCalls'],reply['reviewCalls']),(0,0))
-#         self.assertTrue(reply['chunks'][0]['history']['available'],reply['chunks'][0]['history'])
-#         candidates=reply['chunks'][0]['candidates']
-#         self.assertTrue(candidates,reply)
-#         self.assertEqual({source for item in candidates for source in item['sources']},{'document','commit','issue'})
-#         self.assertEqual(reply['chunks'][0]['embedding'],{'available':False,'reason':'chunk_vectors_unavailable'})
-#         self.assertTrue(all(item['origin'].startswith('fixture:@') for item in candidates))
-#         self.assertTrue(all(item['status']=='pending_jev' for item in candidates),candidates)
-#         self.assertFalse(any('linear.md' in item['origin'] for item in candidates))
-#         self.assertEqual(before,self.state())
-#         self.assertEqual({call.args[0][0] for call in git.call_args_list},{'rev-parse','log'})
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_dry_run_lists_each_local_source_without_writes_or_model_credentials
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryProtocolTests.test_origin_review_requires_score_and_matching_labels_and_citations
+    def test_origin_review_requires_score_and_matching_labels_and_citations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            command=ReviewCommandIdentity.inspect(('/usr/bin/true',),'fixture-v1',Path(directory))
+            decision=origin_decision(command.model_identity('fixture','fixture-model-1'))
+            request=ReviewerRequest(decision,1000)
+            identity={key:request.payload[key] for key in
+                      ('protocol','inputHash','provider','model','adapterRevision','commandHash')}
+            valid={**identity,'judgement':'governs','rationale':'The exact contract orders this code.',
+                   'evidence':[decision.evidence_locators[0]],'confidenceScore':.91}
+            def validate(value):
+                return validate_response(CompletedChild(0,json.dumps(value).encode(),b'',0),request)
+            self.assertEqual(validate(valid).confidence_score,.91)
+            for mutation in (lambda value:value.pop('confidenceScore'),
+                             lambda value:value.update(confidenceScore=True),
+                             lambda value:value.update(confidenceScore=1.01),
+                             lambda value:value.update(judgement='still_supported'),
+                             lambda value:value.update(evidence=['snapshot:'+'0'*64]),
+                             lambda value:value.update(inputHash='0'*64)):
+                value=deepcopy(valid);mutation(value)
+                with self.subTest(value=value),self.assertRaises(ReviewerFailure):validate(value)
+# TEST-TIER-END tests/test_recovery.py::RecoveryProtocolTests.test_origin_review_requires_score_and_matching_labels_and_citations
 
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_tests_are_neither_candidates_nor_sections_to_recover
-#     def test_tests_are_neither_candidates_nor_sections_to_recover(self):
-#         reply=self.run_recovery(dry_run=True,chunk=None)
-#         self.assertEqual(reply['status'],0,reply)
-#         self.assertTrue(reply['chunks'],reply)
-#         self.assertFalse(any('tests/test_value.py' in item['chunk'] for item in reply['chunks']),reply)
-#         self.assertFalse(any('test_value.py' in candidate['origin']
-#                              for item in reply['chunks'] for candidate in item['candidates']),reply)
-#         named=self.run_recovery(dry_run=True,chunk='fixture:@code/tests/test_value.py#test_value')
-#         self.assertEqual((named['status'],named['error']['code']),(1,'invalid_input'),named)
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_tests_are_neither_candidates_nor_sections_to_recover
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_a_name_found_in_many_document_sections_gives_no_name_candidates
-#     def test_a_name_found_in_many_document_sections_gives_no_name_candidates(self):
-#         # value names ref.md and symbol.md (linear.md is never a document); ref.md also cites it.
-#         with patch('mycel._recovery._NAME_MATCHES',1):
-#             reply=self.run_recovery(dry_run=True)
-#         self.assertEqual(reply['status'],0,reply)
-#         origins={item['origin'] for item in reply['chunks'][0]['candidates']}
-#         self.assertFalse(any('symbol.md' in origin for origin in origins),origins)
-#         self.assertTrue(any('ref.md' in origin for origin in origins),origins)
-#         self.assertTrue(any('symbol.md' in item['origin'] for item in self.run_recovery(dry_run=True)['chunks'][0]['candidates']))
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_a_name_found_in_many_document_sections_gives_no_name_candidates
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri
-#     def test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri(self):
-#         from mycel._resolver import SourceResolver
-#         from test_retrieval_store import RetrievalStoreTests
-#         from mycel import _retrieval_store
-#         with self.base.connect() as connection:
-#             catalog=SourceResolver.from_store(connection,self.settings)
-#             for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1','fixture:@code/tests/test_value.py#test_value'):
-#                 selected=catalog.resolve(ref,purpose='endpoint').selection
-#                 chunk=selected.members[0].chunk
-#                 RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
-#         with patch('mycel._retrieval_store._decode_plan',wraps=_retrieval_store._decode_plan) as decoded:
-#             reply=self.run_recovery(dry_run=True)
-#         self.assertEqual(decoded.call_count,2)  # the target and the requirement, not the test's vector
-#         self.assertEqual(reply['status'],0,reply)
-#         self.assertTrue(reply['chunks'][0]['embedding']['available'])
-#         entities=[item for item in reply['chunks'][0]['candidates'] if 'embedding' in item['sources']]
-#         self.assertTrue(entities,reply)
-#         entity=entities[0]
-#         self.assertEqual(entity['status'],'pending_jev',entity)
-#         self.assertTrue(-1<=entity['similarity']<=1,entity)
-#         self.assertIn(':req:'+REQ+':',entity['origin'])
-#         self.assertEqual((reply['jevCalls'],reply['reviewCalls']),(0,0))
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_complete_judgements_write_exact_scores_and_methods_without_verification
-#     def test_complete_judgements_write_exact_scores_and_methods_without_verification(self):
-#         reply=self.run_recovery(dependencies=self.dependencies())
-#         self.assertEqual(reply['status'],0,reply)
-#         self.assertEqual(reply['completed'],reply['selected'])
-#         self.assertEqual(reply['jevCalls'],len(self.calls))
-#         # Only governs writes a link (MYC-D66): the related symbol.md candidate writes none.
-#         links=self.origins();self.assertEqual(len(links),3,links)
-#         self.assertFalse(any('symbol.md' in link['origin'] for link in links))
-#         self.assertEqual({link['method'] for link in links},{'inferred','recovered'})
-#         # Without a reviewer the score is Jev's probability of governs.
-#         self.assertTrue(all(link['confidenceScore']==.9 and link['confidence']=='inferred' for link in links))
-#         self.assertFalse(any('test_value' in link['origin'] for link in links))
-#         with self.base.connect() as connection:
-#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
-#             manifests=connection.execute("SELECT hash,bytes,metadata FROM public.mycel_manifests WHERE kind='origin_recovery'").fetchall()
-#             self.assertEqual(len(manifests),reply['selected'])
-#             for digest,raw,metadata in manifests:
-#                 self.assertEqual(OriginDecisionPayload.from_bytes(bytes(raw),digest).input_hash,digest)
-#                 self.assertEqual(metadata['record']['status'],'complete')
-#             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_recovery' AND invocation IS NOT NULL").fetchone(),(0,))
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_complete_judgements_write_exact_scores_and_methods_without_verification
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_changed_inputs_after_call_have_no_link_or_verification_effect
-#     def test_changed_inputs_after_call_have_no_link_or_verification_effect(self):
-#         def changed(request):self.source.write_text('def value():\n    return 2\n')
-#         reply=self.run_recovery(k=1,dependencies=self.dependencies(changed=changed))
-#         self.assertEqual(reply['status'],1,reply)
-#         self.assertEqual(reply['jevCalls'],1)
-#         self.assertEqual(reply['completed'],0)
-#         self.assertEqual(self.origins(),[])
-#         self.assertIn(reply['pairs'][0]['reason'],{'obsolete','changed_since_ingest'})
-#         with self.base.connect() as connection:
-#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_changed_inputs_after_call_have_no_link_or_verification_effect
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_a_step_parses_each_unchanged_file_at_most_once
-#     def test_a_step_parses_each_unchanged_file_at_most_once(self):
-#         # On the owner's store the stored parse history had another capture
-#         # policy, so every check parsed the whole repository again.
-#         from mycel import _capture
-#         with patch('mycel._capture.chunk_code',wraps=_capture.chunk_code) as parsed, \
-#              patch('mycel._disk_reconciliation._parse_history',return_value=None):
-#             reply=self.run_recovery(dependencies=self.dependencies())
-#         self.assertEqual(reply['status'],0,reply)
-#         self.assertGreater(reply['selected'],1,reply)
-#         self.assertLessEqual(parsed.call_count,4)  # two code files, on disk and on branch main, once
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_a_step_parses_each_unchanged_file_at_most_once
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_a_series_of_steps_keeps_its_work_and_never_sends_a_pair_twice
-#     def test_a_series_of_steps_keeps_its_work_and_never_sends_a_pair_twice(self):
-#         dependencies=self.dependencies(label='unrelated')
-#         replies=[]
-#         for _ in range(20):
-#             replies.append(self.run_recovery(chunk=None,k=2,dependencies=dependencies))
-#             self.assertEqual(replies[-1]['status'],0,replies[-1])
-#             if replies[-1]['complete']:
-#                 break
-#         self.assertTrue(replies[-1]['complete'],replies[-1])
-#         self.assertGreater(len(replies),1)
-#         self.assertEqual([reply['remaining'] for reply in replies],
-#                          sorted((reply['remaining'] for reply in replies),reverse=True))
-#         sent=[json.dumps(request['state'],sort_keys=True) for request in self.calls]
-#         self.assertEqual(len(sent),len(set(sent)))
-#         self.assertEqual(sum(reply['jevCalls'] for reply in replies),len(self.calls))
-#         again=self.run_recovery(chunk=None,k=2,dependencies=dependencies)
-#         self.assertEqual((again['jevCalls'],again['selected'],again['remaining'],again['complete']),(0,0,0,True),again)
-#         self.assertEqual(self.origins(),[])
-#         # A judged candidate whose text changes is judged again; its section only.
-#         before=len(self.calls)
-#         (self.artifact/'symbol.md').write_text('---\nrole: authored\n---\n# Symbol contract\nThe symbol value returns one, always.\n')
-#         self.ingest();self.old_files()
-#         observed=self.run_recovery(chunk=None,k=20,dependencies=dependencies)
-#         self.assertEqual((observed['jevCalls'],observed['complete']),(0,False),observed)
-#         later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
-#         after=self.run_recovery(chunk=None,k=20,dependencies=replace(dependencies,utc_now=lambda:later))
-#         self.assertEqual(after['status'],0,after)
-#         self.assertTrue(after['complete'],after)
-#         self.assertEqual(after['jevCalls'],len(self.calls)-before)
-#         self.assertTrue(after['jevCalls']>=1 and all('symbol.md' in request['state']['candidate']['snapshot']['place']['path']
-#                                                      for request in self.calls[before:]),self.calls[before:])
-#         # New settings judge everything again.
-#         self.base.config.write_text(self.base.config.read_text()+'\n[drifts]\nconfidence_floor=0.6\n')
-#         changed=self.run_recovery(chunk=None,k=1,dependencies=replace(dependencies,utc_now=lambda:later),
-#                                   settings=load_settings(path=self.base.config,home=self.base.base))
-#         self.assertEqual((changed['jevCalls'],changed['complete']),(1,False),changed)
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_a_series_of_steps_keeps_its_work_and_never_sends_a_pair_twice
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_a_guide_candidate_carries_no_code_it_cites
-#     def test_a_guide_candidate_carries_no_code_it_cites(self):
-#         reply=self.run_recovery(dependencies=self.dependencies(label='unrelated'))
-#         self.assertEqual(reply['status'],0,reply)
-#         guide=[request for request in self.calls if request['state']['candidate']['snapshot']['place']['path']=='ref.md']
-#         self.assertEqual(len(guide),1,self.calls)
-#         self.assertEqual([item['snapshot']['place']['root'] for item in guide[0]['state']['context']
-#                           if item['snapshot']['place']['root']=='code'],[])
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_a_guide_candidate_carries_no_code_it_cites
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_an_edit_with_restored_mtime_during_a_step_is_still_caught
-#     def test_an_edit_with_restored_mtime_during_a_step_is_still_caught(self):
-#         before=self.source.stat()
-#         def changed(request):
-#             self.source.write_text('def value():\n    return 3\n')
-#             os.utime(self.source,ns=(before.st_atime_ns,before.st_mtime_ns))
-#         reply=self.run_recovery(k=2,dependencies=self.dependencies(changed=changed))
-#         self.assertEqual(reply['completed'],0,reply)
-#         self.assertEqual(self.origins(),[])
-#         self.assertIn(reply['pairs'][0]['reason'],{'obsolete','changed_since_ingest'})
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_an_edit_with_restored_mtime_during_a_step_is_still_caught
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_real_isolated_standin_review_raises_and_lowers_scores_and_bands
-#     def test_real_isolated_standin_review_raises_and_lowers_scores_and_bands(self):
-#         self.settings=self.reviewer_settings()
-#         first=self.run_recovery(dependencies=self.dependencies())
-#         self.assertEqual(first['status'],0,first)
-#         reviewed=self.run_recovery(review=True,dependencies=self.dependencies())
-#         self.assertEqual(reviewed['status'],0,reviewed)
-#         self.assertEqual(reviewed['jevCalls'],0)
-#         self.assertEqual(reviewed['reviewCalls'],3,reviewed)
-#         links=self.origins();self.assertEqual(len(links),3)
-#         lowered=next(link for link in links if 'commit.md' in link['origin'])
-#         raised=next(link for link in links if 'ref.md' in link['origin'])
-#         self.assertEqual((lowered['confidenceScore'],lowered['confidence']),(.35,'candidate'))
-#         self.assertEqual((raised['confidenceScore'],raised['confidence']),(.95,'inferred'))
-#         self.assertTrue(all(link['review']['outcome']=='governs' for link in links))
-#         self.assertTrue(all(link['review']['who']=='fixture-review-1' for link in links))
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_real_isolated_standin_review_raises_and_lowers_scores_and_bands
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_third_party_snapshots_recover_without_linear_or_remote_reads
-#     def test_third_party_snapshots_recover_without_linear_or_remote_reads(self):
-#         before={str(path):path.read_bytes() for path in self.artifact.glob('*.md')}
-#         with patch('urllib.request.urlopen',side_effect=AssertionError('no remote read')):
-#             reply=self.run_recovery(dependencies=self.dependencies())
-#         self.assertEqual(reply['status'],0,reply)
-#         origins={link['origin'] for link in self.origins()}
-#         self.assertTrue(any('issue.md' in origin for origin in origins))
-#         self.assertTrue(any('commit.md' in origin for origin in origins))
-#         self.assertFalse(any('linear.md' in origin for origin in origins))
-#         self.assertFalse(any('linear.app' in json.dumps(call) for call in self.calls))
-#         self.assertEqual(before,{str(path):path.read_bytes() for path in self.artifact.glob('*.md')})
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_third_party_snapshots_recover_without_linear_or_remote_reads
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect
-#     def test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect(self):
-#         os.utime(self.source,None)
-#         pending=self.run_recovery(k=1,dependencies=self.dependencies())
-#         self.assertEqual(pending['status'],0,pending)
-#         self.assertEqual(pending['jevCalls'],0)
-#         self.assertEqual(pending['pairs'][0]['status'],'pending_debounce')
-#         self.assertEqual(self.origins(),[])
-#         self.old_files()
-#         # An unchanged byte version retains its original observation, even if
-#         # someone restores an older mtime. Re-ingest a new exact version first.
-#         self.source.write_text('def value():\n    return 2\n');self.ingest();self.old_files()
-#         observed=self.run_recovery(k=1,dependencies=self.dependencies(top=.7))
-#         self.assertEqual(observed['pairs'][0]['status'],'pending_debounce')
-#         later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
-#         uncertain=self.run_recovery(k=1,dependencies=replace(self.dependencies(top=.4),utc_now=lambda:later))
-#         self.assertEqual(uncertain['status'],0,uncertain)
-#         # Without a reviewer, governs at probability .4 is below the origin floor: no link, nothing pending.
-#         self.assertEqual((uncertain['pairs'][0]['status'],uncertain['pairs'][0]['decided']),('complete','effect'))
-#         self.assertEqual(uncertain['pairs'][0]['confidenceScore'],.4)
-#         self.assertEqual((uncertain['jevCalls'],uncertain['reviewCalls']),(1,0))
-#         self.assertEqual(self.origins(),[])
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_path_repository_and_public_chunk_commands_use_same_candidates
-#     def test_path_repository_and_public_chunk_commands_use_same_candidates(self):
-#         from mycel._cli import run
-#         with self.base.connect() as connection:
-#             paths=run_recovery(RecoveryStore(connection),self.settings,'fixture',paths=('value.py',),dry_run=True)
-#         self.assertEqual([row['chunk'] for row in paths['chunks']],[self.ref])
-#         with self.base.connect() as connection:
-#             repository=run_recovery(RecoveryStore(connection),self.settings,'fixture',dry_run=True)
-#         self.assertIn(self.ref,[row['chunk'] for row in repository['chunks']])
-#         output,diagnostic=StringIO(),StringIO()
-#         with patch('mycel._cli.load_settings',return_value=self.settings):
-#             status=run(('recovery',self.ref,'--dry-run'),stdout=output,stderr=diagnostic)
-#         self.assertEqual(status,0,output.getvalue())
-#         self.assertEqual(diagnostic.getvalue(),'')
-#         self.assertEqual(json.loads(output.getvalue())['repository'],'fixture')
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_path_repository_and_public_chunk_commands_use_same_candidates
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_model_claims_survive_ingest_without_source_cycles_and_statement_supersedes
-#     def test_model_claims_survive_ingest_without_source_cycles_and_statement_supersedes(self):
-#         from mycel._justify import JustifyStore
-#         reply=self.run_recovery(dependencies=self.dependencies())
-#         self.assertEqual(reply['status'],0,reply)
-#         self.ingest()
-#         self.assertEqual(len(self.origins()),3)
-#         with self.base.connect() as connection:
-#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_stale_reasons').fetchone(),(0,))
-#             result=JustifyStore(connection).apply(self.settings,self.ref,'fixture:@artifact/symbol.md#Symbol%20contract')
-#             self.assertEqual(result['link']['method'],'stated')
-#         links=[link for link in self.origins() if 'symbol.md' in link['origin']]
-#         self.assertEqual(len(links),1,links)
-#         self.assertEqual((links[0]['confidenceScore'],links[0]['confidence']),(1.0,'asserted'))
-#         reviewed=self.run_recovery(review=True,dry_run=True)
-#         self.assertFalse(any('symbol.md' in pair['origin'] for pair in reviewed['pairs']))
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_model_claims_survive_ingest_without_source_cycles_and_statement_supersedes
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_clone_clock_and_equal_version_links_belong_only_to_calling_location
-#     def test_clone_clock_and_equal_version_links_belong_only_to_calling_location(self):
-#         clone=self.base.base/'blue'
-#         self.base.git('clone','--no-hardlinks',str(self.code),str(clone),cwd=self.base.base)
-#         self.base.config.write_text(self.base.config.read_text()+'code_clones='+json.dumps([str(clone)])+'\n')
-#         settings=load_settings(path=self.base.config,home=self.base.base)
-#         primary=replace(settings,_cwd=self.code);secondary=replace(settings,_cwd=clone)
-#         self.settings=primary
-#         self.ingest(secondary)
-#         os.utime(clone/'value.py',None)
-#         pending=self.run_recovery(settings=secondary,k=1,dependencies=self.dependencies())
-#         self.assertEqual(pending['status'],0,pending)
-#         self.assertEqual(pending['pairs'][0]['status'],'pending_debounce')
-#         self.assertEqual(pending['jevCalls'],0)
-#         stamp=(datetime.now(timezone.utc)-timedelta(hours=1)).timestamp()
-#         for path in clone.rglob('*.py'):os.utime(path,(stamp,stamp))
-#         later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
-#         result=self.run_recovery(settings=secondary,dependencies=replace(self.dependencies(),utc_now=lambda:later))
-#         self.assertEqual(result['status'],0,result)
-#         self.assertEqual(self.origins(),[])
-#         self.settings=secondary
-#         self.assertEqual(len(self.origins()),3)
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_clone_clock_and_equal_version_links_belong_only_to_calling_location
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_byte_budget_and_terminal_fault_never_write_a_link
-#     def test_byte_budget_and_terminal_fault_never_write_a_link(self):
-#         oversized=self.run_recovery(k=1,dependencies=self.dependencies(limits=JevLimits(max_input_bytes=1)))
-#         self.assertEqual(oversized['status'],0,oversized)
-#         self.assertEqual((oversized['jevCalls'],oversized['reviewCalls']),(0,0))
-#         self.assertEqual(oversized['pairs'][0]['status'],'needs_llm_review')
-#         failed=self.run_recovery(k=1,dependencies=self.dependencies(failure=JevFailure('provider_result_invalid')))
-#         self.assertEqual(failed['status'],1,failed)
-#         self.assertEqual(failed['jevCalls'],1)
-#         self.assertEqual(len(failed['pairs'][0]['attempts']),1)
-#         self.assertEqual(self.origins(),[])
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_byte_budget_and_terminal_fault_never_write_a_link
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_interrupt_preserves_completed_prefix_and_releases_evidence_leases
-#     def test_interrupt_preserves_completed_prefix_and_releases_evidence_leases(self):
-#         def interrupt(request):
-#             if len(self.calls)==2:raise KeyboardInterrupt()
-#         result=self.run_recovery(dependencies=self.dependencies(changed=interrupt))
-#         self.assertEqual(result['status'],2,result)
-#         self.assertEqual(result['completed'],1,result)
-#         self.assertEqual(result['jevCalls'],2)
-#         self.assertEqual(len(self.origins()),1)
-#         with self.base.connect() as connection:
-#             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_recovery' AND invocation IS NOT NULL").fetchone(),(0,))
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_interrupt_preserves_completed_prefix_and_releases_evidence_leases
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_validated_result_reuse_and_corrupt_cache_refusal
-#     def test_validated_result_reuse_and_corrupt_cache_refusal(self):
-#         from psycopg.types.json import Jsonb
-#         first=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
-#         self.assertEqual(first['status'],0,first)
-#         self.assertEqual(self.origins(),[])
-#         # A result retained without its judgement, as before store format 5,
-#         # is validated and reused.
-#         forget="DELETE FROM public.mycel_judgements"
-#         with self.base.connect() as connection:
-#             connection.execute(forget)
-#         second=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
-#         self.assertEqual(second['status'],0,second)
-#         self.assertEqual(second['jevCalls'],0)
-#         self.assertTrue(second['pairs'][0]['reused'])
-#         with self.base.connect() as connection:
-#             digest,metadata=connection.execute("SELECT hash,metadata FROM public.mycel_manifests WHERE kind='origin_recovery'").fetchone()
-#             metadata['record']['confidenceScore']=.99
-#             connection.execute('UPDATE public.mycel_manifests SET metadata=%s WHERE repository=%s AND hash=%s',
-#                                (Jsonb(metadata),'fixture',digest))
-#             connection.execute(forget)
-#         corrupt=self.run_recovery(k=1,dependencies=self.dependencies())
-#         self.assertEqual(corrupt['status'],1,corrupt)
-#         self.assertEqual(corrupt['jevCalls'],0)
-#         self.assertEqual(corrupt['pairs'][0]['reason'],'snapshot_corrupt')
-#         self.assertEqual(self.origins(),[])
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_validated_result_reuse_and_corrupt_cache_refusal
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_unrelated_review_withdraws_only_model_claims
-#     def test_unrelated_review_withdraws_only_model_claims(self):
-#         from mycel._activity import MutationActivity
-#         self.settings=self.reviewer_settings(unrelated=True)
-#         result=self.run_recovery(dependencies=self.dependencies())
-#         self.assertEqual(result['status'],0,result)
-#         self.assertEqual(len(self.origins()),3)
-#         with self.base.connect() as connection,MutationActivity(connection,build=1).session() as activity:
-#             reviewed=run_recovery(RecoveryStore(connection),self.settings,'fixture',chunk=self.ref,
-#                                  review=True,dependencies=self.dependencies(),activity=activity)
-#             self.assertEqual(reviewed['status'],0,reviewed)
-#             activity.finish('done',counts={('fixture','recovery'):reviewed})
-#         self.assertEqual(self.origins(),[])
-#         with self.base.connect() as connection:
-#             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_activity WHERE kind='recovery'").fetchone(),(1,))
-#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_unrelated_review_withdraws_only_model_claims
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_numbered_public_command_records_committed_origin_mutations
-#     def test_numbered_public_command_records_committed_origin_mutations(self):
-#         from mycel._cli import run
-#         output,diagnostic=StringIO(),StringIO()
-#         with patch('mycel._cli.load_settings',return_value=self.settings), \
-#              patch('mycel._recovery.ClassifyDependencies',return_value=self.dependencies()), \
-#              patch('mycel._build_identity.current_build',return_value=1):
-#             status=run(('recovery',self.ref),stdout=output,stderr=diagnostic)
-#         self.assertEqual(status,0,output.getvalue())
-#         reply=json.loads(output.getvalue());self.assertEqual(reply['completed'],4,reply)
-#         self.assertEqual(diagnostic.getvalue(),'')
-#         with self.base.connect() as connection:
-#             counts,outcome=connection.execute("SELECT counts,outcome FROM public.mycel_activity WHERE kind='recovery'").fetchone()
-#             self.assertEqual(outcome,'done')
-#             self.assertEqual(counts['completed'],4)
-#         self.assertEqual(len(self.origins()),3)
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_numbered_public_command_records_committed_origin_mutations
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_busy_and_expired_deadline_make_no_model_call
-#     def test_busy_and_expired_deadline_make_no_model_call(self):
-#         from mycel._locks import operation_guard
-#         from mycel._freshness import Deadline
-#         with self.base.connect() as connection,operation_guard(connection,'fixture','classify'):
-#             busy=self.run_recovery(k=1,dependencies=self.dependencies())
-#         self.assertEqual(busy['status'],1,busy)
-#         self.assertEqual(busy['jevCalls'],0)
-#         expired=self.run_recovery(k=1,dependencies=self.dependencies(),deadline=Deadline.after(.000001))
-#         self.assertEqual(expired['status'],1,expired)
-#         self.assertTrue(expired['incomplete'])
-#         self.assertEqual(expired['jevCalls'],0)
-#         self.assertEqual(self.origins(),[])
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_busy_and_expired_deadline_make_no_model_call
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_transient_attempts_stop_at_configured_cap
-#     def test_transient_attempts_stop_at_configured_cap(self):
-#         reply=self.run_recovery(k=1,dependencies=self.dependencies(failure=JevFailure('connection')))
-#         self.assertEqual(reply['status'],1,reply)
-#         self.assertEqual(reply['jevCalls'],2)
-#         self.assertEqual(len(reply['pairs'][0]['attempts']),2)
-#         self.assertEqual(self.origins(),[])
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_transient_attempts_stop_at_configured_cap
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link
-#     def test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link(self):
-#         from mycel._resolver import SourceResolver
-#         from mycel._origins import origins_in_transaction
-#         from test_retrieval_store import RetrievalStoreTests
-#         self.settings=self.reviewer_settings()
-#         with self.base.connect() as connection:
-#             catalog=SourceResolver.from_store(connection,self.settings)
-#             for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1'):
-#                 selected=catalog.resolve(ref,purpose='endpoint').selection
-#                 chunk=selected.members[0].chunk
-#                 RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
-#         initial=self.run_recovery(dependencies=self.dependencies())
-#         self.assertEqual(initial['status'],0,initial)
-#         self.assertEqual(len(self.origins()),4)
-#         spec=self.artifact/'spec.md';spec.write_text(spec.read_text().replace('retain a stable return result','retain an unchanged return result'))
-#         self.ingest();self.old_files()
-#         with self.base.connect() as connection,read_snapshot(connection):
-#             report=origins_in_transaction(connection,self.settings,'fixture',unresting=True)
-#             self.assertFalse(any(REQ in row['origin'] for row in report['unresting']))
-#         observed=self.run_recovery(review=True,dependencies=self.dependencies())
-#         self.assertEqual(observed['status'],0,observed)
-#         later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
-#         reviewed=self.run_recovery(review=True,dependencies=replace(self.dependencies(),utc_now=lambda:later))
-#         self.assertEqual(reviewed['status'],0,reviewed)
-#         entities=[link for link in self.origins() if REQ in link['origin']]
-#         self.assertEqual(len(entities),1,entities)
-#         self.assertEqual(entities[0]['confidenceScore'],.95)
-#         self.assertIn('review',entities[0])
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_statement_supersedes_moved_uuid_proposal_without_duplicate
-#     def test_statement_supersedes_moved_uuid_proposal_without_duplicate(self):
-#         from mycel._resolver import SourceResolver
-#         from mycel._justify import JustifyStore
-#         from mycel._source_refs import format_entity_uri
-#         from test_retrieval_store import RetrievalStoreTests
-#         with self.base.connect() as connection:
-#             catalog=SourceResolver.from_store(connection,self.settings)
-#             for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1'):
-#                 selected=catalog.resolve(ref,purpose='endpoint').selection
-#                 chunk=selected.members[0].chunk
-#                 RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
-#         reply=self.run_recovery(dependencies=self.dependencies())
-#         self.assertEqual(reply['status'],0,reply)
-#         (self.artifact/'spec.md').rename(self.artifact/'moved.md');self.ingest()
-#         with self.base.connect() as connection:
-#             stated=JustifyStore(connection).apply(self.settings,self.ref,format_entity_uri('req',REQ,'old display title'))
-#             self.assertEqual(stated['link']['method'],'stated')
-#         entities=[link for link in self.origins() if REQ in link['origin']]
-#         self.assertEqual(len(entities),1,entities)
-#         self.assertEqual(entities[0]['method'],'stated')
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_statement_supersedes_moved_uuid_proposal_without_duplicate
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_pair_cap_bounds_exact_preparation_and_repo_skips_authored_roots
-#     def test_pair_cap_bounds_exact_preparation_and_repo_skips_authored_roots(self):
-#         original=RecoveryStore.prepare_pair;calls=[]
-#         def counted(*args,**kwargs):
-#             calls.append(args[4]);return original(*args,**kwargs)
-#         with patch.object(RecoveryStore,'prepare_pair',counted):
-#             reply=self.run_recovery(k=1,dry_run=True)
-#         self.assertEqual(reply['status'],0,reply)
-#         self.assertEqual(reply['selected'],1)
-#         self.assertEqual(len(calls),1,calls)
-#         repository=self.run_recovery(chunk=None,k=1,dry_run=True)
-#         self.assertEqual(repository['status'],0,repository)
-#         self.assertTrue(repository['capped'])
-#         for row in repository['chunks']:
-#             self.assertFalse(any(path in row['chunk'] for path in ('ref.md','symbol.md','spec.md')),row)
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_pair_cap_bounds_exact_preparation_and_repo_skips_authored_roots
-
-# TEST-TIER-DISABLED-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_foreign_clone_ref_fault_does_not_make_unchanged_pass_mutate
-#     def test_foreign_clone_ref_fault_does_not_make_unchanged_pass_mutate(self):
-#         from mycel._cli import Invocation
-#         from mycel._ingest import ingest
-#         clone=self.base.base/'blue'
-#         self.base.git('clone','--no-hardlinks',str(self.code),str(clone),cwd=self.base.base)
-#         self.base.config.write_text(self.base.config.read_text()+'code_clones='+json.dumps([str(clone)])+'\n')
-#         settings=load_settings(path=self.base.config,home=self.base.base)
-#         primary=replace(settings,_cwd=self.code);secondary=replace(settings,_cwd=clone)
-#         (self.artifact/'missing.md').write_text('# Missing source\n\n<!-- sources:\nfixture:@code/only.py#only\n-->\n')
-#         (clone/'only.py').write_text('def only():\n    return 1\n')
-#         def capture(selected):
-#             with patch('mycel._build_identity.current_build',return_value=1):
-#                 result=ingest(Invocation('ingest',repositories=('fixture',),settings=selected))
-#             self.assertEqual(result.status,0,result.value)
-#             return result.value['repositories']['fixture']
-#         capture(primary);capture(secondary)
-#         again=capture(secondary)
-#         self.assertFalse(again['changed'],again)
-#         again=capture(primary)
-#         self.assertFalse(again['changed'],again)
-#         self.assertFalse(capture(secondary)['changed'])
-# TEST-TIER-DISABLED-END tests/test_recovery.py::RecoveryStoreTests.test_foreign_clone_ref_fault_does_not_make_unchanged_pass_mutate
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryProtocolTests.test_cli_scope_and_options_are_exact
+    def test_cli_scope_and_options_are_exact(self):
+        from mycel._cli import parse
+        self.assertEqual(parse(('recovery','fixture:@code/value.py#value','--dry-run','--k','3')).arguments,
+                         ('fixture:@code/value.py#value','--k','3','--dry-run'))
+        self.assertEqual(parse(('recovery','--repo','fixture','--path','src','--review')).repositories,('fixture',))
+        for arguments in (('recovery','a','b'),('recovery','a','--path','src'),
+                          ('recovery','--k','0'),('recovery','--repo','a','--repo','b'),
+                          ('recovery','--path','../escape')):
+            with self.subTest(arguments=arguments),self.assertRaises(MycelError):parse(arguments)
+# TEST-TIER-END tests/test_recovery.py::RecoveryProtocolTests.test_cli_scope_and_options_are_exact
 
 
-# Original deferred imports (restore at the required scope, never blindly at the tail).
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:2
-# from copy import deepcopy
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:2
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:3
-# from dataclasses import replace
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:3
+class RecoveryStoreTests(_support.RecoveryStoreTests):
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_dry_run_lists_each_local_source_without_writes_or_model_credentials
+    def test_dry_run_lists_each_local_source_without_writes_or_model_credentials(self):
+        before=self.state()
+        with patch('mycel._credentials.Credentials.require_jev_key',side_effect=AssertionError('no model key')), \
+             patch('mycel._classification_runner._jev',side_effect=AssertionError('no model client')), \
+             patch('mycel._recovery.run_git',wraps=__import__('mycel._safeguards',fromlist=['run_git']).run_git) as git:
+            reply=self.run_recovery(dry_run=True)
+        self.assertEqual(reply['status'],0,reply)
+        self.assertEqual((reply['jevCalls'],reply['reviewCalls']),(0,0))
+        self.assertTrue(reply['chunks'][0]['history']['available'],reply['chunks'][0]['history'])
+        candidates=reply['chunks'][0]['candidates']
+        self.assertTrue(candidates,reply)
+        self.assertEqual({source for item in candidates for source in item['sources']},{'document','commit','issue'})
+        self.assertEqual(reply['chunks'][0]['embedding'],{'available':False,'reason':'chunk_vectors_unavailable'})
+        self.assertTrue(all(item['origin'].startswith('fixture:@') for item in candidates))
+        self.assertTrue(all(item['status']=='pending_jev' for item in candidates),candidates)
+        self.assertFalse(any('linear.md' in item['origin'] for item in candidates))
+        self.assertEqual(before,self.state())
+        self.assertEqual({call.args[0][0] for call in git.call_args_list},{'rev-parse','log'})
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_dry_run_lists_each_local_source_without_writes_or_model_credentials
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:5
-# from decimal import Decimal
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:5
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_tests_are_neither_candidates_nor_sections_to_recover
+    def test_tests_are_neither_candidates_nor_sections_to_recover(self):
+        reply=self.run_recovery(dry_run=True,chunk=None)
+        self.assertEqual(reply['status'],0,reply)
+        self.assertTrue(reply['chunks'],reply)
+        self.assertFalse(any('tests/test_value.py' in item['chunk'] for item in reply['chunks']),reply)
+        self.assertFalse(any('test_value.py' in candidate['origin']
+                             for item in reply['chunks'] for candidate in item['candidates']),reply)
+        named=self.run_recovery(dry_run=True,chunk='fixture:@code/tests/test_value.py#test_value')
+        self.assertEqual((named['status'],named['error']['code']),(1,'invalid_input'),named)
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_tests_are_neither_candidates_nor_sections_to_recover
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:9
-# from pathlib import Path
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:9
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_a_name_found_in_many_document_sections_gives_no_name_candidates
+    def test_a_name_found_in_many_document_sections_gives_no_name_candidates(self):
+        # value names ref.md and symbol.md (linear.md is never a document); ref.md also cites it.
+        with patch('mycel._recovery._NAME_MATCHES',1):
+            reply=self.run_recovery(dry_run=True)
+        self.assertEqual(reply['status'],0,reply)
+        origins={item['origin'] for item in reply['chunks'][0]['candidates']}
+        self.assertFalse(any('symbol.md' in origin for origin in origins),origins)
+        self.assertTrue(any('ref.md' in origin for origin in origins),origins)
+        self.assertTrue(any('symbol.md' in item['origin'] for item in self.run_recovery(dry_run=True)['chunks'][0]['candidates']))
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_a_name_found_in_many_document_sections_gives_no_name_candidates
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:11
-# import tempfile
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:11
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri
+    def test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri(self):
+        from mycel._resolver import SourceResolver
+        from test_retrieval_store import RetrievalStoreTests
+        from mycel import _retrieval_store
+        with self.base.connect() as connection:
+            catalog=SourceResolver.from_store(connection,self.settings)
+            for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1','fixture:@code/tests/test_value.py#test_value'):
+                selected=catalog.resolve(ref,purpose='endpoint').selection
+                chunk=selected.members[0].chunk
+                RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
+        with patch('mycel._retrieval_store._decode_plan',wraps=_retrieval_store._decode_plan) as decoded:
+            reply=self.run_recovery(dry_run=True)
+        self.assertEqual(decoded.call_count,2)  # the target and the requirement, not the test's vector
+        self.assertEqual(reply['status'],0,reply)
+        self.assertTrue(reply['chunks'][0]['embedding']['available'])
+        entities=[item for item in reply['chunks'][0]['candidates'] if 'embedding' in item['sources']]
+        self.assertTrue(entities,reply)
+        entity=entities[0]
+        self.assertEqual(entity['status'],'pending_jev',entity)
+        self.assertTrue(-1<=entity['similarity']<=1,entity)
+        self.assertIn(':req:'+REQ+':',entity['origin'])
+        self.assertEqual((reply['jevCalls'],reply['reviewCalls']),(0,0))
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:12
-# import time
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:12
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_complete_judgements_write_exact_scores_and_methods_without_verification
+    def test_complete_judgements_write_exact_scores_and_methods_without_verification(self):
+        reply=self.run_recovery(dependencies=self.dependencies())
+        self.assertEqual(reply['status'],0,reply)
+        self.assertEqual(reply['completed'],reply['selected'])
+        self.assertEqual(reply['jevCalls'],len(self.calls))
+        # Only governs writes a link (MYC-D66): the related symbol.md candidate writes none.
+        links=self.origins();self.assertEqual(len(links),3,links)
+        self.assertFalse(any('symbol.md' in link['origin'] for link in links))
+        self.assertEqual({link['method'] for link in links},{'inferred','recovered'})
+        # Without a reviewer the score is Jev's probability of governs.
+        self.assertTrue(all(link['confidenceScore']==.9 and link['confidence']=='inferred' for link in links))
+        self.assertFalse(any('test_value' in link['origin'] for link in links))
+        with self.base.connect() as connection:
+            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
+            manifests=connection.execute("SELECT hash,bytes,metadata FROM public.mycel_manifests WHERE kind='origin_recovery'").fetchall()
+            self.assertEqual(len(manifests),reply['selected'])
+            for digest,raw,metadata in manifests:
+                self.assertEqual(OriginDecisionPayload.from_bytes(bytes(raw),digest).input_hash,digest)
+                self.assertEqual(metadata['record']['status'],'complete')
+            self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_recovery' AND invocation IS NOT NULL").fetchone(),(0,))
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_complete_judgements_write_exact_scores_and_methods_without_verification
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:16
-# from mycel._classification_payload import (DecisionText, OriginDecisionPayload, ORIGIN_LABELS,
-#     ReviewerRequest, ReviewCommandIdentity)
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:16
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_changed_inputs_after_call_have_no_link_or_verification_effect
+    def test_changed_inputs_after_call_have_no_link_or_verification_effect(self):
+        def changed(request):self.source.write_text('def value():\n    return 2\n')
+        reply=self.run_recovery(k=1,dependencies=self.dependencies(changed=changed))
+        self.assertEqual(reply['status'],1,reply)
+        self.assertEqual(reply['jevCalls'],1)
+        self.assertEqual(reply['completed'],0)
+        self.assertEqual(self.origins(),[])
+        self.assertIn(reply['pairs'][0]['reason'],{'obsolete','changed_since_ingest'})
+        with self.base.connect() as connection:
+            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_changed_inputs_after_call_have_no_link_or_verification_effect
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:20
-# from mycel._errors import MycelError
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:20
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_a_step_parses_each_unchanged_file_at_most_once
+    def test_a_step_parses_each_unchanged_file_at_most_once(self):
+        # On the owner's store the stored parse history had another capture
+        # policy, so every check parsed the whole repository again.
+        from mycel import _capture
+        with patch('mycel._capture.chunk_code',wraps=_capture.chunk_code) as parsed, \
+             patch('mycel._disk_reconciliation._parse_history',return_value=None):
+            reply=self.run_recovery(dependencies=self.dependencies())
+        self.assertEqual(reply['status'],0,reply)
+        self.assertGreater(reply['selected'],1,reply)
+        self.assertLessEqual(parsed.call_count,4)  # two code files, on disk and on branch main, once
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_a_step_parses_each_unchanged_file_at_most_once
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:21
-# from mycel._evidence import EvidenceError, snapshot
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:21
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_a_series_of_steps_keeps_its_work_and_never_sends_a_pair_twice
+    def test_a_series_of_steps_keeps_its_work_and_never_sends_a_pair_twice(self):
+        dependencies=self.dependencies(label='unrelated')
+        replies=[]
+        for _ in range(20):
+            replies.append(self.run_recovery(chunk=None,k=2,dependencies=dependencies))
+            self.assertEqual(replies[-1]['status'],0,replies[-1])
+            if replies[-1]['complete']:
+                break
+        self.assertTrue(replies[-1]['complete'],replies[-1])
+        self.assertGreater(len(replies),1)
+        self.assertEqual([reply['remaining'] for reply in replies],
+                         sorted((reply['remaining'] for reply in replies),reverse=True))
+        sent=[json.dumps(request['state'],sort_keys=True) for request in self.calls]
+        self.assertEqual(len(sent),len(set(sent)))
+        self.assertEqual(sum(reply['jevCalls'] for reply in replies),len(self.calls))
+        again=self.run_recovery(chunk=None,k=2,dependencies=dependencies)
+        self.assertEqual((again['jevCalls'],again['selected'],again['remaining'],again['complete']),(0,0,0,True),again)
+        self.assertEqual(self.origins(),[])
+        # A judged candidate whose text changes is judged again; its section only.
+        before=len(self.calls)
+        (self.artifact/'symbol.md').write_text('---\nrole: authored\n---\n# Symbol contract\nThe symbol value returns one, always.\n')
+        self.ingest();self.old_files()
+        observed=self.run_recovery(chunk=None,k=20,dependencies=dependencies)
+        self.assertEqual((observed['jevCalls'],observed['complete']),(0,False),observed)
+        later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+        after=self.run_recovery(chunk=None,k=20,dependencies=replace(dependencies,utc_now=lambda:later))
+        self.assertEqual(after['status'],0,after)
+        self.assertTrue(after['complete'],after)
+        self.assertEqual(after['jevCalls'],len(self.calls)-before)
+        self.assertTrue(after['jevCalls']>=1 and all('symbol.md' in request['state']['candidate']['snapshot']['place']['path']
+                                                     for request in self.calls[before:]),self.calls[before:])
+        # New settings judge everything again.
+        self.base.config.write_text(self.base.config.read_text()+'\n[drifts]\nconfidence_floor=0.6\n')
+        changed=self.run_recovery(chunk=None,k=1,dependencies=replace(dependencies,utc_now=lambda:later),
+                                  settings=load_settings(path=self.base.config,home=self.base.base))
+        self.assertEqual((changed['jevCalls'],changed['complete']),(1,False),changed)
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_a_series_of_steps_keeps_its_work_and_never_sends_a_pair_twice
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:22
-# from mycel._jev import JevClient, JevFailure, JevLimits, HTTPResult, JevRequest
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:22
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_a_guide_candidate_carries_no_code_it_cites
+    def test_a_guide_candidate_carries_no_code_it_cites(self):
+        reply=self.run_recovery(dependencies=self.dependencies(label='unrelated'))
+        self.assertEqual(reply['status'],0,reply)
+        guide=[request for request in self.calls if request['state']['candidate']['snapshot']['place']['path']=='ref.md']
+        self.assertEqual(len(guide),1,self.calls)
+        self.assertEqual([item['snapshot']['place']['root'] for item in guide[0]['state']['context']
+                          if item['snapshot']['place']['root']=='code'],[])
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_a_guide_candidate_carries_no_code_it_cites
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:25
-# from mycel._reviewer import ReviewerFailure, validate_response
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:25
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_an_edit_with_restored_mtime_during_a_step_is_still_caught
+    def test_an_edit_with_restored_mtime_during_a_step_is_still_caught(self):
+        before=self.source.stat()
+        def changed(request):
+            self.source.write_text('def value():\n    return 3\n')
+            os.utime(self.source,ns=(before.st_atime_ns,before.st_mtime_ns))
+        reply=self.run_recovery(k=2,dependencies=self.dependencies(changed=changed))
+        self.assertEqual(reply['completed'],0,reply)
+        self.assertEqual(self.origins(),[])
+        self.assertIn(reply['pairs'][0]['reason'],{'obsolete','changed_since_ingest'})
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_an_edit_with_restored_mtime_during_a_step_is_still_caught
 
-# TEST-TIER-IMPORTS-BEGIN tests/test_recovery.py:26
-# from mycel._safeguards import CompletedChild, InvocationPolicy, model_call_allowed
-# TEST-TIER-IMPORTS-END tests/test_recovery.py:26
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_real_isolated_standin_review_raises_and_lowers_scores_and_bands
+    def test_real_isolated_standin_review_raises_and_lowers_scores_and_bands(self):
+        self.settings=self.reviewer_settings()
+        first=self.run_recovery(dependencies=self.dependencies())
+        self.assertEqual(first['status'],0,first)
+        reviewed=self.run_recovery(review=True,dependencies=self.dependencies())
+        self.assertEqual(reviewed['status'],0,reviewed)
+        self.assertEqual(reviewed['jevCalls'],0)
+        self.assertEqual(reviewed['reviewCalls'],3,reviewed)
+        links=self.origins();self.assertEqual(len(links),3)
+        lowered=next(link for link in links if 'commit.md' in link['origin'])
+        raised=next(link for link in links if 'ref.md' in link['origin'])
+        self.assertEqual((lowered['confidenceScore'],lowered['confidence']),(.35,'candidate'))
+        self.assertEqual((raised['confidenceScore'],raised['confidence']),(.95,'inferred'))
+        self.assertTrue(all(link['review']['outcome']=='governs' for link in links))
+        self.assertTrue(all(link['review']['who']=='fixture-review-1' for link in links))
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_real_isolated_standin_review_raises_and_lowers_scores_and_bands
 
-raise RuntimeError("Mid-tier tests require an explicitly requested testing task; see MID_TIER.md.")
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_third_party_snapshots_recover_without_linear_or_remote_reads
+    def test_third_party_snapshots_recover_without_linear_or_remote_reads(self):
+        before={str(path):path.read_bytes() for path in self.artifact.glob('*.md')}
+        with patch('urllib.request.urlopen',side_effect=AssertionError('no remote read')):
+            reply=self.run_recovery(dependencies=self.dependencies())
+        self.assertEqual(reply['status'],0,reply)
+        origins={link['origin'] for link in self.origins()}
+        self.assertTrue(any('issue.md' in origin for origin in origins))
+        self.assertTrue(any('commit.md' in origin for origin in origins))
+        self.assertFalse(any('linear.md' in origin for origin in origins))
+        self.assertFalse(any('linear.app' in json.dumps(call) for call in self.calls))
+        self.assertEqual(before,{str(path):path.read_bytes() for path in self.artifact.glob('*.md')})
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_third_party_snapshots_recover_without_linear_or_remote_reads
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect
+    def test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect(self):
+        os.utime(self.source,None)
+        pending=self.run_recovery(k=1,dependencies=self.dependencies())
+        self.assertEqual(pending['status'],0,pending)
+        self.assertEqual(pending['jevCalls'],0)
+        self.assertEqual(pending['pairs'][0]['status'],'pending_debounce')
+        self.assertEqual(self.origins(),[])
+        self.old_files()
+        # An unchanged byte version retains its original observation, even if
+        # someone restores an older mtime. Re-ingest a new exact version first.
+        self.source.write_text('def value():\n    return 2\n');self.ingest();self.old_files()
+        observed=self.run_recovery(k=1,dependencies=self.dependencies(top=.7))
+        self.assertEqual(observed['pairs'][0]['status'],'pending_debounce')
+        later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+        uncertain=self.run_recovery(k=1,dependencies=replace(self.dependencies(top=.4),utc_now=lambda:later))
+        self.assertEqual(uncertain['status'],0,uncertain)
+        # Without a reviewer, governs at probability .4 is below the origin floor: no link, nothing pending.
+        self.assertEqual((uncertain['pairs'][0]['status'],uncertain['pairs'][0]['decided']),('complete','effect'))
+        self.assertEqual(uncertain['pairs'][0]['confidenceScore'],.4)
+        self.assertEqual((uncertain['jevCalls'],uncertain['reviewCalls']),(1,0))
+        self.assertEqual(self.origins(),[])
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_path_repository_and_public_chunk_commands_use_same_candidates
+    def test_path_repository_and_public_chunk_commands_use_same_candidates(self):
+        from mycel._cli import run
+        with self.base.connect() as connection:
+            paths=run_recovery(RecoveryStore(connection),self.settings,'fixture',paths=('value.py',),dry_run=True)
+        self.assertEqual([row['chunk'] for row in paths['chunks']],[self.ref])
+        with self.base.connect() as connection:
+            repository=run_recovery(RecoveryStore(connection),self.settings,'fixture',dry_run=True)
+        self.assertIn(self.ref,[row['chunk'] for row in repository['chunks']])
+        output,diagnostic=StringIO(),StringIO()
+        with patch('mycel._cli.load_settings',return_value=self.settings):
+            status=run(('recovery',self.ref,'--dry-run'),stdout=output,stderr=diagnostic)
+        self.assertEqual(status,0,output.getvalue())
+        self.assertEqual(diagnostic.getvalue(),'')
+        self.assertEqual(json.loads(output.getvalue())['repository'],'fixture')
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_path_repository_and_public_chunk_commands_use_same_candidates
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_model_claims_survive_ingest_without_source_cycles_and_statement_supersedes
+    def test_model_claims_survive_ingest_without_source_cycles_and_statement_supersedes(self):
+        from mycel._justify import JustifyStore
+        reply=self.run_recovery(dependencies=self.dependencies())
+        self.assertEqual(reply['status'],0,reply)
+        self.ingest()
+        self.assertEqual(len(self.origins()),3)
+        with self.base.connect() as connection:
+            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_stale_reasons').fetchone(),(0,))
+            result=JustifyStore(connection).apply(self.settings,self.ref,'fixture:@artifact/symbol.md#Symbol%20contract')
+            self.assertEqual(result['link']['method'],'stated')
+        links=[link for link in self.origins() if 'symbol.md' in link['origin']]
+        self.assertEqual(len(links),1,links)
+        self.assertEqual((links[0]['confidenceScore'],links[0]['confidence']),(1.0,'asserted'))
+        reviewed=self.run_recovery(review=True,dry_run=True)
+        self.assertFalse(any('symbol.md' in pair['origin'] for pair in reviewed['pairs']))
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_model_claims_survive_ingest_without_source_cycles_and_statement_supersedes
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_clone_clock_and_equal_version_links_belong_only_to_calling_location
+    def test_clone_clock_and_equal_version_links_belong_only_to_calling_location(self):
+        clone=self.base.base/'blue'
+        self.base.git('clone','--no-hardlinks',str(self.code),str(clone),cwd=self.base.base)
+        self.base.config.write_text(self.base.config.read_text()+'code_clones='+json.dumps([str(clone)])+'\n')
+        settings=load_settings(path=self.base.config,home=self.base.base)
+        primary=replace(settings,_cwd=self.code);secondary=replace(settings,_cwd=clone)
+        self.settings=primary
+        self.ingest(secondary)
+        os.utime(clone/'value.py',None)
+        pending=self.run_recovery(settings=secondary,k=1,dependencies=self.dependencies())
+        self.assertEqual(pending['status'],0,pending)
+        self.assertEqual(pending['pairs'][0]['status'],'pending_debounce')
+        self.assertEqual(pending['jevCalls'],0)
+        stamp=(datetime.now(timezone.utc)-timedelta(hours=1)).timestamp()
+        for path in clone.rglob('*.py'):os.utime(path,(stamp,stamp))
+        later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+        result=self.run_recovery(settings=secondary,dependencies=replace(self.dependencies(),utc_now=lambda:later))
+        self.assertEqual(result['status'],0,result)
+        self.assertEqual(self.origins(),[])
+        self.settings=secondary
+        self.assertEqual(len(self.origins()),3)
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_clone_clock_and_equal_version_links_belong_only_to_calling_location
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_byte_budget_and_terminal_fault_never_write_a_link
+    def test_byte_budget_and_terminal_fault_never_write_a_link(self):
+        oversized=self.run_recovery(k=1,dependencies=self.dependencies(limits=JevLimits(max_input_bytes=1)))
+        self.assertEqual(oversized['status'],0,oversized)
+        self.assertEqual((oversized['jevCalls'],oversized['reviewCalls']),(0,0))
+        self.assertEqual(oversized['pairs'][0]['status'],'needs_llm_review')
+        failed=self.run_recovery(k=1,dependencies=self.dependencies(failure=JevFailure('provider_result_invalid')))
+        self.assertEqual(failed['status'],1,failed)
+        self.assertEqual(failed['jevCalls'],1)
+        self.assertEqual(len(failed['pairs'][0]['attempts']),1)
+        self.assertEqual(self.origins(),[])
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_byte_budget_and_terminal_fault_never_write_a_link
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_interrupt_preserves_completed_prefix_and_releases_evidence_leases
+    def test_interrupt_preserves_completed_prefix_and_releases_evidence_leases(self):
+        def interrupt(request):
+            if len(self.calls)==2:raise KeyboardInterrupt()
+        result=self.run_recovery(dependencies=self.dependencies(changed=interrupt))
+        self.assertEqual(result['status'],2,result)
+        self.assertEqual(result['completed'],1,result)
+        self.assertEqual(result['jevCalls'],2)
+        self.assertEqual(len(self.origins()),1)
+        with self.base.connect() as connection:
+            self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_recovery' AND invocation IS NOT NULL").fetchone(),(0,))
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_interrupt_preserves_completed_prefix_and_releases_evidence_leases
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_validated_result_reuse_and_corrupt_cache_refusal
+    def test_validated_result_reuse_and_corrupt_cache_refusal(self):
+        from psycopg.types.json import Jsonb
+        first=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
+        self.assertEqual(first['status'],0,first)
+        self.assertEqual(self.origins(),[])
+        # A result retained without its judgement, as before store format 5,
+        # is validated and reused.
+        forget="DELETE FROM public.mycel_judgements"
+        with self.base.connect() as connection:
+            connection.execute(forget)
+        second=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
+        self.assertEqual(second['status'],0,second)
+        self.assertEqual(second['jevCalls'],0)
+        self.assertTrue(second['pairs'][0]['reused'])
+        with self.base.connect() as connection:
+            digest,metadata=connection.execute("SELECT hash,metadata FROM public.mycel_manifests WHERE kind='origin_recovery'").fetchone()
+            metadata['record']['confidenceScore']=.99
+            connection.execute('UPDATE public.mycel_manifests SET metadata=%s WHERE repository=%s AND hash=%s',
+                               (Jsonb(metadata),'fixture',digest))
+            connection.execute(forget)
+        corrupt=self.run_recovery(k=1,dependencies=self.dependencies())
+        self.assertEqual(corrupt['status'],1,corrupt)
+        self.assertEqual(corrupt['jevCalls'],0)
+        self.assertEqual(corrupt['pairs'][0]['reason'],'snapshot_corrupt')
+        self.assertEqual(self.origins(),[])
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_validated_result_reuse_and_corrupt_cache_refusal
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_unrelated_review_withdraws_only_model_claims
+    def test_unrelated_review_withdraws_only_model_claims(self):
+        from mycel._activity import MutationActivity
+        self.settings=self.reviewer_settings(unrelated=True)
+        result=self.run_recovery(dependencies=self.dependencies())
+        self.assertEqual(result['status'],0,result)
+        self.assertEqual(len(self.origins()),3)
+        with self.base.connect() as connection,MutationActivity(connection,build=1).session() as activity:
+            reviewed=run_recovery(RecoveryStore(connection),self.settings,'fixture',chunk=self.ref,
+                                 review=True,dependencies=self.dependencies(),activity=activity)
+            self.assertEqual(reviewed['status'],0,reviewed)
+            activity.finish('done',counts={('fixture','recovery'):reviewed})
+        self.assertEqual(self.origins(),[])
+        with self.base.connect() as connection:
+            self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_activity WHERE kind='recovery'").fetchone(),(1,))
+            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_unrelated_review_withdraws_only_model_claims
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_numbered_public_command_records_committed_origin_mutations
+    def test_numbered_public_command_records_committed_origin_mutations(self):
+        from mycel._cli import run
+        output,diagnostic=StringIO(),StringIO()
+        with patch('mycel._cli.load_settings',return_value=self.settings), \
+             patch('mycel._recovery.ClassifyDependencies',return_value=self.dependencies()), \
+             patch('mycel._build_identity.current_build',return_value=1):
+            status=run(('recovery',self.ref),stdout=output,stderr=diagnostic)
+        self.assertEqual(status,0,output.getvalue())
+        reply=json.loads(output.getvalue());self.assertEqual(reply['completed'],4,reply)
+        self.assertEqual(diagnostic.getvalue(),'')
+        with self.base.connect() as connection:
+            counts,outcome=connection.execute("SELECT counts,outcome FROM public.mycel_activity WHERE kind='recovery'").fetchone()
+            self.assertEqual(outcome,'done')
+            self.assertEqual(counts['completed'],4)
+        self.assertEqual(len(self.origins()),3)
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_numbered_public_command_records_committed_origin_mutations
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_busy_and_expired_deadline_make_no_model_call
+    def test_busy_and_expired_deadline_make_no_model_call(self):
+        from mycel._locks import operation_guard
+        from mycel._freshness import Deadline
+        with self.base.connect() as connection,operation_guard(connection,'fixture','classify'):
+            busy=self.run_recovery(k=1,dependencies=self.dependencies())
+        self.assertEqual(busy['status'],1,busy)
+        self.assertEqual(busy['jevCalls'],0)
+        expired=self.run_recovery(k=1,dependencies=self.dependencies(),deadline=Deadline.after(.000001))
+        self.assertEqual(expired['status'],1,expired)
+        self.assertTrue(expired['incomplete'])
+        self.assertEqual(expired['jevCalls'],0)
+        self.assertEqual(self.origins(),[])
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_busy_and_expired_deadline_make_no_model_call
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_transient_attempts_stop_at_configured_cap
+    def test_transient_attempts_stop_at_configured_cap(self):
+        reply=self.run_recovery(k=1,dependencies=self.dependencies(failure=JevFailure('connection')))
+        self.assertEqual(reply['status'],1,reply)
+        self.assertEqual(reply['jevCalls'],2)
+        self.assertEqual(len(reply['pairs'][0]['attempts']),2)
+        self.assertEqual(self.origins(),[])
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_transient_attempts_stop_at_configured_cap
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link
+    def test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link(self):
+        from mycel._resolver import SourceResolver
+        from mycel._origins import origins_in_transaction
+        from test_retrieval_store import RetrievalStoreTests
+        self.settings=self.reviewer_settings()
+        with self.base.connect() as connection:
+            catalog=SourceResolver.from_store(connection,self.settings)
+            for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1'):
+                selected=catalog.resolve(ref,purpose='endpoint').selection
+                chunk=selected.members[0].chunk
+                RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
+        initial=self.run_recovery(dependencies=self.dependencies())
+        self.assertEqual(initial['status'],0,initial)
+        self.assertEqual(len(self.origins()),4)
+        spec=self.artifact/'spec.md';spec.write_text(spec.read_text().replace('retain a stable return result','retain an unchanged return result'))
+        self.ingest();self.old_files()
+        with self.base.connect() as connection,read_snapshot(connection):
+            report=origins_in_transaction(connection,self.settings,'fixture',unresting=True)
+            self.assertFalse(any(REQ in row['origin'] for row in report['unresting']))
+        observed=self.run_recovery(review=True,dependencies=self.dependencies())
+        self.assertEqual(observed['status'],0,observed)
+        later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+        reviewed=self.run_recovery(review=True,dependencies=replace(self.dependencies(),utc_now=lambda:later))
+        self.assertEqual(reviewed['status'],0,reviewed)
+        entities=[link for link in self.origins() if REQ in link['origin']]
+        self.assertEqual(len(entities),1,entities)
+        self.assertEqual(entities[0]['confidenceScore'],.95)
+        self.assertIn('review',entities[0])
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_statement_supersedes_moved_uuid_proposal_without_duplicate
+    def test_statement_supersedes_moved_uuid_proposal_without_duplicate(self):
+        from mycel._resolver import SourceResolver
+        from mycel._justify import JustifyStore
+        from mycel._source_refs import format_entity_uri
+        from test_retrieval_store import RetrievalStoreTests
+        with self.base.connect() as connection:
+            catalog=SourceResolver.from_store(connection,self.settings)
+            for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1'):
+                selected=catalog.resolve(ref,purpose='endpoint').selection
+                chunk=selected.members[0].chunk
+                RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
+        reply=self.run_recovery(dependencies=self.dependencies())
+        self.assertEqual(reply['status'],0,reply)
+        (self.artifact/'spec.md').rename(self.artifact/'moved.md');self.ingest()
+        with self.base.connect() as connection:
+            stated=JustifyStore(connection).apply(self.settings,self.ref,format_entity_uri('req',REQ,'old display title'))
+            self.assertEqual(stated['link']['method'],'stated')
+        entities=[link for link in self.origins() if REQ in link['origin']]
+        self.assertEqual(len(entities),1,entities)
+        self.assertEqual(entities[0]['method'],'stated')
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_statement_supersedes_moved_uuid_proposal_without_duplicate
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_pair_cap_bounds_exact_preparation_and_repo_skips_authored_roots
+    def test_pair_cap_bounds_exact_preparation_and_repo_skips_authored_roots(self):
+        original=RecoveryStore.prepare_pair;calls=[]
+        def counted(*args,**kwargs):
+            calls.append(args[4]);return original(*args,**kwargs)
+        with patch.object(RecoveryStore,'prepare_pair',counted):
+            reply=self.run_recovery(k=1,dry_run=True)
+        self.assertEqual(reply['status'],0,reply)
+        self.assertEqual(reply['selected'],1)
+        self.assertEqual(len(calls),1,calls)
+        repository=self.run_recovery(chunk=None,k=1,dry_run=True)
+        self.assertEqual(repository['status'],0,repository)
+        self.assertTrue(repository['capped'])
+        for row in repository['chunks']:
+            self.assertFalse(any(path in row['chunk'] for path in ('ref.md','symbol.md','spec.md')),row)
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_pair_cap_bounds_exact_preparation_and_repo_skips_authored_roots
+
+# TEST-TIER-BEGIN tests/test_recovery.py::RecoveryStoreTests.test_foreign_clone_ref_fault_does_not_make_unchanged_pass_mutate
+    def test_foreign_clone_ref_fault_does_not_make_unchanged_pass_mutate(self):
+        from mycel._cli import Invocation
+        from mycel._ingest import ingest
+        clone=self.base.base/'blue'
+        self.base.git('clone','--no-hardlinks',str(self.code),str(clone),cwd=self.base.base)
+        self.base.config.write_text(self.base.config.read_text()+'code_clones='+json.dumps([str(clone)])+'\n')
+        settings=load_settings(path=self.base.config,home=self.base.base)
+        primary=replace(settings,_cwd=self.code);secondary=replace(settings,_cwd=clone)
+        (self.artifact/'missing.md').write_text('# Missing source\n\n<!-- sources:\nfixture:@code/only.py#only\n-->\n')
+        (clone/'only.py').write_text('def only():\n    return 1\n')
+        def capture(selected):
+            with patch('mycel._build_identity.current_build',return_value=1):
+                result=ingest(Invocation('ingest',repositories=('fixture',),settings=selected))
+            self.assertEqual(result.status,0,result.value)
+            return result.value['repositories']['fixture']
+        capture(primary);capture(secondary)
+        again=capture(secondary)
+        self.assertFalse(again['changed'],again)
+        again=capture(primary)
+        self.assertFalse(again['changed'],again)
+        self.assertFalse(capture(secondary)['changed'])
+# TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_foreign_clone_ref_fault_does_not_make_unchanged_pass_mutate

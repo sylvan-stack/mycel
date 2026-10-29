@@ -1,5 +1,16 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured-store proofs for unchanged parsing and fresh acquisition guards."""
+from dataclasses import replace
+from hashlib import sha256
+import os
+from unittest.mock import patch
+
+from psycopg.types.json import Jsonb
+from mycel import _capture
+from mycel._disk_reconciliation import DiskCaptureStore
+from mycel._errors import MycelError
+from mycel._located_reconciliation import LocatedCaptureStore
+
 import unittest
 
 import test_located_reconciliation as _fixture_module

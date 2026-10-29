@@ -15,47 +15,28 @@ from ._errors import MycelError
 
 def run_provider_checks(settings, suite, *, repository, build, implementation_identity,
                         live=False):
-    """Execute only after explicit approval of this concrete suite and budgets.
-
-    This helper itself asks for no approval and performs no operation on import.
-    The caller owns immutable source/fixture/profile binding and report retention.
-    """
-    raise MycelError('refused', 'Tests are commented under the tier policy; see TESTS.md. Restore only in an explicitly requested testing task.')  # TEST-TIER-REFUSAL
-    if live is not True:
-        raise MycelError('refused', 'Provider acceptance requires explicit live selection.')
-    if not isinstance(implementation_identity, str) or not implementation_identity:
-        raise MycelError('invalid_input', 'Provider acceptance requires an immutable implementation identity.')
-    # Avoid spending quota on a corpus which cannot meet even the local floors.
-    from ._evaluation_drift import _fingerprint
-    from ._provider_qualification import CRITICAL_CATEGORIES
-    groups = {}
-    for case in suite.drifts:
-        groups.setdefault(_fingerprint(case), []).append(case)
-    if (len(groups) < 200 or sum(any(case.critical for case in group) for group in groups.values()) < 50
-            or sum(any(case.unchanged for case in group) for group in groups.values()) < 50
-            or any(len({case.expect for case in group}) != 1 for group in groups.values())
-            or not CRITICAL_CATEGORIES <= {tag for case in suite.drifts for tag in case.critical}):
-        raise MycelError('refused', 'The versioned qualification set does not meet the distinct labelled coverage floors.')
-    settings.require_valid(require_store=False)
-    settings.require_current()
-    from ._classification_payload import ReviewCommandIdentity
-    from ._credentials import Credentials, CredentialUnavailable
-    from ._safeguards import InvocationPolicy
-    options = settings.values['drifts']
-    if not options.get('review_command') or not ReviewCommandIdentity.inspect(
-            options['review_command'], options['review_revision'], settings._home or '/').available:
-        raise MycelError('refused', 'Configured reviewer readiness is required before any paid acceptance check.')
-    try:
-        Credentials(settings, InvocationPolicy('evaluate', kind='drift', live=True)).require_jev_key()
-    except CredentialUnavailable:
-        raise MycelError('refused', 'Jev credential readiness is required before any paid acceptance check.') from None
-    reports = {}
-    class ProviderAcceptance(unittest.TestCase):
-        pass  # TEST-TIER-EMPTY-SUITE; helpers remain importable.
+    return _mid_tier_namespace()['run_provider_checks'](settings, suite, repository=repository, build=build, implementation_identity=implementation_identity, live=live)
 
 
-    checks = ((ProviderAcceptance('test_fixed_embedding_compatibility'), 'live', ('MYC-13.9',)),
-              (ProviderAcceptance('test_configured_drift_live_pipeline'), 'live', ('MYC-13.19',)),
-              (ProviderAcceptance('test_same_run_finite_profile_qualification'), 'eval', ('MYC-13.20',)))
-    proofs = run_on_demand_checks(checks, implementation_identity=implementation_identity)
-    return proofs, reports
+def _mid_tier_namespace():
+    """Load test-only code on explicit invocation, leaving normal product imports alone."""
+    from pathlib import Path as _TierPath
+    from types import ModuleType as _TierModule
+    import sys as _tier_sys
+    name = __name__ + '.__mid_tier'
+    if name not in _tier_sys.modules:
+        path = _TierPath(__file__).resolve().parents[2] / 'tests/mid/archived/src/mycel/_provider_checks.py'
+        if not path.is_file():
+            raise RuntimeError('Mid-tier source is unavailable in this installation; use the source checkout or an explicitly qualified test package. See MID_TIER.md.')
+        module = _TierModule(name)
+        # Preserve public case identities consumed by qualification contracts.
+        module.__dict__['__name__'] = __name__
+        module.__file__ = __file__
+        module.__package__ = __package__
+        _tier_sys.modules[name] = module
+        try:
+            exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+        except BaseException:
+            del _tier_sys.modules[name]
+            raise
+    return _tier_sys.modules[name].__dict__

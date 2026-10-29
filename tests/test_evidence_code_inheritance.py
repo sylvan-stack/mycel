@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """D38 inheritance verifies parsed exact files without renewing source pins."""
+from dataclasses import replace
+from unittest.mock import patch
+
+from mycel._errors import MycelError
+from mycel._locks import atomic_transaction
+
 
 import json
 import unittest

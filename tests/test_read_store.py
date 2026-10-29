@@ -1,5 +1,23 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured disposable-store proofs for exact reads and bounded freshness."""
+import io
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+from mycel._cli import run
+from mycel._capture import _Capture
+from mycel._errors import MycelError
+from mycel._declared_refs import DeclaredRefStore
+from mycel._locks import operation_guard
+from mycel._read import ReadSelectionError
+from mycel._resolver import SourceResolver
+from mycel._store import checked_store, search_text
+try:
+    from . import test_declared_refs as declared_fixtures
+except ImportError:
+    import test_declared_refs as declared_fixtures
+
 
 import unittest
 from hashlib import sha256

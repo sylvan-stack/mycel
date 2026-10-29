@@ -1,5 +1,17 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Offline grouping profile and estimated-level proofs."""
+from dataclasses import replace
+import math
+import os
+from unittest.mock import patch
+import warnings
+
+from mycel._errors import MycelError
+from mycel._summary_grouping import (GROUPING_PROFILE, SummaryNode,
+    group_summary_nodes, mean_vector, numerical_versions, plan_summary_levels)
+from mycel._summary_request import (SummaryPrompts, SummarySection,
+    plan_summary_requests)
+
 
 import unittest
 from hashlib import sha256
@@ -48,7 +60,6 @@ class _Mixture:
 
 class SummaryGroupingTests(unittest.TestCase):
     pass  # TEST-TIER-EMPTY-SUITE; helpers remain importable.
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

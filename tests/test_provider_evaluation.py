@@ -1,9 +1,24 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Service-free provider boundaries and pure finite-corpus arithmetic only.
 
 Artificial outcome rows exercise counts; they are not an evaluation set,
 label evidence, measured provider report or live/eval requirement acceptance.
 """
+from dataclasses import replace
+from types import SimpleNamespace
+import tempfile
+from unittest.mock import patch
+
+from mycel._classification_runner import ClassifyDependencies
+from mycel._credentials import CredentialUnavailable
+from mycel._embedding_live import FIXED_QUERY, FIXED_TEXT, run_embedding_live_check
+from mycel._errors import MycelError
+from mycel._evaluation_drift import FixtureStore, _Jev, _Reviewer, run_drift_evaluation
+from mycel._provider_qualification import (CRITICAL_CATEGORIES, QUALIFICATION_REVISION, classification_diagnostics,
+    profile_fingerprint, qualify_profile, semantic_fingerprint)
+from mycel._safeguards import InvocationPolicy, model_call_allowed
+from mycel._voyage import ProviderFailure
+
 import json
 import sys
 import unittest

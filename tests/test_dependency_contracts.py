@@ -1,9 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Complete local dependency contracts through guarded configured-store callers.
 
 These acceptance callers use the reusable publication/confirmation boundary;
 they do not dispatch future ingest, confirmation, relation or detection commands.
 """
+from hashlib import sha256
+
+from mycel._reconciliation import ReconciliationError
+
 import unittest
 
 from mycel._capture import LocationId

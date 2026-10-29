@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Private Git fixtures for read-only rename evidence; no store acceptance."""
+from dataclasses import replace
+from unittest.mock import patch
+
+from mycel._errors import MycelError
+from mycel._safeguards import CompletedChild, run_git
+
 import os
 import subprocess
 import tempfile

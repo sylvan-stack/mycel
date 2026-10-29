@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Settings refusal and diagnostics at the actual command boundary."""
+import io
+import json
+import tempfile
+from unittest.mock import patch
+
+from mycel._cli import Result, StreamedResult, run
+from mycel._settings import load_settings
+
 
 import os
 import subprocess
@@ -26,7 +34,6 @@ class SettingsCliTests(unittest.TestCase):
         return subprocess.run([sys.executable, "-c", unit_boundary, *args],
                               env=environment, cwd=root, input=input,
                               capture_output=True, timeout=5)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

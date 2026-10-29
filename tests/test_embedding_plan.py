@@ -1,5 +1,20 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Offline acceptance of pinned counts and complete original-text coverage."""
+from dataclasses import FrozenInstanceError, replace
+from importlib import resources
+import json
+from pathlib import Path
+import random
+import socket
+import tempfile
+from unittest.mock import patch
+
+from mycel._embedding_plan import (
+    PlanningError, code_place_line, document_place_line, load_tokenizer,
+    plan_batches, plan_chunk, plan_query, validate_plan,
+)
+from mycel._errors import MycelError
+
 
 import hashlib
 import unittest
@@ -46,7 +61,6 @@ class EmbeddingPlanTests(unittest.TestCase):
             offset = part.end_byte
         self.assertEqual(offset, len(raw))
         validate_plan(plan, tokenizer)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

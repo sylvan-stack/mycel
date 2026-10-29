@@ -1,5 +1,14 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Evidence applies within a caller's complete native file/activity change."""
+import json
+from hashlib import sha256
+from unittest.mock import patch
+
+from mycel._activity import AppliedMutation, MutationActivity
+from mycel._errors import MycelError
+from mycel._locks import atomic_transaction
+from mycel._resolver import SourceResolver
+
 
 import unittest
 from uuid import uuid4

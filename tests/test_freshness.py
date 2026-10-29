@@ -1,5 +1,12 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Recursive scheduling, shared time budget and current-index fallback checks."""
+from dataclasses import FrozenInstanceError, replace
+
+from mycel._errors import MycelError
+from mycel._freshness import (ChunkRequirement, Deadline, DeadlineExceeded,
+    DependencyFault, FreshnessDiscovery, FreshnessScope, RefreshResult,
+    RepositoryUpdate, run_freshness)
+
 import unittest
 
 from mycel._freshness import (
@@ -74,7 +81,6 @@ class FreshnessTests(unittest.TestCase):
     def run_check(self, adapter, scope=None, *, seconds=5, no_fresh=False):
         return run_freshness(scope or FreshnessScope(('driver',)), adapter,
             deadline=Deadline.after(seconds, clock=adapter.clock), no_fresh=no_fresh)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

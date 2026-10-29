@@ -1,5 +1,17 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Controlled report-shape fixtures; no real live/eval acceptance is asserted."""
+from copy import deepcopy
+from decimal import Decimal
+from pathlib import Path
+import tempfile
+
+from mycel._classification_payload import ReviewCommandIdentity
+from mycel._coverage import OnDemandProofs
+from mycel._errors import MycelError
+from mycel._evaluation_drift import _fingerprint, _prepare
+from mycel._jev import HTTPResult, route_response, validate_response
+from mycel._provider_deployment import prepare_deployment, require_qualification
+
 import json
 import sys
 import unittest

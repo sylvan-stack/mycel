@@ -1,9 +1,25 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Exact, offline semantic-work lifecycle through configured disposable stores.
 
 Classification replies are deterministic local stand-ins. These checks qualify
 the work/evidence sink; provider execution and its protocols have other owners.
 """
+from copy import deepcopy
+from hashlib import sha256
+from unittest.mock import patch
+
+from psycopg.types.json import Jsonb
+from mycel._errors import MycelError
+from mycel._evidence import EvidenceStore
+from mycel._locks import operation_guard
+from mycel._relate import RelateStore
+from mycel._resolver import SourceResolver
+from mycel._verification import ConfirmationStore
+try:
+    from . import test_generated as generated
+except ImportError:
+    import test_generated as generated
+
 import json
 import unittest
 
@@ -116,7 +132,6 @@ class DriftLifecycleStoreTests(unittest.TestCase):
     def stale(self, connection):
         return connection.execute("SELECT id,chunk_version,dependency,reason FROM public.mycel_stale_reasons "
             "WHERE repository='downstream' ORDER BY id").fetchall()
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

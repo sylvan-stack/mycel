@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured regressions for independently valid and malformed occurrences."""
+
+from mycel._capture import LocationId
+from mycel._dependency_inputs import DependencyCaptureInputs
+from mycel._errors import MycelError
+from mycel._locks import atomic_transaction
+from mycel._relate import RelateStore
+from mycel._relations import RelationApplicationStore
+
 import unittest
 
 from mycel._evidence import EvidenceStore
@@ -80,7 +88,6 @@ class RelationOccurrenceRegressionStoreTests(unittest.TestCase):
         unresolved = self.reports(unresolved=True)
         self.assertEqual([(ref['parsedRef'], ref['line'], ref['fault']) for ref in unresolved],
                          [(SOURCE, 8, 'not_a_ref')])
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

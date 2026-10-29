@@ -1,5 +1,10 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured clones share repository identity and retain independent locations."""
+import os
+
+from mycel._errors import MycelError
+from mycel._scope import RepositoryLocations
+
 import json
 import tempfile
 import unittest

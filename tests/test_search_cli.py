@@ -1,5 +1,17 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Search syntax and offline query fallback across real bounded adapters."""
+from contextlib import contextmanager
+from dataclasses import replace
+import io
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from mycel._cli import parse, run
+from mycel._commands import help_reply
+from mycel._embedding_plan import load_tokenizer
+from mycel._errors import MycelError
+from mycel._search import QueryEmbedding, prepare_query
+
 import json
 import tempfile
 import unittest

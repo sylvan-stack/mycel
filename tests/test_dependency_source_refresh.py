@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Real-store checks for source passes observing surviving foreign dependants."""
+from hashlib import sha256
+from unittest.mock import patch
+
+from mycel._activity import MutationActivity, activity_state
+from mycel._evidence import EvidenceError, EvidenceStore, PinInputs
+from mycel._reconciliation import AssertedRemoval
+from mycel._source_refs import SourceAddress
+
 import json
 import unittest
 from contextlib import ExitStack

@@ -1,5 +1,9 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """A lost store starts new knowledge; an exact store copy preserves evidence."""
+from hashlib import sha256
+
+from mycel._drift_store import DriftStore
+
 
 import json
 import os
@@ -126,7 +130,6 @@ class RebuildGenerationStoreTests(ClassificationStoreFixture):
                     copied.write(tables[table.name])
             for name, (value, called) in sequences.items():
                 connection.execute('SELECT setval(%s::regclass,%s,%s)', ('public.' + name, value, called))
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

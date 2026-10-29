@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured proofs for identity-selected complete located policy production."""
+from unittest.mock import patch
+
+from mycel._activity import MutationActivity, activity_state
+from mycel._declared_refs import _text
+from mycel._located_reconciliation import LocatedCaptureStore
+from mycel._reconciliation import ReconciliationError
+from mycel._settings import load_settings
+
 import unittest
 
 from mycel._capture import capture_repository

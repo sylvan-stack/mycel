@@ -1,5 +1,10 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Exact reads of real generated summaries and their recursive source graph."""
+from unittest.mock import patch
+
+from mycel._freshness import Deadline
+from mycel._read_store import read_from_store
+
 import unittest
 from contextlib import ExitStack
 from uuid import uuid4

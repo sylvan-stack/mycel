@@ -1,10 +1,19 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Synthetic, provider-free operator boundaries; no qualification is measured.
 
 All 200-case sets, staged-binding replies and proof-shaped objects below are
 controlled unit fixtures. They are never the owner's reviewed release corpus,
 actual staged execution, provider results or on-demand requirement acceptance.
 """
+from contextlib import contextmanager, nullcontext
+import io
+
+from mycel._classification_payload import ReviewerRequest
+from mycel._coverage import CheckResult, OnDemandProofs
+from mycel._errors import MycelError
+from mycel._evaluation_drift import _prepare
+from mycel._jev import JevRequest
+
 import importlib.util
 import json
 import sys
@@ -83,7 +92,6 @@ class ProviderOperationTests(unittest.TestCase):
                     patch.object(operation, '_staged_binding', return_value=staged_shape), \
                     patch.object(operation, '_program_stamp', return_value='synthetic-metadata-stamp'):
                 yield root, arguments, reviewer_file, source, staged_shape
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

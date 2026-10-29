@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Origin Coverage over real captures and a disposable PostgreSQL store."""
+from dataclasses import replace
+from unittest.mock import patch
+
+from mycel._errors import MycelError
+from mycel._source_refs import format_entity_uri
+
 import unittest
 
 try:

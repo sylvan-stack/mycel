@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Pure capture and private temporary Git observations, never store acceptance."""
+from dataclasses import FrozenInstanceError, replace
+from unittest.mock import patch
+
+from mycel._errors import MycelError
+from mycel._scope import Folder, RepositoryLocations
+
 
 import json
 import os

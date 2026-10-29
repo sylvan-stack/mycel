@@ -1,5 +1,21 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Public scoped embed acceptance uses the gate's disposable PostgreSQL only."""
+from dataclasses import replace
+
+from mycel._activity import MutationActivity
+from mycel._cli import parse, run
+from mycel._embedding_store import (EmbeddingCounts, EmbeddingStore, PreparedRepository,
+                                   RetainedVersion, VersionEmbedding)
+from mycel._errors import MycelError
+from mycel._locks import atomic_transaction, operation_guard
+from mycel._settings import load_settings
+try:
+    from .test_declared_refs import seed_document
+    from .test_refs import store_state
+except ImportError:
+    from test_declared_refs import seed_document
+    from test_refs import store_state
+
 import json
 import os
 import tempfile

@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Resolver seams and separate genuine disposable-store selection checks."""
+from dataclasses import replace
+from unittest.mock import patch
+
+from mycel._code import chunk_code
+from mycel._errors import MycelError
+from mycel._resolver import ResolvedChunk, ResolvedFile, SourceResolver
+from mycel import _resolver
+
 
 import unittest
 from hashlib import sha256

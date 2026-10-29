@@ -1,5 +1,19 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Voyage acceptance using fictional credentials, service and HTTPS sockets."""
+import io
+import os
+import ssl
+import threading
+import time
+from unittest.mock import patch
+
+from mycel._credentials import Credentials, Secret
+from mycel._embedding_plan import load_tokenizer, plan_batches, plan_chunk, plan_query
+from mycel._errors import MycelError
+from mycel._voyage import (
+    CommitReceipt, HTTPResult, ProviderFailure, VoyageClient, _https_request, _retry_after, _wait,
+)
+
 
 import json
 import tempfile
@@ -86,7 +100,6 @@ class VoyageTests(unittest.TestCase):
     def embed(self, client, batches=None, commit=None):
         return client.embed_repository("repo", self.batches() if batches is None else batches,
                                        commit=commit or self.commit, record_failures=self.record)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

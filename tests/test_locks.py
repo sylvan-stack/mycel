@@ -1,4 +1,4 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """SQL protocol checks plus genuine disposable-store lock acceptance.
 
 Scripted SQL never qualifies an MYC-6 store requirement. Store checks use the
@@ -6,6 +6,16 @@ gate's default product initializer and cannot run without a genuine fixture.
 Only generated test databases are selected. The native backend may privately
 read Mycel's store password when challenged; no paid provider key is acquired.
 """
+from hashlib import sha256
+import json
+from pathlib import Path
+import selectors
+import subprocess
+import sys
+from uuid import UUID, uuid4
+
+from psycopg.types.json import Jsonb
+
 
 import time
 import unittest
@@ -138,7 +148,6 @@ class LockStoreTests(unittest.TestCase):
                 self.fail("conflicting guard was entered")
         self.assertEqual(raised.exception.code, "busy")
         self.assertLess(time.monotonic() - started, 0.5)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

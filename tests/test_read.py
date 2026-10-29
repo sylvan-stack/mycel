@@ -1,5 +1,12 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Exact-read unit proofs over independently retained source selections."""
+from dataclasses import replace
+
+from mycel._errors import MycelError
+from mycel._freshness import (ChunkRequirement, DependencyFault, FreshnessResult,
+                             FreshnessScope, RepositoryStatus)
+from mycel._read import read_chunk, select_chunk
+
 
 import json
 import tempfile

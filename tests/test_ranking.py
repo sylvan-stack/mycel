@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Independent fixtures for accepted ranking constants and ordering rules."""
+from dataclasses import replace
+import random
+
+from mycel._errors import MycelError
+from mycel._ranking import (DocumentCitation, RankingGraph, classify_route,
+                            rank_repository)
+from mycel._retrieval import Candidate, RetrievalChunk
+
 
 import json
 import math
@@ -66,7 +74,6 @@ shared_documents = [{{repo="handbook", paths=["visible"]}}]
 
     def by_id(self, reply):
         return {entry.chunk.identifier: entry for entry in reply.results}
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

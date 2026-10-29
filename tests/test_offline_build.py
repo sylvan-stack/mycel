@@ -1,5 +1,17 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Installed automatic-check provenance and retention boundary fixtures."""
+import json
+import io
+from pathlib import Path
+import subprocess
+import tarfile
+import tempfile
+from unittest.mock import patch
+
+from mycel_build._automatic import _sanitize_report, run_automatic, store_address
+from mycel_build._core import BuildError, digest, json_bytes
+from mycel_build._staging import create_stage
+
 
 import unittest
 
@@ -45,7 +57,6 @@ def report(*, passed=True, errors=0):
 
 class InstalledAutomaticTests(unittest.TestCase):
     pass  # TEST-TIER-EMPTY-SUITE; helpers remain importable.
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

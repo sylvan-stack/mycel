@@ -1,5 +1,17 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured real-store proofs for retained declarations and physical bindings."""
+from dataclasses import replace
+
+from mycel._capture import CapturedFile, FileAlias
+from mycel._code import chunk_code
+from mycel._errors import MycelError
+from mycel._evidence import (EvidenceError, EvidenceStore, SnapshotEvidence, canonical_json,
+                             document_comparisons, exact_comparison)
+from mycel._resolver import SourceResolver
+from mycel._pin_observation import DiskPinObservation
+from mycel._source_bindings import bind_disk_file
+from mycel._source_refs import SourceAddress, read_document_declarations
+
 import json
 import tempfile
 import unittest

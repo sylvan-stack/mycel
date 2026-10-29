@@ -1,5 +1,14 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured-store stale repair proofs with deterministic local services."""
+from dataclasses import replace
+import os
+import signal
+
+from mycel._activity import MutationActivity
+from mycel._errors import MycelError
+from mycel._generated import generated_capture
+from mycel._locks import operation_guard, removal_guard
+
 
 import unittest
 from unittest.mock import patch

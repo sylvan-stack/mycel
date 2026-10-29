@@ -1,5 +1,14 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured current-disk graph and deterministic ranking acceptance."""
+
+from mycel._errors import MycelError
+from mycel._ranking_store import graph_for
+from mycel._retrieval_store import StoreCandidates
+try:
+    from . import test_ingest as ingest_fixtures
+except ImportError:
+    import test_ingest as ingest_fixtures
+
 import math
 import unittest
 from dataclasses import replace

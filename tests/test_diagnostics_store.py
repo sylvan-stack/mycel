@@ -1,5 +1,12 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Real-store info reporting retains every feature row and sequence."""
+from io import StringIO
+import json
+
+from mycel._cli import run
+from mycel._store import STORE_FORMAT
+from test_refs import store_state
+
 import unittest
 
 

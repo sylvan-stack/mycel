@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Dependency decisions only; all SYL-111 store acceptance remains unclaimed."""
+from dataclasses import FrozenInstanceError, replace
+from itertools import permutations
+
+from mycel._reconciliation import (AssertedRemoval, BaselineFault, DependencyRecord,
+    DependencyRequest, GraphEdge, ReconciliationError, plan_dependencies)
+
 import unittest
 from hashlib import sha256
 from pathlib import Path
