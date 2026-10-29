@@ -76,14 +76,16 @@ def _test_classes(tree):
 
 
 def automatic_contract(frozen: dict[str, bytes]) -> dict:
-    """Derive every automatic check and its class kind independently from the captured test sources."""
+    """Derive every top-tier automatic check and its class kind independently from the captured test sources.
+
+    A Build runs the top tier only (SYL-329); the mid tier runs only when the owner asks for it."""
     try:
         declarations = {}
-        if 'tests/qualification-status.json' in frozen:
-            raise BuildError('refused', 'SYL-327 reduced the retained test selection. Full qualification requires an explicitly requested review of the requirement mapping; see TESTS.md.')
-        if any(path.startswith('tests/') and b'# TEST-TIER-DISABLED-BEGIN' in raw
-               for path, raw in frozen.items()):
-            raise BuildError('refused', 'Test sources are commented. Full qualification requires restored sources and an explicitly requested testing task; see MID_TIER.md.')
+        top = [path for path in frozen if path.startswith('tests/top/') and path.endswith('.py')]
+        if not any(path.rsplit('/', 1)[-1].startswith('test_') for path in top):
+            raise BuildError('refused', 'A Build runs the top tier, and tests/top/ has no test source; see TESTS.md.')
+        if any(b'# TEST-TIER-DISABLED-BEGIN' in frozen[path] for path in top):
+            raise BuildError('refused', 'Top-tier test sources are commented. A Build runs the whole top tier; see TESTS.md.')
         modules = {
             path.removeprefix('tests/').removesuffix('.py').replace('/', '.'): ast.parse(raw)
             for path, raw in sorted(frozen.items())
@@ -127,7 +129,7 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
                         name = aliases[head] + ('.' + tail if separator else '')
                     qualified.bases.append(ast.Name(id=name, ctx=ast.Load()))
                 combined.body.append(qualified)
-                if re.fullmatch(r'(?:(?:top|mid)\.)?test_[A-Za-z0-9_]+', module):
+                if re.fullmatch(r'top\.test_[A-Za-z0-9_]+', module):
                     selected.add(qualified.name)
         for class_name, (methods, kind) in _test_classes(combined).items():
             if class_name in selected:
