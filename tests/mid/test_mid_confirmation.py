@@ -27,3 +27,238 @@ class ConfirmationStoreTests(_support.ConfirmationStoreTests):
             # feature or per-repository mutation activity row can survive.
             self.assertEqual(after, before)
 # TEST-TIER-END tests/test_confirmation.py::ConfirmationStoreTests.test_final_audit_callback_source_change_rolls_back_pins_record_and_activity
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/mid/test_mid_confirmation.py::ConfirmationStoreTests.test_confirm_records_exact_dependency_and_related_snapshots_and_renewed_pins_atomically
+# Reason: Narrower case removed from this family after retaining test_final_audit_callback_source_change_rolls_back_pins_record_and_activity. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Confirm records exact dependency and related snapshots and renewed pins atomically.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_confirmation.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_confirm_records_exact_dependency_and_related_snapshots_and_renewed_pins_atomically(self):
+#         self.fixture.answer.write_bytes(self.fixture.answer.read_bytes() +
+#             b'\n<!-- related:\nfixture:@artifact/guide.md#Guide\n-->\n')
+#         with self.base.connect() as connection:
+#             self.fixture.prepare(connection)
+#             old = self.fixture.dependencies(connection)[0][7]
+#             self.fixture.source.write_bytes(b'# Source\nRevised governing source.\n')
+#             self.fixture.publish(connection)
+#             reply = self.confirm(connection, by='ana', how='check')
+#             self.assertEqual((reply['by'], reply['how'], reply['at'], reply['current']),
+#                 ('ana', 'check', '2026-10-11T12:00:00Z', True))
+#             self.assertEqual(reply['textHash'], sha256(b'# Answer\nUnchanged dependant.\n\n<!-- related:\n'
+#                 b'fixture:@artifact/guide.md#Guide\n-->\n').hexdigest())
+#             self.assertEqual(reply['version'], reply['textHash'])
+#             self.assertEqual(len(reply['baselineManifests']), 2)
+#             self.assertEqual(len(reply['sources']), 2)
+#             self.assertNotEqual(self.fixture.dependencies(connection)[0][7], old)
+#             for manifest in reply['baselineManifests']:
+#                 capture = EvidenceStore(connection).read_baseline('downstream', manifest)
+#                 self.assertEqual(capture.manifest.payload['dependant']['snapshot'], reply['dependantSnapshot'])
+#                 self.assertEqual(capture.manifest.payload['capturedAt'], reply['at'])
+#             record, owner = connection.execute('SELECT record,evidence_owner FROM public.mycel_verifications '
+#                 'WHERE id=%s', (reply['id'],)).fetchone()
+#             self.assertEqual({selection['edgeKind'] for selection in record['selections']}, {'declared', 'related'})
+#             refs = connection.execute('SELECT snapshot_hash,manifest_hash FROM public.mycel_evidence_references '
+#                 'WHERE owner=%s ORDER BY ordinal', (owner,)).fetchall()
+#             self.assertEqual({value[1] for value in refs if value[1]}, set(reply['baselineManifests']))
+#             self.assertTrue(all(source['snapshot'].startswith('snapshot:') for source in reply['sources']))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_confirmation.py::ConfirmationStoreTests.test_source_free_confirm_uses_login_read_defaults_and_does_not_mutate_files
+# Reason: Narrower case removed from this family after retaining test_final_audit_callback_source_change_rolls_back_pins_record_and_activity. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Source free confirm uses login read defaults and does not mutate files.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_confirmation.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_source_free_confirm_uses_login_read_defaults_and_does_not_mutate_files(self):
+#         self.fixture.answer.write_bytes(b'# Answer\nIndependent statement.\n')
+#         with self.base.connect() as connection:
+#             self.fixture.prepare(connection)
+#             before = self.fixture.answer.read_bytes()
+#             with patch('mycel._verification.getpass.getuser', return_value='owner-login'):
+#                 reply = self.confirm(connection)
+#             self.assertEqual((reply['by'], reply['how'], reply['current']), ('owner-login', 'read', True))
+#             self.assertEqual((reply['sources'], reply['baselineManifests']), ([], []))
+#             self.assertEqual(self.fixture.answer.read_bytes(), before)
+#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(), (1,))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_confirmation.py::ConfirmationStoreTests.test_confirmation_retains_full_file_and_family_membership_with_every_exact_source
+# Reason: Narrower case removed from this family after retaining test_final_audit_callback_source_change_rolls_back_pins_record_and_activity. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Confirmation retains full file and family membership with every exact source.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_confirmation.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_confirmation_retains_full_file_and_family_membership_with_every_exact_source(self):
+#         code = self.base.code / 'policy.py'
+#         code.write_bytes(b'class Policy:\n    def apply(self):\n        return 1\n')
+#         self.base.commit()
+#         self.fixture.answer.write_bytes(b'---\nsources: ["fixture:@code/policy.py#Policy", '
+#             b'"fixture:@artifact/source.md"]\n---\n# Answer\nReview complete file and family.\n'
+#             b'\n<!-- related:\nfixture:@code/policy.py#Policy\n-->\n')
+#         with self.base.connect() as connection:
+#             self.fixture.prepare(connection)
+#             reply = self.confirm(connection, by='ana')
+#             self.assertEqual(len(reply['baselineManifests']), 3)
+#             self.assertEqual(len(reply['sources']), 5)
+#             record = connection.execute('SELECT record FROM public.mycel_verifications WHERE id=%s',
+#                 (reply['id'],)).fetchone()[0]
+#             checked = [EvidenceStore(connection).read_baseline('downstream', item['manifest']).manifest.payload
+#                        for item in record['selections']]
+#             self.assertEqual(sorted(value['selection'] for value in checked), ['family', 'family', 'file'])
+#             whole = next(value for value in checked if value['selection'] == 'file')
+#             self.assertEqual(whole['members'][0]['evidence']['hash'], sha256(self.fixture.source_bytes).hexdigest())
+#             for source in reply['sources']:
+#                 raw = connection.execute('SELECT bytes FROM public.mycel_snapshots WHERE repository=%s AND hash=%s',
+#                     ('downstream', source['hash'])).fetchone()[0]
+#                 self.assertEqual(sha256(bytes(raw)).hexdigest(), source['hash'])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_confirmation.py::ConfirmationStoreTests.test_changed_since_ingest_dependant_or_source_refuses_without_publication_or_record
+# Reason: Narrower case removed from this family after retaining test_final_audit_callback_source_change_rolls_back_pins_record_and_activity. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Changed since ingest dependant or source refuses without publication or record.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_confirmation.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_changed_since_ingest_dependant_or_source_refuses_without_publication_or_record(self):
+#         with self.base.connect() as connection:
+#             self.fixture.prepare(connection)
+#             before = self.state(connection)
+#             answer = self.fixture.answer.read_bytes()
+#             self.fixture.answer.write_bytes(answer.replace(b'Unchanged', b'Edited'))
+#             with self.assertRaises(MycelError) as error:
+#                 self.confirm(connection)
+#             self.assertEqual(error.exception.code, 'invalid_input')
+#             self.assertIn('changed_since_ingest', error.exception.message)
+#             self.assertEqual(self.state(connection), before)
+#             self.fixture.answer.write_bytes(answer)
+#             self.fixture.source.write_bytes(b'# Source\nUnpublished source change.\n')
+#             with self.assertRaises(MycelError) as error:
+#                 self.confirm(connection)
+#             self.assertIn('changed_since_ingest', error.exception.message)
+#             self.assertEqual(self.state(connection), before)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_confirmation.py::ConfirmationStoreTests.test_new_invalid_relation_rolls_back_earlier_dependency_repin
+# Reason: Narrower case removed from this family after retaining test_final_audit_callback_source_change_rolls_back_pins_record_and_activity. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: New invalid relation rolls back earlier dependency repin.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_confirmation.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_new_invalid_relation_rolls_back_earlier_dependency_repin(self):
+#         self.fixture.answer.write_bytes(self.fixture.answer.read_bytes() +
+#             b'\n<!-- related:\nfixture:@artifact/missing.md#Absent\n-->\n')
+#         with self.base.connect() as connection:
+#             self.fixture.prepare(connection)
+#             self.fixture.source.write_bytes(b'# Source\nChanged before refused confirmation.\n')
+#             self.fixture.publish(connection)
+#             before = self.state(connection)
+#             with self.assertRaises(MycelError) as error:
+#                 self.confirm(connection)
+#             self.assertEqual(error.exception.code, 'invalid_input')
+#             self.assertEqual(self.state(connection), before)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_confirmation.py::ConfirmationStoreTests.test_deleted_declared_source_withdrawal_keeps_fault_and_independent_old_verification_evidence
+# Reason: Narrower case removed from this family after retaining test_final_audit_callback_source_change_rolls_back_pins_record_and_activity. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Deleted declared source withdrawal keeps fault and independent old verification evidence.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_confirmation.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_deleted_declared_source_withdrawal_keeps_fault_and_independent_old_verification_evidence(self):
+#         with self.base.connect() as connection:
+#             self.fixture.prepare(connection)
+#             first = self.confirm(connection, by='ana')
+#             source = first['sources'][0]
+#             self.fixture.source.unlink()
+#             self.base.commit()
+#             self.fixture.publish(connection)
+#             second = self.confirm(connection, by='ana')
+#             self.assertFalse(second['current'])
+#             self.assertEqual((second['sources'], second['baselineManifests']), ([], []))
+#             self.assertIsNone(self.fixture.dependencies(connection)[0][6])
+#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_ref_faults '
+#                 "WHERE repository='downstream'").fetchone(), (1,))
+#             row = connection.execute('SELECT bytes FROM public.mycel_snapshots WHERE repository=%s AND hash=%s',
+#                 ('downstream', source['hash'])).fetchone()
+#             self.assertEqual(bytes(row[0]), self.fixture.source_bytes)
+#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(), (2,))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_confirmation.py::ConfirmationStoreTests.test_final_audit_callback_relation_withdrawal_rolls_back_complete_confirmation
+# Reason: Narrower case removed from this family after retaining test_final_audit_callback_source_change_rolls_back_pins_record_and_activity. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Final audit callback relation withdrawal rolls back complete confirmation.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_confirmation.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_final_audit_callback_relation_withdrawal_rolls_back_complete_confirmation(self):
+#         self.fixture.answer.write_bytes(self.fixture.answer.read_bytes() +
+#             b'\n<!-- related:\nfixture:@artifact/guide.md#Guide\n-->\n')
+#         with self.base.connect() as connection:
+#             self.fixture.prepare(connection)
+#             before = self.state(connection)
+#             original = MutationActivity.record_in_transaction
+#             def withdraw_after_audit(activity, *args, **kwargs):
+#                 result = original(activity, *args, **kwargs)
+#                 connection.execute("DELETE FROM public.mycel_relations WHERE repository='downstream'")
+#                 return result
+#             with patch.object(MutationActivity, 'record_in_transaction', withdraw_after_audit):
+#                 with self.assertRaises(MycelError) as error:
+#                     self.confirm(connection, build=1)
+#             self.assertIn('changed_since_ingest', error.exception.message)
+#             self.assertEqual(self.state(connection), before)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_confirmation.py::ConfirmationStoreTests.test_required_busy_source_refuses_and_unrelated_busy_repository_does_not_block
+# Reason: Narrower case removed from this family after retaining test_final_audit_callback_source_change_rolls_back_pins_record_and_activity. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Required busy source refuses and unrelated busy repository does not block.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_confirmation.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_required_busy_source_refuses_and_unrelated_busy_repository_does_not_block(self):
+#         unrelated = self.base.base / 'unrelated'
+#         unrelated.mkdir()
+#         self.base.config.write_text(self.base.config.read_text() + '\n[repos.unrelated]\nenabled=true\n'
+#             'artifact_root="' + str(unrelated) + '"\n')
+#         self.fixture.reload()
+#         with self.base.connect() as connection, self.base.connect() as peer:
+#             self.fixture.prepare(connection)
+#             before = self.state(connection)
+#             with operation_guard(peer, 'fixture', 'pass'):
+#                 with self.assertRaises(MycelError) as error:
+#                     self.confirm(connection)
+#                 self.assertEqual(error.exception.code, 'busy')
+#             self.assertEqual(self.state(connection), before)
+#             with operation_guard(peer, 'unrelated', 'pass'):
+#                 self.assertTrue(self.confirm(connection)['current'])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_confirmation.py::ConfirmationStoreTests.test_confirm_keeps_remaining_upstream_staleness_and_records_actual_build_reply
+# Reason: Narrower case removed from this family after retaining test_final_audit_callback_source_change_rolls_back_pins_record_and_activity. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Confirm keeps remaining upstream staleness and records actual build reply.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_confirmation.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_confirm_keeps_remaining_upstream_staleness_and_records_actual_build_reply(self):
+#         guide = self.base.artifact / 'guide.md'
+#         guide.write_bytes(b'# Guide\nOriginal upstream fact.\n')
+#         self.fixture.source.write_bytes(b'---\nsources: ["fixture:@artifact/guide.md#Guide"]\n---\n' + self.fixture.source_bytes)
+#         self.base.commit()
+#         with self.base.connect() as connection:
+#             self.fixture.prepare(connection)
+#             guide.write_bytes(b'# Guide\nChanged upstream fact.\n')
+#             self.fixture.publish(connection)
+#             from mycel._staleness import MechanicalStalenessStore, detection_guards
+#             from mycel._locks import atomic_transaction
+#             with self.fixture.guards(connection), detection_guards(connection, self.base.settings, 'fixture') as guards:
+#                 with atomic_transaction(connection):
+#                     MechanicalStalenessStore(connection).apply_in_transaction(self.base.settings, 'fixture', guards)
+#             reply = self.confirm(connection, build=1)
+#             self.assertTrue(reply['current'])
+#             reasons = connection.execute("SELECT reason FROM public.mycel_stale_reasons WHERE repository='downstream'").fetchall()
+#             self.assertTrue(any(row[0]['kind'] == 'upstream_stale' for row in reasons))
+#             entry = connection.execute("SELECT id FROM public.mycel_activity WHERE repository='downstream' AND kind='confirm'").fetchone()
+#             self.assertEqual(activity_state(connection, entry[0])['counts'], reply)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END

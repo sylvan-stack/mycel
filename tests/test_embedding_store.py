@@ -267,3 +267,183 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/test_embedding_store.py::EmbeddingStoreUnitTests.test_exact_nul_parts_and_durable_receipt_roundtrip_without_projection
+# Reason: Repeats the NUL/receipt round trip in an in-memory SQL emulator; the retained case exercises actual byte storage, a contending connection and restart.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_embedding_store.py
+# Retained evidence at review: EmbeddingStoreAcceptanceTests.test_real_nul_saved_inputs_receipts_and_restart_preserve_exact_bytes
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_exact_nul_parts_and_durable_receipt_roundtrip_without_projection(self):
+#         text = '# Heading\n雪\0body literal \\000\0end\n'
+#         self.seed(text)
+#         writer = self.writer()
+#         with writer.session('fixture'):
+#             prepared = self.prepare(writer,persist=True)
+#             self.assertEqual(prepared.versions[0].plan.text,text)
+#             self.assertEqual(b''.join(part.part.text.encode() for part in prepared.versions[0].parts),text.encode())
+#             self.assertTrue(all(isinstance(row[4],bytes) for row in self.connection.parts.values()))
+#             self.connection.pass_busy = True
+#             writer.commit(self.writes(prepared))
+#             saved = next(iter(self.connection.receipts.values()))[4]
+#             encoded = store._payload_bytes(saved)
+#             self.assertIn(b'\\u0000',encoded)
+#             self.assertEqual(store._receipt_payload(encoded)['plans'][0]['text'],text)
+#             self.assertEqual(self.prepare(writer).counts.deferred_parts,len(prepared.versions[0].parts))
+#             self.connection.pass_busy = False
+#             writer.drain('fixture')
+#             self.assertEqual(self.prepare(writer).counts.embedded_versions,1)
+#         self.assertFalse(self.connection.receipts)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_embedding_store.py::EmbeddingStoreUnitTests.test_saved_input_and_plan_survive_metadata_only_moves
+# Reason: Repeats unchanged-plan assertions after a metadata edit in scripted dictionaries; actual locations, saved spans and vectors are checked together in the retained case.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_embedding_store.py
+# Retained evidence at review: EmbeddingStoreAcceptanceTests.test_exact_version_all_locations_saved_spans_vectors_and_metadata_move_coverage
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_saved_input_and_plan_survive_metadata_only_moves(self):
+#         version = self.seed()
+#         writer = self.writer()
+#         with writer.session("fixture"):
+#             before = self.prepare(writer, persist=True)
+#             writer.commit(self.writes(before))
+#             original = self.prepare(writer)
+#             self.contexts[version] = store.EmbeddingContext("moved.md › New metadata", "document")
+#             self.connection.versions[version]["metadata"] = {"path": "moved.md"}
+#             moved = self.prepare(writer, persist=True)
+#         self.assertEqual(moved.versions[0].id, original.versions[0].id)
+#         self.assertEqual(moved.versions[0].plan, original.versions[0].plan)
+#         self.assertEqual(moved.counts.embedded_versions, 1)
+#         self.assertFalse(moved.batches)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_embedding_store.py::EmbeddingStoreUnitTests.test_same_exact_version_shared_by_locations_embeds_once_and_changed_text_is_pending
+# Reason: The scripted SQL returns one version by construction regardless of its locations count; the retained test creates four actual locations and a changed exact version.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_embedding_store.py
+# Retained evidence at review: EmbeddingStoreAcceptanceTests.test_exact_version_all_locations_saved_spans_vectors_and_metadata_move_coverage
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_same_exact_version_shared_by_locations_embeds_once_and_changed_text_is_pending(self):
+#         version = self.seed(location_count=4)
+#         writer = self.writer()
+#         with writer.session("fixture"):
+#             prepared = self.prepare(writer, persist=True)
+#             self.assertEqual(len(self.writes(prepared)), 1)
+#             writer.commit(self.writes(prepared))
+#             self.seed("# Renamed heading\nexact body\n", chunk=self.connection.versions[version]["chunk"])
+#             updated = self.prepare(writer, persist=True)
+#         self.assertEqual((updated.counts.embedded_versions, updated.counts.pending_versions), (1, 1))
+#         self.assertEqual(len(updated.batches[0].inputs), 1)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_embedding_store.py::EmbeddingStoreUnitTests.test_busy_pass_stages_before_publication_and_next_session_drains_without_resending
+# Reason: Repeats deferred-publication/restart behavior with a boolean busy flag and dictionary receipts; the retained case uses an actual conflicting pass lock and stored receipts.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_embedding_store.py
+# Retained evidence at review: EmbeddingStoreAcceptanceTests.test_busy_pass_durable_batch_is_not_coverage_and_next_session_publishes_without_resend
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_busy_pass_stages_before_publication_and_next_session_drains_without_resending(self):
+#         self.seed()
+#         writer = self.writer()
+#         with writer.session("fixture"):
+#             prepared = self.prepare(writer, persist=True)
+#             self.connection.pass_busy = True
+#             writes = self.writes(prepared)
+#             receipt = writer.commit(writes)
+#             self.assertEqual(receipt.deferred, tuple(value.part for value in writes))
+#             self.assertFalse(receipt.retained)
+#             self.assertFalse(self.connection.vectors)
+#             self.assertEqual(len(self.connection.receipts), 1)
+#             staged = self.prepare(writer)
+#             self.assertEqual(staged.counts.deferred_parts, 1)
+#             self.assertEqual(staged.counts.embedded_versions, 0)
+#             self.assertFalse(staged.batches)
+#             self.assertEqual(staged.estimate["deferredParts"], 1)
+#         with self.assertRaises(MycelError) as failure:
+#             with self.writer().session("fixture"):
+#                 self.fail("busy deferred session must stop before sending")
+#         self.assertEqual(failure.exception.code, "busy")
+#         self.connection.pass_busy = False
+#         replacement = self.writer()
+#         with replacement.session("fixture"):
+#             published = self.prepare(replacement)
+#         self.assertEqual(published.counts.embedded_versions, 1)
+#         self.assertFalse(published.batches)
+#         self.assertFalse(self.connection.receipts)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_embedding_store.py::EmbeddingStoreUnitTests.test_row_contention_retains_the_whole_durable_batch
+# Reason: Boolean-controlled fake row contention duplicates the actual two-connection row-lock/deferred-batch scenario.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_embedding_store.py
+# Retained evidence at review: EmbeddingStoreAcceptanceTests.test_row_lock_defers_whole_response_and_deleted_versions_alone_are_discarded
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_row_contention_retains_the_whole_durable_batch(self):
+#         self.seed(); self.seed("second version")
+#         writer = self.writer()
+#         with writer.session("fixture"):
+#             prepared = self.prepare(writer, persist=True)
+#             self.connection.row_busy = True
+#             writes = self.writes(prepared)
+#             receipt = writer.commit(writes)
+#             self.assertEqual(set(receipt.deferred), {value.part for value in writes})
+#             self.assertFalse(self.connection.vectors)
+#             self.connection.row_busy = False
+#             drained = writer.drain("fixture")
+#         self.assertEqual(len(drained.retained), 2)
+#         self.assertEqual(len(self.connection.vectors), 2)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_embedding_store.py::EmbeddingStoreUnitTests.test_deleted_versions_only_are_discarded_and_unlocated_retained_versions_keep_vectors
+# Reason: Dictionary deletion and location-count mutation repeat the retained actual deletion and unlocated-version publication case.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_embedding_store.py
+# Retained evidence at review: EmbeddingStoreAcceptanceTests.test_row_lock_defers_whole_response_and_deleted_versions_alone_are_discarded
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_deleted_versions_only_are_discarded_and_unlocated_retained_versions_keep_vectors(self):
+#         first = self.seed(); second = self.seed("second")
+#         writer = self.writer()
+#         with writer.session("fixture"):
+#             writes = self.writes(self.prepare(writer, persist=True))
+#             self.connection.delete_version(first)
+#             self.connection.versions[second]["locations"] = 0
+#             receipt = writer.commit(writes)
+#         self.assertEqual({p.chunk_version for p in receipt.deleted}, {str(first)})
+#         self.assertEqual({p.chunk_version for p in receipt.retained}, {str(second)})
+#         self.assertEqual(len(self.connection.vectors), 1)
+#         self.assertFalse(self.connection.receipts)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_embedding_store.py::EmbeddingStoreUnitTests.test_publication_sql_failure_rolls_back_all_vectors_and_keeps_receipt_sanitized
+# Reason: The mock transaction restores copied dictionaries; the retained test injects the same second-INSERT failure after a real first INSERT and verifies rollback, sanitization and receipt recovery.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_embedding_store.py
+# Retained evidence at review: EmbeddingStoreAcceptanceTests.test_actual_sql_transaction_rolls_back_mid_batch_fault_and_durable_receipt_can_resume
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_publication_sql_failure_rolls_back_all_vectors_and_keeps_receipt_sanitized(self):
+#         self.seed(); self.seed("second")
+#         writer = self.writer()
+#         with writer.session("fixture"):
+#             writes = self.writes(self.prepare(writer, persist=True))
+#             self.connection.fail_vector_number = 2
+#             with self.assertRaises(MycelError) as failure:
+#                 writer.commit(writes)
+#             self.assertEqual(failure.exception.code, "store_unavailable")
+#             self.assertNotIn("private", str(failure.exception))
+#             self.assertFalse(self.connection.vectors)
+#             self.assertEqual(len(self.connection.receipts), 1)
+#             self.connection.fail_vector_number = None
+#             writer.drain("fixture")
+#         self.assertEqual(len(self.connection.vectors), 2)
+#         self.assertFalse(self.connection.receipts)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END

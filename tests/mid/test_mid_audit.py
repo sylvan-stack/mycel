@@ -149,3 +149,455 @@ class SemanticAuditStoreTests(_support.SemanticAuditStoreTests):
                 self.assertIsNotNone(connection.execute('SELECT 1 FROM public.mycel_snapshots WHERE hash=%s',(shared.evidence.hash,)).fetchone())
                 self.assertIsNone(connection.execute('SELECT 1 FROM public.mycel_snapshots WHERE hash=%s',(unique.evidence.hash,)).fetchone())
 # TEST-TIER-END tests/test_audit.py::SemanticAuditStoreTests.test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::AuditStoreTests.test_seven_deterministic_rules_use_only_current_indexed_evidence
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Seven deterministic rules use only current indexed evidence.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_seven_deterministic_rules_use_only_current_indexed_evidence(self):
+#         decisions=('\n## Decisions\n\n| Decision | Question | Outcome | Discussion |\n|---|---|---|---|\n'
+#             '| FIX-D1 <!-- 12345678-2222-4333-8444-555555555555 --> | Why? | Decided 19 October 2026 by owner: Keep it. | |\n'
+#             '| FIX-D2 <!-- 22345678-2222-4333-8444-555555555555 --> | Why? | Decided 19 October 2026 by owner: Keep it. | [cht:33333333-2222-4333-8444-555555555555:VGVzdA==] |\n'
+#             '| FIX-D2 <!-- 32345678-2222-4333-8444-555555555555 --> | Why again? | Decided 19 October 2026 by owner: Keep it. | [cht:33333333-2222-4333-8444-555555555555:VGVzdA==] |\n')
+#         (self.artifact/'decisions.md').write_text('# Decisions fixture\n'+decisions)
+#         (self.artifact/'GLOSSARY.md').write_text('# Known term\nAn indexed definition.\n')
+#         (self.artifact/'term.md').write_text('# Terms\n\n<!-- sources:\nfixture:@artifact/GLOSSARY.md#Absent term\n-->\n')
+#         self.ingest();self.justify();self.justify('fixture:@artifact/other.md#FIX-2.1')
+#         self.spec.write_text(self.spec.read_text().replace('return one','return exactly one'))
+#         self.ingest()
+#         # Deliberately changed disk text and a quiet-period violation cannot
+#         # affect deterministic queries over the retained Index Store.
+#         self.source.write_text('def another():\n    return 99\n')
+#         with patch('mycel._credentials.Credentials.require_jev_key',side_effect=AssertionError('no model key')), \
+#              patch('mycel._drift_store.DriftStore._physical',side_effect=AssertionError('no live file observation')):
+#             findings,new=self.deterministic()
+#         self.assertEqual(len(findings),7,findings)
+#         self.assertEqual({item['kind'] for item in findings},set(DETERMINISTIC))
+#         self.assertEqual(new,7)
+#         term=next(item for item in findings if item['kind']=='missing_term')
+#         with self.base.connect() as connection:
+#             retained=[bytes(row[0]) for row in connection.execute('SELECT s.bytes FROM public.mycel_evidence_owners o '
+#                 'JOIN public.mycel_evidence_references r ON r.owner=o.id JOIN public.mycel_snapshots s '
+#                 'ON s.repository=r.repository AND s.hash=r.snapshot_hash WHERE o.identity=%s',(term['observationHash'],)).fetchall()]
+#         self.assertIn((self.artifact/'GLOSSARY.md').read_bytes(),retained)
+#         status,public=public_audit(self,('audit','--repo','fixture','--deterministic'))
+#         self.assertEqual(status,0,public);self.assertEqual(len(public['findings']),7)
+#         self.assertEqual({row['kind'] for row in public['findings']},set(DETERMINISTIC))
+#         self.assertEqual((public['jevCalls'],public['reviewCalls']),(0,0))
+#         self.assertTrue(all(item['subject'] and item['facts'] and item['id'] for item in findings))
+#         self.assertTrue(all(item['links'] for item in findings if item['kind'] in {'multiple_chapters','stale_chain'}))
+#         again,new=self.deterministic();self.assertEqual(new,0)
+#         self.assertEqual(again,findings)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::AuditStoreTests.test_person_settles_with_reason_history_and_exact_observation_never_reopens
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Person settles with reason history and exact observation never reopens.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_person_settles_with_reason_history_and_exact_observation_never_reopens(self):
+#         findings,_=self.deterministic();target=findings[0]
+#         with self.base.connect() as connection:
+#             store=AuditStore(connection)
+#             with self.assertRaises(MycelError):store.settle(self.settings,'fixture',target['id'],reason=' ')
+#             settled,changed=store.settle(self.settings,'fixture',target['id'],reason='Accepted for this fixture.',by='fixture-owner')
+#             self.assertTrue(changed);self.assertEqual(settled['state'],'settled')
+#             self.assertFalse(store.settle(self.settings,'fixture',target['id'],reason='Accepted for this fixture.',by='fixture-owner')[1])
+#             with self.assertRaises(MycelError):store.settle(self.settings,'fixture',target['id'],reason='Changed my mind.',by='fixture-owner')
+#         pending,new=self.deterministic();self.assertEqual(new,0);self.assertNotIn(target['id'],[r['id'] for r in pending])
+#         history,_=self.deterministic(closed=True);self.assertIn(settled,history)
+#         preview,_=self.deterministic(dry_run=True);self.assertNotIn(target['id'],[r['id'] for r in preview])
+#         # A new exact requirement version is a new observable condition.
+#         self.spec.write_text(self.spec.read_text().replace('return one','return exactly one'));self.ingest()
+#         changed,new=self.deterministic();self.assertGreater(new,0)
+#         self.assertNotIn(target['id'],[r['id'] for r in changed])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::AuditStoreTests.test_dry_run_is_readonly_and_paths_are_component_scoped
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Dry run is readonly and paths are component scoped.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_dry_run_is_readonly_and_paths_are_component_scoped(self):
+#         before=self.state();findings,new=self.deterministic(dry_run=True,paths=('value.py',))
+#         self.assertEqual(new,0);self.assertEqual(len(findings),2,findings)
+#         self.assertTrue(all(row['state']=='proposed' and row['path']=='value.py' for row in findings))
+#         self.assertEqual(before,self.state())
+#         empty,_=self.deterministic(paths=('value',));self.assertEqual(empty,[])
+#         with self.assertRaises(MycelError):self.deterministic(paths=('../escape',))
+#         self.assertEqual(before,self.state())
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::AuditStoreTests.test_requirement_marks_and_withdrawal_exempt_only_unresting_requirements
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Requirement marks and withdrawal exempt only unresting requirements.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_requirement_marks_and_withdrawal_exempt_only_unresting_requirements(self):
+#         from mycel._origins import mark_needs_nothing
+#         with self.base.connect() as connection:
+#             mark_needs_nothing(connection,self.settings,'fixture:@artifact/spec.md#FIX-1.1',reason='No implementation is required.',by='fixture-owner')
+#         findings,_=self.deterministic()
+#         unused=[row for row in findings if row['kind']=='unresting_requirement']
+#         self.assertEqual(len(unused),2,unused)
+#         self.assertFalse(any(REQ in row['subject'] for row in unused))
+#         self.spec.write_text(self.spec.read_text().replace('retain an unused contract','Withdrawn: retain an unused contract'));self.ingest()
+#         current,_=self.deterministic(dry_run=True)
+#         proposed=[row for row in current if row['state']=='proposed' and row['kind']=='unresting_requirement']
+#         self.assertFalse(any(UNUSED in row['subject'] for row in proposed))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::AuditStoreTests.test_repeated_human_names_are_ambiguous_but_uuid_diagnostics_remain_auditable
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Repeated human names are ambiguous but uuid diagnostics remain auditable.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_repeated_human_names_are_ambiguous_but_uuid_diagnostics_remain_auditable(self):
+#         from mycel._resolver import SourceResolver
+#         self.spec.write_text(self.spec.read_text().replace('FIX-1.2','FIX-1.1'))
+#         self.ingest()
+#         with self.base.connect() as connection:
+#             catalog=SourceResolver.from_store(connection,self.settings)
+#             self.assertEqual(catalog.resolve('fixture:@artifact/spec.md#FIX-1.1',purpose='endpoint').fault,'ambiguous_name')
+#             from mycel._source_refs import format_entity_uri
+#             self.assertEqual(catalog.resolve(format_entity_uri('req',REQ,'ignored'),purpose='endpoint').state,'resolved')
+#         findings,_=self.deterministic();duplicates=[r for r in findings if r['kind']=='duplicate_id']
+#         self.assertEqual(len(duplicates),1,duplicates)
+#         self.assertEqual(duplicates[0]['facts']['identity'],'FIX-1.1')
+#         self.assertEqual(len(duplicates[0]['facts']['occurrences']),2)
+#         self.spec.write_text(self.spec.read_text().replace(UNUSED,REQ));self.ingest()
+#         findings,_=self.deterministic();duplicates=[r for r in findings if r['kind']=='duplicate_id' and r['facts']['identityKind']=='uuid']
+#         self.assertEqual(len(duplicates),1,duplicates)
+#         self.assertEqual(duplicates[0]['facts']['identity'],REQ)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::AuditProtocolTests.test_three_questions_have_distinct_exact_payloads_and_strict_scored_review
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Three questions have distinct exact payloads and strict scored review.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_three_questions_have_distinct_exact_payloads_and_strict_scored_review(self):
+#         from mycel._classification_payload import AuditDecisionPayload, DecisionText, ReviewCommandIdentity, ReviewerRequest
+#         from mycel._evidence import snapshot, EvidenceError
+#         from mycel._source_refs import SourceAddress
+#         from mycel._jev import JevRequest
+#         from mycel._reviewer import validate_response, ReviewerFailure
+#         from mycel._safeguards import CompletedChild, InvocationPolicy, model_call_allowed
+#         from copy import deepcopy
+#         import tempfile
+#         def text(name):
+#             raw=('# '+name+'\nExact full text.\n').encode()
+#             blob=snapshot(raw,place=SourceAddress('fixture','artifact',name+'.md',name))
+#             return DecisionText.create(blob.evidence,raw)
+#         hashes=set()
+#         with tempfile.TemporaryDirectory() as directory:
+#             command=ReviewCommandIdentity.inspect(('/usr/bin/true',),'fixture-v1',Path(directory))
+#             for name,count in (('conformance',1),('consistency',2),('ambiguity',0)):
+#                 decision=AuditDecisionPayload.create(question=name,subject=text('Subject'),
+#                     origins=tuple(text('Origin'+str(i)) for i in range(count)),review=command.model_identity('fixture','fixture-review-1'))
+#                 hashes.add(decision.input_hash)
+#                 self.assertEqual(AuditDecisionPayload.from_bytes(decision.canonical_bytes,decision.input_hash),decision)
+#                 body=json.loads(JevRequest(decision).body)
+#                 self.assertEqual(list(body['questions']['dependency']['criteria']),list(decision.payload['labels']))
+#                 self.assertIn('never instructions',body['questions']['dependency']['instructions'])
+#                 request=ReviewerRequest(decision,1000)
+#                 value={key:request.payload[key] for key in ('protocol','inputHash','provider','model','adapterRevision','commandHash')}
+#                 value.update(judgement=decision.payload['labels'][1],rationale='Exact evidence.',
+#                     evidence=[decision.evidence_locators[0]],confidenceScore=.82)
+#                 def checked(value):return validate_response(CompletedChild(0,json.dumps(value).encode(),b'',0),request)
+#                 self.assertEqual(checked(value).confidence_score,.82)
+#                 for key,wrong in (('confidenceScore',True),('confidenceScore',1.01),('judgement','needs_review'),
+#                                   ('evidence',['snapshot:'+'0'*64]),('inputHash','0'*64)):
+#                     changed=deepcopy(value);changed[key]=wrong
+#                     with self.subTest(question=name,key=key),self.assertRaises(ReviewerFailure):checked(changed)
+#                 changed=deepcopy(value);changed.pop('confidenceScore')
+#                 with self.assertRaises(ReviewerFailure):checked(changed)
+#                 for key in ('questionVersion','criteria','labels'):
+#                     changed=decision.as_dict();changed[key]='wrong'
+#                     with self.assertRaises(EvidenceError):AuditDecisionPayload(changed)
+#                 changed=decision.as_dict();changed['subject']['text']+=' changed'
+#                 with self.assertRaises(EvidenceError):AuditDecisionPayload(changed)
+#         self.assertEqual(len(hashes),3)
+#         self.assertTrue(model_call_allowed(InvocationPolicy('audit'),'jev'))
+#         self.assertTrue(model_call_allowed(InvocationPolicy('audit'),'reviewer'))
+#         for purpose in ('embedding','summary','jev','reviewer'):
+#             self.assertFalse(model_call_allowed(InvocationPolicy('audit',dry_run=True),purpose))
+#         self.assertFalse(model_call_allowed(InvocationPolicy('audit'),'embedding'))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::SemanticAuditStoreTests.test_three_negative_questions_retain_exact_evidence_lower_only_disputed_link_and_reuse
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Three negative questions retain exact evidence lower only disputed link and reuse.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_three_negative_questions_retain_exact_evidence_lower_only_disputed_link_and_reuse(self):
+#         from mycel._classification_payload import AuditDecisionPayload
+#         self.two_origins()
+#         with self.base.connect() as connection:
+#             before=connection.execute('SELECT to_jsonb(t),xmin::text FROM public.mycel_verifications t ORDER BY id').fetchall()
+#         reply=self.audit(dependencies=self.dependencies())
+#         self.assertEqual(reply['status'],0,reply)
+#         negatives=[row for row in reply['findings'] if row['mode']=='semantic']
+#         self.assertEqual({r['kind'] for r in negatives},{'nonconforming','contradictory','ambiguous'},negatives)
+#         self.assertEqual(len(negatives),3,negatives)
+#         self.assertEqual(reply['completed'],6,reply)
+#         links=self.links();lowered=next(link for link in links if REQ in link['origin'])
+#         conforming=next(link for link in links if OTHER in link['origin'])
+#         self.assertEqual((lowered['confidenceScore'],lowered['confidence'],lowered['method']),(.1,'candidate','stated'))
+#         self.assertEqual(conforming['confidenceScore'],1)
+#         self.assertEqual(lowered['who'],'fixture-owner')
+#         self.assertEqual(lowered['review']['outcome'],'nonconforming')
+#         with self.base.connect() as connection:
+#             self.assertEqual(connection.execute('SELECT to_jsonb(t),xmin::text FROM public.mycel_verifications t ORDER BY id').fetchall(),before)
+#             for digest,raw,metadata in connection.execute("SELECT hash,bytes,metadata FROM public.mycel_manifests WHERE kind='origin_audit_request'").fetchall():
+#                 payload=AuditDecisionPayload.from_bytes(bytes(raw),digest)
+#                 self.assertEqual(payload.input_hash,metadata['record']['inputHash'])
+#                 self.assertEqual(metadata['record']['status'],'complete')
+#             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_audit_request' AND invocation IS NOT NULL").fetchone(),(0,))
+#         again=self.audit(dependencies=self.dependencies())
+#         self.assertEqual(again['status'],0,again);self.assertEqual(again['jevCalls'],0,again)
+#         # The three findings' results are reused; the three without effect are judged already.
+#         self.assertEqual((again['reused'],again['skipped']),(3,3));self.assertEqual(again['newFindings'],0)
+#         disputed=next(row for row in negatives if row['kind']=='nonconforming')
+#         with self.base.connect() as connection:
+#             from psycopg.types.json import Jsonb
+#             AuditStore(connection).settle(self.settings,'fixture',disputed['id'],reason='The owner accepts this discrepancy.',by='fixture-owner')
+#             # Restoring a score without changing the claim cannot make an
+#             # accepted exact observation reopen or lower the link again.
+#             identifier=disputed['links'][0]['id']
+#             state=connection.execute('SELECT state FROM public.mycel_dependencies WHERE id=%s',(identifier,)).fetchone()[0]
+#             state['originLink'].update(confidenceScore=1,confidence='asserted')
+#             connection.execute('UPDATE public.mycel_dependencies SET state=%s WHERE id=%s',(Jsonb(state),identifier))
+#         settled=self.audit(dependencies=self.dependencies())
+#         self.assertEqual(settled['status'],0,settled);self.assertEqual(settled['jevCalls'],0)
+#         self.assertNotIn(disputed['id'],[r['id'] for r in settled['findings']])
+#         self.assertEqual(next(link for link in self.links() if REQ in link['origin'])['confidenceScore'],1)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::SemanticAuditStoreTests.test_changed_input_and_late_activity_edit_roll_back_findings_and_score
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Changed input and late activity edit roll back findings and score.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_changed_input_and_late_activity_edit_roll_back_findings_and_score(self):
+#         self.justify()
+#         reply=self.audit(k=1,paths=('value.py',),dependencies=self.dependencies(changed=lambda request:self.source.write_text('def value():\n    return 9\n')))
+#         self.assertEqual(reply['status'],1,reply);self.assertEqual(reply['jevCalls'],1)
+#         self.assertEqual(self.links()[0]['confidenceScore'],1)
+#         self.assertFalse(any(r['mode']=='semantic' for r in reply['findings']))
+#         self.source.write_text('def value():\n    return 1\n\ndef spare():\n    return 2\n');self.old_files()
+#         # First collect mechanical findings so this callback happens only
+#         # inside the semantic effect transaction.
+#         self.deterministic(paths=('value.py',))
+#         source=self.source
+#         class EditingActivity:
+#             def record_in_transaction(self,*args):source.write_text('def value():\n    return 3\n')
+#         reply=self.audit(k=1,paths=('value.py',),dependencies=self.dependencies(),activity=EditingActivity())
+#         self.assertEqual(reply['status'],1,reply);self.assertEqual(reply['jevCalls'],1)
+#         self.assertEqual(self.links()[0]['confidenceScore'],1)
+#         findings,_=self.deterministic();self.assertFalse(any(r['mode']=='semantic' for r in findings))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::SemanticAuditStoreTests.test_every_method_and_band_is_audited_without_changing_policy_or_verification
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Every method and band is audited without changing policy or verification.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_every_method_and_band_is_audited_without_changing_policy_or_verification(self):
+#         from psycopg.types.json import Jsonb
+#         self.two_origins();self.justify(chunk='fixture:@code/value.py#spare')
+#         self.justify('fixture:@artifact/other.md#FIX-2.1',chunk='fixture:@code/value.py#spare')
+#         with self.base.connect() as connection:
+#             rows=connection.execute("SELECT id,state FROM public.mycel_dependencies WHERE state ? 'originLink' ORDER BY id").fetchall()
+#             expected={}
+#             for (identifier,state),(method,score,band) in zip(rows,[('stated',.1,'candidate'),('proven',.9,'proven'),
+#                     ('inferred',.95,'inferred'),('recovered',.4,'candidate')],strict=True):
+#                 state['originLink'].update(method=method,confidenceScore=score,confidence=band)
+#                 expected[str(identifier)]=state.copy()
+#                 connection.execute('UPDATE public.mycel_dependencies SET state=%s WHERE id=%s',(Jsonb(state),identifier))
+#             verifications=connection.execute('SELECT to_jsonb(t),xmin::text FROM public.mycel_verifications t ORDER BY id').fetchall()
+#         reply=self.audit(k=4,dependencies=self.dependencies(label='nonconforming'))
+#         self.assertEqual(reply['status'],0,reply);self.assertEqual(reply['completed'],4)
+#         self.assertTrue(reply['capped'])
+#         with self.base.connect() as connection:
+#             rows=connection.execute("SELECT id,state FROM public.mycel_dependencies WHERE state ? 'originLink'").fetchall()
+#             self.assertEqual({state['originLink']['method'] for _,state in rows},{'stated','proven','inferred','recovered'})
+#             for identifier,state in rows:
+#                 old=expected[str(identifier)];self.assertEqual(state['originLink']['confidenceScore'],min(old['originLink']['confidenceScore'],.1))
+#                 self.assertEqual({k:v for k,v in state.items() if k!='originLink'},{k:v for k,v in old.items() if k!='originLink'})
+#                 for key in ('chunk','origin','method','who','when'):self.assertEqual(state['originLink'][key],old['originLink'][key])
+#             self.assertEqual(connection.execute('SELECT to_jsonb(t),xmin::text FROM public.mycel_verifications t ORDER BY id').fetchall(),verifications)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::SemanticAuditStoreTests.test_quiet_period_byte_budget_and_uncertain_handoff_have_no_claim_effect
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Quiet period byte budget and uncertain handoff have no claim effect.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_quiet_period_byte_budget_and_uncertain_handoff_have_no_claim_effect(self):
+#         from mycel._jev import JevLimits
+#         self.justify();os.utime(self.source,None)
+#         pending=self.audit(k=1,dependencies=self.dependencies())
+#         self.assertEqual(pending['status'],0,pending);self.assertEqual(pending['jevCalls'],0)
+#         self.assertEqual(pending['pairs'][0]['status'],'pending_debounce')
+#         later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+#         small=replace(self.dependencies(limits=JevLimits(max_input_bytes=1)),utc_now=lambda:later)
+#         oversized=self.audit(k=1,dependencies=small)
+#         self.assertEqual(oversized['status'],0,oversized);self.assertEqual(oversized['jevCalls'],0)
+#         self.assertEqual(oversized['pairs'][0]['status'],'needs_llm_review')
+#         uncertain=self.audit(k=1,dependencies=replace(self.dependencies(top=.4),utc_now=lambda:later))
+#         self.assertEqual(uncertain['status'],0,uncertain);self.assertEqual(uncertain['jevCalls'],1)
+#         # Without a reviewer, nonconforming at probability .4 is below its floor: no finding, nothing pending.
+#         self.assertEqual((uncertain['pairs'][0]['status'],uncertain['pairs'][0]['decided']),('complete','effect'))
+#         self.assertEqual(self.links()[0]['confidenceScore'],1)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::SemanticAuditStoreTests.test_candidate_cap_bounds_unresolved_preparation_before_assembly
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Candidate cap bounds unresolved preparation before assembly.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_candidate_cap_bounds_unresolved_preparation_before_assembly(self):
+#         from mycel._audit_semantic import SemanticAuditStore
+#         from psycopg.types.json import Jsonb
+#         self.two_origins()
+#         with self.base.connect() as connection:
+#             for identifier,state in connection.execute("SELECT id,state FROM public.mycel_dependencies WHERE state ? 'originLink' ORDER BY id").fetchall():
+#                 state['originLink']['origin']='fixture:@artifact/absent.md#Missing'
+#                 connection.execute('UPDATE public.mycel_dependencies SET state=%s WHERE id=%s',(Jsonb(state),identifier))
+#         before=self.state();original=SemanticAuditStore.prepare_pair;attempts=[]
+#         def counted(*args,**kwargs):attempts.append(args[5]);return original(*args,**kwargs)
+#         with patch.object(SemanticAuditStore,'prepare_pair',counted):reply=self.audit(k=1,dry_run=True)
+#         self.assertEqual(reply['status'],0,reply);self.assertEqual(len(attempts),1)
+#         self.assertEqual(reply['selected'],0);self.assertEqual(reply['attempted'],1);self.assertTrue(reply['capped'])
+#         self.assertEqual(reply['pairs'][0]['status'],'unresolved')
+#         self.assertEqual(self.state(),before)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::SemanticAuditStoreTests.test_busy_deadline_terminal_and_transient_failures_are_finite
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Busy deadline terminal and transient failures are finite.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_busy_deadline_terminal_and_transient_failures_are_finite(self):
+#         from mycel._locks import operation_guard
+#         from mycel._freshness import Deadline
+#         from mycel._jev import JevFailure
+#         self.justify()
+#         with self.base.connect() as connection,operation_guard(connection,'fixture','classify'):
+#             busy=self.audit(k=1,dependencies=self.dependencies())
+#         self.assertEqual(busy['status'],1,busy);self.assertEqual(busy['jevCalls'],0)
+#         expired=self.audit(k=1,dependencies=self.dependencies(),deadline=Deadline.after(.000001))
+#         self.assertEqual(expired['status'],1,expired);self.assertTrue(expired['incomplete'])
+#         self.assertEqual(expired['jevCalls'],0)
+#         terminal=self.audit(k=1,dependencies=self.dependencies(failure=JevFailure('authentication')))
+#         self.assertEqual((terminal['status'],terminal['jevCalls']),(1,1),terminal)
+#         transient=self.audit(k=1,dependencies=self.dependencies(failure=JevFailure('connection')))
+#         self.assertEqual((transient['status'],transient['jevCalls']),(1,2),transient)
+#         self.assertEqual(len(transient['pairs'][0]['attempts']),2)
+#         self.assertEqual(self.links()[0]['confidenceScore'],1)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::SemanticAuditStoreTests.test_corrupt_cached_stage_is_refused_without_a_call_or_claim_effect
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Corrupt cached stage is refused without a call or claim effect.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_corrupt_cached_stage_is_refused_without_a_call_or_claim_effect(self):
+#         from psycopg.types.json import Jsonb
+#         self.justify()
+#         first=self.audit(k=1,dependencies=self.dependencies(label='conforms'))
+#         self.assertEqual(first['status'],0,first)
+#         with self.base.connect() as connection:
+#             digest,metadata=connection.execute("SELECT hash,metadata FROM public.mycel_manifests WHERE kind='origin_audit_request'").fetchone()
+#             metadata['record']['confidenceScore']=.99
+#             connection.execute('UPDATE public.mycel_manifests SET metadata=%s WHERE repository=%s AND hash=%s',(Jsonb(metadata),'fixture',digest))
+#             # A result retained without its judgement, as before store format 5.
+#             connection.execute('DELETE FROM public.mycel_judgements')
+#         reply=self.audit(k=1,dependencies=self.dependencies())
+#         self.assertEqual(reply['status'],1,reply);self.assertEqual(reply['jevCalls'],0)
+#         self.assertEqual(reply['pairs'][0]['reason'],'snapshot_corrupt')
+#         self.assertEqual(self.links()[0]['confidenceScore'],1)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::SemanticAuditStoreTests.test_public_command_records_mutations_settlement_and_readonly_dryrun
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Public command records mutations settlement and readonly dryrun.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_public_command_records_mutations_settlement_and_readonly_dryrun(self):
+#         self.justify()
+#         status,preview=public_audit(self,('audit','--repo','fixture','--dry-run'),self.dependencies())
+#         self.assertEqual(status,0,preview);self.assertEqual(preview['jevCalls'],0)
+#         before=self.state()
+#         with patch('mycel._credentials.Credentials.require_jev_key',side_effect=AssertionError('deterministic mode forbids models')):
+#             status,reply=public_audit(self,('audit','--repo','fixture','--deterministic'))
+#         self.assertEqual(status,0,reply);self.assertGreater(reply['newFindings'],0)
+#         target=reply['findings'][0]
+#         status,settled=public_audit(self,('audit','--repo','fixture','--settle',target['id'],'--reason','Reviewed and accepted.','--by','fixture-owner'))
+#         self.assertEqual(status,0,settled);self.assertEqual(settled['settled']['state'],'settled')
+#         status,history=public_audit(self,('audit','--repo','fixture','--deterministic','--closed'))
+#         self.assertEqual(status,0,history);self.assertIn(settled['settled'],history['findings'])
+#         status,semantic=public_audit(self,('audit','--repo','fixture','--k','1'),self.dependencies())
+#         self.assertEqual(status,0,semantic);self.assertEqual(semantic['jevCalls'],1)
+#         with self.base.connect() as connection:
+#             activities=connection.execute("SELECT counts,outcome FROM public.mycel_activity WHERE kind='audit' ORDER BY id").fetchall()
+#         self.assertEqual(len(activities),3,activities)
+#         self.assertTrue(all(outcome=='done' for _,outcome in activities))
+#         before=self.state()
+#         status,_=public_audit(self,('audit','--repo','fixture','--dry-run','--deterministic'))
+#         self.assertEqual(status,0);self.assertEqual(before,self.state())
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::SemanticAuditStoreTests.test_adapter_cancellation_returns_interrupted_status_without_effects
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Adapter cancellation returns interrupted status without effects.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_adapter_cancellation_returns_interrupted_status_without_effects(self):
+#         self.justify();cancelled=[False]
+#         def stop(request):cancelled[0]=True
+#         dependencies=replace(self.dependencies(changed=stop),cancelled=lambda:cancelled[0])
+#         reply=self.audit(k=1,dependencies=dependencies)
+#         self.assertEqual(reply['status'],2,reply);self.assertTrue(reply['incomplete'])
+#         self.assertEqual(reply['jevCalls'],1);self.assertEqual(reply['completed'],0)
+#         self.assertEqual(self.links()[0]['confidenceScore'],1)
+#         self.assertFalse(any(row['mode']=='semantic' for row in reply['findings']))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_audit.py::AuditInputTests.test_cli_options_scopes_settlement_and_count_validation
+# Reason: Narrower case removed from this family after retaining test_a_series_of_audit_steps_keeps_its_work_and_never_sends_a_pair_twice, test_real_isolated_reviewer_routes_each_question_with_exact_scored_evidence, test_interrupt_preserves_completed_prefix_and_releases_request_leases, test_clone_quiet_clocks_and_findings_are_isolated_while_exact_results_are_shared, test_newest_thousand_closed_and_ended_bundles_preserve_open_live_and_shared_evidence. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Cli options scopes settlement and count validation.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_audit.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_cli_options_scopes_settlement_and_count_validation(self):
+#         from mycel._cli import parse
+#         self.assertEqual(parse(('audit','--repo','fixture','--path','src/./audit','--deterministic')).arguments,
+#             ('--path','src/audit','--deterministic'))
+#         self.assertEqual(parse(('audit','--repo','fixture','--settle',REQ,'--reason','Accepted.','--by','owner')).arguments,
+#             ('--settle',REQ,'--reason','Accepted.','--by','owner'))
+#         for arguments in (('audit','positional'),('audit','--all'),('audit','--k','0'),
+#                 ('audit','--repo','one','--repo','two'),('audit','--path','../escape'),('audit','--reason','No target'),
+#                 ('audit','--settle','wrong','--reason','Reason'),('audit','--settle',REQ),
+#                 ('audit','--settle',REQ,'--reason',' '),('audit','--settle',REQ,'--reason','Reason','--dry-run')):
+#             with self.subTest(arguments=arguments),self.assertRaises(MycelError):parse(arguments)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END

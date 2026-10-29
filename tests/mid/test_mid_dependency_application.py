@@ -37,3 +37,219 @@ class DependencyApplicationStoreTests(_support.DependencyApplicationStoreTests):
             self.assertIn(str(index_id), error.exception.cycle)
             self.assertEqual(self.rows(connection), before)
 # TEST-TIER-END tests/test_dependency_application.py::DependencyApplicationStoreTests.test_index_generation_edges_cannot_hide_a_cycle_from_an_unrelated_document
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/mid/test_mid_dependency_application.py::RetainedResolverUnitTests.test_policy_wrappers_reuse_validated_catalog_bytes_and_keep_selection_rules
+# Reason: Narrower case removed from this family after retaining test_index_generation_edges_cannot_hide_a_cycle_from_an_unrelated_document. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Policy wrappers reuse validated catalog bytes and keep selection rules.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_dependency_application.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_policy_wrappers_reuse_validated_catalog_bytes_and_keep_selection_rules(self):
+#         from mycel import _resolver
+#         try:
+#             from .test_resolver import settings, chunk, file
+#         except ImportError:
+#             from test_resolver import settings, chunk, file
+#         members = tuple(chunk(f'Part{i}', f'Body {i}', number=i + 1) for i in range(100))
+#         retained = file('guide.md', 'whole file', members=members)
+#         with patch.object(_resolver, '_exact', wraps=_resolver._exact) as exact:
+#             catalog = SourceResolver(settings(), (retained,))
+#             validations = exact.call_count
+#             self.assertGreaterEqual(validations, len(members))
+#             for member in members:
+#                 policy = RetainedDependencyResolver(catalog, {})
+#                 ref = f'fixture:@artifact/guide.md#{member.name}'
+#                 self.assertEqual(policy.resolve(ref), catalog.resolve(ref))
+#                 self.assertEqual(policy.resolve('disabled:guide.md').fault, 'disabled_repository')
+#                 self.assertEqual(policy.resolve('fixture:guide.md', purpose='endpoint').fault,
+#                                  'one_chunk_required')
+#             self.assertEqual(exact.call_count, validations,
+#                              'Per-chunk policy must not rehash the complete immutable catalog')
+#         # Invalid input still fails at the catalog boundary, before any adapter.
+#         with self.assertRaises(MycelError):
+#             SourceResolver(settings(), (replace(retained, snapshot_hash='0' * 64),))
+#         with self.assertRaises(MycelError):
+#             RetainedDependencyResolver(object(), {})
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_dependency_application.py::DependencyApplicationStoreTests.test_aliases_and_duplicates_keep_one_location_baseline_and_removal_releases_only_disk
+# Reason: Narrower case removed from this family after retaining test_index_generation_edges_cannot_hide_a_cycle_from_an_unrelated_document. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Aliases and duplicates keep one location baseline and removal releases only disk.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_dependency_application.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_aliases_and_duplicates_keep_one_location_baseline_and_removal_releases_only_disk(self):
+#         self.prepare()
+#         with self.fixture.connect() as connection:
+#             self.publish(connection)
+#             before = self.rows(connection)
+#             path = self.fixture.artifact / 'guide.md'
+#             path.write_bytes(path.read_bytes().replace(b'sources: ["fixture:@artifact/source.md#Source"]',
+#                 b'sources: ["fixture:source.md#Source", "fixture:@artifact/source.md#Source"]'))
+#             result = self.publish(connection)
+#             after = self.rows(connection)
+#             self.assertEqual([(row[0], row[5]) for row in before], [(row[0], row[5]) for row in after])
+#             self.assertEqual(result.counts['pinsCaptured'], 0)
+#             disk = next(row for row in after if row[4]['declarationLocation']['kind'] == 'disk')
+#             self.assertEqual(len(disk[4]['occurrences']), 2)
+#             self.assertEqual(disk[2], 'fixture:@artifact/source.md#Source')
+#             path.write_bytes(b'---\nrole: authored\n---\n# Guide\nPlain body.\n')
+#             released = self.publish(connection)
+#             surviving = self.rows(connection)
+#             self.assertEqual(len(surviving), 1)
+#             self.assertEqual(surviving[0][4]['declarationLocation']['kind'], 'branch')
+#             self.assertEqual(released.counts['dependenciesReleased'], 1)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_dependency_application.py::DependencyApplicationStoreTests.test_assertions_match_alias_and_remove_only_the_requested_selection
+# Reason: Narrower case removed from this family after retaining test_index_generation_edges_cannot_hide_a_cycle_from_an_unrelated_document. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Assertions match alias and remove only the requested selection.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_dependency_application.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_assertions_match_alias_and_remove_only_the_requested_selection(self):
+#         self.prepare(declared=False)
+#         with self.fixture.connect() as connection:
+#             self.publish(connection)
+#             with self.guards(connection), atomic_transaction(connection):
+#                 added = self.apply(connection, assertions=('fixture:@artifact/source.md#Source',
+#                                                           'fixture:@artifact/source.md'))
+#                 self.assertEqual(added.captured, 2)
+#             before = self.rows(connection)
+#             with self.guards(connection), atomic_transaction(connection):
+#                 observed = self.apply(connection, assertions=('fixture:source.md#Source',))
+#                 self.assertEqual(observed.captured, 0)
+#                 self.assertEqual(len(self.rows(connection)), 2)
+#                 removed = self.apply(connection, remove_assertions=(AssertedRemoval(
+#                     SourceAddress('fixture', 'artifact', 'source.md', 'Source'), 'chunk'),))
+#                 self.assertEqual(removed.released, 1)
+#             remaining = self.rows(connection)
+#             self.assertEqual(len(remaining), 1)
+#             self.assertEqual(remaining[0][3], 'fixture:@artifact/source.md')
+#             self.assertIn((remaining[0][0], remaining[0][5]), {(row[0], row[5]) for row in before})
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_dependency_application.py::DependencyApplicationStoreTests.test_file_selection_absent_on_disk_is_away_while_branch_file_survives
+# Reason: Narrower case removed from this family after retaining test_index_generation_edges_cannot_hide_a_cycle_from_an_unrelated_document. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: File selection absent on disk is away while branch file survives.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_dependency_application.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_file_selection_absent_on_disk_is_away_while_branch_file_survives(self):
+#         self.prepare(file_selection=True)
+#         with self.fixture.connect() as connection:
+#             self.publish(connection)
+#             before = self.rows(connection)
+#             (self.fixture.artifact / 'source.md').unlink()
+#             self.publish(connection)
+#             with self.guards(connection), atomic_transaction(connection):
+#                 reply = self.apply(connection)
+#                 self.assertEqual(reply.plan.decisions[0].source_state, 'away')
+#                 self.assertEqual(reply.plan.decisions[0].reasons, ('source_removed',))
+#                 self.assertEqual(reply.plan.role, 'derived')
+#             self.assertEqual([(row[0], row[5]) for row in self.rows(connection)],
+#                              [(row[0], row[5]) for row in before])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_dependency_application.py::DependencyApplicationStoreTests.test_incomplete_baseline_owner_graph_refuses_without_fresh_capture
+# Reason: Narrower case removed from this family after retaining test_index_generation_edges_cannot_hide_a_cycle_from_an_unrelated_document. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Incomplete baseline owner graph refuses without fresh capture.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_dependency_application.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_incomplete_baseline_owner_graph_refuses_without_fresh_capture(self):
+#         self.prepare()
+#         with self.fixture.connect() as connection:
+#             self.publish(connection)
+#             disk = next(row for row in self.rows(connection) if row[4]['declarationLocation']['kind'] == 'disk')
+#             with self.guards(connection), atomic_transaction(connection):
+#                 connection.execute('DELETE FROM public.mycel_evidence_references WHERE owner=%s AND ordinal=0', (disk[5],))
+#             before = self.rows(connection)
+#             with self.assertRaises(EvidenceError) as error, self.guards(connection), atomic_transaction(connection):
+#                 self.apply(connection, mode='confirm')
+#             self.assertEqual(error.exception.status, 'baseline_missing')
+#             self.assertEqual(self.rows(connection), before)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_dependency_application.py::DependencyApplicationStoreTests.test_generated_authority_is_included_in_the_complete_cycle_check
+# Reason: Narrower case removed from this family after retaining test_index_generation_edges_cannot_hide_a_cycle_from_an_unrelated_document. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Generated authority is included in the complete cycle check.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_dependency_application.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_generated_authority_is_included_in_the_complete_cycle_check(self):
+#         self.prepare()
+#         with self.fixture.connect() as connection:
+#             self.publish(connection)
+#             location, guide_version = self.guide(connection)
+#             source_version = SourceResolver.from_store(connection, self.fixture.settings).resolve(
+#                 'fixture:@artifact/source.md#Source').selection.members[0].chunk.version
+#             generated = uuid4()
+#             with self.guards(connection), atomic_transaction(connection):
+#                 connection.execute("INSERT INTO public.mycel_dependencies VALUES (%s,'fixture',%s,'generated',"
+#                     "'fixture:@artifact/guide.md#Guide','generated','{}',NULL)", (generated, source_version))
+#                 connection.execute('INSERT INTO public.mycel_edges VALUES (%s,%s)', (generated, guide_version))
+#             before = self.rows(connection)
+#             with self.assertRaises(ReconciliationError) as error, self.guards(connection), atomic_transaction(connection):
+#                 self.apply(connection)
+#             self.assertEqual(error.exception.status, 'dependency_cycle')
+#             self.assertEqual(error.exception.cycle[0], error.exception.cycle[-1])
+#             self.assertEqual(self.rows(connection), before)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_dependency_application.py::DependencyApplicationStoreTests.test_incomplete_and_expired_batch_tokens_cannot_hide_pending_authority
+# Reason: Narrower case removed from this family after retaining test_index_generation_edges_cannot_hide_a_cycle_from_an_unrelated_document. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Incomplete and expired batch tokens cannot hide pending authority.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_dependency_application.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_incomplete_and_expired_batch_tokens_cannot_hide_pending_authority(self):
+#         self.prepare()
+#         with self.fixture.connect() as connection:
+#             self.publish(connection)
+#             location, version = self.guide(connection)
+#             source = connection.execute("SELECT l.id,cl.chunk_version FROM public.mycel_file_locations l "
+#                 "JOIN public.mycel_file_versions v ON v.id=l.file_version JOIN public.mycel_files f ON f.id=v.file_id "
+#                 "JOIN public.mycel_locations cl ON cl.file_location=l.id WHERE l.kind='disk' "
+#                 "AND l.metadata->>'path'='source.md'").fetchone()
+#             scopes = ((str(location), version), (str(source[0]), source[1]))
+#             before = self.rows(connection)
+#             with self.assertRaises(MycelError), self.guards(connection), atomic_transaction(connection):
+#                 store = DependencyApplicationStore(connection)
+#                 with store.batch_in_transaction(self.fixture.settings, scopes=scopes) as batch:
+#                     self.apply(connection, batch=batch)
+#             self.assertEqual(self.rows(connection), before)
+#             with self.guards(connection), atomic_transaction(connection):
+#                 store = DependencyApplicationStore(connection)
+#                 with store.batch_in_transaction(self.fixture.settings, scopes=((str(location), version),)) as batch:
+#                     self.apply(connection, batch=batch)
+#                     with self.assertRaises(MycelError):
+#                         self.apply(connection, batch=batch)
+#                 with self.assertRaises(MycelError):
+#                     self.apply(connection, batch=batch)
+#             self.assertEqual(self.rows(connection), before)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_dependency_application.py::DependencyApplicationStoreTests.test_no_transaction_no_guards_and_foreign_version_refuse_before_mutation
+# Reason: Narrower case removed from this family after retaining test_index_generation_edges_cannot_hide_a_cycle_from_an_unrelated_document. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: No transaction no guards and foreign version refuse before mutation.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_dependency_application.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_no_transaction_no_guards_and_foreign_version_refuse_before_mutation(self):
+#         self.prepare()
+#         with self.fixture.connect() as connection:
+#             self.publish(connection)
+#             before = self.rows(connection)
+#             with self.assertRaises(MycelError):
+#                 self.apply(connection)
+#             with self.assertRaises(MycelError), atomic_transaction(connection):
+#                 self.apply(connection)
+#             source = SourceResolver.from_store(connection, self.fixture.settings).resolve(
+#                 'fixture:@artifact/source.md#Source').selection.members[0].chunk.version
+#             with self.assertRaises(MycelError), self.guards(connection), atomic_transaction(connection):
+#                 self.apply(connection, pin_version=source)
+#             self.assertEqual(self.rows(connection), before)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END

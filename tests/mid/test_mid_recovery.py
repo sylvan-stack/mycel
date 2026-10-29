@@ -33,3 +33,677 @@ class RecoveryStoreTests(_support.RecoveryStoreTests):
         with self.base.connect() as connection:
             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_recovery' AND invocation IS NOT NULL").fetchone(),(0,))
 # TEST-TIER-END tests/test_recovery.py::RecoveryStoreTests.test_interrupt_preserves_completed_prefix_and_releases_evidence_leases
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryProtocolTests.test_distinct_question_exact_text_hash_and_policy_boundary
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Distinct question exact text hash and policy boundary.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_distinct_question_exact_text_hash_and_policy_boundary(self):
+#         decision = origin_decision()
+#         body = json.loads(JevRequest(decision).body)
+#         self.assertEqual(list(body['questions']['dependency']['criteria']),list(ORIGIN_LABELS))
+#         self.assertIn('never instructions',body['questions']['dependency']['instructions'])
+#         self.assertEqual(decision,OriginDecisionPayload.from_bytes(decision.canonical_bytes,decision.input_hash))
+#         changed = decision.as_dict();changed['labels']=['needs_review','insufficient_evidence','still_supported']
+#         with self.assertRaises(EvidenceError):OriginDecisionPayload(changed)
+#         changed = decision.as_dict();changed['candidate']['text'] += 'changed'
+#         with self.assertRaises(EvidenceError):OriginDecisionPayload(changed)
+#         self.assertTrue(model_call_allowed(InvocationPolicy('recovery'),'jev'))
+#         self.assertTrue(model_call_allowed(InvocationPolicy('recovery'),'reviewer'))
+#         for purpose in ('embedding','summary','jev','reviewer'):
+#             self.assertFalse(model_call_allowed(InvocationPolicy('recovery',dry_run=True),purpose))
+#         self.assertFalse(model_call_allowed(InvocationPolicy('recovery'),'embedding'))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryProtocolTests.test_origin_review_requires_score_and_matching_labels_and_citations
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Origin review requires score and matching labels and citations.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_origin_review_requires_score_and_matching_labels_and_citations(self):
+#         with tempfile.TemporaryDirectory() as directory:
+#             command=ReviewCommandIdentity.inspect(('/usr/bin/true',),'fixture-v1',Path(directory))
+#             decision=origin_decision(command.model_identity('fixture','fixture-model-1'))
+#             request=ReviewerRequest(decision,1000)
+#             identity={key:request.payload[key] for key in
+#                       ('protocol','inputHash','provider','model','adapterRevision','commandHash')}
+#             valid={**identity,'judgement':'governs','rationale':'The exact contract orders this code.',
+#                    'evidence':[decision.evidence_locators[0]],'confidenceScore':.91}
+#             def validate(value):
+#                 return validate_response(CompletedChild(0,json.dumps(value).encode(),b'',0),request)
+#             self.assertEqual(validate(valid).confidence_score,.91)
+#             for mutation in (lambda value:value.pop('confidenceScore'),
+#                              lambda value:value.update(confidenceScore=True),
+#                              lambda value:value.update(confidenceScore=1.01),
+#                              lambda value:value.update(judgement='still_supported'),
+#                              lambda value:value.update(evidence=['snapshot:'+'0'*64]),
+#                              lambda value:value.update(inputHash='0'*64)):
+#                 value=deepcopy(valid);mutation(value)
+#                 with self.subTest(value=value),self.assertRaises(ReviewerFailure):validate(value)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryProtocolTests.test_cli_scope_and_options_are_exact
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Cli scope and options are exact.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_cli_scope_and_options_are_exact(self):
+#         from mycel._cli import parse
+#         self.assertEqual(parse(('recovery','fixture:@code/value.py#value','--dry-run','--k','3')).arguments,
+#                          ('fixture:@code/value.py#value','--k','3','--dry-run'))
+#         self.assertEqual(parse(('recovery','--repo','fixture','--path','src','--review')).repositories,('fixture',))
+#         for arguments in (('recovery','a','b'),('recovery','a','--path','src'),
+#                           ('recovery','--k','0'),('recovery','--repo','a','--repo','b'),
+#                           ('recovery','--path','../escape')):
+#             with self.subTest(arguments=arguments),self.assertRaises(MycelError):parse(arguments)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_dry_run_lists_each_local_source_without_writes_or_model_credentials
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Dry run lists each local source without writes or model credentials.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_dry_run_lists_each_local_source_without_writes_or_model_credentials(self):
+#         before=self.state()
+#         with patch('mycel._credentials.Credentials.require_jev_key',side_effect=AssertionError('no model key')), \
+#              patch('mycel._classification_runner._jev',side_effect=AssertionError('no model client')), \
+#              patch('mycel._recovery.run_git',wraps=__import__('mycel._safeguards',fromlist=['run_git']).run_git) as git:
+#             reply=self.run_recovery(dry_run=True)
+#         self.assertEqual(reply['status'],0,reply)
+#         self.assertEqual((reply['jevCalls'],reply['reviewCalls']),(0,0))
+#         self.assertTrue(reply['chunks'][0]['history']['available'],reply['chunks'][0]['history'])
+#         candidates=reply['chunks'][0]['candidates']
+#         self.assertTrue(candidates,reply)
+#         self.assertEqual({source for item in candidates for source in item['sources']},{'document','commit','issue'})
+#         self.assertEqual(reply['chunks'][0]['embedding'],{'available':False,'reason':'chunk_vectors_unavailable'})
+#         self.assertTrue(all(item['origin'].startswith('fixture:@') for item in candidates))
+#         self.assertTrue(all(item['status']=='pending_jev' for item in candidates),candidates)
+#         self.assertFalse(any('linear.md' in item['origin'] for item in candidates))
+#         self.assertEqual(before,self.state())
+#         self.assertEqual({call.args[0][0] for call in git.call_args_list},{'rev-parse','log'})
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_tests_are_neither_candidates_nor_sections_to_recover
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Tests are neither candidates nor sections to recover.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_tests_are_neither_candidates_nor_sections_to_recover(self):
+#         reply=self.run_recovery(dry_run=True,chunk=None)
+#         self.assertEqual(reply['status'],0,reply)
+#         self.assertTrue(reply['chunks'],reply)
+#         self.assertFalse(any('tests/test_value.py' in item['chunk'] for item in reply['chunks']),reply)
+#         self.assertFalse(any('test_value.py' in candidate['origin']
+#                              for item in reply['chunks'] for candidate in item['candidates']),reply)
+#         named=self.run_recovery(dry_run=True,chunk='fixture:@code/tests/test_value.py#test_value')
+#         self.assertEqual((named['status'],named['error']['code']),(1,'invalid_input'),named)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_a_name_found_in_many_document_sections_gives_no_name_candidates
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: A name found in many document sections gives no name candidates.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_a_name_found_in_many_document_sections_gives_no_name_candidates(self):
+#         # value names ref.md and symbol.md (linear.md is never a document); ref.md also cites it.
+#         with patch('mycel._recovery._NAME_MATCHES',1):
+#             reply=self.run_recovery(dry_run=True)
+#         self.assertEqual(reply['status'],0,reply)
+#         origins={item['origin'] for item in reply['chunks'][0]['candidates']}
+#         self.assertFalse(any('symbol.md' in origin for origin in origins),origins)
+#         self.assertTrue(any('ref.md' in origin for origin in origins),origins)
+#         self.assertTrue(any('symbol.md' in item['origin'] for item in self.run_recovery(dry_run=True)['chunks'][0]['candidates']))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Embedding candidates use existing complete vectors and uuid uri.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_embedding_candidates_use_existing_complete_vectors_and_uuid_uri(self):
+#         from mycel._resolver import SourceResolver
+#         from test_retrieval_store import RetrievalStoreTests
+#         from mycel import _retrieval_store
+#         with self.base.connect() as connection:
+#             catalog=SourceResolver.from_store(connection,self.settings)
+#             for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1','fixture:@code/tests/test_value.py#test_value'):
+#                 selected=catalog.resolve(ref,purpose='endpoint').selection
+#                 chunk=selected.members[0].chunk
+#                 RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
+#         with patch('mycel._retrieval_store._decode_plan',wraps=_retrieval_store._decode_plan) as decoded:
+#             reply=self.run_recovery(dry_run=True)
+#         self.assertEqual(decoded.call_count,2)  # the target and the requirement, not the test's vector
+#         self.assertEqual(reply['status'],0,reply)
+#         self.assertTrue(reply['chunks'][0]['embedding']['available'])
+#         entities=[item for item in reply['chunks'][0]['candidates'] if 'embedding' in item['sources']]
+#         self.assertTrue(entities,reply)
+#         entity=entities[0]
+#         self.assertEqual(entity['status'],'pending_jev',entity)
+#         self.assertTrue(-1<=entity['similarity']<=1,entity)
+#         self.assertIn(':req:'+REQ+':',entity['origin'])
+#         self.assertEqual((reply['jevCalls'],reply['reviewCalls']),(0,0))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_complete_judgements_write_exact_scores_and_methods_without_verification
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Complete judgements write exact scores and methods without verification.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_complete_judgements_write_exact_scores_and_methods_without_verification(self):
+#         reply=self.run_recovery(dependencies=self.dependencies())
+#         self.assertEqual(reply['status'],0,reply)
+#         self.assertEqual(reply['completed'],reply['selected'])
+#         self.assertEqual(reply['jevCalls'],len(self.calls))
+#         # Only governs writes a link (MYC-D66): the related symbol.md candidate writes none.
+#         links=self.origins();self.assertEqual(len(links),3,links)
+#         self.assertFalse(any('symbol.md' in link['origin'] for link in links))
+#         self.assertEqual({link['method'] for link in links},{'inferred','recovered'})
+#         # Without a reviewer the score is Jev's probability of governs.
+#         self.assertTrue(all(link['confidenceScore']==.9 and link['confidence']=='inferred' for link in links))
+#         self.assertFalse(any('test_value' in link['origin'] for link in links))
+#         with self.base.connect() as connection:
+#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
+#             manifests=connection.execute("SELECT hash,bytes,metadata FROM public.mycel_manifests WHERE kind='origin_recovery'").fetchall()
+#             self.assertEqual(len(manifests),reply['selected'])
+#             for digest,raw,metadata in manifests:
+#                 self.assertEqual(OriginDecisionPayload.from_bytes(bytes(raw),digest).input_hash,digest)
+#                 self.assertEqual(metadata['record']['status'],'complete')
+#             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_evidence_owners WHERE kind='origin_recovery' AND invocation IS NOT NULL").fetchone(),(0,))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_changed_inputs_after_call_have_no_link_or_verification_effect
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Changed inputs after call have no link or verification effect.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_changed_inputs_after_call_have_no_link_or_verification_effect(self):
+#         def changed(request):self.source.write_text('def value():\n    return 2\n')
+#         reply=self.run_recovery(k=1,dependencies=self.dependencies(changed=changed))
+#         self.assertEqual(reply['status'],1,reply)
+#         self.assertEqual(reply['jevCalls'],1)
+#         self.assertEqual(reply['completed'],0)
+#         self.assertEqual(self.origins(),[])
+#         self.assertIn(reply['pairs'][0]['reason'],{'obsolete','changed_since_ingest'})
+#         with self.base.connect() as connection:
+#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_a_step_parses_each_unchanged_file_at_most_once
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: A step parses each unchanged file at most once.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_a_step_parses_each_unchanged_file_at_most_once(self):
+#         # On the owner's store the stored parse history had another capture
+#         # policy, so every check parsed the whole repository again.
+#         from mycel import _capture
+#         with patch('mycel._capture.chunk_code',wraps=_capture.chunk_code) as parsed, \
+#              patch('mycel._disk_reconciliation._parse_history',return_value=None):
+#             reply=self.run_recovery(dependencies=self.dependencies())
+#         self.assertEqual(reply['status'],0,reply)
+#         self.assertGreater(reply['selected'],1,reply)
+#         self.assertLessEqual(parsed.call_count,4)  # two code files, on disk and on branch main, once
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_a_series_of_steps_keeps_its_work_and_never_sends_a_pair_twice
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: A series of steps keeps its work and never sends a pair twice.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_a_series_of_steps_keeps_its_work_and_never_sends_a_pair_twice(self):
+#         dependencies=self.dependencies(label='unrelated')
+#         replies=[]
+#         for _ in range(20):
+#             replies.append(self.run_recovery(chunk=None,k=2,dependencies=dependencies))
+#             self.assertEqual(replies[-1]['status'],0,replies[-1])
+#             if replies[-1]['complete']:
+#                 break
+#         self.assertTrue(replies[-1]['complete'],replies[-1])
+#         self.assertGreater(len(replies),1)
+#         self.assertEqual([reply['remaining'] for reply in replies],
+#                          sorted((reply['remaining'] for reply in replies),reverse=True))
+#         sent=[json.dumps(request['state'],sort_keys=True) for request in self.calls]
+#         self.assertEqual(len(sent),len(set(sent)))
+#         self.assertEqual(sum(reply['jevCalls'] for reply in replies),len(self.calls))
+#         again=self.run_recovery(chunk=None,k=2,dependencies=dependencies)
+#         self.assertEqual((again['jevCalls'],again['selected'],again['remaining'],again['complete']),(0,0,0,True),again)
+#         self.assertEqual(self.origins(),[])
+#         # A judged candidate whose text changes is judged again; its section only.
+#         before=len(self.calls)
+#         (self.artifact/'symbol.md').write_text('---\nrole: authored\n---\n# Symbol contract\nThe symbol value returns one, always.\n')
+#         self.ingest();self.old_files()
+#         observed=self.run_recovery(chunk=None,k=20,dependencies=dependencies)
+#         self.assertEqual((observed['jevCalls'],observed['complete']),(0,False),observed)
+#         later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+#         after=self.run_recovery(chunk=None,k=20,dependencies=replace(dependencies,utc_now=lambda:later))
+#         self.assertEqual(after['status'],0,after)
+#         self.assertTrue(after['complete'],after)
+#         self.assertEqual(after['jevCalls'],len(self.calls)-before)
+#         self.assertTrue(after['jevCalls']>=1 and all('symbol.md' in request['state']['candidate']['snapshot']['place']['path']
+#                                                      for request in self.calls[before:]),self.calls[before:])
+#         # New settings judge everything again.
+#         self.base.config.write_text(self.base.config.read_text()+'\n[drifts]\nconfidence_floor=0.6\n')
+#         changed=self.run_recovery(chunk=None,k=1,dependencies=replace(dependencies,utc_now=lambda:later),
+#                                   settings=load_settings(path=self.base.config,home=self.base.base))
+#         self.assertEqual((changed['jevCalls'],changed['complete']),(1,False),changed)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_a_guide_candidate_carries_no_code_it_cites
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: A guide candidate carries no code it cites.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_a_guide_candidate_carries_no_code_it_cites(self):
+#         reply=self.run_recovery(dependencies=self.dependencies(label='unrelated'))
+#         self.assertEqual(reply['status'],0,reply)
+#         guide=[request for request in self.calls if request['state']['candidate']['snapshot']['place']['path']=='ref.md']
+#         self.assertEqual(len(guide),1,self.calls)
+#         self.assertEqual([item['snapshot']['place']['root'] for item in guide[0]['state']['context']
+#                           if item['snapshot']['place']['root']=='code'],[])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_real_isolated_standin_review_raises_and_lowers_scores_and_bands
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Real isolated standin review raises and lowers scores and bands.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_real_isolated_standin_review_raises_and_lowers_scores_and_bands(self):
+#         self.settings=self.reviewer_settings()
+#         first=self.run_recovery(dependencies=self.dependencies())
+#         self.assertEqual(first['status'],0,first)
+#         reviewed=self.run_recovery(review=True,dependencies=self.dependencies())
+#         self.assertEqual(reviewed['status'],0,reviewed)
+#         self.assertEqual(reviewed['jevCalls'],0)
+#         self.assertEqual(reviewed['reviewCalls'],3,reviewed)
+#         links=self.origins();self.assertEqual(len(links),3)
+#         lowered=next(link for link in links if 'commit.md' in link['origin'])
+#         raised=next(link for link in links if 'ref.md' in link['origin'])
+#         self.assertEqual((lowered['confidenceScore'],lowered['confidence']),(.35,'candidate'))
+#         self.assertEqual((raised['confidenceScore'],raised['confidence']),(.95,'inferred'))
+#         self.assertTrue(all(link['review']['outcome']=='governs' for link in links))
+#         self.assertTrue(all(link['review']['who']=='fixture-review-1' for link in links))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_third_party_snapshots_recover_without_linear_or_remote_reads
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Third party snapshots recover without linear or remote reads.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_third_party_snapshots_recover_without_linear_or_remote_reads(self):
+#         before={str(path):path.read_bytes() for path in self.artifact.glob('*.md')}
+#         with patch('urllib.request.urlopen',side_effect=AssertionError('no remote read')):
+#             reply=self.run_recovery(dependencies=self.dependencies())
+#         self.assertEqual(reply['status'],0,reply)
+#         origins={link['origin'] for link in self.origins()}
+#         self.assertTrue(any('issue.md' in origin for origin in origins))
+#         self.assertTrue(any('commit.md' in origin for origin in origins))
+#         self.assertFalse(any('linear.md' in origin for origin in origins))
+#         self.assertFalse(any('linear.app' in json.dumps(call) for call in self.calls))
+#         self.assertEqual(before,{str(path):path.read_bytes() for path in self.artifact.glob('*.md')})
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Pending debounce and missing reviewer have no paid or link effect.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_pending_debounce_and_missing_reviewer_have_no_paid_or_link_effect(self):
+#         os.utime(self.source,None)
+#         pending=self.run_recovery(k=1,dependencies=self.dependencies())
+#         self.assertEqual(pending['status'],0,pending)
+#         self.assertEqual(pending['jevCalls'],0)
+#         self.assertEqual(pending['pairs'][0]['status'],'pending_debounce')
+#         self.assertEqual(self.origins(),[])
+#         self.old_files()
+#         # An unchanged byte version retains its original observation, even if
+#         # someone restores an older mtime. Re-ingest a new exact version first.
+#         self.source.write_text('def value():\n    return 2\n');self.ingest();self.old_files()
+#         observed=self.run_recovery(k=1,dependencies=self.dependencies(top=.7))
+#         self.assertEqual(observed['pairs'][0]['status'],'pending_debounce')
+#         later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+#         uncertain=self.run_recovery(k=1,dependencies=replace(self.dependencies(top=.4),utc_now=lambda:later))
+#         self.assertEqual(uncertain['status'],0,uncertain)
+#         # Without a reviewer, governs at probability .4 is below the origin floor: no link, nothing pending.
+#         self.assertEqual((uncertain['pairs'][0]['status'],uncertain['pairs'][0]['decided']),('complete','effect'))
+#         self.assertEqual(uncertain['pairs'][0]['confidenceScore'],.4)
+#         self.assertEqual((uncertain['jevCalls'],uncertain['reviewCalls']),(1,0))
+#         self.assertEqual(self.origins(),[])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_path_repository_and_public_chunk_commands_use_same_candidates
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Path repository and public chunk commands use same candidates.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_path_repository_and_public_chunk_commands_use_same_candidates(self):
+#         from mycel._cli import run
+#         with self.base.connect() as connection:
+#             paths=run_recovery(RecoveryStore(connection),self.settings,'fixture',paths=('value.py',),dry_run=True)
+#         self.assertEqual([row['chunk'] for row in paths['chunks']],[self.ref])
+#         with self.base.connect() as connection:
+#             repository=run_recovery(RecoveryStore(connection),self.settings,'fixture',dry_run=True)
+#         self.assertIn(self.ref,[row['chunk'] for row in repository['chunks']])
+#         output,diagnostic=StringIO(),StringIO()
+#         with patch('mycel._cli.load_settings',return_value=self.settings):
+#             status=run(('recovery',self.ref,'--dry-run'),stdout=output,stderr=diagnostic)
+#         self.assertEqual(status,0,output.getvalue())
+#         self.assertEqual(diagnostic.getvalue(),'')
+#         self.assertEqual(json.loads(output.getvalue())['repository'],'fixture')
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_model_claims_survive_ingest_without_source_cycles_and_statement_supersedes
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Model claims survive ingest without source cycles and statement supersedes.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_model_claims_survive_ingest_without_source_cycles_and_statement_supersedes(self):
+#         from mycel._justify import JustifyStore
+#         reply=self.run_recovery(dependencies=self.dependencies())
+#         self.assertEqual(reply['status'],0,reply)
+#         self.ingest()
+#         self.assertEqual(len(self.origins()),3)
+#         with self.base.connect() as connection:
+#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_stale_reasons').fetchone(),(0,))
+#             result=JustifyStore(connection).apply(self.settings,self.ref,'fixture:@artifact/symbol.md#Symbol%20contract')
+#             self.assertEqual(result['link']['method'],'stated')
+#         links=[link for link in self.origins() if 'symbol.md' in link['origin']]
+#         self.assertEqual(len(links),1,links)
+#         self.assertEqual((links[0]['confidenceScore'],links[0]['confidence']),(1.0,'asserted'))
+#         reviewed=self.run_recovery(review=True,dry_run=True)
+#         self.assertFalse(any('symbol.md' in pair['origin'] for pair in reviewed['pairs']))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_clone_clock_and_equal_version_links_belong_only_to_calling_location
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Clone clock and equal version links belong only to calling location.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_clone_clock_and_equal_version_links_belong_only_to_calling_location(self):
+#         clone=self.base.base/'blue'
+#         self.base.git('clone','--no-hardlinks',str(self.code),str(clone),cwd=self.base.base)
+#         self.base.config.write_text(self.base.config.read_text()+'code_clones='+json.dumps([str(clone)])+'\n')
+#         settings=load_settings(path=self.base.config,home=self.base.base)
+#         primary=replace(settings,_cwd=self.code);secondary=replace(settings,_cwd=clone)
+#         self.settings=primary
+#         self.ingest(secondary)
+#         os.utime(clone/'value.py',None)
+#         pending=self.run_recovery(settings=secondary,k=1,dependencies=self.dependencies())
+#         self.assertEqual(pending['status'],0,pending)
+#         self.assertEqual(pending['pairs'][0]['status'],'pending_debounce')
+#         self.assertEqual(pending['jevCalls'],0)
+#         stamp=(datetime.now(timezone.utc)-timedelta(hours=1)).timestamp()
+#         for path in clone.rglob('*.py'):os.utime(path,(stamp,stamp))
+#         later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+#         result=self.run_recovery(settings=secondary,dependencies=replace(self.dependencies(),utc_now=lambda:later))
+#         self.assertEqual(result['status'],0,result)
+#         self.assertEqual(self.origins(),[])
+#         self.settings=secondary
+#         self.assertEqual(len(self.origins()),3)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_byte_budget_and_terminal_fault_never_write_a_link
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Byte budget and terminal fault never write a link.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_byte_budget_and_terminal_fault_never_write_a_link(self):
+#         oversized=self.run_recovery(k=1,dependencies=self.dependencies(limits=JevLimits(max_input_bytes=1)))
+#         self.assertEqual(oversized['status'],0,oversized)
+#         self.assertEqual((oversized['jevCalls'],oversized['reviewCalls']),(0,0))
+#         self.assertEqual(oversized['pairs'][0]['status'],'needs_llm_review')
+#         failed=self.run_recovery(k=1,dependencies=self.dependencies(failure=JevFailure('provider_result_invalid')))
+#         self.assertEqual(failed['status'],1,failed)
+#         self.assertEqual(failed['jevCalls'],1)
+#         self.assertEqual(len(failed['pairs'][0]['attempts']),1)
+#         self.assertEqual(self.origins(),[])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_validated_result_reuse_and_corrupt_cache_refusal
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Validated result reuse and corrupt cache refusal.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_validated_result_reuse_and_corrupt_cache_refusal(self):
+#         from psycopg.types.json import Jsonb
+#         first=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
+#         self.assertEqual(first['status'],0,first)
+#         self.assertEqual(self.origins(),[])
+#         # A result retained without its judgement, as before store format 5,
+#         # is validated and reused.
+#         forget="DELETE FROM public.mycel_judgements"
+#         with self.base.connect() as connection:
+#             connection.execute(forget)
+#         second=self.run_recovery(k=1,dependencies=self.dependencies(label='unrelated'))
+#         self.assertEqual(second['status'],0,second)
+#         self.assertEqual(second['jevCalls'],0)
+#         self.assertTrue(second['pairs'][0]['reused'])
+#         with self.base.connect() as connection:
+#             digest,metadata=connection.execute("SELECT hash,metadata FROM public.mycel_manifests WHERE kind='origin_recovery'").fetchone()
+#             metadata['record']['confidenceScore']=.99
+#             connection.execute('UPDATE public.mycel_manifests SET metadata=%s WHERE repository=%s AND hash=%s',
+#                                (Jsonb(metadata),'fixture',digest))
+#             connection.execute(forget)
+#         corrupt=self.run_recovery(k=1,dependencies=self.dependencies())
+#         self.assertEqual(corrupt['status'],1,corrupt)
+#         self.assertEqual(corrupt['jevCalls'],0)
+#         self.assertEqual(corrupt['pairs'][0]['reason'],'snapshot_corrupt')
+#         self.assertEqual(self.origins(),[])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_unrelated_review_withdraws_only_model_claims
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Unrelated review withdraws only model claims.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_unrelated_review_withdraws_only_model_claims(self):
+#         from mycel._activity import MutationActivity
+#         self.settings=self.reviewer_settings(unrelated=True)
+#         result=self.run_recovery(dependencies=self.dependencies())
+#         self.assertEqual(result['status'],0,result)
+#         self.assertEqual(len(self.origins()),3)
+#         with self.base.connect() as connection,MutationActivity(connection,build=1).session() as activity:
+#             reviewed=run_recovery(RecoveryStore(connection),self.settings,'fixture',chunk=self.ref,
+#                                  review=True,dependencies=self.dependencies(),activity=activity)
+#             self.assertEqual(reviewed['status'],0,reviewed)
+#             activity.finish('done',counts={('fixture','recovery'):reviewed})
+#         self.assertEqual(self.origins(),[])
+#         with self.base.connect() as connection:
+#             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_activity WHERE kind='recovery'").fetchone(),(1,))
+#             self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone(),(0,))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_numbered_public_command_records_committed_origin_mutations
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Numbered public command records committed origin mutations.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_numbered_public_command_records_committed_origin_mutations(self):
+#         from mycel._cli import run
+#         output,diagnostic=StringIO(),StringIO()
+#         with patch('mycel._cli.load_settings',return_value=self.settings), \
+#              patch('mycel._recovery.ClassifyDependencies',return_value=self.dependencies()), \
+#              patch('mycel._build_identity.current_build',return_value=1):
+#             status=run(('recovery',self.ref),stdout=output,stderr=diagnostic)
+#         self.assertEqual(status,0,output.getvalue())
+#         reply=json.loads(output.getvalue());self.assertEqual(reply['completed'],4,reply)
+#         self.assertEqual(diagnostic.getvalue(),'')
+#         with self.base.connect() as connection:
+#             counts,outcome=connection.execute("SELECT counts,outcome FROM public.mycel_activity WHERE kind='recovery'").fetchone()
+#             self.assertEqual(outcome,'done')
+#             self.assertEqual(counts['completed'],4)
+#         self.assertEqual(len(self.origins()),3)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_busy_and_expired_deadline_make_no_model_call
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Busy and expired deadline make no model call.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_busy_and_expired_deadline_make_no_model_call(self):
+#         from mycel._locks import operation_guard
+#         from mycel._freshness import Deadline
+#         with self.base.connect() as connection,operation_guard(connection,'fixture','classify'):
+#             busy=self.run_recovery(k=1,dependencies=self.dependencies())
+#         self.assertEqual(busy['status'],1,busy)
+#         self.assertEqual(busy['jevCalls'],0)
+#         expired=self.run_recovery(k=1,dependencies=self.dependencies(),deadline=Deadline.after(.000001))
+#         self.assertEqual(expired['status'],1,expired)
+#         self.assertTrue(expired['incomplete'])
+#         self.assertEqual(expired['jevCalls'],0)
+#         self.assertEqual(self.origins(),[])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_transient_attempts_stop_at_configured_cap
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Transient attempts stop at configured cap.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_transient_attempts_stop_at_configured_cap(self):
+#         reply=self.run_recovery(k=1,dependencies=self.dependencies(failure=JevFailure('connection')))
+#         self.assertEqual(reply['status'],1,reply)
+#         self.assertEqual(reply['jevCalls'],2)
+#         self.assertEqual(len(reply['pairs'][0]['attempts']),2)
+#         self.assertEqual(self.origins(),[])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Entity title edit keeps uuid origin and review updates one link.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_entity_title_edit_keeps_uuid_origin_and_review_updates_one_link(self):
+#         from mycel._resolver import SourceResolver
+#         from mycel._origins import origins_in_transaction
+#         from test_retrieval_store import RetrievalStoreTests
+#         self.settings=self.reviewer_settings()
+#         with self.base.connect() as connection:
+#             catalog=SourceResolver.from_store(connection,self.settings)
+#             for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1'):
+#                 selected=catalog.resolve(ref,purpose='endpoint').selection
+#                 chunk=selected.members[0].chunk
+#                 RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
+#         initial=self.run_recovery(dependencies=self.dependencies())
+#         self.assertEqual(initial['status'],0,initial)
+#         self.assertEqual(len(self.origins()),4)
+#         spec=self.artifact/'spec.md';spec.write_text(spec.read_text().replace('retain a stable return result','retain an unchanged return result'))
+#         self.ingest();self.old_files()
+#         with self.base.connect() as connection,read_snapshot(connection):
+#             report=origins_in_transaction(connection,self.settings,'fixture',unresting=True)
+#             self.assertFalse(any(REQ in row['origin'] for row in report['unresting']))
+#         observed=self.run_recovery(review=True,dependencies=self.dependencies())
+#         self.assertEqual(observed['status'],0,observed)
+#         later=(datetime.now(timezone.utc)+timedelta(seconds=301)).isoformat()
+#         reviewed=self.run_recovery(review=True,dependencies=replace(self.dependencies(),utc_now=lambda:later))
+#         self.assertEqual(reviewed['status'],0,reviewed)
+#         entities=[link for link in self.origins() if REQ in link['origin']]
+#         self.assertEqual(len(entities),1,entities)
+#         self.assertEqual(entities[0]['confidenceScore'],.95)
+#         self.assertIn('review',entities[0])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_statement_supersedes_moved_uuid_proposal_without_duplicate
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Statement supersedes moved uuid proposal without duplicate.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_statement_supersedes_moved_uuid_proposal_without_duplicate(self):
+#         from mycel._resolver import SourceResolver
+#         from mycel._justify import JustifyStore
+#         from mycel._source_refs import format_entity_uri
+#         from test_retrieval_store import RetrievalStoreTests
+#         with self.base.connect() as connection:
+#             catalog=SourceResolver.from_store(connection,self.settings)
+#             for ref in (self.ref,'fixture:@artifact/spec.md#FIX-1.1'):
+#                 selected=catalog.resolve(ref,purpose='endpoint').selection
+#                 chunk=selected.members[0].chunk
+#                 RetrievalStoreTests().plan(connection,chunk.identifier,chunk.version,chunk.source.decode())
+#         reply=self.run_recovery(dependencies=self.dependencies())
+#         self.assertEqual(reply['status'],0,reply)
+#         (self.artifact/'spec.md').rename(self.artifact/'moved.md');self.ingest()
+#         with self.base.connect() as connection:
+#             stated=JustifyStore(connection).apply(self.settings,self.ref,format_entity_uri('req',REQ,'old display title'))
+#             self.assertEqual(stated['link']['method'],'stated')
+#         entities=[link for link in self.origins() if REQ in link['origin']]
+#         self.assertEqual(len(entities),1,entities)
+#         self.assertEqual(entities[0]['method'],'stated')
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_pair_cap_bounds_exact_preparation_and_repo_skips_authored_roots
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Pair cap bounds exact preparation and repo skips authored roots.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_pair_cap_bounds_exact_preparation_and_repo_skips_authored_roots(self):
+#         original=RecoveryStore.prepare_pair;calls=[]
+#         def counted(*args,**kwargs):
+#             calls.append(args[4]);return original(*args,**kwargs)
+#         with patch.object(RecoveryStore,'prepare_pair',counted):
+#             reply=self.run_recovery(k=1,dry_run=True)
+#         self.assertEqual(reply['status'],0,reply)
+#         self.assertEqual(reply['selected'],1)
+#         self.assertEqual(len(calls),1,calls)
+#         repository=self.run_recovery(chunk=None,k=1,dry_run=True)
+#         self.assertEqual(repository['status'],0,repository)
+#         self.assertTrue(repository['capped'])
+#         for row in repository['chunks']:
+#             self.assertFalse(any(path in row['chunk'] for path in ('ref.md','symbol.md','spec.md')),row)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_recovery.py::RecoveryStoreTests.test_foreign_clone_ref_fault_does_not_make_unchanged_pass_mutate
+# Reason: Narrower case removed from this family after retaining test_an_edit_with_restored_mtime_during_a_step_is_still_caught, test_interrupt_preserves_completed_prefix_and_releases_evidence_leases. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Foreign clone ref fault does not make unchanged pass mutate.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_recovery.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_foreign_clone_ref_fault_does_not_make_unchanged_pass_mutate(self):
+#         from mycel._cli import Invocation
+#         from mycel._ingest import ingest
+#         clone=self.base.base/'blue'
+#         self.base.git('clone','--no-hardlinks',str(self.code),str(clone),cwd=self.base.base)
+#         self.base.config.write_text(self.base.config.read_text()+'code_clones='+json.dumps([str(clone)])+'\n')
+#         settings=load_settings(path=self.base.config,home=self.base.base)
+#         primary=replace(settings,_cwd=self.code);secondary=replace(settings,_cwd=clone)
+#         (self.artifact/'missing.md').write_text('# Missing source\n\n<!-- sources:\nfixture:@code/only.py#only\n-->\n')
+#         (clone/'only.py').write_text('def only():\n    return 1\n')
+#         def capture(selected):
+#             with patch('mycel._build_identity.current_build',return_value=1):
+#                 result=ingest(Invocation('ingest',repositories=('fixture',),settings=selected))
+#             self.assertEqual(result.status,0,result.value)
+#             return result.value['repositories']['fixture']
+#         capture(primary);capture(secondary)
+#         again=capture(secondary)
+#         self.assertFalse(again['changed'],again)
+#         again=capture(primary)
+#         self.assertFalse(again['changed'],again)
+#         self.assertFalse(capture(secondary)['changed'])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END

@@ -265,3 +265,91 @@ class EvidenceStoreTests(unittest.TestCase):
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/test_evidence.py::EvidenceSQLTests.test_pin_exact_version_guard_and_evidence_keep_body_nul
+# Reason: Repeats the same NUL-dependent/source input, pin and snapshot read against an in-memory SQL emulator.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_evidence.py
+# Retained evidence at review: EvidenceStoreTests.test_real_body_nul_pin_and_snapshot_roundtrip_never_uses_projection
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_pin_exact_version_guard_and_evidence_keep_body_nul(self):
+#         observed = inputs(dependant='# Answer\nExact\0answer.\n',source='# Source\nComplete\0source.\n')
+#         self.connection.seed(observed)
+#         identifier = self.store.pin(observed,lambda:observed,dependency_id=uuid4(),kind='declared',
+#             declaration=observed.resolution.declaration,captured_at='2026-10-09T00:00:00Z',authorization='initial_resolution')
+#         baseline = self.store.read_baseline('owner',identifier)
+#         descriptor = evidence.SnapshotEvidence.from_record(json.loads(evidence.canonical_json(baseline.manifest.payload['dependant'])))
+#         self.assertEqual(self.store.read_snapshot('owner',descriptor,textual=True),observed.dependant.chunk.source)
+#         self.assertIn(b'\0',self.store.read_snapshot('owner',descriptor))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_evidence.py::EvidenceSQLTests.test_native_failure_rolls_back_complete_capture_and_sanitizes_detail
+# Reason: Mock rollback restores dictionaries; the retained actual transaction test fails after writing evidence and checks every affected table is empty.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_evidence.py
+# Retained evidence at review: EvidenceStoreTests.test_real_callback_and_mid_transaction_failure_write_no_partial_baseline
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_native_failure_rolls_back_complete_capture_and_sanitizes_detail(self):
+#         self.connection.fail = lambda sql: sql == evidence._INSERT_REFERENCE_SQL
+#         with self.assertRaises(MycelError) as error:
+#             self.pin()
+#         self.assertEqual(error.exception.code.value, 'store_unavailable')
+#         self.assertNotIn('private', str(error.exception))
+#         for data in (self.connection.snapshots, self.connection.manifests, self.connection.owners,
+#                      self.connection.refs, self.connection.dependencies):
+#             self.assertFalse(data)
+#         self.assertEqual(self.connection.events[-1], 'rollback')
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_evidence.py::EvidenceSQLTests.test_confirmation_releases_only_unreferenced_old_owner_and_collects_no_live_evidence
+# Reason: The fake protected-owner set repeats actual verification-owner retention and unprotected-owner collection in the database case.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_evidence.py
+# Retained evidence at review: EvidenceStoreTests.test_real_confirmation_releases_old_live_pin_but_preserves_verification_owner
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_confirmation_releases_only_unreferenced_old_owner_and_collects_no_live_evidence(self):
+#         for protected in (False, True):
+#             with self.subTest(protected=protected):
+#                 dependency = uuid4()
+#                 first = self.pin(identifier=dependency)
+#                 owner = self.connection.dependencies[dependency][-1]
+#                 if protected:
+#                     self.connection.protected.add(owner)
+#                 second = self.pin(identifier=dependency, authorization='owner_confirmation', expected_owner=owner,
+#                                   captured_at='2026-10-09T00:01:00Z')
+#                 self.assertNotEqual(first, second)
+#                 self.assertEqual((owner, 'owner') in self.connection.refs, protected)
+#                 self.assertEqual(('owner', first) in self.connection.manifests, protected)
+#                 self.assertTrue(('owner', second) in self.connection.manifests)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_evidence.py::EvidenceSQLTests.test_inherited_pin_has_new_dependant_version_and_identical_old_source
+# Reason: Repeats evidence inheritance in dictionaries while the retained branch/stash case verifies exact persisted versions and unchanged source evidence.
+# Source: mycel@f606f26b4895fd0a641c4f9eb9088bf177de42aa:tests/test_evidence.py
+# Retained evidence at review: EvidenceStoreTests.test_real_branch_stash_baselines_restore_own_exact_versions_and_inherit_without_source_repin
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_inherited_pin_has_new_dependant_version_and_identical_old_source(self):
+#         dependency = uuid4()
+#         original_id = self.pin(identifier=dependency)
+#         original = self.store.read_baseline('owner', original_id)
+#         dep = document('owner', 'renamed.md', '# Answer\nExact\tanswer.\n', version=2,
+#                        identifier=self.observed.dependant.chunk.identifier)
+#         current = inputs(source='# Source\nNew source\n', source_version=12)
+#         resolver = SourceResolver(current.settings, (dep, current.selection.file))
+#         new = replace(current, dependant=member(dep), dependant_file=dep, catalog=resolver)
+#         self.connection.seed(new)
+#         new_id = self.store.inherit_pin(new, lambda: new, previous_dependency=dependency,
+#                                       dependency_id=uuid4(), authorization='normalized_equivalent_edit')
+#         inherited = self.store.read_baseline('owner', new_id)
+#         self.assertEqual(inherited.manifest.payload['members'], original.manifest.payload['members'])
+#         self.assertEqual(inherited.manifest.payload['pinnedHash'], original.manifest.payload['pinnedHash'])
+#         self.assertEqual(inherited.manifest.payload['dependantVersion'], '2')
+#         self.assertEqual(len(self.connection.dependencies), 2)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END

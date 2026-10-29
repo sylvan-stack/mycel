@@ -173,3 +173,213 @@ class ActivityRetentionStoreTests(_support.ActivityRetentionStoreTests):
             self.assertEqual(peer.execute('SELECT payload FROM public.mycel_embedding_receipts WHERE id=%s',
                                           (left_receipt,)).fetchone()[0], b'fresh retry committed feature')
 # TEST-TIER-END tests/test_activity_retention.py::ActivityRetentionStoreTests.test_stale_repeatable_snapshot_refuses_after_peer_commit_and_rolls_back_feature_then_fresh_retry
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/mid/test_mid_activity_retention.py::ActivityRetentionStoreTests.test_opening_keeps_exact_newest_thousand_independently_for_two_repositories_and_globals
+# Reason: Narrower case removed from this family after retaining test_pruning_all_attached_detail_leaves_baseline_verification_and_classifier_evidence_exact, test_late_open_and_close_prune_failures_rollback_feature_rows_audits_and_deletions, test_group_guards_remain_compatible_with_peer_fk_key_share_and_other_groups, test_stale_repeatable_snapshot_refuses_after_peer_commit_and_rolls_back_feature_then_fresh_retry. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Opening keeps exact newest thousand independently for two repositories and globals.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_activity_retention.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_opening_keeps_exact_newest_thousand_independently_for_two_repositories_and_globals(self):
+#         with self.history.connect() as connection:
+#             self.history.repositories(connection, 'fixture', 'other')
+#             groups = {owner: self.history.seed(connection, owner, 1000)
+#                       for owner in ('fixture', 'other', None)}
+#             for identifiers in groups.values():
+#                 self.history.details(connection, identifiers[0])
+#                 self.history.details(connection, identifiers[-1])
+#             with activity.MutationActivity(connection, build=31).session() as audit:
+#                 for owner in ('fixture', 'other', None):
+#                     kind = 'remove' if owner is None else 'ingest'
+#                     audit.apply(owner, kind, self.history.mutation(owner))
+#                     survivors = self.history.ids(connection, owner)
+#                     self.assertEqual(len(survivors), 1000)
+#                     self.assertEqual(set(survivors[1:]), set(groups[owner][1:]))
+#                     self.assertGreater(survivors[0], groups[owner][-1])
+#                     for untouched in groups.keys() - {owner}:
+#                         self.assertGreaterEqual(len(self.history.ids(connection, untouched)), 1000)
+#                 audit.finish('done')
+#             for owner, identifiers in groups.items():
+#                 self.assertEqual(len(self.history.ids(connection, owner)), 1000)
+#                 for table in ('mycel_activity_files', 'mycel_identity_decisions', 'mycel_activity_classifications'):
+#                     self.assertEqual(connection.execute(f'SELECT count(*) FROM public.{table} WHERE activity=%s',
+#                                                         (identifiers[0],)).fetchone(), (0,))
+#                     self.assertEqual(connection.execute(f'SELECT count(*) FROM public.{table} WHERE activity=%s',
+#                                                         (identifiers[-1],)).fetchone(), (1,))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_activity_retention.py::ActivityRetentionStoreTests.test_only_exact_live_invocations_survive_the_limit_and_closed_protection_eventually_expires
+# Reason: Narrower case removed from this family after retaining test_pruning_all_attached_detail_leaves_baseline_verification_and_classifier_evidence_exact, test_late_open_and_close_prune_failures_rollback_feature_rows_audits_and_deletions, test_group_guards_remain_compatible_with_peer_fk_key_share_and_other_groups, test_stale_repeatable_snapshot_refuses_after_peer_commit_and_rolls_back_feature_then_fresh_retry. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Only exact live invocations survive the limit and closed protection eventually expires.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_activity_retention.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_only_exact_live_invocations_survive_the_limit_and_closed_protection_eventually_expires(self):
+#         with self.history.connect() as owner, self.history.connect() as writer:
+#             self.history.repositories(owner, 'fixture')
+#             with activity.MutationActivity(owner, build=31).session() as live:
+#                 live.apply('fixture', 'ingest', self.history.mutation('fixture'))
+#                 identifier = self.history.ids(owner, 'fixture')[0]
+#                 owner.execute("UPDATE public.mycel_activity SET started_at='2000-01-01' WHERE id=%s", (identifier,))
+#                 dead, = self.history.seed(owner, 'fixture', 1, open_entry=True, at='1999-01-01T00:00:00Z')
+#                 recent = self.history.seed(owner, 'fixture', 1000)
+#                 # A repository operation lock cannot supply the dead entry's
+#                 # invocation key, PID, backend start time and generation.
+#                 with locks.operation_guard(owner, 'fixture', 'pass'):
+#                     removed = self.prune(writer, 'fixture')
+#                 self.assertIn(dead, removed)
+#                 self.assertEqual(set(self.history.ids(writer, 'fixture')), {*recent, identifier})
+#                 live.finish('done')
+#                 self.assertIn(identifier, self.history.ids(writer, 'fixture'))
+#                 self.assertTrue(locks.invocation_is_live(writer, live.invocation))
+#             self.assertEqual(len(self.history.ids(writer, 'fixture')), 1001)
+#             with activity.MutationActivity(writer, build=31).session() as next_writer:
+#                 next_writer.apply('fixture', 'embed', self.history.mutation('fixture'))
+#             survivors = self.history.ids(writer, 'fixture')
+#             self.assertEqual(len(survivors), 1000)
+#             self.assertNotIn(identifier, survivors)
+#             self.assertNotIn(recent[0], survivors)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_activity_retention.py::ActivityRetentionStoreTests.test_concurrent_group_writers_refuse_without_partial_feature_or_prune_then_retry
+# Reason: Narrower case removed from this family after retaining test_pruning_all_attached_detail_leaves_baseline_verification_and_classifier_evidence_exact, test_late_open_and_close_prune_failures_rollback_feature_rows_audits_and_deletions, test_group_guards_remain_compatible_with_peer_fk_key_share_and_other_groups, test_stale_repeatable_snapshot_refuses_after_peer_commit_and_rolls_back_feature_then_fresh_retry. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Concurrent group writers refuse without partial feature or prune then retry.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_activity_retention.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_concurrent_group_writers_refuse_without_partial_feature_or_prune_then_retry(self):
+#         with self.history.connect() as first, self.history.connect() as second:
+#             self.history.repositories(first, 'fixture')
+#             self.history.seed(first, 'fixture', 1000)
+#             raw = b'An independent feature write must roll back with its audit.'
+#             receipt = uuid4()
+#
+#             def second_write(connection):
+#                 # Returned embedding receipts deliberately have no repository
+#                 # FK. This reaches the activity group guard rather than
+#                 # blocking earlier on a feature table's parent-row FK check.
+#                 connection.execute('INSERT INTO public.mycel_embedding_receipts '
+#                     '(id,repository,model,dimensions,payload) VALUES (%s,\'fixture\',\'voyage-code-4\',1024,%s)',
+#                     (receipt, raw))
+#                 return activity.AppliedMutation(True, {'applied': 1})
+#
+#             with activity.MutationActivity(first, build=31).session() as left, \
+#                     activity.MutationActivity(second, build=31).session() as right:
+#                 with locks.mutation_guard(first, 'fixture'), locks.atomic_transaction(first):
+#                     left.record_in_transaction('fixture', 'ingest', activity.AppliedMutation(True, {'applied': 1}))
+#                     with self.assertRaises(MycelError) as error:
+#                         right.apply('fixture', 'embed', second_write)
+#                     self.assertEqual(error.exception.code, 'internal')
+#                     self.assertIsNone(second.execute('SELECT 1 FROM public.mycel_embedding_receipts WHERE id=%s', (receipt,)).fetchone())
+#                     self.assertEqual(len(self.history.ids(second, 'fixture')), 1000)
+#                 right.apply('fixture', 'embed', second_write)
+#                 self.assertEqual(len(self.history.ids(second, 'fixture')), 1000)
+#                 with checked_store(first), locks.atomic_transaction(first):
+#                     ActivityRetentionStore(first).guard_in_transaction('fixture')
+#                     with self.assertRaises(MycelError) as closing:
+#                         right.finish('done')
+#                     self.assertEqual(closing.exception.code, 'internal')
+#                     self.assertEqual(second.execute('SELECT outcome,ended_at FROM public.mycel_activity '
+#                         'WHERE invocation=%s', (right.invocation.id,)).fetchone(), (None, None))
+#                 right.finish('done')
+#                 left.finish('done')
+#             self.assertEqual(len(self.history.ids(first, 'fixture')), 1000)
+#             self.assertIsNotNone(first.execute('SELECT 1 FROM public.mycel_embedding_receipts WHERE id=%s', (receipt,)).fetchone())
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_activity_retention.py::ActivityRetentionStoreTests.test_actual_numbered_initialization_prunes_global_history_atomically_with_dimension_change
+# Reason: Narrower case removed from this family after retaining test_pruning_all_attached_detail_leaves_baseline_verification_and_classifier_evidence_exact, test_late_open_and_close_prune_failures_rollback_feature_rows_audits_and_deletions, test_group_guards_remain_compatible_with_peer_fk_key_share_and_other_groups, test_stale_repeatable_snapshot_refuses_after_peer_commit_and_rolls_back_feature_then_fresh_retry. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Actual numbered initialization prunes global history atomically with dimension change.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_activity_retention.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_actual_numbered_initialization_prunes_global_history_atomically_with_dimension_change(self):
+#         with self.history.connect() as connection:
+#             old = self.history.seed(connection, None, 1000)
+#             self.history.details(connection, old[0])
+#             actual = ActivityRetentionStore.prune_in_transaction
+#
+#             def fail_after_prune(store, repository):
+#                 actual(store, repository)
+#                 raise MycelError('internal', 'The init retention transaction failed.')
+#
+#             before = self.history.state(connection)
+#             with patch.object(ActivityRetentionStore, 'prune_in_transaction', fail_after_prune):
+#                 with self.assertRaises(MycelError):
+#                     initialize_store(connection, dimensions=2048, build=31,
+#                                      address=self.store_fixture.backend.address(self.store_fixture.database))
+#             # Invocation protocol identities may be allocated before a schema
+#             # transaction; the feature schema and all activity remain exact.
+#             after = self.history.state(connection)
+#             for name in before.keys() - {'mycel_invocations', 'mycel_lock_keys'}:
+#                 self.assertEqual(after[name], before[name], name)
+#             self.assertEqual(require_store(connection).dimensions, 1024)
+#             initialize_store(connection, dimensions=2048, build=31,
+#                              address=self.store_fixture.backend.address(self.store_fixture.database))
+#             self.assertEqual(require_store(connection).dimensions, 2048)
+#             identifiers = self.history.ids(connection, None)
+#             self.assertEqual(len(identifiers), 1000)
+#             self.assertNotIn(old[0], identifiers)
+#             self.assertEqual(activity.activity_state(connection, identifiers[0])['kind'], 'init')
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_activity_retention.py::ActivityRetentionStoreTests.test_numbered_repository_removal_deletes_its_history_and_retains_foreign_evidence_and_global_limit
+# Reason: Narrower case removed from this family after retaining test_pruning_all_attached_detail_leaves_baseline_verification_and_classifier_evidence_exact, test_late_open_and_close_prune_failures_rollback_feature_rows_audits_and_deletions, test_group_guards_remain_compatible_with_peer_fk_key_share_and_other_groups, test_stale_repeatable_snapshot_refuses_after_peer_commit_and_rolls_back_feature_then_fresh_retry. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Numbered repository removal deletes its history and retains foreign evidence and global limit.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_activity_retention.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_numbered_repository_removal_deletes_its_history_and_retains_foreign_evidence_and_global_limit(self):
+#         fixture = removal_fixtures.RepositoryRemovalStoreTests()
+#         fixture.store_fixture = self.store_fixture
+#         fixture.setUp()
+#         self.addCleanup(fixture.doCleanups)
+#         with fixture.connect() as connection:
+#             fixture.seed(connection, 'fixture', complete=True)
+#             fixture.seed(connection, 'other', complete=True)
+#             owned = self.history.ids(connection, 'fixture')
+#             other_activity = self.history.ids(connection, 'other')
+#             foreign_details = {table: connection.execute(f'SELECT to_jsonb(t),xmin::text FROM public.{table} t '
+#                 'WHERE activity=ANY(%s) ORDER BY to_jsonb(t)::text', (other_activity,)).fetchall()
+#                 for table in ('mycel_activity_files', 'mycel_identity_decisions', 'mycel_activity_classifications')}
+#             foreign = {table.name: connection.execute(f'SELECT to_jsonb(t),xmin::text FROM public.{table.name} t '
+#                        "WHERE to_jsonb(t)->>'repository'='other' ORDER BY to_jsonb(t)::text").fetchall()
+#                        for table in TABLES}
+#             old = self.history.seed(connection, None, 1000)
+#             self.history.details(connection, old[0])
+#             before = self.history.state(connection)
+#             actual = ActivityRetentionStore.prune_in_transaction
+#
+#             def fail_after_prune(store, repository):
+#                 actual(store, repository)
+#                 raise MycelError('internal', 'The removal retention transaction failed.')
+#
+#             with patch.object(ActivityRetentionStore, 'prune_in_transaction', fail_after_prune):
+#                 with self.assertRaises(MycelError) as error:
+#                     RepositoryRemovalStore(connection).remove(fixture.settings, 'fixture', build=31)
+#             self.assertEqual(error.exception.code, 'internal')
+#             after = self.history.state(connection)
+#             for name in before.keys() - {'mycel_invocations', 'mycel_lock_keys'}:
+#                 self.assertEqual(after[name], before[name], name)
+#             reply = RepositoryRemovalStore(connection).remove(fixture.settings, 'fixture', build=31)
+#             self.assertNotIn('error', reply)
+#             self.assertEqual(self.history.ids(connection, 'fixture'), [])
+#             for table in ('mycel_activity_files', 'mycel_identity_decisions', 'mycel_activity_classifications'):
+#                 self.assertEqual(connection.execute(f'SELECT count(*) FROM public.{table} WHERE activity=ANY(%s)',
+#                                                     (owned,)).fetchone(), (0,))
+#             for table in TABLES:
+#                 self.assertEqual(connection.execute(f'SELECT to_jsonb(t),xmin::text FROM public.{table.name} t '
+#                     "WHERE to_jsonb(t)->>'repository'='other' ORDER BY to_jsonb(t)::text").fetchall(),
+#                     foreign[table.name], table.name)
+#             for table, expected in foreign_details.items():
+#                 self.assertEqual(connection.execute(f'SELECT to_jsonb(t),xmin::text FROM public.{table} t '
+#                     'WHERE activity=ANY(%s) ORDER BY to_jsonb(t)::text', (other_activity,)).fetchall(), expected)
+#             globals_ = self.history.ids(connection, None)
+#             self.assertEqual(len(globals_), 1000)
+#             self.assertNotIn(old[0], globals_)
+#             removal = activity.activity_state(connection, globals_[0])
+#             self.assertIsNone(removal['repository'])
+#             self.assertEqual((removal['kind'], removal['outcome'], removal['counts']), ('remove', 'done', reply))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
