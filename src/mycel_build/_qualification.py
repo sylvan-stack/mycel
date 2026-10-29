@@ -78,6 +78,9 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
     """Derive every automatic check and its class kind independently from the captured test sources."""
     try:
         declarations = {}
+        if any(path.startswith('tests/mid/') and b'# TEST-TIER-DISABLED-BEGIN' in raw
+               for path, raw in frozen.items()):
+            raise BuildError('refused', 'Mid-tier tests are commented. Full qualification requires an explicitly requested testing task; see MID_TIER.md.')
         for path, raw in sorted(frozen.items()):
             if not re.fullmatch(r'tests/test_[A-Za-z0-9_]+\.py', path):
                 continue

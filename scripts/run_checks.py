@@ -55,8 +55,8 @@ def ownership_journal():
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tests", type=Path, default=REPOSITORY / "tests")
-    parser.add_argument("--select", action="append", default=[], metavar="MODULE[.CLASS[.METHOD]]")
+    parser.add_argument("--tests", type=Path, default=REPOSITORY / "tests" / "top")
+    parser.add_argument("--select", action="append", default=[], metavar="MODULE.CLASS.METHOD")
     parser.add_argument("--workers", type=int, default=min(6, os.cpu_count() or 1))
     parser.add_argument("--store-settings", type=Path, help="read only store.address from this settings file")
     parser.add_argument("--report", type=Path, help="write the complete JSON report outside the repository")
@@ -67,6 +67,8 @@ def main() -> int:
             raise CoverageError('Select exact MODULE.CLASS.METHOD cases; broad testing is disabled. See TESTS.md.')
         if arguments.workers < 1:
             raise CoverageError("check workers must be a positive integer")
+        # Case modules live in top/; their existing shared fixtures stay in tests/.
+        sys.path.insert(0, str(REPOSITORY / "tests"))
         sys.path.insert(0, str(arguments.tests.resolve()))
         loader = unittest.TestLoader()
         suite = loader.loadTestsFromNames(arguments.select)
