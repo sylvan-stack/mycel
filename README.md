@@ -256,7 +256,7 @@ Select the configured server with `STORE_SETTINGS`; see the check
 guide for the private database lifecycle and test initialization callback.
 
 Authoritative originals live in `~/Artifacts/mycel/specs/`; the task order
-and live states are maintained in [Linear](https://linear.app/sylvan-stack/document/mycel-implementation-status-and-task-order-45df7721be7b).
+and live states are maintained in [Linear](https://linear.app/amorphius/document/mycel-implementation-status-and-task-order-dd599e5d8424).
 
 The selective148 continuation prepares locked last-record working publication
 after complete qualification while preserving all latest144–147 behavior.
