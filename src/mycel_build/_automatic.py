@@ -46,7 +46,7 @@ backend = (InstalledFixtureBackend(configuration['storeAddress'],
     _ownership_journal=pathlib.Path(configuration['ownershipJournal']))
     if configuration['storeAddress'] else None)
 native = backend
-suite = unittest.defaultTestLoader.discover(str(root / 'tests'))
+suite = unittest.defaultTestLoader.discover(str(root / 'tests' / 'top'), top_level_dir=str(root / 'tests'))
 observed = []
 for check in iter_checks(suite):
     kind = getattr(check, 'check_kind', 'unit')
@@ -219,7 +219,7 @@ def _sanitize_report(raw: bytes, number: int, *, contract: dict) -> dict:
 
 def _run_automatic(program: Path, target: str, frozen: dict[str, bytes], *, source_root: Path,
                   number: str, address: str | None = None, timeout: int = 5400) -> dict:
-    """All declared unit/store checks; never eval/live or working publication."""
+    """All top-tier unit/store checks; never the mid tier, eval/live or working publication."""
     if target not in TARGETS:
         return _failure(target, "The release target is unsupported.")
     expected_machine = "arm64"

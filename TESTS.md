@@ -47,6 +47,10 @@ Restoration under SYL-326 used static checks only. No tests, Builds, provider ca
 
 ## Qualification after SYL-327
 
-The source runner continues to require exact selections. The historical full Build qualification gate now refuses while `tests/qualification-status.json` is present. A separately requested qualification task must review the requirement mapping before restoring that gate. Reduced selections are not historical full qualification. No tests, Builds, provider calls or owner-store operations ran during this pruning.
+The source runner continues to require exact selections. Reduced selections are not historical full qualification: `tests/qualification-status.json` records that a separately requested qualification task must review the requirement mapping before a complete run can write the named checks again. No tests, Builds, provider calls or owner-store operations ran during this pruning.
 
 The review used an AST census of calls, assertions and patch boundaries, followed by targeted inspection of retained case bodies and fixtures. This is risk-based retention, not a runtime proof that the removed coverage is redundant.
+
+## Builds
+
+Since SYL-329 (29 October 2026) a Build runs the top tier only (MYC-D73). Its automatic gate selects every `unit` and `store` check under `tests/top/` and no mid-tier check, and refuses when `tests/top/` has no test source or a top-tier source is commented. The mid tier runs only when the owner asks for a mid-tier run. A passing top-only Build is not full qualification and does not rewrite the named checks.
