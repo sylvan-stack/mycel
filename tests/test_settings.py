@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Settings acceptance with private files and no store or model access."""
+from dataclasses import FrozenInstanceError
+from itertools import combinations
+import os
+import subprocess
+from unittest.mock import patch
+
 
 import json
 import tempfile
@@ -67,7 +73,6 @@ class SettingsTests(unittest.TestCase):
         }
         entries.update(changes)
         return "[drifts]\n" + "\n".join(f"{key} = {toml_value(value)}" for key, value in entries.items())
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

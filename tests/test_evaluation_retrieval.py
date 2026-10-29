@@ -1,10 +1,38 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Actual retrieval producers inside the evaluator's sole read-only snapshot.
 
 These store checks cover actual normal retrieval and explicitly selected-kind
 dispatch for MYC-13.11. They neither qualify the separate full Drift pipeline
 nor measure semantic quality/MYC-4.25.
 """
+from dataclasses import replace
+from io import StringIO
+import json
+import tempfile
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+from mycel._cli import parse, run
+from mycel._errors import MycelError
+from mycel._evaluate import evaluate
+from mycel._evaluation import (EvaluationSet, PreparedQueryVector, RetrievalQuery,
+                               run_retrieval_evaluation)
+from mycel._evaluation_store import NormalQueryVectors, StoreRetrieval
+from mycel._locks import atomic_transaction
+from mycel._resolver import SourceResolver
+from mycel._retrieval_store import (CandidateSnapshot, StoreCandidates,
+                                    candidate_snapshot_in_transaction)
+from mycel._search import QueryEmbedding
+from mycel._search_reply import SEARCH_REPLY
+from mycel._safeguards import InvocationPolicy
+from mycel._settings import _freeze, load_settings
+try:
+    from . import test_evaluate_cli as cli_fixtures
+    from . import test_read_store as read_fixtures
+except ImportError:
+    import test_evaluate_cli as cli_fixtures
+    import test_read_store as read_fixtures
+
 
 import unittest
 from contextlib import ExitStack, contextmanager

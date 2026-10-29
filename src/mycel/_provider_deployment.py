@@ -183,43 +183,30 @@ def prepare_deployment(settings, suite, report_path, *, expected_report_sha256):
 
 def run_provider_deployment_checks(settings, suite, provider_proofs, reports, *, repository, build,
                                    implementation_identity, live=False):
-    """Consume an explicitly completed146 group without another provider call.
-
-    The trusted same-process group caller passes the original OnDemandProofs
-    and reports objects directly from run_provider_checks. This API never
-    invokes that producer, reconstructs a proof or loads a report file. A plain
-    report dictionary has no independent object-origin authentication; the
-    caller retains genuine operation provenance, not a self-comparison claim.
-    Both separately executed proof objects remain available to the caller.
-    Automatic Build discovery never calls this helper.
-    """
-    raise MycelError('refused', 'Tests are commented under the tier policy; see TESTS.md. Restore only in an explicitly requested testing task.')  # TEST-TIER-REFUSAL
-    if live is not True:
-        raise MycelError('refused', 'Provider deployment checks require explicit live selection.')
-    if (not isinstance(implementation_identity, str) or not implementation_identity
-            or not isinstance(build, str) or not build
-            or not isinstance(repository, str) or not repository):
-        raise MycelError('invalid_input', 'Provider deployment checks require an immutable Build identity.')
-    import unittest
-
-    from ._coverage import run_on_demand_checks
-    # Expected proof rows belong to the commented deployment acceptance below.
-    # expected_checks = (
-    #     ('mycel._provider_checks.run_provider_checks.<locals>.ProviderAcceptance.test_fixed_embedding_compatibility',
-    #      'live', ('MYC-13.9',)),
-    #     ('mycel._provider_checks.run_provider_checks.<locals>.ProviderAcceptance.test_configured_drift_live_pipeline',
-    #      'live', ('MYC-13.19',)),
-    #     ('mycel._provider_checks.run_provider_checks.<locals>.ProviderAcceptance.test_same_run_finite_profile_qualification',
-    #      'eval', ('MYC-13.20',)))
-
-    class ProviderDeploymentAcceptance(unittest.TestCase):
-        pass  # TEST-TIER-EMPTY-SUITE; helpers remain importable.
-
-    consumer_proofs = run_on_demand_checks(((ProviderDeploymentAcceptance(
-        'test_same_run_provider_qualification_required_for_deployment'), 'live', ('MYC-14.22',)),),
-        implementation_identity=implementation_identity)
-    # Never reconstruct or concatenate proof rows into a manufactured object.
-    # run_checks already accepts this sequence of independently executed proofs.
-    return (provider_proofs, consumer_proofs), reports
+    return _mid_tier_namespace()['run_provider_deployment_checks'](settings, suite, provider_proofs, reports, repository=repository, build=build, implementation_identity=implementation_identity, live=live)
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.
+
+
+def _mid_tier_namespace():
+    """Load test-only code on explicit invocation, leaving normal product imports alone."""
+    from pathlib import Path as _TierPath
+    from types import ModuleType as _TierModule
+    import sys as _tier_sys
+    name = __name__ + '.__mid_tier'
+    if name not in _tier_sys.modules:
+        path = _TierPath(__file__).resolve().parents[2] / 'tests/mid/archived/src/mycel/_provider_deployment.py'
+        if not path.is_file():
+            raise RuntimeError('Mid-tier source is unavailable in this installation; use the source checkout or an explicitly qualified test package. See MID_TIER.md.')
+        module = _TierModule(name)
+        # Preserve public case identities consumed by qualification contracts.
+        module.__dict__['__name__'] = __name__
+        module.__file__ = __file__
+        module.__package__ = __package__
+        _tier_sys.modules[name] = module
+        try:
+            exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+        except BaseException:
+            del _tier_sys.modules[name]
+            raise
+    return _tier_sys.modules[name].__dict__

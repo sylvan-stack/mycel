@@ -1,5 +1,9 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Offline proofs for the deterministic, complete structural outline."""
+from unittest.mock import patch
+
+from mycel._overview_render import OverviewFile, OverviewSymbol, render_sections
+
 import unittest
 from types import SimpleNamespace
 

@@ -1,5 +1,17 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Invocation deadlines reach safe child boundaries and leave fallback reads usable."""
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import time
+from unittest.mock import patch
+
+from mycel._deadline import (DeadlineConnection, check_deadline, current_deadline,
+    deadline_guard, deadline_seconds, deadline_suspended)
+from mycel._freshness import Deadline, DeadlineExceeded
+from mycel._safeguards import CompletedChild, run_child, run_git
+
 import unittest
 from types import SimpleNamespace
 
@@ -32,7 +44,6 @@ class Connection:
 
 class DeadlineBoundaryTests(unittest.TestCase):
     pass  # TEST-TIER-EMPTY-SUITE; helpers remain importable.
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

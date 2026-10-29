@@ -1,5 +1,19 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Direct offline relation reasons through the guarded mechanical detector."""
+from unittest.mock import patch
+
+from mycel._errors import MycelError
+from mycel._evidence import CaptureLocation, EvidenceStore, capture_baseline
+from mycel._locks import operation_guard
+from mycel._relate import RelateStore
+from mycel._resolver import SourceResolver
+from mycel._source_refs import SourceAddress
+from mycel._staleness import StaleEdge, StaleNode, StaleReason, compare_dependency, plan_staleness
+try:
+    from . import test_reconciliation as values
+except ImportError:
+    import test_reconciliation as values
+
 import json
 import unittest
 

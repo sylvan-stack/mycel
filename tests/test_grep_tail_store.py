@@ -1,10 +1,20 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Actual normal top-five grep tails over disposable PostgreSQL.
 
 Only ordinary query preparation is a controlled automatic-check stand-in.
 Candidate/ranking/reply/metadata producers remain real and every row/xmin and
 sequence is checked. Metadata-only no-fresh discovery is deliberately allowed.
 """
+import io
+
+from psycopg import pq
+from mycel._cli import Invocation
+from mycel._freshness import Deadline
+from mycel._grep import append_tail, render_tail, search_tail
+from mycel._safeguards import InvocationPolicy
+from mycel._search import QueryEmbedding
+from mycel._search_store import search_from_store
+
 import unittest
 from contextlib import ExitStack, contextmanager
 from pathlib import Path

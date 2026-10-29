@@ -1,5 +1,9 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """UUID compatibility and atomic stated Origin Links over disposable stores."""
+import os
+
+from mycel._errors import MycelError
+
 import json
 import unittest
 from dataclasses import replace

@@ -1,5 +1,14 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Native read-only reporting, logical lifetime and exact legacy migration."""
+from copy import deepcopy
+from hashlib import sha256
+from unittest.mock import patch
+
+from psycopg.types.json import Jsonb
+from mycel._errors import MycelError
+from mycel._evidence import EvidenceError
+from mycel._verification_reader import VerificationReader, validate_verification_record
+
 import unittest
 
 from mycel import _store as store

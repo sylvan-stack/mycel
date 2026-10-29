@@ -7,6 +7,7 @@ objects or a result list as its expected inventory.
 from __future__ import annotations
 
 import ast
+import copy
 import re
 
 from ._core import BuildError, digest, json_bytes
@@ -78,20 +79,60 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
     """Derive every automatic check and its class kind independently from the captured test sources."""
     try:
         declarations = {}
-        if any(path.startswith('tests/mid/') and b'# TEST-TIER-DISABLED-BEGIN' in raw
+        if any(path.startswith('tests/') and b'# TEST-TIER-DISABLED-BEGIN' in raw
                for path, raw in frozen.items()):
-            raise BuildError('refused', 'Mid-tier tests are commented. Full qualification requires an explicitly requested testing task; see MID_TIER.md.')
-        for path, raw in sorted(frozen.items()):
-            if not re.fullmatch(r'tests/test_[A-Za-z0-9_]+\.py', path):
-                continue
-            if b'# TEST-TIER-DISABLED-BEGIN ' in raw:
-                raise BuildError('refused', 'Mid-tier tests are commented. Full qualification requires an explicitly requested testing task; see TESTS.md.')
-            module = path.removeprefix('tests/').removesuffix('.py')
-            for class_name, (methods, kind) in _test_classes(ast.parse(raw)).items():
+            raise BuildError('refused', 'Test sources are commented. Full qualification requires restored sources and an explicitly requested testing task; see MID_TIER.md.')
+        modules = {
+            path.removeprefix('tests/').removesuffix('.py').replace('/', '.'): ast.parse(raw)
+            for path, raw in sorted(frozen.items())
+            if path.startswith('tests/') and path.endswith('.py') and '/archived/' not in path
+        }
+        combined = ast.Module(body=[], type_ignores=[])
+        selected = set()
+        for module, tree in modules.items():
+            aliases = {}
+
+            def imports(nodes):
+                for node in nodes:
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            aliases[alias.asname or alias.name.split('.')[0]] = alias.name if alias.asname else alias.name.split('.')[0]
+                    elif isinstance(node, ast.ImportFrom):
+                        prefix = module.split('.')[:-node.level] if node.level else []
+                        prefix += node.module.split('.') if node.module else []
+                        for alias in node.names:
+                            aliases[alias.asname or alias.name] = '.'.join([*prefix, alias.name])
+                    elif not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                        for field in ('body', 'orelse', 'finalbody'):
+                            imports(getattr(node, field, []))
+                        for handler in getattr(node, 'handlers', []):
+                            imports(handler.body)
+
+            imports(tree.body)
+            local = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
+            for node in tree.body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                qualified = copy.deepcopy(node)
+                qualified.name = module + '.' + node.name
+                qualified.bases = []
+                for base in node.bases:
+                    name = ast.unparse(base)
+                    head, separator, tail = name.partition('.')
+                    if head in local and not separator:
+                        name = module + '.' + head
+                    elif head in aliases:
+                        name = aliases[head] + ('.' + tail if separator else '')
+                    qualified.bases.append(ast.Name(id=name, ctx=ast.Load()))
+                combined.body.append(qualified)
+                if re.fullmatch(r'(?:(?:top|mid)\.)?test_[A-Za-z0-9_]+', module):
+                    selected.add(qualified.name)
+        for class_name, (methods, kind) in _test_classes(combined).items():
+            if class_name in selected:
                 if kind not in {'unit', 'store', 'eval', 'live'}:
                     raise ValueError('check kind')
                 for method in methods.values():
-                    name = f'{module}.{class_name}.{method.name}'
+                    name = f'{class_name}.{method.name}'
                     if name in declarations:
                         raise ValueError('duplicate declaration')
                     declarations[name] = {'name': name, 'kind': kind}

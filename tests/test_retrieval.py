@@ -1,5 +1,9 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Scoped candidate-arm checks; final search ranking is deliberately absent."""
+
+from mycel._retrieval import (RetrievalChunk, meaning_candidates, resolve_search_scope,
+    select_chunks, selected_shared_document, validate_search, wording_candidates)
+
 
 import json
 import math

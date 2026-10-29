@@ -1,5 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured exact relation creation, ownership, guards and edit acceptance."""
+import io
+import json
+from unittest.mock import patch
+
+from mycel._activity import MutationActivity, activity_state
+from mycel._cli import Invocation, parse, run
+from mycel._errors import MycelError
+from mycel._evidence import EvidenceStore
+from mycel._relate import RelateStore, relate
+
 import unittest
 
 from mycel._capture import LocationId

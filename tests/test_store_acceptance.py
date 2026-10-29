@@ -1,5 +1,14 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Product-store acceptance requires a real per-check disposable database."""
+from contextlib import contextmanager
+import io
+import json
+import socket
+from unittest.mock import patch
+
+from mycel._cli import run
+from mycel._settings import load_settings
+
 
 import unittest
 from hashlib import sha256
@@ -40,7 +49,6 @@ class EmptyProductStoreTests(unittest.TestCase):
     check_kind = "store"
 
     initialize_store = staticmethod(lambda backend, settings_file: None)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

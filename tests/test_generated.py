@@ -1,5 +1,17 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Successful publication, exact retained provenance and mechanical work proofs."""
+from dataclasses import replace
+from hashlib import sha256
+import json
+from unittest.mock import patch
+
+from psycopg.types.json import Jsonb
+from mycel._errors import MycelError
+from mycel._evidence import EvidenceError
+from mycel._generated import GeneratedPublicationStore, generated_capture
+from mycel._locks import atomic_transaction, invocation_guard, operation_guard
+from mycel._verification import ConfirmationStore
+
 import unittest
 from uuid import uuid4
 
@@ -81,7 +93,6 @@ class GeneratedStoreTests(unittest.TestCase):
     def reasons(self, connection, result):
         return connection.execute('SELECT reason FROM public.mycel_stale_reasons WHERE chunk_version=%s '
             'ORDER BY reason::text', (result.chunk_version,)).fetchall()
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

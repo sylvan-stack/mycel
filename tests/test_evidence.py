@@ -1,9 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Pure comparison checks, SQL seams, and separate native fixture checks.
 
 The native methods are acceptance candidates. Declaring a store requirement
 does not claim it in the Build; exploratory probes remain separate evidence.
 """
+from dataclasses import replace
+from hashlib import sha256
+
+from mycel._errors import MycelError
+from mycel._markdown import split_markdown, COMPARISON_REVISION, UNICODE_VERSION
+
 
 import json
 import unittest

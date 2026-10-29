@@ -1,5 +1,24 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Private credential proofs with public values and local child stand-ins."""
+import io
+import os
+import subprocess
+import threading
+import time
+from unittest.mock import patch
+
+from mycel._cli import run
+from mycel._credentials import (
+    CREDENTIAL_STDERR_LIMIT, CREDENTIAL_STDOUT_LIMIT, SECURITY,
+    CredentialUnavailable, Credentials, Secret, StoreTarget,
+    configured_store_address,
+)
+from mycel._errors import MycelError
+from mycel._safeguards import (
+    ChildProcessFailure, CompletedChild, InvocationPolicy,
+    run_git, run_model_child,
+)
+
 
 import json
 import sys
@@ -36,8 +55,6 @@ class CredentialsTests(unittest.TestCase):
         path.write_text("#!" + sys.executable + "\n" + body)
         path.chmod(0o700)
         return path
-
-
 
 
 class ApiKeyTests(unittest.TestCase):

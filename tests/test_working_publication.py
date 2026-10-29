@@ -1,10 +1,30 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Synthetic complete evidence proves publication policy, not native release.
 
 These fixtures use real files, fsynced replacements, non-waiting kernel locks
 and the actual independent selector. No package, Keychain, database or provider
 probe is run by these unit checks.
 """
+import contextlib
+import fcntl
+import io
+from pathlib import Path
+import tempfile
+import subprocess
+from unittest.mock import patch
+
+from mycel_build import _release as release
+from mycel_build import _keychain_probe as keychain_probe
+from mycel_build.__main__ import main
+from mycel_build._core import BuildError, atomic_json, digest, file_manifest, json_bytes, seal_program
+from mycel_build._registry import allocate, read_record
+try:
+    from .test_launcher_maintenance import peer_lock
+    from .test_launcher_selection import LauncherFixture, ROOT, thaw, tree_state
+except ImportError:
+    from test_launcher_maintenance import peer_lock
+    from test_launcher_selection import LauncherFixture, ROOT, thaw, tree_state
+
 import copy
 import json
 import os

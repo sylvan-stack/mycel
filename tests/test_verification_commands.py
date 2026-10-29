@@ -1,5 +1,7 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Actual confirmation and history dispatch over configured disposable stores."""
+
+
 from io import StringIO
 import json
 import unittest

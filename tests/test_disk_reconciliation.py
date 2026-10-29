@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured disposable-store proofs for the capture/identity handoff."""
+from dataclasses import replace
+import shutil
+from unittest.mock import patch
+
+from mycel._activity import MutationActivity, activity_state
+from mycel._disk_reconciliation import DiskCaptureStore, GitFileMove
+from mycel._errors import MycelError
+
 import json
 import os
 import subprocess

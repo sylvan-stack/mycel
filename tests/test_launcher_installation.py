@@ -1,9 +1,24 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Isolated installer ownership, complete staging and preserved older bundles.
 
 Synthetic checked bundles exercise installation, not native release acceptance.
 Their shell runtime adapter execs a real isolated interpreter without a mock.
 """
+import fcntl
+import os
+import subprocess
+import tempfile
+from unittest.mock import patch
+
+from mycel_build import _launcher as installer
+from mycel_build._core import BuildError, atomic_json, digest, file_manifest, json_bytes, seal_program
+try:
+    from .test_launcher_selection import LauncherFixture, ROOT, tree_state
+    from .test_launcher_maintenance import peer_lock
+except ImportError:
+    from test_launcher_selection import LauncherFixture, ROOT, tree_state
+    from test_launcher_maintenance import peer_lock
+
 
 import json
 import shlex

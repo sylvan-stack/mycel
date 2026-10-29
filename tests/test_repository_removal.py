@@ -1,5 +1,19 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured disposable-store proofs for complete repository removal."""
+from unittest.mock import patch
+
+from psycopg.types.json import Jsonb
+from mycel._activity import MutationActivity
+from mycel._collection import CollectionStore
+from mycel._errors import MycelError
+from mycel._evidence import EvidenceStore
+from mycel._freshness import Deadline
+from mycel._locks import invocation_guard, mutation_guard, operation_guard, structure_guard
+from mycel._repository_removal import RepositoryRemovalStore
+from mycel._read_store import read_from_store
+from mycel._resolver import SourceResolver
+from mycel._verification import ConfirmationStore
+
 import json
 import tempfile
 import unittest

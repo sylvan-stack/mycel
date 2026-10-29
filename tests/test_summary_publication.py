@@ -1,5 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Private summary staging and complete guarded tree replacement proofs."""
+from dataclasses import replace
+from unittest.mock import patch
+
+from mycel._evidence import EvidenceError
+from mycel._generated import generated_capture
+from mycel._locks import atomic_transaction, invocation_guard, operation_guard
+from mycel._resolver import SourceResolver
+from mycel._summary_publication import SummaryPublicationStore, StagedSummaryEmbedding
+from mycel._summary_store import StoreSummaries
+
 import unittest
 
 from mycel._embedding_plan import document_place_line, plan_chunk

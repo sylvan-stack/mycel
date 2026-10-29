@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured-store proofs for document origin under both independent roots."""
+
+from mycel._capture import LocationId, capture_repository
+from mycel._disk_reconciliation import DiskCaptureStore
+from mycel._located_reconciliation import LocatedCaptureStore, location_key
+from mycel._resolver import SourceResolver
+
 
 import json
 import os
@@ -92,7 +98,6 @@ class DualRootCaptureStoreTests(unittest.TestCase):
         code = resolver.resolve('fixture:@code/src/worker.py#work', purpose='read').selection
         self.assertIsNotNone(code)
         self.assertEqual(code.members[0].chunk.kind, 'function')
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

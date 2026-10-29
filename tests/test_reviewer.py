@@ -1,5 +1,19 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Independent local protocol adapters; no provider or credential access."""
+from contextlib import contextmanager
+from hashlib import sha256
+import os
+import re
+import signal
+import subprocess
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from mycel._classification_runner import ClassifyDependencies, _Runner
+from mycel._errors import MycelError
+from mycel._jev import JevOutcome
+from mycel._safeguards import CompletedChild, InvocationPolicy, SYSTEM_PATH
+
 
 import json
 import sys
@@ -106,7 +120,6 @@ class ReviewerExecutionTests(unittest.TestCase):
     def call(self, client, decision, **kwargs):
         return client.classify(decision, deadline=kwargs.pop('deadline', time.monotonic() + 5),
             before_call=kwargs.pop('before_call', lambda: None), **kwargs)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

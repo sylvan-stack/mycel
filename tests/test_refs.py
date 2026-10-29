@@ -1,5 +1,18 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Public refs command proofs through the finite JSON and disposable-store boundaries."""
+from contextlib import contextmanager
+from pathlib import Path
+import tempfile
+
+from psycopg.types.json import Jsonb
+from mycel._declared_refs import DeclaredRefStore
+from mycel._errors import MycelError
+from mycel._store import TABLES, STORE_FORMAT
+try:
+    from .test_declared_refs import retain, seed_document
+except ImportError:
+    from test_declared_refs import retain, seed_document
+
 
 import json
 import os
@@ -65,7 +78,6 @@ class RefsProducerStoreTests(unittest.TestCase):
         self.addCleanup(self.fixture.doCleanups)
         self.fixture.prepare()
         self.base = self.fixture.fixture
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

@@ -1,5 +1,14 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Partial configured-store proofs for guarded collection, without claims."""
+from contextlib import ExitStack
+from dataclasses import replace
+import json
+
+from mycel._activity import MutationActivity
+from mycel._errors import MycelError
+from mycel._locks import atomic_transaction, operation_guard
+from mycel._settings import load_settings
+
 import unittest
 from hashlib import sha256
 from uuid import uuid4
@@ -83,7 +92,6 @@ class CollectionStoreTests(unittest.TestCase):
         connection.execute('INSERT INTO public.mycel_classification_work VALUES (%s,%s,%s,NULL,%s,%s)',
             (work, 'fixture', dependency, Jsonb({}), owner))
         return owner, work, digest
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

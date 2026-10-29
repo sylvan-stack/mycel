@@ -1,5 +1,12 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Offline all-path mechanical reasoning and configured disposable-store proofs."""
+from unittest.mock import patch
+
+from mycel._activity import MutationActivity, activity_state
+from mycel._errors import MycelError
+from mycel._source_refs import SourceAddress
+from mycel._staleness import StaleEdge, StaleNode, StaleReason, compare_dependency, plan_staleness
+
 import json
 import unittest
 from contextlib import ExitStack

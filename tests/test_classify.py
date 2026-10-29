@@ -1,5 +1,31 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Finite classifier proofs with scripted services and disposable real stores."""
+from contextlib import contextmanager
+from dataclasses import replace
+from datetime import timedelta
+import os
+import signal
+import threading
+import time
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from mycel._activity import MutationActivity
+from mycel._classify import classify_arguments
+from mycel._classification_payload import ReviewerRequest
+from mycel._classification_runner import (ClassifyDependencies, preview_classification,
+                                           run_classification)
+from mycel._classification_store import ClassificationPreparation, ClassificationStore
+from mycel._drift_store import DriftStore
+from mycel._errors import MycelError
+from mycel._jev import JevFailure, JevOutcome, JevRequest, route_response, validate_response
+from mycel._locks import operation_guard, removal_guard
+from mycel._reviewer import ReviewerFailure, ReviewerSuccess
+try:
+    from .test_classification_payload import fixture, reviewed
+except ImportError:
+    from test_classification_payload import fixture, reviewed
+
 import json
 import re
 import unittest

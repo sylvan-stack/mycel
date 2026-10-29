@@ -1,5 +1,16 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured real-store proofs for summary withdrawal and guarded renewal."""
+from contextlib import contextmanager
+from unittest.mock import patch
+from uuid import uuid4
+
+from psycopg.types.json import Jsonb
+from mycel._activity import AppliedMutation, MutationActivity
+from mycel._errors import MycelError
+from mycel._evidence import EvidenceError
+from mycel._locks import atomic_transaction, invocation_guard, operation_guard
+from mycel._summary_store import StoreSummaries, summary_set_identifier
+
 import unittest
 
 from mycel._cli import Invocation
@@ -60,7 +71,6 @@ class SummaryLifecycleStoreTests(unittest.TestCase):
             for table in ('mycel_chunks', 'mycel_chunk_versions', 'mycel_locations', 'mycel_dependencies', 'mycel_edges',
                           'mycel_generated_state', 'mycel_embedding_plans', 'mycel_embedding_parts', 'mycel_vectors',
                           'mycel_evidence_owners', 'mycel_evidence_references', 'mycel_snapshots', 'mycel_manifests')}
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

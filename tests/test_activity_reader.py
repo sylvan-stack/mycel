@@ -1,5 +1,18 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Public pass identity details through the finite CLI and real-store boundary."""
+from contextlib import contextmanager
+import os
+from pathlib import Path
+import tempfile
+from unittest.mock import patch
+from uuid import uuid4
+
+from mycel._activity import AppliedMutation, FileChange, IdentityChange, MutationActivity
+from mycel._cli import Invocation, run
+from mycel._activity_reader import handle_activity
+from mycel._errors import MycelError
+from mycel._settings import load_settings
+
 
 import json
 import unittest

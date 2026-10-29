@@ -1,5 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Finite exact-read command syntax and Build capability description."""
+import io
+import json
+from pathlib import Path
+import tempfile
+from unittest.mock import patch
+
+from mycel._cli import parse, run
+from mycel._commands import COMMANDS, help_reply
+from mycel._errors import MycelError
+
 
 import unittest
 

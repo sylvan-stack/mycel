@@ -1,5 +1,23 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Real-store search replies with exact scope, coverage and dependency marks."""
+from dataclasses import replace
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace
+from unittest.mock import patch
+from uuid import uuid4
+
+from psycopg.types.json import Jsonb
+from mycel._capture import _Capture
+from mycel._embedding_plan import PlanningError
+from mycel._freshness import (ChunkRequirement, Deadline, DependencyFault, FreshnessResult,
+                              FreshnessScope)
+from mycel._locks import operation_guard
+from mycel._search_store import _fault_records, _readable_file, search_from_store
+from mycel._settings import _defaults, _freeze, load_settings
+from mycel._source_refs import SourceAddress
+from mycel._store import checked_store
+
 import unittest
 
 from mycel._freshness import Deadline

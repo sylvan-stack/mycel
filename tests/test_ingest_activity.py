@@ -1,10 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Public subprocess audit checks with an explicitly fictional numbered package.
 
 Only the immutable package-local Build identity is a fixture. CLI dispatch,
 publication, PostgreSQL writes and both activity readers run without patches.
 This is not installed-runtime or working-Build qualification.
 """
+
 
 import json
 import os

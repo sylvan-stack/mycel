@@ -1,9 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Prospective declaration/evidence adapters join complete capture publication.
 
 These fixture producers do not claim the complete dependency executor. Pinned
 declaration replacement intentionally refuses until identity policy is wired.
 """
+from unittest.mock import patch
+
+from mycel._activity import MutationActivity, activity_state
+from mycel._errors import MycelError
+from mycel._locks import atomic_transaction, operation_guard
+
 import unittest
 from contextlib import ExitStack
 

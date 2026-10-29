@@ -1,5 +1,9 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Inheritance keeps owned before-text even when the current source is absent."""
+
+from psycopg.types.json import Jsonb
+from mycel._errors import MycelError
+
 
 import json
 import unittest

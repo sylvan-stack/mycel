@@ -1,9 +1,16 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Real disposable-store evaluation inputs with controlled search replies.
 
 These checks prove the measurement/snapshot handoff. The named stand-in places
 are not a semantic-ranking evaluation or evidence for MYC-4.25.
 """
+
+from mycel._errors import MycelError
+from mycel._evaluation import (EvaluationSet, PreparedQueryVector, RetrievalPlace,
+    RetrievalQuery, RetrievalReply, comparison_failures, run_retrieval_evaluation)
+from mycel._locks import atomic_transaction, snapshot_transaction, structure_guard
+from mycel._resolver import SourceResolver
+
 
 import unittest
 from dataclasses import replace

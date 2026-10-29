@@ -1,5 +1,21 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Real-store proofs of complete private summary builds with local services."""
+from dataclasses import replace
+from hashlib import sha256
+import math
+import io
+import os
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from psycopg.types.json import Jsonb
+from mycel._credentials import Secret
+from mycel._errors import MycelError
+from mycel._locks import operation_guard, removal_guard
+from mycel._store import TABLES, checked_store
+from mycel._summary_store import StoreSummaries
+from mycel._voyage import EmbeddingProgress, HTTPResult, PartIdentity, VectorWrite, VoyageClient
+
 
 import json
 import sys

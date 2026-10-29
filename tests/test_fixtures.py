@@ -1,5 +1,16 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Acceptance for private feature-check helpers, separate from live providers."""
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from io import StringIO
+import json
+import shutil
+import tempfile
+
+from mycel._cli import run
+from mycel._coverage import CoverageError, require_check_database
+from mycel._settings import load_settings
+from fixtures import EmbeddingFixtureFailure, EmbeddingStandIn
+
 
 import importlib.util
 import os
@@ -36,7 +47,6 @@ class RepositoryFixtureTests(unittest.TestCase):
     # store-backed and cannot qualify against an in-memory substitute.
 
     check_kind = "store"
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

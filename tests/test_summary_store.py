@@ -1,5 +1,18 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Native disposable-store proofs for stored summary reports and dry-runs."""
+from contextlib import ExitStack
+from dataclasses import replace
+import io
+import json
+
+from mycel._cli import Invocation, run
+from mycel._build_identity import current_build
+from mycel._errors import MycelError
+from mycel._settings import _freeze
+from mycel._summaries import handle_summaries
+from mycel._summary_store import (PublishedSummaryState, StoreSummaries, summary_repository,
+                                  summary_removal_reply, summary_result_reply)
+
 
 import unittest
 from hashlib import sha256

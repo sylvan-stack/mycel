@@ -1,5 +1,19 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Public complete ingest against the gate's real disposable PostgreSQL."""
+from contextlib import contextmanager
+from dataclasses import replace
+
+from mycel._activity import MutationActivity, activity_state
+from mycel._cli import parse, run
+from mycel._errors import MycelError
+from mycel._ingest import _cumulative
+from mycel._locks import operation_guard
+from mycel._voyage import HTTPResult
+try:
+    from .fixtures import EmbeddingStandIn
+except ImportError:
+    from fixtures import EmbeddingStandIn
+
 import json
 import os
 import unittest

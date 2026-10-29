@@ -1,9 +1,24 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Dedicated MYC-10 parser, scope, text and real inherited-process proofs.
 
 Future preparation only. These methods are authored/compiled, not executed by
 their author. Provider/store seams are controlled; primary grep is a real child.
 """
+from dataclasses import replace
+import io
+import selectors
+import signal
+import tempfile
+import tomllib
+from unittest.mock import Mock
+
+from mycel._cli import Invocation, parse
+from mycel._commands import help_reply
+from mycel._errors import MycelError
+from mycel._grep import (append_tail, parse_grep_args, render_tail,
+                         resolve_tail_repository, semantic_query)
+from mycel._settings import _freeze, load_settings
+
 import json
 import os
 import subprocess

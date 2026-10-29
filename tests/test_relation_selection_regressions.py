@@ -1,9 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured regressions for valid changes to a declared source selection.
 
 Every publication passes through the complete located producer. The checks
 keep immutable observation pins distinct from accepted edits and confirmations.
 """
+
+
 import unittest
 
 from mycel._errors import MycelError

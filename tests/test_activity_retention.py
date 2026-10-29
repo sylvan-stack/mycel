@@ -1,5 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Writer-triggered activity retention against the configured disposable store."""
+from unittest.mock import patch
+
+from mycel._errors import MycelError
+from mycel._repository_removal import RepositoryRemovalStore
+from mycel._store import TABLES, checked_store, initialize_store, require_store
+try:
+    from . import test_repository_removal as removal_fixtures
+except ImportError:
+    import test_repository_removal as removal_fixtures
+
 
 import unittest
 from contextlib import nullcontext

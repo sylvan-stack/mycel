@@ -1,5 +1,9 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Unexecuted pure protocol fixtures; fake C API only, not a native proof."""
+import hashlib
+import json
+
+
 import ctypes
 import re
 import tempfile
@@ -48,6 +52,5 @@ class PrivateCredentialReaderTests(unittest.TestCase):
         st=self.root.stat();self.identity={'device':st.st_dev,'inode':st.st_ino,'uid':st.st_uid,'mode':0o700}
     def run_fake(self,api):return reader.read_fixture(self.root,self.identity,api=(api,api))
 
-if __name__=='__main__':unittest.main()
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

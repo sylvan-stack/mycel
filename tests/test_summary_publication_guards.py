@@ -1,9 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Real-store public summary publication across affected owner pass guards.
 
 Writer/vector transports alone are local stand-ins. Canonical ingest, public
 CLI handlers, generated publication, detection closure and peer locks are real.
 """
+
+
 from contextlib import ExitStack
 from io import StringIO
 import json

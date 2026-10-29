@@ -1,5 +1,18 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Strict location corpus ownership and actual mixed disk/Git publication."""
+from dataclasses import replace
+
+from psycopg.types.json import Jsonb
+from mycel._activity import MutationActivity
+from mycel._disk_reconciliation import _guard_disk_corpora, _location_rows, _parse_history
+from mycel._embed import retained_contexts
+from mycel._errors import MycelError
+from mycel._evaluation import RetrievalQuery
+from mycel._evaluation_store import StoreRetrieval
+from mycel._location_corpus import location_corpus, require_captured_corpus
+from mycel._located_reconciliation import LocatedCaptureStore, location_key
+from mycel._resolver import SourceResolver
+
 import unittest
 from hashlib import sha256
 

@@ -1,5 +1,9 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Repository membership and scope with private folders and exact names."""
+from dataclasses import FrozenInstanceError
+import os
+from unittest.mock import patch
+
 
 import json
 import tempfile
@@ -54,7 +58,6 @@ class ScopeTests(unittest.TestCase):
         if code is not None:
             self.assertEqual(raised.exception.code, code)
         return raised.exception
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

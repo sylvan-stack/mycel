@@ -1,5 +1,23 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Offline fixture proofs for staging; full MYC-15 acceptance stays unclaimed."""
+import contextlib
+import json
+import multiprocessing
+import shutil
+import subprocess
+import sys
+import tarfile
+
+from mycel_build.__main__ import main
+from mycel_build._core import (BuildError, atomic_json, digest, extract_runtime,
+                              file_manifest, install_wheel, json_bytes, load_lock,
+                              read_json, seal_program, snapshot_asset, validate_manifest, verify_asset)
+from mycel_build._registry import (allocate, build_number, list_records, maintenance,
+                                  read_record, update_staging)
+from mycel_build._staging import (check_input_manifest, create_stage, exec_installed, input_manifest,
+                                 install_build_identity, installed_command, probe_installed,
+                                 product_wheel, source_inputs, verify_source)
+
 
 import base64
 import csv

@@ -1,5 +1,14 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Real temporary disk observations and explicit SQL seams; no store claims."""
+from dataclasses import replace
+from hashlib import sha256
+
+from mycel._code import chunk_code
+from mycel._resolver import ResolvedChunk, ResolvedFile, SourceResolver
+from mycel._settings import load_settings, _freeze
+from mycel._source_refs import SourceAddress
+import test_evidence as evidence_checks
+
 
 import json
 import tempfile

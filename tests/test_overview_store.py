@@ -1,5 +1,21 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured disposable-store proofs for index-only code projections."""
+from contextlib import ExitStack
+from dataclasses import replace
+from pathlib import Path
+
+from mycel._embed import retained_contexts
+from mycel._embedding_store import EmbeddingStore
+from mycel._errors import MycelError
+from mycel._freshness import Deadline
+from mycel._locks import atomic_transaction, operation_guard, snapshot_transaction
+from mycel._overview_store import OverviewStore
+from mycel._read_store import read_from_store
+from mycel._retrieval_store import StoreCandidates
+from mycel._search_store import search_from_store
+from mycel._settings import load_settings
+from mycel._summary_store import StoreSummaries
+
 import json
 import math
 import os

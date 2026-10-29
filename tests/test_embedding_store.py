@@ -1,4 +1,4 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """SQL seam checks and separate genuine disposable-store acceptance checks.
 
 Scripted connections declare only the evidence-separation requirement. Store
@@ -6,6 +6,16 @@ checks use the gate's real fixture and default product initializer; ordinary
 unittest runs must select EmbeddingStoreUnitTests, never substitute a stand-in
 for an owned store requirement.
 """
+from dataclasses import replace
+from uuid import UUID, uuid4
+
+import psycopg
+from mycel._credentials import Credentials
+from mycel._locks import atomic_transaction, operation_guard
+from mycel._safeguards import CompletedChild, InvocationPolicy
+from mycel._voyage import HTTPResult, PartFailure, PartIdentity, VectorWrite, VoyageClient
+from fixtures import EmbeddingFixtureFailure, EmbeddingStandIn
+
 
 import json
 import unittest
@@ -254,7 +264,6 @@ class EmbeddingStoreAcceptanceTests(unittest.TestCase):
         return writer.prepare("fixture", contexts=self.contexts, **kwargs)
 
     writes = staticmethod(EmbeddingStoreUnitTests.writes)
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

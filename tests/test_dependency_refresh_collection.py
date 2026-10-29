@@ -1,5 +1,10 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Evidence-only dependency refreshes remain scoped applied mutations."""
+from hashlib import sha256
+
+from psycopg.types.json import Jsonb
+from mycel._activity import MutationActivity, activity_state
+
 import unittest
 
 try:

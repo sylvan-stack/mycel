@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Confirmation's public writer through real, configured disposable stores."""
+from hashlib import sha256
+from unittest.mock import patch
+
+from mycel._activity import MutationActivity, activity_state
+from mycel._errors import MycelError
+from mycel._evidence import EvidenceStore
+from mycel._locks import operation_guard
+
 import unittest
 
 from mycel._verification import ConfirmationStore

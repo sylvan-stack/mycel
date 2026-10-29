@@ -1,5 +1,15 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Declared relations share Markdown exclusions without becoming sources."""
+from dataclasses import FrozenInstanceError, replace
+from pathlib import Path
+from unittest.mock import patch
+
+from mycel import _capture
+from mycel._dependency_application import RetainedDependencyResolver
+from mycel._dependency_inputs import DependencyCaptureInputs
+from mycel._evidence import CaptureLocation, PinInputs
+from mycel._source_refs import SourceAddress, read_document_declarations
+
 import unittest
 
 import test_capture as capture_fixtures
@@ -30,7 +40,6 @@ class RelationEndpointResolverTests(unittest.TestCase):
                                         kind='method', family='Policy', number=2)
         file = resolver_fixtures.file('policy.py', 'complete bytes', root='code', members=(header, method))
         return SourceResolver(resolver_fixtures.settings(), (file,)), file, header
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

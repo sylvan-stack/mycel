@@ -1,5 +1,25 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Bounded exact-input history and owner-scoped release on real stores."""
+from datetime import timedelta
+import unittest
+from unittest.mock import patch
+from uuid import UUID, uuid4
+
+from psycopg.types.json import Jsonb
+from mycel._activity import AppliedMutation, ClassificationReference, MutationActivity
+from mycel._classification_store import ClassificationStore
+from mycel._collection import CollectionStore
+from mycel._derive import DeriveStore
+from mycel._errors import MycelError
+from mycel._evidence import EvidenceStore, snapshot
+from mycel._locks import atomic_transaction, invocation_guard, operation_guard, removal_guard
+from mycel._verification import ConfirmationStore
+from mycel._source_refs import parse_source_address
+try:
+    from .test_classification_store import ClassificationStoreFixture, NOW, AT
+except ImportError:
+    from test_classification_store import ClassificationStoreFixture, NOW, AT
+
 from contextlib import ExitStack
 from copy import deepcopy
 

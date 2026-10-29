@@ -1,5 +1,11 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Scope and repository reports through the CLI's JSON boundary."""
+from pathlib import Path
+import tempfile
+
+from mycel._cli import for_repositories, run
+from mycel._errors import MycelError
+
 
 import json
 import unittest
@@ -15,7 +21,6 @@ class ScopeCliTests(unittest.TestCase):
         with patch.dict("os.environ", {"MYCEL_CONFIG": str(config)}):
             status = run(arguments, handlers=handlers, stdout=output, stderr=StringIO())
         return status, json.loads(output.getvalue())
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.

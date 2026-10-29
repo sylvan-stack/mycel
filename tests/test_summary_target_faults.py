@@ -1,5 +1,13 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Configured store proofs of generated-target faults and mutation refusal."""
+from contextlib import ExitStack
+
+from mycel._derive import DeriveStore
+from mycel._errors import MycelError
+from mycel._relate import RelateStore
+from mycel._resolver import SourceResolver
+from mycel._source_refs import SourceAddress
+
 import json
 import os
 import unittest

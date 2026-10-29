@@ -1,5 +1,14 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Pure whole-file identity decisions; no persistence or automatic pinning."""
+from dataclasses import FrozenInstanceError, replace
+from hashlib import sha256
+from itertools import permutations
+
+from mycel._code import chunk_code
+from mycel._coverage import no_network
+from mycel._evidence import ComparisonRecord, EvidenceError, exact_comparison
+from mycel._identity import ChunkInput, KnownChunk, KnownVersion, reconcile_file
+
 
 import unittest
 
