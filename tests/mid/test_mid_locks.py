@@ -70,3 +70,428 @@ with store_connection(Credentials(settings, InvocationPolicy('init'))) as connec
             process.stderr.close()
         self.assertEqual(files(), before)
 # TEST-TIER-END tests/test_locks.py::LockStoreTests.test_killed_owning_process_releases_every_lock_without_cleanup_files
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_nonblocking_structure_protocol_and_balanced_cleanup
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Nonblocking structure protocol and balanced cleanup.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_nonblocking_structure_protocol_and_balanced_cleanup(self):
+#         connection = ScriptedConnection()
+#         for exclusive in (False, True):
+#             with locks.structure_guard(connection, exclusive=exclusive):
+#                 self.assertEqual(sum(connection.held.values()), 1)
+#             self.assertEqual(sum(connection.held.values()), 0)
+#         self.assertTrue(all("pg_try_advisory_lock" in sql or "pg_advisory_unlock" in sql
+#                             for sql, _ in connection.statements))
+#         self.assertTrue(all(params == locks.STRUCTURE_LOCK for _, params in connection.statements))
+#         connection.busy.add(locks.STRUCTURE_LOCK)
+#         with self.assertRaises(MycelError) as raised:
+#             with locks.structure_guard(connection):
+#                 self.fail("busy lock was entered")
+#         self.assertEqual(raised.exception.code, "busy")
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_registry_allocates_distinct_exact_identities_and_reuses_committed_key
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Registry allocates distinct exact identities and reuses committed key.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_registry_allocates_distinct_exact_identities_and_reuses_committed_key(self):
+#         connection = ScriptedConnection()
+#         identities = ["fixture", "Fixture", "é", "e\u0301", "fixture\nother"]
+#         keys = [locks.allocate_key(connection, namespace, identity)
+#                 for namespace in locks.LockNamespace for identity in identities]
+#         self.assertEqual(len(set(keys)), len(keys))
+#         self.assertEqual(locks.allocate_key(connection, "repository.pass", "fixture"), keys[0])
+#         insertions = [params for sql, params in connection.statements if sql.startswith("INSERT")]
+#         self.assertEqual(len(insertions), len(keys))
+#         self.assertTrue(all("hash" not in sql for sql, _ in connection.statements))
+#         self.assertNotEqual(locks.ALLOCATOR_LOCK, locks.STRUCTURE_LOCK)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_allocator_busy_and_failed_allocation_are_bounded_and_release_guard
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Allocator busy and failed allocation are bounded and release guard.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_allocator_busy_and_failed_allocation_are_bounded_and_release_guard(self):
+#         connection = ScriptedConnection()
+#         connection.busy.add(locks.ALLOCATOR_LOCK)
+#         with self.assertRaises(MycelError) as raised:
+#             locks.allocate_key(connection, locks.LockNamespace.PASS, "fixture")
+#         self.assertEqual(raised.exception.code, "busy")
+#         self.assertFalse(connection.registry)
+#         connection.busy.clear()
+#         connection.failure = lambda sql, _: sql.startswith("INSERT")
+#         with self.assertRaises(MycelError) as raised:
+#             locks.allocate_key(connection, locks.LockNamespace.PASS, "fixture")
+#         self.assertEqual(raised.exception.code, "busy")
+#         self.assertFalse(connection.registry)
+#         self.assertEqual(sum(connection.held.values()), 0)
+#         self.assertIn(("SET LOCAL lock_timeout = '1ms'", None), connection.statements)
+#         self.assertEqual(connection.transactions[-1], "rollback")
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_operations_share_removal_protection_but_use_separate_exclusive_keys
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Operations share removal protection but use separate exclusive keys.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_operations_share_removal_protection_but_use_separate_exclusive_keys(self):
+#         connection = ScriptedConnection()
+#         for operation in ("pass", "embed", "classify", "summaries"):
+#             with locks.operation_guard(connection, "fixture", operation) as key:
+#                 self.assertEqual(connection.held[((key,), "exclusive")], 1)
+#                 removal = connection.registry[("repository.mutation", "fixture")]
+#                 self.assertEqual(connection.held[((removal,), "shared")], 1)
+#                 self.assertEqual(sum(connection.held.values()), 3)
+#             self.assertEqual(sum(connection.held.values()), 0)
+#         operation_keys = {key for (namespace, _), key in connection.registry.items()
+#                           if namespace != "repository.mutation"}
+#         self.assertEqual(len(operation_keys), 4)
+#         with locks.removal_guard(connection, "fixture"):
+#             self.assertEqual(connection.held[((removal,), "exclusive")], 1)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_failed_last_acquisition_releases_prior_guards_and_interrupt_releases_all
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Failed last acquisition releases prior guards and interrupt releases all.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_failed_last_acquisition_releases_prior_guards_and_interrupt_releases_all(self):
+#         connection = ScriptedConnection()
+#         key = locks.allocate_key(connection, locks.LockNamespace.CLASSIFY, "fixture")
+#         connection.busy.add((key,))
+#         with self.assertRaises(MycelError) as raised:
+#             with locks.operation_guard(connection, "fixture", "classify"):
+#                 self.fail("busy classifier guard entered")
+#         self.assertEqual(raised.exception.code, "busy")
+#         self.assertEqual(sum(connection.held.values()), 0)
+#         connection.busy.clear()
+#         with self.assertRaises(KeyboardInterrupt):
+#             with locks.invocation_guard(connection), locks.operation_guard(connection, "fixture", "classify"):
+#                 raise KeyboardInterrupt()
+#         self.assertEqual(sum(connection.held.values()), 0)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_store_failures_name_the_postgres_error_class_and_state_without_native_text
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Store failures name the postgres error class and state without native text.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_store_failures_name_the_postgres_error_class_and_state_without_native_text(self):
+#         error = psycopg.errors.QueryCanceled("canceling statement: public private-looking fixture URI/password")
+#         message = locks._database_failure(error).message
+#         self.assertIn("QueryCanceled", message)
+#         self.assertIn("SQLSTATE 57014", message)
+#         self.assertNotIn("URI/password", message)
+#         self.assertEqual(locks._database_failure().message,
+#                          "The index store could not complete the lock or transaction operation.")
+#         self.assertEqual(locks.postgres_detail(RuntimeError("not a database fault")), "")
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_unlock_failure_closes_session_without_masking_primary_failure_or_native_text
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Unlock failure closes session without masking primary failure or native text.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_unlock_failure_closes_session_without_masking_primary_failure_or_native_text(self):
+#         connection = ScriptedConnection()
+#         original_execute = connection.execute
+#
+#         def execute(statement, parameters=None):
+#             if "pg_advisory_unlock" in statement:
+#                 raise psycopg.OperationalError("public private-looking fixture URI/password")
+#             return original_execute(statement, parameters)
+#
+#         connection.execute = execute
+#         with self.assertRaises(RuntimeError) as raised:
+#             with locks.structure_guard(connection):
+#                 raise RuntimeError("original public failure")
+#         self.assertEqual(str(raised.exception), "original public failure")
+#         self.assertTrue(connection.closed)
+#         connection = ScriptedConnection()
+#         original_execute = connection.execute
+#         connection.execute = execute
+#         with self.assertRaises(MycelError) as raised:
+#             with locks.structure_guard(connection):
+#                 pass
+#         self.assertEqual(raised.exception.code, "store_unavailable")
+#         self.assertNotIn("URI/password", str(raised.exception))
+#         self.assertTrue(connection.closed)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_invocation_guard_records_exact_session_and_balances_failure_cleanup
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Invocation guard records exact session and balances failure cleanup.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_invocation_guard_records_exact_session_and_balances_failure_cleanup(self):
+#         connection = ScriptedConnection()
+#         identifier = uuid4()
+#         with locks.invocation_guard(connection, invocation_id=identifier) as invocation:
+#             self.assertEqual((invocation.backend_pid, invocation.backend_start, invocation.index_generation), connection.session)
+#             self.assertEqual(connection.invocations[identifier],
+#                              (identifier, invocation.liveness_key, *connection.session))
+#             self.assertEqual(connection.held[((invocation.liveness_key,), "exclusive")], 1)
+#             self.assertTrue(locks.invocation_is_live(connection, invocation))
+#         self.assertEqual(sum(connection.held.values()), 0)
+#         with self.assertRaises(MycelError) as raised:
+#             with locks.invocation_guard(connection, invocation_id=identifier):
+#                 self.fail("reused invocation UUID")
+#         self.assertEqual(raised.exception.code, "invalid_input")
+#         self.assertEqual(sum(connection.held.values()), 0)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_snapshot_and_atomic_helpers_require_idle_autocommit_and_rollback_interrupts
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Snapshot and atomic helpers require idle autocommit and rollback interrupts.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_snapshot_and_atomic_helpers_require_idle_autocommit_and_rollback_interrupts(self):
+#         connection = ScriptedConnection()
+#         with locks.read_snapshot(connection):
+#             self.assertEqual(connection.info.transaction_status, pq.TransactionStatus.INTRANS)
+#         begin = next(index for index, (sql, _) in enumerate(connection.statements)
+#                      if sql.startswith("SET TRANSACTION"))
+#         self.assertIn("REPEATABLE READ, READ ONLY", connection.statements[begin][0])
+#         for error in (RuntimeError("public injected failure"), KeyboardInterrupt()):
+#             with self.assertRaises(type(error)):
+#                 with locks.atomic_transaction(connection):
+#                     connection.registry[("test", "partial")] = 42
+#                     raise error
+#             self.assertNotIn(("test", "partial"), connection.registry)
+#             self.assertEqual(connection.transactions[-1], "rollback")
+#         connection.autocommit = False
+#         with self.assertRaises(MycelError):
+#             with locks.atomic_transaction(connection):
+#                 self.fail("implicit transaction accepted")
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_invalid_identifiers_and_operation_fail_before_sql_or_store_writes
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Invalid identifiers and operation fail before sql or store writes.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_invalid_identifiers_and_operation_fail_before_sql_or_store_writes(self):
+#         connection = ScriptedConnection()
+#         for namespace, identity in (("unknown", "fixture"), (locks.LockNamespace.PASS, ""),
+#                                     (locks.LockNamespace.PASS, "bad\0name")):
+#             with self.assertRaises(MycelError):
+#                 locks.allocate_key(connection, namespace, identity)
+#         with self.assertRaises(MycelError):
+#             with locks.operation_guard(connection, "fixture", "unknown"):
+#                 pass
+#         with self.assertRaises(MycelError):
+#             with locks.invocation_guard(connection, invocation_id="not-a-uuid"):
+#                 pass
+#         self.assertFalse(connection.statements)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockProtocolTests.test_real_store_declarations_cannot_be_replaced_by_protocol_proofs
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Real store declarations cannot be replaced by protocol proofs.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_real_store_declarations_cannot_be_replaced_by_protocol_proofs(self):
+#         self.assertTrue(unittest.defaultTestLoader.getTestCaseNames(LockStoreTests))
+#         self.assertEqual(LockStoreTests.check_kind, "store")
+#         connection = ScriptedConnection()
+#         self.assertTrue(locks.invocation_is_live(connection, uuid4()))
+#         sql = connection.statements[-1][0]
+#         for predicate in ("a.backend_start = i.backend_start", "l.pid = a.pid", "l.granted",
+#                           "l.objsubid = 1", "k.namespace = 'invocation.liveness'",
+#                           "s.index_generation = i.index_generation"):
+#             self.assertIn(predicate, sql)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockStoreTests.test_pass_embed_and_distinct_repositories_follow_conflict_matrix
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Pass embed and distinct repositories follow conflict matrix.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_pass_embed_and_distinct_repositories_follow_conflict_matrix(self):
+#         with self.connect() as first, self.connect() as second:
+#             with locks.operation_guard(first, "fixture", "pass"):
+#                 self.busy(locks.operation_guard(second, "fixture", "pass"))
+#                 with locks.operation_guard(second, "fixture", "embed"):
+#                     pass
+#                 with locks.operation_guard(second, "other", "pass"):
+#                     pass
+#                 with locks.read_snapshot(second):
+#                     self.assertEqual(second.execute("SELECT count(*) FROM public.mycel_lock_keys").fetchone()[0], 5)
+#             for operation in ("embed", "classify", "summaries"):
+#                 with locks.operation_guard(first, "fixture", operation):
+#                     self.busy(locks.operation_guard(second, "fixture", operation))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockStoreTests.test_structure_removal_and_every_mutation_guard_refuse_conflicts
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Structure removal and every mutation guard refuse conflicts.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_structure_removal_and_every_mutation_guard_refuse_conflicts(self):
+#         with self.connect() as first, self.connect() as second:
+#             for operation in ("pass", "embed", "classify", "summaries"):
+#                 with locks.operation_guard(first, "fixture", operation):
+#                     self.busy(locks.removal_guard(second, "fixture"))
+#                     self.busy(locks.structure_guard(second, exclusive=True))
+#             with locks.mutation_guard(first, "fixture"):
+#                 self.busy(locks.removal_guard(second, "fixture"))
+#             with locks.removal_guard(first, "fixture"):
+#                 for operation in ("pass", "embed", "classify", "summaries"):
+#                     self.busy(locks.operation_guard(second, "fixture", operation))
+#                 self.busy(locks.mutation_guard(second, "fixture"))
+#             with locks.structure_guard(first, exclusive=True):
+#                 self.busy(locks.operation_guard(second, "fixture", "pass"))
+#                 self.busy(locks.read_snapshot(second))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockStoreTests.test_paid_model_interval_retains_operation_liveness_and_releases_pass_lock
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Paid model interval retains operation liveness and releases pass lock.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_paid_model_interval_retains_operation_liveness_and_releases_pass_lock(self):
+#         with self.connect() as owner, self.connect() as other:
+#             for operation in ("classify", "summaries"):
+#                 with locks.invocation_guard(owner) as invocation, locks.operation_guard(owner, "fixture", operation):
+#                     with locks.operation_guard(owner, "fixture", "pass"), locks.atomic_transaction(owner):
+#                         owner.execute("SELECT 1")  # Immutable capture transaction.
+#                     self.assertTrue(locks.invocation_is_live(other, invocation))
+#                     self.busy(locks.operation_guard(other, "fixture", operation))
+#                     self.busy(locks.removal_guard(other, "fixture"))
+#                     with locks.operation_guard(other, "fixture", "pass"):
+#                         self.busy(locks.operation_guard(owner, "fixture", "pass"))
+#                     with locks.operation_guard(owner, "fixture", "pass"), locks.atomic_transaction(owner):
+#                         owner.execute("SELECT 1")  # Guarded publication transaction.
+#                 self.assertFalse(locks.invocation_is_live(other, invocation))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockStoreTests.test_atomic_change_rolls_back_all_rows_and_commits_complete_changes
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Atomic change rolls back all rows and commits complete changes.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_atomic_change_rolls_back_all_rows_and_commits_complete_changes(self):
+#         with self.connect() as connection:
+#             with self.assertRaises(RuntimeError):
+#                 with locks.operation_guard(connection, "fixture", "pass"), locks.atomic_transaction(connection):
+#                     for repository in ("fixture", "other"):
+#                         connection.execute("INSERT INTO public.mycel_repository_state (repository, read_locations) VALUES (%s,%s)",
+#                                            (repository, Jsonb({"value": 0})))
+#                     raise RuntimeError("public injected failure")
+#             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_repository_state").fetchone()[0], 0)
+#             with locks.operation_guard(connection, "fixture", "pass"), locks.atomic_transaction(connection):
+#                 for repository in ("fixture", "other"):
+#                     connection.execute("INSERT INTO public.mycel_repository_state (repository, read_locations) VALUES (%s,%s)",
+#                                        (repository, Jsonb({"value": 0})))
+#             self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_repository_state").fetchone()[0], 2)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockStoreTests.test_snapshot_keeps_first_committed_state_and_rejects_writes
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Snapshot keeps first committed state and rejects writes.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_snapshot_keeps_first_committed_state_and_rejects_writes(self):
+#         with self.connect() as reader, self.connect() as writer:
+#             with locks.atomic_transaction(writer):
+#                 writer.execute("INSERT INTO public.mycel_repository_state (repository, read_locations) VALUES ('fixture', %s)",
+#                                (Jsonb({"value": 0}),))
+#             query = "SELECT read_locations FROM public.mycel_repository_state WHERE repository='fixture'"
+#             with locks.read_snapshot(reader):
+#                 self.assertEqual(reader.execute(query).fetchone()[0], {"value": 0})
+#                 with locks.atomic_transaction(writer):
+#                     writer.execute("UPDATE public.mycel_repository_state SET read_locations=%s WHERE repository='fixture'",
+#                                    (Jsonb({"value": 1}),))
+#                 self.assertEqual(reader.execute(query).fetchone()[0], {"value": 0})
+#             self.assertEqual(reader.execute(query).fetchone()[0], {"value": 1})
+#             with self.assertRaises(MycelError):
+#                 with locks.read_snapshot(reader):
+#                     reader.execute("DELETE FROM public.mycel_repository_state")
+#             self.assertEqual(reader.execute("SELECT count(*) FROM public.mycel_repository_state").fetchone()[0], 1)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockStoreTests.test_allocator_guard_and_uncommitted_unique_conflict_refuse_without_waiting
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Allocator guard and uncommitted unique conflict refuse without waiting.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_allocator_guard_and_uncommitted_unique_conflict_refuse_without_waiting(self):
+#         with self.connect() as first, self.connect() as second:
+#             existing = locks.allocate_key(first, locks.LockNamespace.PASS, "existing")
+#             with locks._session_guard(first, locks.ALLOCATOR_LOCK, shared=False, message="fixture"):
+#                 self.assertEqual(locks.allocate_key(second, locks.LockNamespace.PASS, "existing"), existing)
+#                 started = time.monotonic()
+#                 with self.assertRaises(MycelError) as raised:
+#                     locks.allocate_key(second, locks.LockNamespace.PASS, "new")
+#                 self.assertEqual(raised.exception.code, "busy")
+#                 self.assertLess(time.monotonic() - started, 0.5)
+#             with locks.atomic_transaction(first):
+#                 first.execute("INSERT INTO public.mycel_lock_keys (namespace,identity) VALUES ('repository.pass','raced')")
+#                 started = time.monotonic()
+#                 with self.assertRaises(MycelError) as raised:
+#                     locks.allocate_key(second, locks.LockNamespace.PASS, "raced")
+#                 self.assertEqual(raised.exception.code, "busy")
+#                 # This exercises an actual uncommitted unique-key conflict,
+#                 # which has no INSERT ... NOWAIT syntax. A 100 ms fallback
+#                 # would fail this bound even on an otherwise idle server.
+#                 self.assertLess(time.monotonic() - started, 0.1)
+#                 self.assertEqual(second.info.transaction_status, pq.TransactionStatus.IDLE)
+#                 self.assertEqual(second.execute(
+#                     "SELECT count(*) FROM public.mycel_lock_keys "
+#                     "WHERE namespace='repository.pass' AND identity='raced'").fetchone(), (0,))
+#                 # Refusal must roll back the allocation and release its
+#                 # session guard, while the original writer still holds its row.
+#                 with locks._session_guard(first, locks.ALLOCATOR_LOCK, shared=False, message="fixture"):
+#                     pass
+#             self.assertEqual(locks.allocate_key(second, locks.LockNamespace.PASS, "raced"),
+#                              locks.allocate_key(first, locks.LockNamespace.PASS, "raced"))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_locks.py::LockStoreTests.test_exact_liveness_uses_full_bigint_session_start_and_not_other_lock_holders
+# Reason: Narrower case removed from this family after retaining test_killed_owning_process_releases_every_lock_without_cleanup_files. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Exact liveness uses full bigint session start and not other lock holders.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_locks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_exact_liveness_uses_full_bigint_session_start_and_not_other_lock_holders(self):
+#         with self.connect() as owner, self.connect() as other:
+#             owner.execute("SELECT pg_catalog.setval('public.mycel_lock_keys_key_seq', 4294967311, false)")
+#             with locks.invocation_guard(owner) as invocation:
+#                 self.assertGreater(invocation.liveness_key, 2**32)
+#                 self.assertTrue(locks.invocation_is_live(other, invocation))
+#                 with locks.atomic_transaction(owner):
+#                     owner.execute("UPDATE public.mycel_invocations SET backend_start=backend_start-interval '1 second' WHERE id=%s",
+#                                   (invocation.id,))
+#                 self.assertFalse(locks.invocation_is_live(other, invocation))
+#                 with locks.atomic_transaction(owner):
+#                     owner.execute("UPDATE public.mycel_invocations SET backend_start=%s WHERE id=%s",
+#                                   (invocation.backend_start, invocation.id))
+#                 self.assertTrue(locks.invocation_is_live(other, invocation))
+#             with locks._session_guard(other, invocation.liveness_key, shared=False, message="fixture"):
+#                 self.assertFalse(locks.invocation_is_live(other, invocation))
+#             with locks.operation_guard(other, "fixture", "pass"):
+#                 self.assertFalse(locks.invocation_is_live(other, invocation))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END

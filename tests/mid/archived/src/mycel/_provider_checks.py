@@ -72,3 +72,20 @@ def run_provider_checks(settings, suite, *, repository, build, implementation_id
               (ProviderAcceptance('test_same_run_finite_profile_qualification'), 'eval', ('MYC-13.20',)))
     proofs = run_on_demand_checks(checks, implementation_identity=implementation_identity)
     return proofs, reports
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/mid/archived/src/mycel/_provider_checks.py::ProviderAcceptance.test_same_run_finite_profile_qualification
+# Reason: Narrower case removed from this family after retaining test_fixed_embedding_compatibility, test_configured_drift_live_pipeline. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Same run finite profile qualification.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/archived/src/mycel/_provider_checks.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#         def test_same_run_finite_profile_qualification(self):
+#             report = reports.get('drift')
+#             self.assertIsNotNone(report, 'The same process did not complete its real live Drift evaluation.')
+#             self.assertTrue(report['qualified'])
+#             self.assertEqual(report['fileHash'], suite.file_hash)
+#             self.assertEqual(report['build'], build)
+#             self.assertFalse(report['profileQualificationIsSameBuildProof'])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END

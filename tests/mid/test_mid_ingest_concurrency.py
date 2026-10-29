@@ -80,3 +80,89 @@ class IngestConcurrencyStoreTests(_support.IngestConcurrencyStoreTests):
                     self.assertEqual(member.chunk.source, exact)
                     self.assertEqual((base / name / "guide.md").read_bytes(), exact)
 # TEST-TIER-END tests/test_ingest_concurrency.py::IngestConcurrencyStoreTests.test_public_ingest_survives_disjoint_publication_inside_its_producer_transaction
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/mid/test_mid_ingest_concurrency.py::IngestCrossRepositoryStoreTests.test_foreign_refresh_and_requested_pass_share_cumulative_reply_and_final_activity
+# Reason: Narrower case removed from this family after retaining test_public_ingest_survives_disjoint_publication_inside_its_producer_transaction. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Foreign refresh and requested pass share cumulative reply and final activity.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_ingest_concurrency.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_foreign_refresh_and_requested_pass_share_cumulative_reply_and_final_activity(self):
+#         fixture = self.fixture
+#         fixture.add_repository("downstream",
+#             b'---\nsources: ["fixture:@artifact/guide.md#Guide"]\n---\n# Answer\nStable answer.\n')
+#         status, initial = fixture.invoke("--repo", "fixture", "--repo", "downstream")
+#         self.assertEqual(status, 0, initial)
+#         (fixture.base.artifact / "guide.md").write_bytes(b"# Guide\nChanged selected source.\n")
+#         status, reply = fixture.invoke("--repo", "fixture", "--repo", "downstream")
+#         self.assertEqual(status, 0, reply)
+#         foreign = reply["repositories"]["fixture"]["dependencyRepositories"]["downstream"]
+#         direct = reply["repositories"]["downstream"]
+#         self.assertEqual(foreign["refsChecked"], 1)
+#         self.assertEqual(direct["refsChecked"], 2)
+#         self.assertEqual(direct["refsChanged"], 1)
+#         self.assertEqual(direct["files"]["changed"], 0)
+#         self.assertEqual(direct["pending"], direct["embedding"]["versions"]["pending"])
+#         from mycel._activity import activity_state
+#         with fixture.base.connect() as connection:
+#             entries = {}
+#             for repository in ("fixture", "downstream"):
+#                 identifier = connection.execute("SELECT id FROM public.mycel_activity "
+#                     "WHERE repository=%s ORDER BY id DESC LIMIT 1", (repository,)).fetchone()[0]
+#                 entries[repository] = activity_state(connection, identifier)
+#                 self.assertEqual(entries[repository]["counts"], reply["repositories"][repository])
+#             self.assertEqual(entries["fixture"]["invocation"], entries["downstream"]["invocation"])
+#             self.assertEqual(entries["downstream"]["files"], [])
+#             self.assertEqual(entries["downstream"]["decisions"], [])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_ingest_concurrency.py::IngestCrossRepositoryStoreTests.test_selected_source_pass_keeps_unrelated_pending_ref_in_same_foreign_chunk_exact
+# Reason: Narrower case removed from this family after retaining test_public_ingest_survives_disjoint_publication_inside_its_producer_transaction. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Selected source pass keeps unrelated pending ref in same foreign chunk exact.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_ingest_concurrency.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_selected_source_pass_keeps_unrelated_pending_ref_in_same_foreign_chunk_exact(self):
+#         fixture = self.fixture
+#         third = self.prepare_two_sources()
+#         (third / "answer.md").write_bytes(b"# Answer\nChanged third source.\n")
+#         with fixture.base.connect() as connection:
+#             # A complete C publication deliberately leaves its dependency
+#             # observations to the later owning producer. A must observe only
+#             # its own affected ref, even though B also declares a ref to C.
+#             LocatedCaptureStore(connection).apply(fixture.base.settings,
+#                 capture_repository(fixture.base.settings, "third"))
+#             before = self.third_dependency(connection)
+#         (fixture.base.artifact / "guide.md").write_bytes(b"# Guide\nChanged selected source.\n")
+#         status, reply = fixture.invoke("--repo", "fixture")
+#         self.assertEqual(status, 0, reply)
+#         self.assertTrue(reply["repositories"]["fixture"]["ran"])
+#         with fixture.base.connect() as connection:
+#             self.assertEqual(self.third_dependency(connection), before)
+#             self.selected_ref_changed(connection)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_ingest_concurrency.py::IngestCrossRepositoryStoreTests.test_unindexed_unrelated_source_does_not_refuse_selected_foreign_ref_refresh
+# Reason: Narrower case removed from this family after retaining test_public_ingest_survives_disjoint_publication_inside_its_producer_transaction. Its extra expected-state/branch permutation is not admitted as a separate consequential integration or independent invariant under the raised bar; this is a deliberate reduction of qualification breadth, not equivalent coverage. Case reviewed: Unindexed unrelated source does not refuse selected foreign ref refresh.
+# Source: mycel@560e2e2b1623066240ebd128bfa1e552f0a4f25f:tests/mid/test_mid_ingest_concurrency.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_unindexed_unrelated_source_does_not_refuse_selected_foreign_ref_refresh(self):
+#         fixture = self.fixture
+#         third = self.prepare_two_sources()
+#         with fixture.base.connect() as connection:
+#             before = self.third_dependency(connection)
+#         (third / "answer.md").write_bytes(b"# Answer\nUnindexed unrelated third edit.\n")
+#         (fixture.base.artifact / "guide.md").write_bytes(b"# Guide\nChanged selected source.\n")
+#         status, reply = fixture.invoke("--repo", "fixture")
+#         self.assertEqual(status, 0, reply)
+#         self.assertTrue(reply.get("repositories", {}).get("fixture", {}).get("ran"), reply)
+#         self.assertNotIn("refused", reply["repositories"]["fixture"])
+#         self.assertEqual(reply["repositories"]["fixture"]["stalePending"], [])
+#         with fixture.base.connect() as connection:
+#             self.assertEqual(self.third_dependency(connection), before)
+#             self.selected_ref_changed(connection)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END

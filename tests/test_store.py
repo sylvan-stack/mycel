@@ -214,3 +214,60 @@ class StoreUnitTests(unittest.TestCase):
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/test_store.py::StoreUnitTests.test_same_format_and_dimensions_are_true_noop_and_keep_generation
+# Reason: Repeats no-op initialization over a fake catalogue; actual init/read tests inspect stable generation and absence of writes.
+# Source: mycel@0e58d3be017922339df16c1310ae5e2cc431bc77:tests/test_store.py
+# Retained evidence at review: tests/test_store_acceptance.py: test_product_init_has_both_indexes_only_metadata_and_stable_generation; test_compatible_init_and_read_guards_issue_no_ddl
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_same_format_and_dimensions_are_true_noop_and_keep_generation(self):
+#         connection = CatalogueConnection(current=True)
+#         before = deepcopy(connection.metadata)
+#         result = store.initialize_store(connection, dimensions=1024)
+#         self.assertFalse(result.changed)
+#         self.assertEqual(connection.metadata, before)
+#         self.assertEqual(result.before, result.after)
+#         self.assertFalse(connection.mutations)
+#         self.assertTrue(any("pg_try_advisory_lock_shared" in sql for sql, _ in connection.sql))
+#         self.assertFalse(any("pg_try_advisory_lock(" in sql for sql, _ in connection.sql))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_store.py::StoreUnitTests.test_newer_format_is_reported_and_refused_without_mutation
+# Reason: Routine newer-version comparison duplicates both the future-table edge case and real-store refusal.
+# Source: mycel@0e58d3be017922339df16c1310ae5e2cc431bc77:tests/test_store.py
+# Retained evidence at review: tests/test_store_acceptance.py: test_newer_and_foreign_stores_refuse_without_reading_foreign_or_v1_tables
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_newer_format_is_reported_and_refused_without_mutation(self):
+#         connection = CatalogueConnection(current=True)
+#         singleton, _, dimensions, generation = connection.metadata[0]
+#         connection.metadata[0] = (singleton, store.STORE_FORMAT + 1, dimensions, generation)
+#         self.assertEqual(store.inspect_store(connection).state, "newer")
+#         self.assertEqual(store.inspect_store(connection).format, store.STORE_FORMAT + 1)
+#         for operation in (lambda: store.initialize_store(connection, dimensions=1024),
+#                           lambda: store.require_store(connection)):
+#             error = self.error("store_format", operation)
+#             self.assertIn(str(store.STORE_FORMAT + 1), str(error))
+#             self.assertIn(str(store.STORE_FORMAT), str(error))
+#         self.assertFalse(connection.mutations)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/test_store.py::StoreUnitTests.test_embed_dimension_guard_refuses_but_retrieval_reports_for_wording_fallback
+# Reason: Duplicates the exact embed/search dimension distinction already asserted before an actual dimension migration.
+# Source: mycel@0e58d3be017922339df16c1310ae5e2cc431bc77:tests/test_store.py
+# Retained evidence at review: tests/test_store_acceptance.py: test_dimension_change_removes_only_vectors_retaining_complete_text_parts_and_failures
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_embed_dimension_guard_refuses_but_retrieval_reports_for_wording_fallback(self):
+#         connection = CatalogueConnection(current=True)
+#         self.error("store_format", lambda: store.require_store(connection, dimensions=512, operation="embed"))
+#         inspection = store.require_store(connection, dimensions=512, operation="search")
+#         self.assertEqual(inspection.dimensions, 1024)
+#         self.assertFalse(connection.mutations)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
