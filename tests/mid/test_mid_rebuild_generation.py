@@ -2,69 +2,10 @@
 from __future__ import annotations
 
 import test_rebuild_generation as _support
-from test_rebuild_generation import (
-    AT,
-    ClassificationStore,
-    ClassificationStoreFixture,
-    DriftStore,
-    EvidenceStore,
-    RebuildGenerationStoreTests,
-    StringIO,
-    TABLES,
-    UUID,
-    contextmanager,
-    inspect_store,
-    json,
-    os,
-    patch,
-    require_check_database,
-    run,
-    sha256,
-    unittest,
-)
+from test_rebuild_generation import (DriftStore ,EvidenceStore ,inspect_store ,sha256)
 
 
 class RebuildGenerationStoreTests(_support.RebuildGenerationStoreTests):
-# TEST-TIER-BEGIN tests/test_rebuild_generation.py::RebuildGenerationStoreTests.test_lost_store_cli_rebuild_reports_new_generation_and_only_new_current_baselines
-    def test_lost_store_cli_rebuild_reports_new_generation_and_only_new_current_baselines(self):
-        old_generation, old_baseline, verification, prepared = self.history()
-        with self.base.connect() as connection:
-            self.erase_store(connection)
-        self.assertIsNone(self.generation())
-        initialized = self.invoke('init')
-        generation = initialized['indexGeneration']
-        self.assertNotEqual(generation, old_generation)
-        self.assertEqual(self.generation(), generation)
-        with self.base.connect() as connection:
-            entry = connection.execute('SELECT id FROM public.mycel_activity').fetchone()[0]
-        detail = self.invoke('activity', '--entry', str(entry))['entries'][0]
-        self.assertEqual((detail['kind'], detail['indexGeneration'], detail['counts']),
-                         ('init', generation, initialized))
-        self.ingest_files()
-        with self.base.connect() as connection:
-            dependencies = self.fixture.fixture.dependencies(connection)
-            self.assertEqual({row[2] for row in dependencies}, {'declared'})
-            self.assertEqual(len(dependencies), 3)
-            baseline = next(row[7] for row in dependencies if row[4] == self.fixture.addresses[0])
-            self.assertNotEqual(baseline, old_baseline)
-            captured = EvidenceStore(connection).read_baseline('downstream', baseline)
-            self.assertIn(self.fixture.fixture.source.read_bytes(), [blob.source for blob in captured.snapshots])
-            self.assertNotIn(self.fixture.fixture.source_bytes, [blob.source for blob in captured.snapshots])
-            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_relations').fetchone()[0], 0)
-            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_verifications').fetchone()[0], 0)
-            self.assertEqual(connection.execute('SELECT count(*) FROM public.mycel_classification_work').fetchone()[0], 0)
-            self.assertEqual(DriftStore(connection).list('downstream', closed=True, all_versions=True)['drifts'], [])
-            for digest in (old_baseline, prepared.input_hash, sha256(self.fixture.fixture.source_bytes).hexdigest()):
-                self.assertIsNone(connection.execute('SELECT 1 FROM public.mycel_manifests '
-                    'WHERE repository=%s AND hash=%s', ('downstream', digest)).fetchone())
-                self.assertIsNone(connection.execute('SELECT 1 FROM public.mycel_snapshots '
-                    'WHERE repository=%s AND hash=%s', ('downstream', digest)).fetchone())
-            entries = connection.execute('SELECT id,kind,index_generation FROM public.mycel_activity ORDER BY id').fetchall()
-            self.assertEqual({row[1] for row in entries}, {'init', 'ingest'})
-            self.assertEqual({str(row[2]) for row in entries}, {generation})
-        for entry, _, _ in entries:
-            self.assertEqual(self.invoke('activity', '--entry', str(entry))['entries'][0]['indexGeneration'], generation)
-# TEST-TIER-END tests/test_rebuild_generation.py::RebuildGenerationStoreTests.test_lost_store_cli_rebuild_reports_new_generation_and_only_new_current_baselines
 
 # TEST-TIER-BEGIN tests/test_rebuild_generation.py::RebuildGenerationStoreTests.test_exact_store_backup_restores_generation_pins_verification_and_classifier_bytes
     def test_exact_store_backup_restores_generation_pins_verification_and_classifier_bytes(self):

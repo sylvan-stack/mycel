@@ -2,67 +2,10 @@
 from __future__ import annotations
 
 import test_classification_guard_edges as _support
-from test_classification_guard_edges import (
-    AT,
-    ClassificationGuardEdgeStoreTests,
-    ClassificationStore,
-    ClassificationStoreFixture,
-    Jsonb,
-    NOW,
-    RelateStore,
-    SourceResolver,
-    json,
-    os,
-    sha256,
-    timedelta,
-    unittest,
-)
+from test_classification_guard_edges import (AT ,ClassificationStore ,Jsonb ,NOW ,json ,os ,timedelta)
 
 
 class ClassificationGuardEdgeStoreTests(_support.ClassificationGuardEdgeStoreTests):
-# TEST-TIER-BEGIN tests/test_classification_guard_edges.py::ClassificationGuardEdgeStoreTests.test_two_related_inputs_retain_independent_evidence_and_observation_maps
-    def test_two_related_inputs_retain_independent_evidence_and_observation_maps(self):
-        self.fixture.write_answer()
-        with self.base.connect() as connection:
-            self.fixture.prepare(connection)
-            for address in self.fixture.addresses[:2]:
-                RelateStore(connection).apply(self.base.settings, self.fixture.ref, address,
-                    captured_at=AT, settings_home=self.base.base)
-            self.fixture.change(connection, 1, 2)
-            self.old_files()
-            paths = (self.fixture.fixture.source, self.fixture.extra[0])
-            for path, seconds in zip(paths, (20, 40), strict=True):
-                stamp = (NOW - timedelta(seconds=seconds)).timestamp()
-                os.utime(path, (stamp, stamp))
-            drift = self.fixture.one(connection)
-            reasons = [self.fixture.reason(drift, number, kind='related_changed') for number in (1, 2)]
-            writer = ClassificationStore(connection)
-            first = writer.prepare(self.base.settings, drift['id'], reasons[0]['id'], at=AT)
-            second = writer.prepare(self.base.settings, drift['id'], reasons[1]['id'], at=AT)
-            for prepared in (first, second):
-                self.assertIsNone(prepared.fault, prepared.as_dict())
-                self.assertEqual(prepared.decision.payload['baseline']['kind'], 'related')
-                self.assertEqual(prepared.decision.payload['context'], ())
-                self.assertEqual(prepared.status, 'pending_debounce')
-                self.assertIn('Original', prepared.decision.payload['before'][0]['text'])
-                self.assertIn('Changed', prepared.decision.payload['current']['members'][0]['text'])
-            self.assertNotEqual(first.input_hash, second.input_hash)
-            self.assertEqual(first.eligible_at, (NOW + timedelta(seconds=280)).isoformat(timespec='microseconds'))
-            self.assertEqual(second.eligible_at, (NOW + timedelta(seconds=260)).isoformat(timespec='microseconds'))
-            state = connection.execute('SELECT state FROM public.mycel_drifts WHERE id=%s', (drift['id'],)).fetchone()[0]
-            observations = state['classificationObservations']
-            self.assertTrue({'fixture:@artifact/source.md', 'fixture:@artifact/source2.md'} <= set(observations))
-            self.assertTrue({first.input_hash, second.input_hash} <= set(state['classificationRequests']))
-            repeated = writer.prepare(self.base.settings, drift['id'], reasons[0]['id'],
-                                      at=(NOW + timedelta(seconds=60)).isoformat())
-            self.assertEqual(repeated.input_hash, first.input_hash)
-            self.assertEqual(repeated.eligible_at, first.eligible_at)
-            retained = connection.execute('SELECT state FROM public.mycel_drifts WHERE id=%s', (drift['id'],)).fetchone()[0]
-            self.assertEqual(retained['classificationObservations']['fixture:@artifact/source2.md'],
-                             observations['fixture:@artifact/source2.md'])
-            self.assertTrue(self.stage_check(connection, repeated, at=first.eligible_at)['allowed'])
-            self.assertTrue(self.stage_check(connection, second, at=second.eligible_at)['allowed'])
-# TEST-TIER-END tests/test_classification_guard_edges.py::ClassificationGuardEdgeStoreTests.test_two_related_inputs_retain_independent_evidence_and_observation_maps
 
 # TEST-TIER-BEGIN tests/test_classification_guard_edges.py::ClassificationGuardEdgeStoreTests.test_removed_section_keeps_live_file_and_tombstone_timers_and_outside_edit_restarts_file
     def test_removed_section_keeps_live_file_and_tombstone_timers_and_outside_edit_restarts_file(self):
@@ -142,75 +85,3 @@ class ClassificationGuardEdgeStoreTests(_support.ClassificationGuardEdgeStoreTes
             state = connection.execute('SELECT state FROM public.mycel_drifts WHERE id=%s', (drift['id'],)).fetchone()[0]
             self.assertEqual(state.get('classificationRequests', {}), {})
 # TEST-TIER-END tests/test_classification_guard_edges.py::ClassificationGuardEdgeStoreTests.test_standalone_ref_fault_is_required_missing_context_without_silent_omission
-
-# TEST-TIER-BEGIN tests/test_classification_guard_edges.py::ClassificationGuardEdgeStoreTests.test_code_family_and_whole_file_preserve_complete_exact_membership_and_bytes
-    def test_code_family_and_whole_file_preserve_complete_exact_membership_and_bytes(self):
-        code = self.base.code / 'policy.py'
-        original = (b'# exact file preface\nclass Policy:\n    def apply(self):\n        return 1\n'
-                    b'    def keep(self):\n        return 2\n# exact file footer\n')
-        code.write_bytes(original)
-        self.fixture.write_answer('fixture:@code/policy.py#Policy', 'fixture:@code/policy.py')
-        self.base.commit()
-        with self.base.connect() as connection:
-            self.fixture.prepare(connection)
-            current = original.replace(b'return 1', b'return 3').replace(b'# exact file footer',
-                b'    def zed(self):\n        return 4\n# exact file footer')
-            code.write_bytes(current)
-            self.fixture.fixture.publish(connection)
-            self.fixture.sync(connection)
-            self.old_files()
-            stamp = (NOW - timedelta(days=1)).timestamp()
-            os.utime(code, (stamp, stamp))
-            drift = self.fixture.one(connection)
-            dependency_by_ref = {row[3]: str(row[0]) for row in self.fixture.fixture.dependencies(connection)}
-            requests = {}
-            for ref in ('fixture:@code/policy.py#Policy', 'fixture:@code/policy.py'):
-                reason = next(item for item in drift['sources'] if item['dependency'] == dependency_by_ref[ref]
-                              and item['kind'] == 'source_changed')
-                prepared = ClassificationStore(connection).prepare(self.base.settings, drift['id'], reason['id'], at=AT)
-                self.assertIsNone(prepared.fault, prepared.as_dict())
-                self.assertTrue(self.stage_check(connection, prepared)['allowed'])
-                requests[ref] = prepared
-            family = requests['fixture:@code/policy.py#Policy'].decision.payload
-            whole = requests['fixture:@code/policy.py'].decision.payload
-            self.assertEqual(family['baseline']['selection'], 'family')
-            self.assertEqual([item['snapshot']['place']['name'] for item in family['before']],
-                             ['Policy', 'Policy.apply', 'Policy.keep'])
-            self.assertEqual([item['snapshot']['place']['name'] for item in family['current']['members']],
-                             ['Policy', 'Policy.apply', 'Policy.keep', 'Policy.zed'])
-            resolved = SourceResolver.from_store(connection, self.base.settings).resolve('fixture:@code/policy.py#Policy').selection
-            self.assertEqual([(item['snapshot']['place']['address'], item['text'].encode()) for item in family['current']['members']],
-                             [(member.place.address, member.chunk.source) for member in resolved.members])
-            self.assertEqual(whole['baseline']['selection'], 'file')
-            self.assertEqual(whole['before'][0]['text'].encode(), original)
-            self.assertEqual(whole['current']['members'][0]['text'].encode(), current)
-            self.assertEqual(whole['current']['members'][0]['snapshot']['hash'], sha256(current).hexdigest())
-            for prepared in requests.values():
-                retained = connection.execute('SELECT bytes FROM public.mycel_snapshots WHERE repository=%s AND hash=%s',
-                    ('downstream', prepared.input_hash)).fetchone()[0]
-                self.assertEqual(bytes(retained), prepared.decision.canonical_bytes)
-# TEST-TIER-END tests/test_classification_guard_edges.py::ClassificationGuardEdgeStoreTests.test_code_family_and_whole_file_preserve_complete_exact_membership_and_bytes
-
-# TEST-TIER-BEGIN tests/test_classification_guard_edges.py::ClassificationGuardEdgeStoreTests.test_unchanged_preparation_sixty_seconds_later_preserves_request_bundle_and_cache
-    def test_unchanged_preparation_sixty_seconds_later_preserves_request_bundle_and_cache(self):
-        with self.base.connect() as connection:
-            first = self.prepare(connection)
-            writer = ClassificationStore(connection)
-            self.assertTrue(writer.apply(self.base.settings, first, judgement='needs_review', at=AT)['applied'])
-            cached = writer.reuse(self.base.settings, first, at=AT)
-            before = connection.execute('SELECT state FROM public.mycel_drifts WHERE id=%s', (first.drift_id,)).fetchone()[0]
-            snapshot_count = connection.execute("SELECT count(*) FROM public.mycel_snapshots WHERE repository='downstream'").fetchone()[0]
-            later = (NOW + timedelta(seconds=60)).isoformat()
-            repeated = writer.prepare(self.base.settings, first.drift_id, first.reason_id, at=later)
-            self.assertIsNone(repeated.fault, repeated.as_dict())
-            self.assertEqual((repeated.input_hash, repeated.recorded_at, repeated.guards_bytes),
-                             (first.input_hash, first.recorded_at, first.guards_bytes))
-            self.assertEqual(repeated.bundle.evidence_hash, first.bundle.evidence_hash)
-            self.assertEqual(repeated.eligible_at, first.eligible_at)
-            self.assertEqual(writer.reuse(self.base.settings, repeated, at=later), cached)
-            self.assertTrue(self.stage_check(connection, first, at=later)['allowed'])
-            after = connection.execute('SELECT state FROM public.mycel_drifts WHERE id=%s', (first.drift_id,)).fetchone()[0]
-            self.assertEqual(after['classificationRequests'], before['classificationRequests'])
-            self.assertEqual(connection.execute("SELECT count(*) FROM public.mycel_snapshots WHERE repository='downstream'")
-                             .fetchone()[0], snapshot_count)
-# TEST-TIER-END tests/test_classification_guard_edges.py::ClassificationGuardEdgeStoreTests.test_unchanged_preparation_sixty_seconds_later_preserves_request_bundle_and_cache

@@ -7,7 +7,6 @@ Component profile reports remain separately reviewable provenance.
 from __future__ import annotations
 
 
-
 import unittest
 
 from ._coverage import run_on_demand_checks
@@ -68,13 +67,6 @@ def run_provider_checks(settings, suite, *, repository, build, implementation_id
             self.assertEqual(report['cases'], len(suite.drifts))
             self.assertTrue(report['qualified'], 'Actual configured provider-profile qualification did not pass.')
 
-        def test_same_run_finite_profile_qualification(self):
-            report = reports.get('drift')
-            self.assertIsNotNone(report, 'The same process did not complete its real live Drift evaluation.')
-            self.assertTrue(report['qualified'])
-            self.assertEqual(report['fileHash'], suite.file_hash)
-            self.assertEqual(report['build'], build)
-            self.assertFalse(report['profileQualificationIsSameBuildProof'])
     checks = ((ProviderAcceptance('test_fixed_embedding_compatibility'), 'live', ('MYC-13.9',)),
               (ProviderAcceptance('test_configured_drift_live_pipeline'), 'live', ('MYC-13.19',)),
               (ProviderAcceptance('test_same_run_finite_profile_qualification'), 'eval', ('MYC-13.20',)))

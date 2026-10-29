@@ -2,93 +2,11 @@
 from __future__ import annotations
 
 import test_capture_history as _support
-from test_capture_history import (
-    CaptureHistoryStoreTests,
-    DiskCaptureStore,
-    Jsonb,
-    LocatedCaptureStore,
-    MycelError,
-    _capture,
-    _fixture_module,
-    os,
-    patch,
-    replace,
-    sha256,
-    unittest,
-)
+from test_capture_history import (DiskCaptureStore ,Jsonb ,MycelError ,_capture ,os ,patch ,replace ,sha256)
 
 
 class CaptureHistoryStoreTests(_support.CaptureHistoryStoreTests):
-# TEST-TIER-BEGIN tests/test_capture_history.py::CaptureHistoryStoreTests.test_branch_and_stash_blobs_are_read_in_one_batch_and_a_failed_batch_reads_each_alone
-    def test_branch_and_stash_blobs_are_read_in_one_batch_and_a_failed_batch_reads_each_alone(self):
-        self.populate()
-        calls = []
 
-        def counting(args, **kwargs):
-            calls.append(tuple(args[:2]))
-            return _capture.run_git(args, **kwargs)
-
-        first = _capture.capture_repository(self.settings, 'fixture', _git=counting)
-        self.assertTrue(first.deletion_safe)
-        self.assertIn(('cat-file', '--batch'), calls)
-        # Only the stash's own commit header is read alone.
-        self.assertEqual(calls.count(('cat-file', '-p')), 1)
-
-        def no_batch(args, **kwargs):
-            calls.append(tuple(args[:2]))
-            if tuple(args[:2]) == ('cat-file', '--batch'):
-                return _capture.CompletedChild(1, b'', b'', 0.0)
-            return _capture.run_git(args, **kwargs)
-
-        calls.clear()
-        second = _capture.capture_repository(self.settings, 'fixture', _git=no_batch)
-        self.assertGreater(calls.count(('cat-file', '-p')), 1)
-        self.assertEqual([[file.source for file in location.files] for location in second.locations],
-                         [[file.source for file in location.files] for location in first.locations])
-# TEST-TIER-END tests/test_capture_history.py::CaptureHistoryStoreTests.test_branch_and_stash_blobs_are_read_in_one_batch_and_a_failed_batch_reads_each_alone
-
-# TEST-TIER-BEGIN tests/test_capture_history.py::CaptureHistoryStoreTests.test_unchanged_disk_and_located_repeat_from_persisted_history_never_splits
-    def test_unchanged_disk_and_located_repeat_from_persisted_history_never_splits(self):
-        self.populate()
-        with self.connect() as connection:
-            first = LocatedCaptureStore(connection).apply(self.settings, 'fixture')
-            before = self.state(connection)
-            identities = tuple((file.binding, file.chunk_versions) for file in first.files)
-        # A new store object and connection must use persisted parser history,
-        # rather than process-local previous-manifest state.
-        with self.connect() as connection:
-            with patch.object(_capture, 'split_markdown', wraps=_capture.split_markdown) as markdown, \
-                    patch.object(_capture, 'chunk_code', wraps=_capture.chunk_code) as code:
-                store = LocatedCaptureStore(connection)
-                captured = store.capture(self.settings, 'fixture')
-                self.assertTrue(all(file.reused_parse for file in captured.disk.files))
-                self.assertTrue(all(location.reused for location in captured.locations[1:]))
-                frontmatter = next(file.parsed.frontmatter for file in captured.disk.files
-                                   if file.corpus == 'documents')
-                self.assertEqual(frontmatter['unknown_nul'], 'malformed\0ref')
-                self.assertEqual(frontmatter['unknown_surrogate'], '\ud800')
-                self.assertEqual(frontmatter['unknown\0key'], '\udfff')
-                repeat = store.apply(self.settings, 'fixture')
-            self.assertEqual((markdown.call_count, code.call_count), (0, 0))
-            self.assertFalse(repeat.changed)
-            self.assertEqual(tuple((file.binding, file.chunk_versions) for file in repeat.files), identities)
-            self.assertEqual(self.state(connection), before)
-        # The disk-only API also retains unchanged parse history without a Git
-        # publication catalog, while reading every selected disk file again.
-        self.git('update-ref', '-d', 'refs/stash')
-        self.git('update-ref', '-d', 'refs/heads/feature')
-        self.git('update-ref', '-d', 'refs/heads/fixture-main')
-        with self.connect() as connection:
-            disk = DiskCaptureStore(connection)
-            disk.apply(self.settings, 'fixture')
-            before = self.state(connection)
-            with patch.object(_capture, 'split_markdown', wraps=_capture.split_markdown) as markdown, \
-                    patch.object(_capture, 'chunk_code', wraps=_capture.chunk_code) as code:
-                repeat = disk.apply(self.settings, 'fixture')
-            self.assertEqual((markdown.call_count, code.call_count), (0, 0))
-            self.assertFalse(repeat.changed)
-            self.assertEqual(self.state(connection), before)
-# TEST-TIER-END tests/test_capture_history.py::CaptureHistoryStoreTests.test_unchanged_disk_and_located_repeat_from_persisted_history_never_splits
 
 # TEST-TIER-BEGIN tests/test_capture_history.py::CaptureHistoryStoreTests.test_changed_code_after_preliminary_scan_is_not_hidden_or_preemptively_stored
     def test_changed_code_after_preliminary_scan_is_not_hidden_or_preemptively_stored(self):
@@ -120,35 +38,6 @@ class CaptureHistoryStoreTests(_support.CaptureHistoryStoreTests):
                 'WHERE id=%s', (current.binding.version,)).fetchone()[0]), self.source.read_bytes())
 # TEST-TIER-END tests/test_capture_history.py::CaptureHistoryStoreTests.test_changed_code_after_preliminary_scan_is_not_hidden_or_preemptively_stored
 
-# TEST-TIER-BEGIN tests/test_capture_history.py::CaptureHistoryStoreTests.test_reused_parses_preserve_late_disk_git_and_effective_settings_rollback_guards
-    def test_reused_parses_preserve_late_disk_git_and_effective_settings_rollback_guards(self):
-        self.populate()
-        with self.connect() as connection:
-            store = LocatedCaptureStore(connection)
-            store.apply(self.settings, 'fixture')
-            initial_settings = self.config.read_bytes()
-            initial_source = self.source.read_bytes()
-            for stage in ('disk', 'git', 'settings'):
-                with self.subTest(stage=stage):
-                    before = self.state(connection)
-                    def late_change(repository, counts):
-                        if stage == 'disk':
-                            self.source.write_bytes(b'def value():\n    return 7\n')
-                        elif stage == 'git':
-                            self.git('branch', 'late-ref')
-                        else:
-                            self.config.write_bytes(initial_settings.replace(b'enabled=true', b'enabled=false'))
-                        return counts
-                    try:
-                        with self.assertRaises(MycelError):
-                            store.apply(self.settings, 'fixture', reply_counts=late_change)
-                        self.assertEqual(self.state(connection), before)
-                    finally:
-                        self.source.write_bytes(initial_source)
-                        self.config.write_bytes(initial_settings)
-                        if stage == 'git':
-                            self.git('branch', '--delete', 'late-ref')
-# TEST-TIER-END tests/test_capture_history.py::CaptureHistoryStoreTests.test_reused_parses_preserve_late_disk_git_and_effective_settings_rollback_guards
 
 # TEST-TIER-BEGIN tests/test_capture_history.py::CaptureHistoryStoreTests.test_forged_incoming_parse_is_refused_and_corrupt_or_changed_parser_cache_reparses
     def test_forged_incoming_parse_is_refused_and_corrupt_or_changed_parser_cache_reparses(self):

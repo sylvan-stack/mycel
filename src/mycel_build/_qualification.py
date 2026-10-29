@@ -79,6 +79,8 @@ def automatic_contract(frozen: dict[str, bytes]) -> dict:
     """Derive every automatic check and its class kind independently from the captured test sources."""
     try:
         declarations = {}
+        if 'tests/qualification-status.json' in frozen:
+            raise BuildError('refused', 'SYL-327 reduced the retained test selection. Full qualification requires an explicitly requested review of the requirement mapping; see TESTS.md.')
         if any(path.startswith('tests/') and b'# TEST-TIER-DISABLED-BEGIN' in raw
                for path, raw in frozen.items()):
             raise BuildError('refused', 'Test sources are commented. Full qualification requires restored sources and an explicitly requested testing task; see MID_TIER.md.')
