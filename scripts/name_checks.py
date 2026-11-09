@@ -119,7 +119,11 @@ def proven_links(path) -> dict[str, set[str]]:
                 if link["method"] == "stated":
                     continue
                 raise NamingError(f"{path}: {link['chunk']} -> {link['origin']} is not a test proving a requirement")
-            name = test["path"].replace("/", ".") + "." + test["symbol"]
+            module = test["path"]
+            # The tier directory is on the selected runner's import path.
+            if module.startswith(("top/", "mid/")):
+                module = module.split("/", 1)[1]
+            name = module.replace("/", ".") + "." + test["symbol"]
             links.setdefault(origin["uuid"], set()).add(name)
     return links
 

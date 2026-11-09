@@ -8,7 +8,7 @@ Reviewed revision: `560e2e2b1623066240ebd128bfa1e552f0a4f25f` under SYL-327 (29 
 
 ## Selection and limits
 
-8 top-tier inventory entries and 135 mid-tier entries are available after the higher-bar review. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Top-tier bodies are unchanged. Retained mid-tier sources remain uncommented.
+12 top-tier inventory entries and 135 mid-tier entries are available after the higher-bar review. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Top-tier bodies are unchanged. Retained mid-tier sources remain uncommented.
 
 ## Active top tier
 
@@ -22,6 +22,10 @@ Reviewed revision: `560e2e2b1623066240ebd128bfa1e552f0a4f25f` under SYL-327 (29 
 | [`test_top_relation_selection_regressions.RelationSelectionRegressionStoreTests.test_same_literal_short_method_ref_cannot_redirect_existing_pin_to_unrelated_place`](tests/top/test_top_relation_selection_regressions.py#L11) | Replaces a previously pinned class with an unrelated class exposing the same short method name. Requires publication refusal and unchanged persisted relation state instead of silently redirecting the pin. |
 | [`test_top_source_refs.SourceAddressTests.test_double_encoded_sequences_remain_literal_after_one_decode`](tests/top/test_top_source_refs.py#L11) | Uses double-encoded separators, traversal spelling and a name delimiter. Requires exactly one decode and a stable canonical address, protecting literal names from accidental reinterpretation. |
 | [`test_top_store_acceptance.ProductStoreTests.test_exact_utf8_nul_bytes_projection_and_hash_guards_roundtrip`](tests/top/test_top_store_acceptance.py#L14) | Regression for quadratic dense-NUL projection: 100,000 NUL bytes must project within a finite SQL deadline. Also checks byte-preserving storage and independent database constraints on hashes and projections. |
+| [`test_top_ids.IdentifierStoreTests.test_allocation_refuses_contention_and_lists_only_committed_issues`](tests/top/test_top_ids.py#L29) | Real advisory-lock contention and an uncommitted issue expose races in allocation and visibility. The next allocation reuses the rolled-back number and a separate connection verifies both purposes. |
+| [`test_top_ids.IdentifierStoreTests.test_init_migrates_format_five_without_tying_issues_to_repository_lifetime`](tests/top/test_top_ids.py#L74) | A real format 5 store refuses allocation until init adds the table. The check verifies preserved generation and repository data, then removes the repository with the product's collection code and verifies the issue survives. |
+| [`test_top_pieces.FilePiecesTests.test_working_and_head_match_ingest_across_rename_and_body_edit`](tests/top/test_top_pieces.py#L27) | A real Git index holds a third version, distinct from HEAD and the working file. Compares both reported sides with ingest and checks exact-byte digests and rename keys across a rename and a body edit. |
+| [`test_top_pieces.FilePiecesTests.test_absent_and_unsafe_versions_are_distinct_without_mutation`](tests/top/test_top_pieces.py#L101) | An unborn and then deleted file exercise opposite version boundaries. An external symlink and invalid file bytes must be refused, with the checkout, Git metadata and external file preserved. |
 
 ## Layout and shared support
 
