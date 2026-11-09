@@ -54,6 +54,8 @@ COMMANDS = (
     CommandSpec("init", "Initialize the private index store", scope=False),
     CommandSpec("ids", "Issue or list identifiers in the index store", scope=False,
                 extra_options=("next <series> --for <purpose>", "list <series>")),
+    CommandSpec("pieces", "List one file's working and committed chunks", scope=False,
+                extra_options=("<repo>:@code/<path>",)),
     CommandSpec("api-key", "Store a Voyage or Jev API key in the login Keychain", scope=False,
                 extra_options=("voyage|jev",)),
     CommandSpec("info", "Report program and configuration diagnostics", scope=False),
@@ -69,7 +71,7 @@ def help_reply(command: str | None = None) -> dict:
         "version": "2.0.0",
         "usage": "mycel <command> [arguments]",
         "commands": [
-            {"name": s.name, "description": s.description, "available": s.name in {"audit", "recovery", "origins", "justify", "api-key", "info", "grep", "repos", "init", "ids", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
+            {"name": s.name, "description": s.description, "available": s.name in {"audit", "recovery", "origins", "justify", "api-key", "info", "grep", "repos", "init", "ids", "pieces", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
              "rawArguments": s.raw_arguments,
              "options": ([] if s.raw_arguments else
                          ["-h", "--help"] + (["--repo <name>"] if s.scope else []) +

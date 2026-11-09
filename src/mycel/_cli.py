@@ -404,6 +404,8 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         raise MycelError(ErrorCode.INVALID_INPUT, "Select named repositories or --all, with nonempty names.")
     if parsed.help:
         return Result(help_reply(name))
+    if name == "pieces" and len(parsed.arguments) != 1:
+        raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel pieces <repo>:@code/<path>.")
     if name == "ids":
         from ._ids import FIRST_ISSUABLE
 
@@ -610,6 +612,8 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
             selected_handlers = {"api-key": _api_key, "info": _settings_info, "grep": _plain_grep, "repos": _repos,
                                  "init": _init, "ids": _handle_ids}
             selected_handlers["read"] = _read_chunk
+            from ._pieces import handle_pieces
+            selected_handlers["pieces"] = handle_pieces
             from ._search import handle_search
             selected_handlers["search"] = handle_search
             from ._undocumented import handle_undocumented

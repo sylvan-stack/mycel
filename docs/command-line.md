@@ -31,6 +31,29 @@ mycel:@code/src/mycel/_cli.py#_handle_ids
 mycel:@code/src/mycel/_ids.py
 -->
 
+## Listing file pieces
+
+`mycel pieces cellar:@code/src/net/retry.py` reports one file from the working
+tree and from the `HEAD` commit pinned for this invocation. It uses the
+configured checkout that contains the working directory, or the repository's
+`code_root` when invoked elsewhere. It runs without an Index Store connection.
+
+The JSON reply has the canonical `path`, `headCommit`, `working` and
+`committed`. Each side has `present` and `pieces`. Each piece has Mycel's
+parser `name`, inclusive one-based `lineStart` and `lineEnd`, and the `sha256`
+of its exact bytes. The two lists preserve parser order. A new or deleted
+file has an absent side with `present: false` and no pieces. An unborn
+checkout has a null `headCommit` and an absent committed side.
+
+The command refuses unqualified addresses, chunk selectors and paths outside
+the configured code and document classification. An absent file on both sides,
+an unsafe filesystem entry or a failed read or parse produces an error.
+
+<!-- sources:
+mycel:@code/src/mycel/_pieces.py#handle_pieces
+mycel:@code/src/mycel/_capture.py#capture_file_versions
+-->
+
 ## Setting API keys
 
 Run `mycel api-key voyage` or `mycel api-key jev` from a terminal with valid settings. The prompt hides what you type. Mycel creates or replaces the corresponding generic password in the login Keychain and returns, for example:
