@@ -1,6 +1,6 @@
 # Origin Links and coverage
 
-An Origin Link states what a chunk rests on. It is a claim, with its method, confidence score and band, author, recording time and any retained review. It does not prove that code conforms to a requirement. Links live only in the Index Store, on ordinary asserted dependencies; Mycel writes no source annotation or ledger file.
+An Origin Link states what a chunk rests on. It is a claim, with its method, confidence score and band, author, recording time and any retained review. It does not prove that code conforms to a requirement. Links live in the Index Store. Mycel writes no source annotation or ledger file.
 
 ## State a link
 
@@ -20,6 +20,30 @@ The bulk file is UTF-8 JSON lines, with one object per nonempty line:
 Each object has exactly these two string fields. Duplicate fields, unknown fields and duplicate exact pairs are refused. Every pair resolves before any assertion, and all assertions, metadata, pins, verification evidence and applied activity share one transaction. A late failure rolls the entire batch back.
 
 The single reply contains `chunk`, `chunkVersion`, `origin`, `link` and the ordinary `verification`. The batch reply is `{ justifications: [...] }` in input order. Pairs for one chunk share one final verification covering all of that chunk's links. A direct statement uses `method: stated`, `confidenceScore: 1` and `confidence: asserted`; its author defaults to the operating-system user. A retained review survives a repeated statement, and no review is invented. `refs` includes these assertions with `originLink`; `stale` and `verifications` show the ordinary result.
+
+## Ingest saved Justifications
+
+An explicit `mycel ingest` reconciles Justifications from the publishing
+repository's artifact root on the final step of its pass. For example,
+`justifications/src/water.py.md` can contain this section:
+
+```markdown
+## water
+
+Open the valve only after the pressure check.
+
+Origins: GDN-1.2 · Intention i-12345678 · 9 November 2026
+```
+
+The heading names the exact chunk in `@code/src/water.py`. A ` · lines N to M`
+heading states Origins for the same piece. The terminal `Origins:` line
+accepts canonical chunk addresses, Entity URIs and unique indexed requirement,
+decision or active Owner Goal IDs. Skip and removal sections create no links.
+
+Ingest records file-owned `stated` links without creating a verification or
+changing derivation policy. Editing or removing the declaration updates or
+withdraws its links. Independent stated and proven links take precedence.
+The `justifications` reply reports changed links and any declaration faults.
 
 ## Find work
 

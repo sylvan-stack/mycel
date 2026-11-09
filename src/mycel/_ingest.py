@@ -97,7 +97,7 @@ def _upstream(owners, links):
 
 
 @contextmanager
-def _publication_guards(connection, settings, manifest):
+def _publication_guards(connection, settings, manifest, *, justification_declarations=()):
     check_deadline()
     links = _ownership(connection, settings)
     with read_snapshot(connection):
@@ -110,6 +110,10 @@ def _publication_guards(connection, settings, manifest):
     from ._resolver import SourceResolver
     links[manifest.repository].update(_manifest_targets(manifest,
         lambda: SourceResolver.from_store(connection, settings)).intersection(links))
+    if justification_declarations:
+        from ._justification_files import origin_repositories
+        links[manifest.repository].update(origin_repositories(justification_declarations,
+            lambda: SourceResolver.from_store(connection, settings)).intersection(links))
     required = _upstream({manifest.repository}, links)
     affected = {manifest.repository}
     while True:
@@ -163,6 +167,10 @@ def _changed_since_ingest(error) -> MycelError:
 
 
 class _CompleteProducer(LocatedDependencyProducer):
+    def __init__(self, settings, *, justifications=None, **options):
+        super().__init__(settings, **options)
+        self.justifications = justifications
+
     def verify_in_transaction(self, connection, result):
         from ._evidence import EvidenceError
         try:
@@ -177,6 +185,16 @@ class _CompleteProducer(LocatedDependencyProducer):
 
     def __call__(self, connection, result):
         from ._evidence import EvidenceError
+        statements_changed = False
+        if self.justifications is not None and not any(result.counts.get('remaining', {}).values()):
+            from ._justification_files import reconcile_in_transaction
+            statements = reconcile_in_transaction(connection, self.settings, result.repository,
+                                                   self.guarded_repositories, self.justifications)
+            if statements['changed'] or statements['faults'] or self.justifications[0]:
+                result.counts['justifications'] = statements
+            statements_changed = bool(statements['changed'])
+        # Install file-owned links before the policy producer records which
+        # scopes have no links to recheck at the end of this transaction.
         try:
             changed = super().__call__(connection, result)
         except EvidenceError as error:
@@ -186,7 +204,7 @@ class _CompleteProducer(LocatedDependencyProducer):
             # alone creates no identity decision or activity entry.
             connection.execute('UPDATE public.mycel_repository_state SET last_pass_at=clock_timestamp() '
                                'WHERE repository=%s', (result.repository,))
-        return changed
+        return changed or statements_changed
 
 
 def _embedding_counts(connection, settings, repository):
@@ -297,7 +315,10 @@ def _ingest(invocation, state):
                     manifest = store.capture(settings, name)
                     if not manifest.deletion_safe:
                         raise MycelError('refused', 'The complete repository capture failed; no ingest change was applied.')
-                    with _publication_guards(connection, settings, manifest) as (guards, pending):
+                    from ._justification_files import declarations_from_capture
+                    justifications = declarations_from_capture(manifest)
+                    with _publication_guards(connection, settings, manifest,
+                                             justification_declarations=justifications[0]) as (guards, pending):
                         # The pass publishes the capture it read (MYC-1.37):
                         # a file that changes meanwhile is named in the reply
                         # under changedDuringPass and left to the next pass.
@@ -305,7 +326,7 @@ def _ingest(invocation, state):
                             captured_at=datetime.now(timezone.utc).isoformat(),
                             collection_manifest=manifest, activity=activity,
                             guarded_repositories=guards, pending_repositories=pending,
-                            snapshot=manifest)
+                            snapshot=manifest, justifications=justifications)
                         applied = store.apply(settings, manifest, batch_handoff=producer,
                             confirm_empty='--confirm-empty' in invocation.arguments, activity=activity,
                             targeted_detection=True, publish_capture=True,
