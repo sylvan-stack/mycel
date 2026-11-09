@@ -30,7 +30,7 @@ from ._errors import ErrorCode, MycelError
 from ._locks import structure_guard
 
 
-STORE_FORMAT = 5
+STORE_FORMAT = 6
 REQUIRED_EXTENSIONS = frozenset({"pg_search", "vector"})
 _ALLOWED_EXTENSIONS = REQUIRED_EXTENSIONS | {"plpgsql"}
 _DIMENSIONS = frozenset({256, 512, 1024, 2048})
@@ -283,6 +283,8 @@ TABLES = (
           ("repository", "question", "chunk_version", "candidate", "policy"),
           foreign=(_fk("repository", "mycel_repository_state", "repository"),
                    _fk("chunk_version", "mycel_chunk_versions"))),
+    Table("mycel_issued_identifiers", (_c("series", "text"), _c("number", "bigint"),
+          _c("purpose", "text")), ("series", "number")),
 )
 _TABLE_MAP = MappingProxyType({table.name: table for table in TABLES})
 _SEQUENCES = frozenset(f"{table.name}_{column.name}_seq" for table in TABLES for column in table.columns
@@ -332,8 +334,9 @@ class Migration:
 # The predecessors are exact and bounded: no older inspection grants permission
 # to reinterpret arbitrary records or accept a damaged catalogue. Formats 2 and
 # 3 share one structure; format 4 adds the repository's step progress and
-# format 5 the judgements of no effect.
-_FORMAT_4_TABLES = tuple(table for table in TABLES if table.name != "mycel_judgements")
+# format 5 the judgements of no effect. Format 6 adds issued identifiers.
+_FORMAT_5_TABLES = tuple(table for table in TABLES if table.name != "mycel_issued_identifiers")
+_FORMAT_4_TABLES = tuple(table for table in _FORMAT_5_TABLES if table.name != "mycel_judgements")
 _FORMAT_3_TABLES = tuple(Table("mycel_repository_state", (_c("repository", "text"),
     _c("last_pass_at", "timestamp with time zone", True), _c("read_locations", "jsonb")), ("repository",))
     if table.name == "mycel_repository_state" else table for table in _FORMAT_4_TABLES)
@@ -589,6 +592,24 @@ def _migrate_judgements(connection) -> None:
 
 def _validate_judgements(connection) -> None:
     dimensions = connection.execute("SELECT dimensions FROM public.mycel_store").fetchone()[0]
+    fault = _shape_fault(connection, dimensions, _FORMAT_5_TABLES)
+    if fault is not None:
+        raise MycelError("store_format", fault)
+
+
+def _migrate_issued_identifiers(connection) -> None:
+    """Format 5 to 6: add the issue table without seeding identifiers."""
+    metadata = connection.execute("SELECT singleton, format, dimensions FROM public.mycel_store").fetchall()
+    if len(metadata) != 1 or metadata[0][0] is not True or metadata[0][1] != 5:
+        raise MycelError("store_format", "The identifier migration requires store format 5.")
+    dimensions = metadata[0][2]
+    if _shape_fault(connection, dimensions, _FORMAT_5_TABLES) is not None:
+        raise MycelError("store_format", "The identifier migration found an incompatible predecessor catalogue.")
+    connection.execute(_TABLE_MAP["mycel_issued_identifiers"].sql(dimensions))
+
+
+def _validate_issued_identifiers(connection) -> None:
+    dimensions = connection.execute("SELECT dimensions FROM public.mycel_store").fetchone()[0]
     fault = _shape_fault(connection, dimensions)
     if fault is not None:
         raise MycelError("store_format", fault)
@@ -599,6 +620,7 @@ MIGRATIONS: Mapping[int, Migration] = MappingProxyType({
     2: Migration(_migrate_entity_kinds, _validate_entity_kinds),
     3: Migration(_migrate_pass_progress, _validate_pass_progress),
     4: Migration(_migrate_judgements, _validate_judgements),
+    5: Migration(_migrate_issued_identifiers, _validate_issued_identifiers),
 })
 
 

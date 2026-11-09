@@ -26,6 +26,7 @@ from ._deadline import check_deadline, deadline_suspended
 # receive distinct positive bigints from the store's single registry sequence.
 STRUCTURE_LOCK = (-2147483648, 0)
 ALLOCATOR_LOCK = (-2147483648, 1)
+_SYL_IDENTIFIER_LOCK = (-2147483648, 2)
 
 
 class LockNamespace(StrEnum):
@@ -173,6 +174,14 @@ def _session_guard(connection, key: int | tuple[int, int], *, shared: bool,
 def structure_guard(connection, *, exclusive: bool = False) -> Iterator[None]:
     with _session_guard(connection, STRUCTURE_LOCK, shared=not exclusive,
                         message="Another invocation is changing or using the index structure."):
+        yield
+
+
+@contextmanager
+def identifier_allocation_guard(connection) -> Iterator[None]:
+    """Reserve SYL, the only identifier series, without writing a lock identity."""
+    with _session_guard(connection, _SYL_IDENTIFIER_LOCK, shared=False,
+                        message="Another invocation is issuing a number for this series."):
         yield
 
 

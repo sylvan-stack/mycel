@@ -34,7 +34,7 @@ contain sanitized reasons, and the successful connection closes on every exit.
 An empty private database needs server extensions `pg_search` and `vector`.
 Initialization creates the Mycel tables, a BM25 index over the guarded chunk-version
 search projection and a cosine HNSW index over embedding parts. It writes mandatory
-format 5, dimensions and a fresh index-generation UUID, with no repository,
+format 6, dimensions and a fresh index-generation UUID, with no repository,
 settings or feature-default rows. Numbered packages also record the exact
 invocation and a completed global `init` audit in that schema transaction;
 unnumbered development/fixture initialization writes the schema only. The generation stays fixed through normal
@@ -72,6 +72,13 @@ logical chunk. The immutable record retains the exact version descriptor and
 verification-owned dependant/source bytes and manifests. Old unlocated versions
 still collect normally; surviving logical chunks keep their full verification
 history. Dead chunks and repository removal release their record owners.
+
+Format 6 adds the empty identifier issue table. The explicit format 5-to-6
+migration preserves the existing rows and index generation. The issue table
+belongs to the store and survives repository removal and collection. Its
+primary key covers the series and number. An allocation holds its series
+lock through the transaction that selects the next number and records its
+purpose. A list reads one committed snapshot while an allocation can proceed.
 
 Only explicit `init` performs the consecutive transactional format 1→2
 migration. It validates the exact predecessor catalogue, each legacy record's
