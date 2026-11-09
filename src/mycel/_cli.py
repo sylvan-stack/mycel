@@ -160,6 +160,17 @@ def invocation_store(invocation: Invocation, *, operation: str = "read"):
             yield connection, inspection
 
 
+def _handle_ids(invocation: Invocation) -> Result:
+    from ._ids import issue_identifier, list_identifiers
+
+    action, series, *arguments = invocation.arguments
+    with invocation_store(invocation) as (connection, _):
+        if action == "next":
+            purpose, = arguments
+            return Result({"id": issue_identifier(connection, series, purpose)})
+        return Result({"series": series, "ids": list_identifiers(connection, series)})
+
+
 @contextmanager
 def classification_store(invocation: Invocation, *, dry_run: bool = False):
     """Reach the store as every command does; a dry-run's policy refuses model credentials (MYC-D41)."""
@@ -316,6 +327,8 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         parser.add_argument("--all", action="store_true")
     if name == "refs":
         parser.add_argument("--unresolved", action="store_true")
+    if name == "ids":
+        parser.add_argument("--for", dest="purpose")
     if name == "drifts":
         parser.add_argument("--closed", action="store_true")
         parser.add_argument("--all-versions", action="store_true")
@@ -391,6 +404,26 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         raise MycelError(ErrorCode.INVALID_INPUT, "Select named repositories or --all, with nonempty names.")
     if parsed.help:
         return Result(help_reply(name))
+    if name == "ids":
+        from ._ids import FIRST_ISSUABLE
+
+        if len(parsed.arguments) != 2 or parsed.arguments[0] not in {"next", "list"}:
+            raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel ids next <series> --for <purpose> or mycel ids list <series>.")
+        action, series = parsed.arguments
+        if series not in FIRST_ISSUABLE:
+            raise MycelError(ErrorCode.INVALID_INPUT, "Unknown identifier series; use SYL.")
+        purpose = parsed.purpose
+        if action == "list":
+            if purpose is not None:
+                raise MycelError(ErrorCode.INVALID_INPUT, "Only mycel ids next takes --for.")
+            return Invocation(name, arguments=(action, series))
+        if purpose is None or not purpose.strip() or "\0" in purpose:
+            raise MycelError(ErrorCode.INVALID_INPUT, "mycel ids next requires a nonempty --for purpose.")
+        try:
+            purpose.encode("utf-8")
+        except UnicodeError:
+            raise MycelError(ErrorCode.INVALID_INPUT, "The identifier purpose must be valid UTF-8 text.") from None
+        return Invocation(name, arguments=(action, series, purpose))
     if name == "api-key" and tuple(parsed.arguments) not in {("voyage",), ("jev",)}:
         raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel api-key voyage|jev.")
     if name == "search" and (len(parsed.arguments) > 1 or (parsed.arguments and not parsed.arguments[0].strip())
@@ -574,7 +607,8 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
                              (os.environ.get("MYCEL_GREP_PLAIN") == "1" or not snapshot.valid))
             if parsed.command not in {"info", "grep"}:
                 snapshot.require_valid()
-            selected_handlers = {"api-key": _api_key, "info": _settings_info, "grep": _plain_grep, "repos": _repos, "init": _init}
+            selected_handlers = {"api-key": _api_key, "info": _settings_info, "grep": _plain_grep, "repos": _repos,
+                                 "init": _init, "ids": _handle_ids}
             selected_handlers["read"] = _read_chunk
             from ._search import handle_search
             selected_handlers["search"] = handle_search

@@ -8,6 +8,29 @@ Each ordinary invocation writes exactly one JSON document with a final newline. 
 
 The installed launcher accepts `-v <number>` only as the first two arguments, removes them and passes every remaining argument unchanged. Its default is the highest intact compatible working Build; an explicitly named withdrawn Build runs with its reason on standard error. An unknown or malformed number returns `invalid_input`, an unavailable known Build returns `refused`, and a held distribution lock returns `busy`. Direct source execution has no numbered registry selection and returns `refused` for the otherwise valid reserved prefix. `grep` keeps its raw arguments and streamed-result boundary; the common boundary adds no JSON to its output.
 
+## Issuing and listing identifiers
+
+`mycel ids next SYL --for "Document archive imports"` reserves the next number
+in the configured store and records its purpose. The first reply is
+`{"id":"SYL-341"}`. A concurrent request that cannot acquire the series lock
+returns `busy` without reserving a number. If the reply is lost, inspect the
+list before requesting another number. Repeating a purpose issues a fresh ID.
+
+`mycel ids list SYL` returns the committed issues in number order:
+
+```json
+{"series":"SYL","ids":[{"id":"SYL-341","for":"Document archive imports"}]}
+```
+
+Both commands work from any directory and use the configured Index Store in
+format 6. To bring a format 5 store forward, run `mycel init` with a Build
+that supports format 6. See [store compatibility](store.md).
+
+<!-- sources:
+mycel:@code/src/mycel/_cli.py#_handle_ids
+mycel:@code/src/mycel/_ids.py
+-->
+
 ## Setting API keys
 
 Run `mycel api-key voyage` or `mycel api-key jev` from a terminal with valid settings. The prompt hides what you type. Mycel creates or replaces the corresponding generic password in the login Keychain and returns, for example:
