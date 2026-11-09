@@ -583,6 +583,15 @@ def _signature(info: os.stat_result) -> tuple[int, ...]:
     return (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
+def _exact_entry(descriptor: int, name: str) -> os.stat_result | None:
+    # Use the spelling that ingest would see, even on case-insensitive disks.
+    with os.scandir(descriptor) as entries:
+        for entry in entries:
+            if entry.name == name:
+                return entry.stat(follow_symlinks=False)
+    return None
+
+
 class _Capture:
     def __init__(self, snapshot: SettingsSnapshot, repository: Repository,
                  previous: CaptureManifest | None, git: GitReader, cancelled: Callable[[], bool] | None):
@@ -740,6 +749,35 @@ class _Capture:
         finally:
             if descriptor is not None:
                 os.close(descriptor)
+
+    def working_file(self, root: Path, parts: list[str]) -> bytes | None:
+        """Walk the explicit path without following any symlink below the root."""
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        descriptor = os.open(root, flags)
+        try:
+            directory = root
+            self.observe(directory, os.fstat(descriptor))
+            for name in parts[:-1]:
+                entry = _exact_entry(descriptor, name)
+                if entry is None or stat.S_ISREG(entry.st_mode):
+                    return None
+                child = os.open(name, flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+                directory /= name
+                current = os.fstat(descriptor)
+                if _signature(entry) != _signature(current):
+                    raise _CaptureFailure("changed_during_capture", "A parent directory changed during capture.")
+                self.observe(directory, current)
+            name = parts[-1]
+            entry = _exact_entry(descriptor, name)
+            if entry is None:
+                return None
+            path = directory / name
+            self.observe(path, entry)
+            return self.read_disk(path, parent=descriptor, name=name)
+        finally:
+            os.close(descriptor)
 
     def disk_rules(self, binding: _Binding) -> _IgnoreRules:
         rules = self.rules(binding.checkout)
@@ -917,6 +955,42 @@ class _Capture:
             raise _CaptureFailure("git_tree", "A Git tree could not be enumerated completely.") from None
         return result
 
+    def head_commit(self, checkout: Path) -> str | None:
+        self.cancel()
+        head = self.git(("rev-parse", "--verify", "--quiet", "HEAD^{commit}"), cwd=checkout,
+                        timeout_seconds=GIT_READ_SECONDS, cancelled=self.cancelled)
+        if head.returncode == 0:
+            oid = head.stdout.removesuffix(b"\n").decode("ascii")
+            if _OID.fullmatch(oid):
+                return oid
+        if head.returncode == 1 and not head.stderr:
+            # A missing branch behind symbolic HEAD is unborn. A dangling
+            # detached HEAD or a branch that exists but cannot peel is an error.
+            branch = self.read_git(("symbolic-ref", "--quiet", "HEAD"), checkout).removesuffix(b"\n").decode("utf-8")
+            if branch.startswith("refs/heads/") and not any(c in branch for c in "\n\r\0"):
+                ref = self.git(("show-ref", "--verify", "--quiet", branch), cwd=checkout,
+                               timeout_seconds=GIT_READ_SECONDS, cancelled=self.cancelled)
+                if ref.returncode == 1 and not ref.stderr:
+                    return None
+        raise _CaptureFailure("git_head", "The checkout's HEAD could not be resolved to a commit.")
+
+    def committed_file(self, checkout: Path, commit: str, path: str) -> bytes | None:
+        raw = self.read_git(("ls-tree", "-l", "-z", "--full-tree", commit, "--", f":(literal){path}"), checkout)
+        if not raw:
+            return None
+        try:
+            header, name = raw.split(b"\t", 1)
+            mode, kind, oid, size = header.decode("ascii").split()
+            if name != path.encode("utf-8") + b"\0" or not _OID.fullmatch(oid):
+                raise ValueError()
+        except (UnicodeError, ValueError):
+            raise _CaptureFailure("git_tree", "Git did not return an exact entry for the requested file.") from None
+        if kind != "blob" or mode not in {"100644", "100755"}:
+            raise _CaptureFailure("unsafe_file", "The committed path is not a regular file.")
+        if not size.isascii() or not size.isdecimal():
+            raise _CaptureFailure("git_tree", "Git returned an invalid file size.")
+        return self.blob(checkout, _TreeFile(path, oid, int(size), mode))
+
     def prefetch(self, checkout: Path, files) -> None:
         """Read many blobs through one `cat-file --batch` per share (SYL-286).
 
@@ -1084,6 +1158,60 @@ class _Capture:
         locations = [locations[0], *sorted(locations[1:], key=lambda location:
                      (location.id.kind == "stash", location.id.checkout != "code", location.id.identity))]
         return CaptureManifest(self.repository.name, policy_hash, tuple(locations), complete, tuple(self.diagnostics))
+
+
+def capture_file_versions(
+    snapshot: SettingsSnapshot, address: SourceAddress,
+) -> tuple[str | None, CapturedFile | None, CapturedFile | None]:
+    """Capture one code-root file from the working tree and the pinned HEAD."""
+    parts = address.path.split("/")
+    if address.root != "code" or address.name is not None or any(part.casefold() == ".git" for part in parts):
+        raise MycelError("invalid_input", "Pieces requires a qualified code file address outside Git metadata.")
+    locations = RepositoryLocations(snapshot)
+    selected = locations.named(address.repository)
+    if len(selected) != 1 or selected[0].name != address.repository:
+        raise MycelError("invalid_input", "Pieces requires one configured repository, not an organization.")
+    repository = selected[0]
+    repository.require_folders()
+    if repository.code is None:
+        raise MycelError("refused", "The repository has no configured code checkout.")
+    capture = _Capture(snapshot, repository, None, run_git, None)
+    alias = FileAlias("code", address.path)
+    try:
+        alias.address(repository.name)  # Also validate callers that constructed an address directly.
+        root = repository.code.path.resolve(strict=True)
+        checkout = capture.checkout(root)
+        if checkout is None:
+            raise _CaptureFailure("git_checkout", "The configured code folder has no Git checkout.")
+        binding = _Binding("code", root, checkout, checkout, repository.code.subfolders)
+        corpus = capture.corpus(alias, binding)
+        if corpus is None:
+            raise MycelError("refused", "The requested path is outside Mycel's configured code and document types or subfolders.")
+
+        head = capture.head_commit(checkout)
+        git_path = "/".join(part for part in (binding.prefix, address.path) if part)
+        committed = capture.committed_file(checkout, head, git_path) if head is not None else None
+        working = capture.working_file(root, parts)
+        capture.verify_disk()
+        if not capture.complete:
+            raise _CaptureFailure("changed_during_capture", "The working path changed during capture.")
+        if working is None and committed is None:
+            raise MycelError("io", "The requested file is absent from both the working tree and HEAD.")
+
+        aliases = {alias: len(root.parts)}
+        disk_file = None if working is None else capture.parsed_file(LocationId("disk", None, "disk"),
+                                                                    aliases, corpus, working)
+        git_file = None if committed is None else capture.parsed_file(LocationId("branch", "code", "HEAD"),
+                                                                     aliases, corpus, committed)
+        if any(file is not None and file.failure is not None for file in (disk_file, git_file)):
+            raise _CaptureFailure("parse_failure", "A present version of the requested file could not be parsed.")
+        return head, disk_file, git_file
+    except SourceAddressError as error:
+        raise MycelError("invalid_input", str(error)) from None
+    except _CaptureFailure as error:
+        raise MycelError("io", error.message) from None
+    except (OSError, RuntimeError, UnicodeError):
+        raise MycelError("io", "The working path or its Git version could not be read safely.") from None
 
 
 def capture_repository(snapshot: SettingsSnapshot, repository: Repository | str, *,

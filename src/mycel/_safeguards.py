@@ -427,6 +427,8 @@ def validate_read_only_git_args(args: Sequence[str]) -> tuple[str, ...]:
     name, *arguments = command
     if name == "config" and command == ("config", "--bool", "--get", "core.ignorecase"):
         return command
+    if command == ("symbolic-ref", "--quiet", "HEAD"):
+        return command  # The read form only. A second ref would write HEAD.
     if name == "stash" and arguments[:1] == ["list"]:
         name = "log"
         arguments = arguments[1:]
