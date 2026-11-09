@@ -41,7 +41,9 @@ configured checkout that contains the working directory, or the repository's
 The JSON reply has the canonical `path`, `headCommit`, `working` and
 `committed`. Each side has `present` and `pieces`. Each piece has Mycel's
 parser `name`, inclusive one-based `lineStart` and `lineEnd`, and the `sha256`
-of its exact bytes. The two lists preserve parser order. A new or deleted
+of its exact bytes. `renameKey` carries the ingest parser's conservative code
+identity key when available and is otherwise null. Use a key for a rename only
+when the match is unique. The two lists preserve parser order. A new or deleted
 file has an absent side with `present: false` and no pieces. An unborn
 checkout has a null `headCommit` and an absent committed side.
 

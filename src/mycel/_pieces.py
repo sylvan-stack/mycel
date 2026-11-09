@@ -4,6 +4,7 @@ from hashlib import sha256
 
 from ._capture import CapturedFile, capture_file_versions
 from ._cli import Invocation, Result
+from ._code import code_identity_key
 from ._errors import MycelError
 from ._markdown import MarkdownDocument
 from ._source_refs import SourceAddressError, parse_source_address
@@ -17,12 +18,13 @@ def _side(file: CapturedFile | None) -> dict:
         raise MycelError("internal", "A captured file version has no parsed pieces.")
     if isinstance(parsed, MarkdownDocument):
         pieces = [{"name": chunk.name, "lineStart": chunk.span.line_start,
-                   "lineEnd": chunk.span.line_end, "sha256": chunk.snapshot_hash}
+                   "lineEnd": chunk.span.line_end, "sha256": chunk.snapshot_hash, "renameKey": None}
                   for chunk in parsed.chunks]
     else:
         pieces = [{"name": chunk.symbol, "lineStart": chunk.line_start,
                    "lineEnd": chunk.line_end,
-                   "sha256": sha256(file.source[chunk.byte_start:chunk.byte_end]).hexdigest()}
+                   "sha256": sha256(file.source[chunk.byte_start:chunk.byte_end]).hexdigest(),
+                   "renameKey": code_identity_key(chunk)}
                   for chunk in parsed]
     return {"present": True, "pieces": pieces}
 
