@@ -123,7 +123,8 @@ def _blank(line: str) -> bool:
 
 
 _HEADING_LITERAL = re.compile(
-    r"(?P<ticks>`+)(?P<code>.+?)(?<!`)(?P=ticks)(?!`)"
+    # Consume the whole opener even if there is no equal-length closer.
+    r"(?P<ticks>`++)(?:(?P<code>.+?)(?<!`)(?P=ticks)(?!`))?"
     r"""|\\(?P<escape>[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])"""
     rf"|{_AUTOLINK.pattern}",
     re.DOTALL,
@@ -238,6 +239,8 @@ def _rendered(title: str, references: frozenset[str]) -> str:
             # CommonMark strips one space from both ends of a nonblank span.
             if content[0] == content[-1] == " " and content.strip(" "):
                 content = content[1:-1]
+        elif match["ticks"] is not None:
+            return source
         elif (escape := match["escape"]) is not None:
             content = escape
         else:
