@@ -338,21 +338,27 @@ def _container_prefix(
     return view, tuple(containers)
 
 
-def _in_container(content: str, containers: tuple[tuple[str, int], ...]) -> str | None:
+def _container_view(content: str, containers: tuple[tuple[str, int], ...]) -> tuple[str, int]:
+    """Return the remaining line and the number of container prefixes it matched."""
     view = content.expandtabs(4)
-    for kind, width in containers:
+    for depth, (kind, width) in enumerate(containers):
         if kind == "quote":
             marker = _QUOTE.match(view)
             if marker is None:
-                return None
+                return view, depth
             view = view[marker.end():]
         elif not view.strip(" "):
             view = ""
         elif len(view) - len(view.lstrip(" ")) < width:
-            return None
+            return view, depth
         else:
             view = view[width:]
-    return view
+    return view, len(containers)
+
+
+def _in_container(content: str, containers: tuple[tuple[str, int], ...]) -> str | None:
+    view, depth = _container_view(content, containers)
+    return view if depth == len(containers) else None
 
 
 def _html_block(content: str, *, can_start_type_seven: bool) -> str | None:
@@ -587,11 +593,11 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
         if index == 0:
             content = content.removeprefix("\ufeff")
         if fence_character is not None:
-            view = _in_container(content, fence_containers)
-            if view is None:
+            view, depth = _container_view(content, fence_containers)
+            if depth < len(fence_containers):
                 # A fence contained in a list/quote ends with that container.
                 fence_character, fence_length = None, 0
-                container_context = ()
+                container_context = fence_containers[:depth]
             elif re.fullmatch(r" {0,3}" + re.escape(fence_character) + "{" + str(fence_length) + r",}[ \t]*", view):
                 fence_character, fence_length = None, 0
                 continue

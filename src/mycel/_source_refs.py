@@ -19,8 +19,8 @@ import unicodedata
 from urllib.parse import quote, unquote_to_bytes
 
 from mycel._markdown import (MarkdownDocument, _ATX, _FENCE, _SETEXT, _THEMATIC,
-                             _Line, _container_prefix, _html_block, _html_ends,
-                             _in_container, _lines, _link_reference_end)
+                             _Line, _container_prefix, _container_view, _html_block,
+                             _html_ends, _in_container, _lines, _link_reference_end)
 
 
 Root = Literal["code", "artifact", "index"]
@@ -543,9 +543,10 @@ def _document_blocks(lines: tuple[_Line, ...], start: int) -> list[tuple[list[_P
     for index in range(start, len(lines)):
         content = lines[index].content.removeprefix("\ufeff") if index == 0 else lines[index].content
         if fence_character is not None:
-            view = _in_container(content, fence_containers)
-            if view is None:
-                fence_character, fence_length, container_context = None, 0, ()
+            view, depth = _container_view(content, fence_containers)
+            if depth < len(fence_containers):
+                fence_character, fence_length = None, 0
+                container_context = fence_containers[:depth]
             elif re.fullmatch(r" {0,3}" + re.escape(fence_character) + "{" + str(fence_length) + r",}[ \t]*", view):
                 fence_character, fence_length = None, 0
                 continue
