@@ -312,6 +312,7 @@ def _frontmatter(lines: tuple[_Line, ...]) -> tuple[Mapping[str, Any], bool, boo
 def _container_prefix(
     content: str, *, interrupting_paragraph: bool = False,
     following: str | None = None, parents: tuple[tuple[str, int], ...] = (),
+    preserve_list_code_indent: bool = False,
 ) -> tuple[str, tuple[tuple[str, int], ...]]:
     """Read explicit quote/list chains for block state, without altering source."""
     view = content.expandtabs(4)
@@ -324,6 +325,11 @@ def _container_prefix(
             if not remainder or (number is not None and int(number) != 1):
                 break
         width = marker.end()
+        if (preserve_list_code_indent and not is_quote and remainder
+                and width - marker.end("list_marker") > 4):
+            # One space pads the marker; the remaining indent starts a code block.
+            width = marker.end("list_marker") + 1
+            remainder = view[width:]
         if not is_quote and not remainder:
             if following is not None:
                 next_view = _in_container(following, parents + tuple(containers))
@@ -359,6 +365,19 @@ def _container_view(content: str, containers: tuple[tuple[str, int], ...]) -> tu
 def _in_container(content: str, containers: tuple[tuple[str, int], ...]) -> str | None:
     view, depth = _container_view(content, containers)
     return view if depth == len(containers) else None
+
+
+def _written_view(content: str, view: str) -> str:
+    """Keep the block's relative indent and recover the source spelling after it."""
+    if "\t" not in content:
+        return view
+    indent = len(view) - len(view.lstrip(" "))
+    start_column = len(content.expandtabs(4)) - len(view) + indent
+    position = column = 0
+    while column < start_column:
+        column += 4 - column % 4 if content[position] == "\t" else 1
+        position += 1
+    return view[:indent] + content[position:]
 
 
 def _html_block(content: str, *, can_start_type_seven: bool) -> str | None:
@@ -575,6 +594,7 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
 
     When ``comments`` is given, the index of every line that opens a
     ``<!-- mycel:cues`` comment is added, including in ordinary HTML blocks.
+    That outline also recognizes headings relative to their list item.
     """
     result: list[_Heading] = []
     fence_character, fence_length = None, 0
@@ -586,6 +606,7 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
     html_containers: tuple[tuple[str, int], ...] = ()
     reference_end = start
     paragraph_start: int | None = None
+    list_paragraph: list[str] = []
     for index in range(start, len(lines)):
         if index < reference_end:
             continue
@@ -626,6 +647,7 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
         view, explicit_containers = _container_prefix(
             inherited, interrupting_paragraph=paragraph_start is not None,
             following=following, parents=container_context,
+            preserve_list_code_indent=comments is not None,
         )
         containers = container_context + explicit_containers
         if explicit_containers:
@@ -655,26 +677,37 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
             if definition_end is not None:
                 reference_end = definition_end
                 continue
-        heading = _ATX.fullmatch(content)
+        in_list = comments is not None and any(kind == "list" for kind, _ in containers)
+        heading_content = _written_view(content, view) if in_list else content
+        heading = _ATX.fullmatch(heading_content)
         if heading is not None:
             marks, title = heading.groups()
             title = re.sub(r"[ \t]+#+[ \t]*$", "", title).strip(" \t")
             result.append(_Heading(title, len(marks), index, index + 1))
             paragraph_start = None
             continue
-        underline = _SETEXT.fullmatch(content)
+        underline = _SETEXT.fullmatch(heading_content)
         if underline is not None and paragraph_start is not None:
-            title = " ".join(lines[position].content.strip(" \t")
-                             for position in range(paragraph_start, index))
+            if in_list:
+                title = " ".join(list_paragraph)
+            else:
+                title = " ".join(lines[position].content.strip(" \t")
+                                 for position in range(paragraph_start, index))
             result.append(_Heading(title, 1 if underline.group(1)[0] == "=" else 2,
                                    paragraph_start, index + 1))
             paragraph_start = None
             continue
-        if (not content.strip(" \t") or (content.startswith(("    ", "\t")) and paragraph_start is None)
-                or explicit_containers or _HTML_LINE.match(content) or _THEMATIC.fullmatch(content)):
+        paragraph_text = heading_content.strip(" \t")
+        if (not paragraph_text or (heading_content.startswith(("    ", "\t")) and paragraph_start is None)
+                or (explicit_containers and not in_list) or _HTML_LINE.match(heading_content)
+                or _THEMATIC.fullmatch(heading_content)):
             paragraph_start = None
-        elif paragraph_start is None:
-            paragraph_start = index
+        else:
+            if paragraph_start is None:
+                paragraph_start = index
+                list_paragraph.clear()
+            if in_list:
+                list_paragraph.append(paragraph_text)
     return tuple(result)
 
 
