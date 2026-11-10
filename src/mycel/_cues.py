@@ -191,7 +191,8 @@ def _rendered(title: str) -> str:
             content = content[1:-1]
         return keep(content)
 
-    text = _CODE_SPAN.sub(lambda match: code(match[2]), title)
+    # CommonMark renders a source NUL as U+FFFD. Reserve NUL for placeholders.
+    text = _CODE_SPAN.sub(lambda match: code(match[2]), title.replace("\0", "\ufffd"))
     text = _ESCAPE.sub(lambda match: keep(match[1]), text)
     text = _AUTOLINK.sub(lambda match: keep(match[1]), text)
     previous = None
