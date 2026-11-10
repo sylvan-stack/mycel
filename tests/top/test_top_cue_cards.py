@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import stat
 import tomllib
 import unittest
 from hashlib import sha256
@@ -318,3 +319,104 @@ instructions: Check leaves.
                 "codex-config.toml": original,
             },
         )
+
+    def test_heading_cards_preserve_prose_aliases_and_unique_anchors(self):
+        self.write(
+            "artifacts/headings.md",
+            """# Parent
+<!-- mycel:cues {literal: section_headings, heading-levels: [1, 3]} -->
+
+## Branch
+### Alpha
+<!-- mycel:cues {type: literal, match: Exact} -->Closing prose.
+
+Next paragraph.
+
+### Alpha-1
+Numbered heading.
+
+### Alpha
+Repeated heading.
+
+## Remaining
+<!-- mycel:cues {match: [Parent alias]} -->
+
+Still in Parent.
+""",
+        )
+        reply = self.command("cues", "compile")
+        cards = json.loads(self.catalog.read_bytes())["cards"]
+        glossary = [card for card in cards if card["group"] == "glossary"]
+
+        with self.subTest("closing-line prose"):
+            exact = next(
+                card for card in glossary if card["cue_target"]["anchor"] == "alpha"
+            )
+            self.assertEqual(
+                exact["text"], "### Alpha\nClosing prose.\n\nNext paragraph."
+            )
+        with self.subTest("containing selected parent"):
+            parent = next(
+                card for card in glossary if card["cue_target"]["anchor"] == "parent"
+            )
+            self.assertEqual(parent["match"], ["Parent", "Parent alias"])
+            self.assertEqual(reply["faults"], [])
+        with self.subTest("numbered anchor collision"):
+            targets = sorted(
+                (
+                    card["cue_target"]
+                    for card in glossary
+                    if card["title"].startswith("Alpha")
+                ),
+                key=lambda target: target["first_line"],
+            )
+            self.assertEqual(
+                [target["anchor"] for target in targets],
+                ["alpha", "alpha-1", "alpha-2"],
+            )
+
+    def test_invalid_escaped_scalars_report_faults_without_losing_valid_cards(self):
+        source = self.write(
+            "artifacts/scalars.md",
+            r"""# Rules
+<!-- mycel:cues {type: literal, match: "\uD800"} -->
+<!-- mycel:cues {"\uD800": first, "\uD800": second, type: literal, match: Broken} -->
+<!-- mycel:cues {type: literal, match: Valid} -->
+
+Valid content.
+""",
+        )
+        reply = self.command("cues", "compile")
+        catalog = json.loads(self.catalog.read_bytes())
+        self.assertEqual(reply["faults"], catalog["faults"])
+        self.assertEqual(
+            [(fault["file"], fault["line"]) for fault in reply["faults"]],
+            [(str(source), 2), (str(source), 3)],
+        )
+        self.assertTrue(all("Unicode" in fault["problem"] for fault in reply["faults"]))
+        self.assertEqual([card["match"] for card in catalog["cards"]], [["Valid"]])
+
+    def test_directory_sync_failure_reports_the_published_catalog(self):
+        source = self.write(
+            "artifacts/card.md",
+            "<!-- mycel:cues {type: literal, match: Original} -->\n\nSaved.\n",
+        )
+        self.command("cues", "compile")
+        previous = self.catalog.read_bytes()
+        source.write_text(source.read_text().replace("Original", "Changed"))
+        sync = os.fsync
+        observed = []
+
+        def fail_directory_sync(descriptor):
+            if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+                observed.append(self.catalog.read_bytes())
+                raise OSError("directory sync failed")
+            sync(descriptor)
+
+        with patch("mycel._cues.os.fsync", side_effect=fail_directory_sync):
+            reply = self.command("cues", "compile")
+        published = self.catalog.read_bytes()
+        self.assertEqual(observed, [published])
+        self.assertNotEqual(published, previous)
+        self.assertEqual(reply["cards"], 1)
+        self.assertEqual(json.loads(published)["cards"][0]["match"], ["Changed"])
