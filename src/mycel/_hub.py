@@ -1,10 +1,13 @@
 """Manage the Instructions Hub copies used by new sessions (MYC-21.9–21.11)."""
 
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import re
 import stat
+import tempfile
 import tomllib
 
 from ._errors import ErrorCode, MycelError
@@ -121,3 +124,144 @@ def _read_state(paths: _Paths) -> _State:
     except (ValueError, RecursionError):
         pass
     raise MycelError(ErrorCode.IO, "The Hub state record cannot be read.")
+
+
+_CODEX_ASSIGNMENT = re.compile(
+    r"""^[ \t]*(developer_instructions|'developer_instructions'|"(?:[^"\\\r\n]|\\.)*")[ \t]*=""",
+    re.MULTILINE,
+)
+_LINE_END = re.compile(r"\r?\n|\Z")
+_COMMENT = re.compile(r"#")
+
+
+def _try_toml(text: str) -> dict | None:
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return None
+
+
+def _codex_assignment(text: str, old: str, without_key: dict) -> tuple[int, int, str, str]:
+    """Find the assignment whose removal leaves exactly the rest of the parsed config."""
+    wanted = {_CODEX_KEY: old}
+    for start in _CODEX_ASSIGNMENT.finditer(text):
+        if _try_toml(f"{start[1]} = true") != {_CODEX_KEY: True}:
+            continue
+        for ending in _LINE_END.finditer(text, start.end()):
+            assignment = _try_toml(text[start.start():ending.end()])
+            if assignment is None:
+                continue
+            if assignment == wanted and _try_toml(text[:start.start()] + text[ending.end():]) == without_key:
+                last_line = text.rfind("\n", start.end(), ending.start()) + 1
+                for mark in _COMMENT.finditer(text, max(last_line, start.end()), ending.start()):
+                    prefix = text[start.start():mark.start()]
+                    if _try_toml(prefix) == wanted:
+                        suffix = text[start.start() + len(prefix.rstrip(" \t")):ending.start()]
+                        return start.start(), ending.end(), suffix, ending[0]
+                return start.start(), ending.end(), "", ending[0]
+            break
+    raise MycelError(ErrorCode.REFUSED, "The top-level Codex Hub setting could not be edited safely.")
+
+
+def _codex_copy(before: str, value: str | None) -> str:
+    expected = _codex_config(before)
+    old = expected.pop(_CODEX_KEY, None)
+    if old == value:
+        return before
+    if old is not None and not isinstance(old, str):
+        raise MycelError(ErrorCode.REFUSED, "The top-level Codex Hub setting is not a string.")
+    line = ""
+    if value is not None:
+        literal = json.dumps(value, ensure_ascii=False).replace("\x7f", "\\u007f")
+        line = f"{_CODEX_KEY} = {literal}"
+    if old is None:
+        after = line + "\n" + before
+    else:
+        first, last, comment, ending = _codex_assignment(before, old, expected)
+        replacement = line + comment
+        after = before[:first] + (replacement + ending if replacement else "") + before[last:]
+    if value is not None:
+        expected[_CODEX_KEY] = value
+    if _codex_config(after) != expected:
+        raise MycelError(ErrorCode.REFUSED, "Editing the Hub would change another Codex setting.")
+    return after
+
+
+def _with_header(hub: str) -> str:
+    normalized = hub.replace("\r\n", "\n")
+    if normalized.startswith("---\n"):
+        end = normalized.find("\n---\n", 4)
+        if end != -1:
+            normalized = normalized[end + 5:]
+    return _HEADER + normalized.strip() + "\n"
+
+
+@dataclass(frozen=True)
+class _Change:
+    path: Path
+    previous: _File | None
+    contents: bytes
+    initial_mode: int
+    backup: Path
+
+    @property
+    def mode(self) -> int:
+        return self.previous.mode if self.previous is not None else self.initial_mode
+
+
+def _copy_changes(paths: _Paths, mode: str) -> list[_Change]:
+    source = _read(paths.source) if mode == "on" else None
+    if mode == "on" and source is None:
+        raise MycelError(ErrorCode.IO, "The Instructions Hub source could not be read.")
+    headed = _with_header(_text(source)) if source is not None else None
+    active, codex, agents = _read(paths.active), _read(paths.codex), _read(paths.agents)
+    encoded = b"" if headed is None else headed.encode("utf-8")
+    backup = paths.root / "backups"
+    changes = [
+        _Change(paths.active, active, source.contents if source is not None else b"", 0o644, backup / "active.md"),
+        _Change(paths.agents, agents, encoded, 0o644, backup / "agents-AGENTS.md"),
+    ]
+    if codex is not None or headed is not None:
+        replacement = _codex_copy(_text(codex), headed).encode("utf-8")
+        changes.append(_Change(paths.codex, codex, replacement, 0o600, backup / "codex-config.toml"))
+    return [change for change in changes if change.previous is None or change.contents != change.previous.contents]
+
+
+def _temporary(path: Path, contents: bytes, mode: int) -> Path:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    scratch = Path(name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(contents)
+            stream.flush()
+            os.fchmod(stream.fileno(), mode)
+            os.fsync(stream.fileno())
+    except BaseException:
+        scratch.unlink(missing_ok=True)
+        raise
+    return scratch
+
+
+def _backup(change: _Change) -> None:
+    if change.previous is None or change.backup.exists():
+        return
+    scratch = _temporary(change.backup, change.previous.contents, 0o600)
+    try:
+        os.link(scratch, change.backup)
+    except FileExistsError:
+        pass
+    finally:
+        scratch.unlink(missing_ok=True)
+
+
+@contextmanager
+def _staged_copies(changes: list[_Change]):
+    with ExitStack() as cleanup:
+        staged = []
+        for change in changes:
+            scratch = _temporary(change.path, change.contents, change.mode)
+            cleanup.callback(scratch.unlink, missing_ok=True)
+            _backup(change)
+            staged.append((change, scratch))
+        yield staged
