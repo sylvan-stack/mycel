@@ -144,6 +144,23 @@ Excluded text.
         self.write("artifacts/ignored.md", ignored_card)
         self.write("artifacts/disabled/disabled.md", ignored_card)
         self.write("code/code.md", ignored_card)
+        paragraph = self.write(
+            "artifacts/paragraph.md",
+            "## Alpha\n"
+            "<!-- mycel:cues {type: literal, match: First} -->\n"
+            "Some prose\n"
+            "2. ```\n"
+            "   <!-- mycel:cues {type: literal, match: Second} -->\n",
+        )
+        heading = "A``[B](/path)`C"
+        backticks = self.write(
+            "artifacts/backticks.md",
+            f"## {heading}\n<!-- mycel:cues {{type: literal, match: Backticks}} -->\n",
+        )
+        whole = self.write(
+            "artifacts/whole-file.md",
+            "<!-- mycel:cues {type: literal, match: Intro} -->\n\nBody.\n \t\n",
+        )
 
         reply = self.command("cues", "compile")
         catalog = json.loads(self.catalog.read_bytes())
@@ -153,8 +170,12 @@ Excluded text.
             [(fault["file"], fault["line"]) for fault in catalog["faults"]],
             [(str(declarations), line) for line in (9, 15, 20, 26)],
         )
-        self.assertEqual((reply["cards"], reply["sources"]), (3, 3))
-        named, local, glossary = catalog["cards"]
+        self.assertEqual(reply["cards"], len(catalog["cards"]))
+        self.assertEqual(reply["sources"], 6)
+        boundary_paths = {str(paragraph), str(backticks), str(whole)}
+        named, local, glossary = [
+            card for card in catalog["cards"] if card["declared_at"]["path"] not in boundary_paths
+        ]
         self.assertEqual(named["id"], "inner:guide.md#book-code")
         self.assertEqual(
             named["cue_target"],
@@ -194,6 +215,38 @@ Excluded text.
                 "sha256": sha256(target.read_bytes()).hexdigest(),
             },
         )
+        for document, written, anchor, end, text, declarations in (
+            (
+                paragraph, "Alpha", "alpha", 5, "## Alpha\nSome prose\n2. ```",
+                (("outer:paragraph.md#alpha", "First", 2),
+                 ("outer:paragraph.md#alpha~2", "Second", 5)),
+            ),
+            (
+                backticks, heading, "abc", 2, f"## {heading}",
+                (("outer:backticks.md#abc", "Backticks", 2),),
+            ),
+            (
+                whole, None, None, 4, "Body.\n \t",
+                (("outer:whole-file.md", "Intro", 1),),
+            ),
+        ):
+            with self.subTest(document=document.name):
+                path = str(document)
+                actual = [
+                    (card["id"], card["match"], card["title"], card["cue_target"],
+                     card["declared_at"], card["text"])
+                    for card in catalog["cards"] if card["declared_at"]["path"] == path
+                ]
+                self.assertEqual(
+                    actual,
+                    [
+                        (card_id, [term], written or document.name,
+                         {"path": path, "heading": written, "anchor": anchor,
+                          "first_line": 1, "last_line": end},
+                         {"path": path, "first_line": line, "last_line": line}, text)
+                        for card_id, term, line in declarations
+                    ],
+                )
 
     def test_fatal_compile_leaves_previous_catalog_bytes(self):
         source = self.write(
