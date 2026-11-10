@@ -122,12 +122,58 @@ def _blank(line: str) -> bool:
 
 
 _CODE_SPAN = re.compile(r"(`+)(.+?)(?<!`)\1(?!`)", re.DOTALL)
-_IMAGE_OR_LINK = re.compile(r"!?\[((?:[^\[\]\\]|\\.)*)\](?:\((?:[^()\\]|\\.)*\)|\[[^\]]*\])?")
+_IMAGE_OR_LINK = re.compile(r"!?\[([^\[\]]*)\]")
+_LINK_REFERENCE = re.compile(r"\[[^\]]*\]")
+_LINK_ANGLE_DESTINATION = re.compile(r"<[^<>\n]*>")
+_LINK_DESTINATION_MARK = re.compile(r"[() \t]")
+_LINK_TRAILER = re.compile(r"""(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^()]*\)))?[ \t]*\)""")
 _AUTOLINK = re.compile(r"<((?:https?|ftp|mailto):[^<>\s]*|[^<>\s@]+@[^<>\s@]+)>", re.IGNORECASE)
 _TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?/?>|<!--.*?-->")
 _ESCAPE = re.compile(r"\\([!\"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])")
 _EMPHASIS_UNDERSCORE = re.compile(r"(?<![^\W_])_+|_+(?![^\W_])")
 _EMPHASIS_OTHER = re.compile(r"[*~]+")
+
+
+def _inline_link_end(text: str, opening: int) -> int | None:
+    """Find an inline link's end after escapes have been set aside."""
+    start = opening + 1
+    trailer = _LINK_TRAILER.match(text, start)
+    if trailer is not None:
+        return trailer.end()
+    while text.startswith((" ", "\t"), start):
+        start += 1
+    if text.startswith("<", start):
+        destination = _LINK_ANGLE_DESTINATION.match(text, start)
+        trailer = _LINK_TRAILER.match(text, destination.end()) if destination is not None else None
+        return trailer.end() if trailer is not None else None
+    depth = 0
+    for mark in _LINK_DESTINATION_MARK.finditer(text, start):
+        if mark[0] == "(":
+            depth += 1
+            if depth > 32:  # cmark-gfm's limit for bare destinations
+                return None
+        elif mark[0] == ")" and depth:
+            depth -= 1
+        else:
+            trailer = _LINK_TRAILER.match(text, mark.start()) if not depth else None
+            return trailer.end() if trailer is not None else None
+    return None
+
+
+def _link_labels(text: str) -> str:
+    parts: list[str] = []
+    end = 0
+    for label in _IMAGE_OR_LINK.finditer(text):
+        if label.start() < end:
+            continue
+        parts.extend((text[end:label.start()], label[1]))
+        end = label.end()
+        if text.startswith("(", end):
+            end = _inline_link_end(text, end) or end
+        elif reference := _LINK_REFERENCE.match(text, end):
+            end = reference.end()
+    parts.append(text[end:])
+    return "".join(parts)
 
 
 def _rendered(title: str) -> str:
@@ -150,7 +196,7 @@ def _rendered(title: str) -> str:
     text = _AUTOLINK.sub(lambda match: keep(match[1]), text)
     previous = None
     while previous != text:
-        previous, text = text, _IMAGE_OR_LINK.sub(lambda match: match[1], text)
+        previous, text = text, _link_labels(text)
     text = _TAG.sub("", text)
     text = _EMPHASIS_UNDERSCORE.sub("", text)
     text = _EMPHASIS_OTHER.sub("", text)
