@@ -471,3 +471,67 @@ Visible prose.
         self.assertEqual(
             card["text"], text.replace(f"{declaration}\n", "", 1).rstrip("\n")
         )
+
+    def test_malformed_front_matter_keeps_scanning_cue_files(self):
+        malformed = self.write(
+            "artifacts/metadata.md",
+            """---
+created: !!timestamp invalid
+---
+
+## Local
+<!-- mycel:cues {type: literal, match: Local} -->
+
+Local content.
+""",
+        )
+        separate = self.write(
+            "artifacts/separate.md",
+            """## Separate
+<!-- mycel:cues {type: literal, match: Separate} -->
+
+Separate content.
+""",
+        )
+        reply = self.command("cues", "compile")
+        cards = json.loads(self.catalog.read_bytes())["cards"]
+        self.assertEqual(reply["cards"], 2)
+        self.assertEqual(reply["faults"], [])
+        self.assertEqual(
+            {tuple(card["match"]): card["cue_target"]["path"] for card in cards},
+            {("Local",): str(malformed), ("Separate",): str(separate)},
+        )
+
+    def test_html_tokens_preserve_cue_lookalikes_in_the_published_target(self):
+        declaration = "<!-- mycel:cues {type: literal, match: Real} -->"
+        text = f"""## Rules
+<div title="
+<!-- mycel:cues {{type: literal, match: Attribute before blank}} -->
+
+<!-- mycel:cues {{type: literal, match: Attribute after blank}} -->
+">
+</div>
+<section><!-- Comment starting on the tag line
+<!-- mycel:cues {{type: literal, match: Nested}} -->
+</section>
+<div><script>
+<!-- mycel:cues {{type: literal, match: Script}} -->
+</script></div>
+{declaration}
+Visible prose.
+
+```markdown
+<!-- mycel:cues {{type: literal, match: Fenced}} -->
+```
+"""
+        self.write("artifacts/html-tokens.md", text)
+
+        reply = self.command("cues", "compile")
+        self.assertEqual(reply["faults"], [])
+        self.assertEqual(reply["cards"], 1)
+        (card,) = json.loads(self.catalog.read_bytes())["cards"]
+        self.assertEqual(card["match"], ["Real"])
+        self.assertEqual(card["cue_target"]["heading"], "Rules")
+        self.assertEqual(
+            card["text"], text.replace(f"{declaration}\n", "", 1).rstrip("\n")
+        )
