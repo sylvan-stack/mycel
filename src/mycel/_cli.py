@@ -432,6 +432,8 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "cues" and parsed.arguments != ["compile"] and (
             len(parsed.arguments) != 2 or parsed.arguments[0] != "match"):
         raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel cues compile or mycel cues match <text>.")
+    if name == "hub" and tuple(parsed.arguments) not in {("on",), ("off",), ("status",), ("__sync",)}:
+        raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel hub on, mycel hub off, or mycel hub status.")
     if name == "api-key" and tuple(parsed.arguments) not in {("voyage",), ("jev",)}:
         raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel api-key voyage|jev.")
     if name == "search" and (len(parsed.arguments) > 1 or (parsed.arguments and not parsed.arguments[0].strip())
@@ -614,7 +616,7 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
                              grep_plain=parsed.command == "grep" and
                              (os.environ.get("MYCEL_GREP_PLAIN") == "1" or not snapshot.valid))
             if parsed.command not in {"info", "grep"}:
-                snapshot.require_valid()
+                snapshot.require_valid(require_store=parsed.command != "hub")
             selected_handlers = {"api-key": _api_key, "info": _settings_info, "grep": _plain_grep, "repos": _repos,
                                  "init": _init, "ids": _handle_ids}
             selected_handlers["read"] = _read_chunk
@@ -622,6 +624,8 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
             selected_handlers["pieces"] = handle_pieces
             from ._cues import handle_cues
             selected_handlers["cues"] = handle_cues
+            from ._hub import handle_hub
+            selected_handlers["hub"] = handle_hub
             from ._plan_check import handle_plan_check
             selected_handlers["plan"] = handle_plan_check
             from ._search import handle_search

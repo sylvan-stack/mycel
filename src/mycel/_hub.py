@@ -12,6 +12,7 @@ import stat
 import tempfile
 import tomllib
 
+from ._cli import Invocation, Result
 from ._errors import ErrorCode, MycelError
 from ._settings import SettingsSnapshot
 
@@ -362,3 +363,21 @@ def _sync(paths: _Paths, settings: SettingsSnapshot) -> dict:
         raise copy_problem from None
     assert state is not None
     return {"hub": state.reply(), "catalog": catalog}
+
+
+def handle_hub(invocation: Invocation) -> Result:
+    if invocation.settings is None:
+        raise MycelError(ErrorCode.INTERNAL, "Settings were not loaded for this invocation.")
+    arguments = invocation.arguments
+    if len(arguments) != 1 or arguments[0] not in (*_MODES, "status", "__sync"):
+        raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel hub on, mycel hub off, or mycel hub status.")
+    action = arguments[0]
+    paths = _Paths.from_settings(invocation.settings)
+    try:
+        if action == "status":
+            return Result(_read_state(paths).reply())
+        if action == "__sync":
+            return Result(_sync(paths, invocation.settings))
+        return Result(_switch(paths, action).reply())
+    except (OSError, UnicodeError):
+        raise MycelError(ErrorCode.IO, "The Instructions Hub files could not be read or written.") from None
