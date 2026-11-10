@@ -311,6 +311,7 @@ def _frontmatter(lines: tuple[_Line, ...]) -> tuple[Mapping[str, Any], bool, boo
 
 def _container_prefix(
     content: str, *, interrupting_paragraph: bool = False,
+    following: str | None = None, parents: tuple[tuple[str, int], ...] = (),
 ) -> tuple[str, tuple[tuple[str, int], ...]]:
     """Read explicit quote/list chains for block state, without altering source."""
     view = content.expandtabs(4)
@@ -324,6 +325,11 @@ def _container_prefix(
                 break
         width = marker.end()
         if not is_quote and not remainder:
+            if following is not None:
+                next_view = _in_container(following, parents + tuple(containers))
+                if next_view is not None and not next_view.strip(" "):
+                    # A second blank line leaves the item empty.
+                    return remainder, tuple(containers)
             # A blank-start item continues one space past the marker, regardless of trailing whitespace.
             width = marker.end("list_marker") + 1
         containers.append(("quote" if is_quote else "list", width))
@@ -610,8 +616,10 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
             container_context = ()
             paragraph_start = None
             inherited = content
+        following = lines[index + 1].content if index + 1 < len(lines) else None
         view, explicit_containers = _container_prefix(
             inherited, interrupting_paragraph=paragraph_start is not None,
+            following=following, parents=container_context,
         )
         containers = container_context + explicit_containers
         if explicit_containers:
