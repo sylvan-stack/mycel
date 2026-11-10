@@ -420,3 +420,54 @@ Valid content.
         self.assertNotEqual(published, previous)
         self.assertEqual(reply["cards"], 1)
         self.assertEqual(json.loads(published)["cards"][0]["match"], ["Changed"])
+
+    def test_malformed_tagged_values_leave_valid_cards_in_the_catalog(self):
+        source = self.write(
+            "artifacts/tagged.md",
+            """## Rules
+<!-- mycel:cues {type: literal, match: !!timestamp invalid} -->
+<!-- mycel:cues {type: literal, match: !!int ''} -->
+<!-- mycel:cues {type: literal, match: !!bool maybe} -->
+<!-- mycel:cues {type: literal, match: Valid} -->
+
+Valid content.
+""",
+        )
+        reply = self.command("cues", "compile")
+        catalog = json.loads(self.catalog.read_bytes())
+        self.assertEqual(reply["faults"], catalog["faults"])
+        self.assertEqual(
+            [(fault["file"], fault["line"]) for fault in reply["faults"]],
+            [(str(source), 2), (str(source), 3), (str(source), 4)],
+        )
+        self.assertEqual([card["match"] for card in catalog["cards"]], [["Valid"]])
+
+    def test_html_container_declares_a_card_and_preserves_literal_examples(self):
+        declaration = "<!-- mycel:cues {type: literal, match: Inside} -->"
+        text = f"""## Section
+<div>
+<!-- Ordinary comment
+<!-- mycel:cues {{type: literal, match: Nested}} -->
+{declaration}
+Visible prose.
+<script>
+
+<!-- mycel:cues {{type: literal, match: Script}} -->
+</script>
+</div>
+
+```markdown
+<!-- mycel:cues {{type: literal, match: Fenced}} -->
+```
+"""
+        self.write("artifacts/html.md", text)
+
+        reply = self.command("cues", "compile")
+        self.assertEqual(reply["faults"], [])
+        self.assertEqual(reply["cards"], 1)
+        (card,) = json.loads(self.catalog.read_bytes())["cards"]
+        self.assertEqual(card["match"], ["Inside"])
+        self.assertEqual(card["cue_target"]["heading"], "Section")
+        self.assertEqual(
+            card["text"], text.replace(f"{declaration}\n", "", 1).rstrip("\n")
+        )

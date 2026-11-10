@@ -8,7 +8,7 @@ Reviewed revision: `560e2e2b1623066240ebd128bfa1e552f0a4f25f` under SYL-327 (29 
 
 ## Selection and limits
 
-19 top-tier inventory entries and 135 mid-tier entries are available after the higher-bar review. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Top-tier bodies are unchanged. Retained mid-tier sources remain uncommented.
+21 top-tier inventory entries and 135 mid-tier entries are available after the higher-bar review. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Top-tier bodies are unchanged. Retained mid-tier sources remain uncommented.
 
 ## Active top tier
 
@@ -21,6 +21,8 @@ Reviewed revision: `560e2e2b1623066240ebd128bfa1e552f0a4f25f` under SYL-327 (29 
 | [`test_top_cue_cards.CueCardTests.test_heading_cards_preserve_prose_aliases_and_unique_anchors`](tests/top/test_top_cue_cards.py#L323) | One compiled Markdown document verifies exact prose after a declaration, a parent alias after a nested section, and a numbered anchor collision. |
 | [`test_top_cue_cards.CueCardTests.test_invalid_escaped_scalars_report_faults_without_losing_valid_cards`](tests/top/test_top_cue_cards.py#L378) | Invalid escaped values and duplicate keys produce line-specific faults while a valid card still reaches the published catalog. |
 | [`test_top_cue_cards.CueCardTests.test_directory_sync_failure_reports_the_published_catalog`](tests/top/test_top_cue_cards.py#L399) | A real atomic replacement followed by an injected directory sync failure leaves the new catalog in place and reports publication. |
+| [`test_top_cue_cards.CueCardTests.test_malformed_tagged_values_leave_valid_cards_in_the_catalog`](tests/top/test_top_cue_cards.py#L424) | Malformed explicitly tagged scalar values become file-and-line faults while the real compiler publishes a valid neighboring card. |
+| [`test_top_cue_cards.CueCardTests.test_html_container_declares_a_card_and_preserves_literal_examples`](tests/top/test_top_cue_cards.py#L445) | The published target removes a real declaration in an HTML container and retains literal examples in nested comments, verbatim HTML and fences. |
 | [`test_top_ingest.IngestStepStoreTests.test_a_series_completes_while_a_file_changes_before_every_step`](tests/top/test_top_ingest.py#L8) | Documented SYL-315 regression of SYL-289 run 3: while another agent edited a file before every step, each step that wrote it started the refresh of unchanged files again, so a stepped pass never completed. Edits a file before every step of a series and requires the pass to complete within a bounded number of steps. |
 | [`test_top_ingest.IngestStepStoreTests.test_a_refreshed_file_resting_on_a_written_file_is_refreshed_again`](tests/top/test_top_ingest.py#L29) | Non-obvious edge of the SYL-315 fix: a file the refresh already passed rests, through a Source Ref, on a section a later step writes. Requires that step to refresh it again, and the finished series to leave the dependency, edge, relation and stale rows exactly as one whole pass does. |
 | [`test_top_recovery.RecoveryStoreTests.test_edit_during_final_audit_rolls_back_the_origin_claim_and_edge`](tests/top/test_top_recovery.py#L14) | Edits source during the final audit callback after a provider result exists. Requires transaction rollback of both the origin claim and its dependency edge, preventing publication against changed evidence. |

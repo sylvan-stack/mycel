@@ -6,7 +6,7 @@
   "counting": "Static definitions and separately labelled programs/scenario functions; not runtime-discovered cases.",
   "mid_review": "Individually reviewed against the raised mid-tier bar under SYL-327; source inspection only, no execution.",
   "counts": {
-    "python_active": 152,
+    "python_active": 154,
     "python_commented": 0,
     "programs_active": 2,
     "node_cases_commented": 0,
@@ -20,7 +20,7 @@
       "entrypoint": 1,
       "python": 133
     },
-    "top_available": 19,
+    "top_available": 21,
     "low_removed_SYL_327": 1653,
     "low_removed_total": 1679
   },
@@ -37,7 +37,7 @@
       "reason": "A real multi-root scan and published catalog show innermost ownership, fenced examples, fault isolation, and exact cross-file targets and source metadata.",
       "review": "individual",
       "line": 68,
-      "file_sha256": "c3e6761f76a1897bc951f4268f12a2e4d54ff60e5c34ca1824ef7c175b5e8ec5",
+      "file_sha256": "5bbb4ad61cc6bff60fad014b8781f1ea5f0bc26e56d64e516afbf15fb6f80b05",
       "selector": "test_top_cue_cards.CueCardTests.test_compile_keeps_exact_cross_root_targets_and_reports_faults"
     },
     {
@@ -52,7 +52,7 @@
       "reason": "An unusable artifact root and a failed atomic replacement both leave the prior catalog byte-for-byte usable and clean up staging files.",
       "review": "individual",
       "line": 198,
-      "file_sha256": "c3e6761f76a1897bc951f4268f12a2e4d54ff60e5c34ca1824ef7c175b5e8ec5",
+      "file_sha256": "5bbb4ad61cc6bff60fad014b8781f1ea5f0bc26e56d64e516afbf15fb6f80b05",
       "selector": "test_top_cue_cards.CueCardTests.test_fatal_compile_leaves_previous_catalog_bytes"
     },
     {
@@ -67,7 +67,7 @@
       "reason": "The public matcher consumes the real catalog and distinguishes first appearance, fenced and multiline matches, plural suffixes, and false word-boundary matches.",
       "review": "individual",
       "line": 224,
-      "file_sha256": "c3e6761f76a1897bc951f4268f12a2e4d54ff60e5c34ca1824ef7c175b5e8ec5",
+      "file_sha256": "5bbb4ad61cc6bff60fad014b8781f1ea5f0bc26e56d64e516afbf15fb6f80b05",
       "selector": "test_top_cue_cards.CueCardTests.test_match_uses_published_patterns_over_the_whole_message"
     },
     {
@@ -82,7 +82,7 @@
       "reason": "A real partial copy publication leaves durable pending state. Retrying and switching off restore agreement, preserve unrelated Codex bytes, and keep the first backups.",
       "review": "individual",
       "line": 266,
-      "file_sha256": "c3e6761f76a1897bc951f4268f12a2e4d54ff60e5c34ca1824ef7c175b5e8ec5",
+      "file_sha256": "5bbb4ad61cc6bff60fad014b8781f1ea5f0bc26e56d64e516afbf15fb6f80b05",
       "selector": "test_top_cue_cards.CueCardTests.test_interrupted_hub_switch_resumes_and_preserves_first_backups"
     },
     {
@@ -97,7 +97,7 @@
       "reason": "One compiled Markdown document verifies exact prose after a declaration, a parent alias after a nested section, and a numbered anchor collision.",
       "review": "individual",
       "line": 323,
-      "file_sha256": "c3e6761f76a1897bc951f4268f12a2e4d54ff60e5c34ca1824ef7c175b5e8ec5",
+      "file_sha256": "5bbb4ad61cc6bff60fad014b8781f1ea5f0bc26e56d64e516afbf15fb6f80b05",
       "selector": "test_top_cue_cards.CueCardTests.test_heading_cards_preserve_prose_aliases_and_unique_anchors"
     },
     {
@@ -112,7 +112,7 @@
       "reason": "Invalid escaped values and duplicate keys produce line-specific faults while a valid card still reaches the published catalog.",
       "review": "individual",
       "line": 378,
-      "file_sha256": "c3e6761f76a1897bc951f4268f12a2e4d54ff60e5c34ca1824ef7c175b5e8ec5",
+      "file_sha256": "5bbb4ad61cc6bff60fad014b8781f1ea5f0bc26e56d64e516afbf15fb6f80b05",
       "selector": "test_top_cue_cards.CueCardTests.test_invalid_escaped_scalars_report_faults_without_losing_valid_cards"
     },
     {
@@ -127,8 +127,38 @@
       "reason": "A real atomic replacement followed by an injected directory sync failure leaves the new catalog in place and reports publication.",
       "review": "individual",
       "line": 399,
-      "file_sha256": "c3e6761f76a1897bc951f4268f12a2e4d54ff60e5c34ca1824ef7c175b5e8ec5",
+      "file_sha256": "5bbb4ad61cc6bff60fad014b8781f1ea5f0bc26e56d64e516afbf15fb6f80b05",
       "selector": "test_top_cue_cards.CueCardTests.test_directory_sync_failure_reports_the_published_catalog"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_cue_cards.py",
+      "id": "tests/top/test_top_cue_cards.py::CueCardTests.test_malformed_tagged_values_leave_valid_cards_in_the_catalog",
+      "name": "test_malformed_tagged_values_leave_valid_cards_in_the_catalog",
+      "class": "CueCardTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "Malformed explicitly tagged scalar values become file-and-line faults while the real compiler publishes a valid neighboring card.",
+      "review": "individual",
+      "line": 424,
+      "file_sha256": "5bbb4ad61cc6bff60fad014b8781f1ea5f0bc26e56d64e516afbf15fb6f80b05",
+      "selector": "test_top_cue_cards.CueCardTests.test_malformed_tagged_values_leave_valid_cards_in_the_catalog"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_cue_cards.py",
+      "id": "tests/top/test_top_cue_cards.py::CueCardTests.test_html_container_declares_a_card_and_preserves_literal_examples",
+      "name": "test_html_container_declares_a_card_and_preserves_literal_examples",
+      "class": "CueCardTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "The published target removes a real declaration in an HTML container and retains literal examples in nested comments, verbatim HTML and fences.",
+      "review": "individual",
+      "line": 445,
+      "file_sha256": "5bbb4ad61cc6bff60fad014b8781f1ea5f0bc26e56d64e516afbf15fb6f80b05",
+      "selector": "test_top_cue_cards.CueCardTests.test_html_container_declares_a_card_and_preserves_literal_examples"
     },
     {
       "repo": "mycel",
