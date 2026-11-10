@@ -20,7 +20,7 @@ from urllib.parse import quote, unquote_to_bytes
 
 from mycel._markdown import (MarkdownDocument, _ATX, _FENCE, _SETEXT, _THEMATIC,
                              _Line, _container_prefix, _container_view, _html_block,
-                             _html_ends, _in_container, _lines, _link_reference_end)
+                             _html_ends, _lines, _link_reference_end)
 
 
 Root = Literal["code", "artifact", "index"]
@@ -526,7 +526,9 @@ def _comments(fragment: list[_ProseLine], *, inline: bool,
     return result
 
 
-def _document_blocks(lines: tuple[_Line, ...], start: int) -> list[tuple[list[_ProseLine], bool]]:
+def _document_blocks(lines: tuple[_Line, ...], start: int, *,
+                     cue_anchors: bool = False) -> list[tuple[list[_ProseLine], bool]]:
+    """Read prose blocks, using the Cue outline's list indentation for anchors."""
     fragment: list[_ProseLine] = []
     blocks: list[tuple[list[_ProseLine], bool]] = []
     container_context: tuple[tuple[str, int], ...] = ()
@@ -553,11 +555,12 @@ def _document_blocks(lines: tuple[_Line, ...], start: int) -> list[tuple[list[_P
             else:
                 continue
         if html_kind is not None:
-            view = _in_container(content, html_containers)
-            if view is None:
+            view, depth = _container_view(content, html_containers)
+            if depth < len(html_containers):
                 if html_kind in {"comment", "blank"}:
                     flush(inline=False)
-                html_kind, container_context = None, ()
+                html_kind = None
+                container_context = html_containers[:depth] if cue_anchors else ()
             else:
                 if html_kind in {"comment", "blank"}:
                     fragment.append(_ProseLine(view + lines[index].text[len(lines[index].content):], index + 1, lines[index].text))
@@ -566,33 +569,34 @@ def _document_blocks(lines: tuple[_Line, ...], start: int) -> list[tuple[list[_P
                         flush(inline=False)
                     html_kind = None
                 continue
-        inherited = _in_container(content, container_context)
+        inherited, depth = _container_view(content, container_context)
         lazy_continuation = False
-        if inherited is None:
+        if depth < len(container_context):
+            if not cue_anchors:
+                inherited = content
             # A list/blockquote paragraph may continue without its marker or
             # full indentation. Preserve its inline-code fragment unless this
-            # physical line starts another block. A missing marker on a setext
+            # line starts another block. A missing marker on a setext
             # underline is plain paragraph text, not a heading in the container.
-            _, new_containers = _container_prefix(content)
-            possible_fence = _FENCE.fullmatch(content)
+            _, new_containers = _container_prefix(inherited)
+            possible_fence = _FENCE.fullmatch(inherited)
             starts_fence = (possible_fence is not None and
                             (possible_fence.group(1)[0] != "`" or "`" not in possible_fence.group(2)))
             lazy_continuation = bool(
-                fragment and container_context and content.strip(" \t") and not new_containers
-                and _ATX.fullmatch(content) is None and _THEMATIC.fullmatch(content) is None
+                fragment and inherited.strip(" \t") and not new_containers
+                and _ATX.fullmatch(inherited) is None and _THEMATIC.fullmatch(inherited) is None
                 and not starts_fence
-                and _html_block(content, can_start_type_seven=False) is None)
-            if lazy_continuation:
-                inherited = content
-            else:
+                and _html_block(inherited, can_start_type_seven=False) is None)
+            if not lazy_continuation:
                 flush()
-                container_context, inherited = (), content
+                container_context = container_context[:depth] if cue_anchors else ()
         # A sibling list item fails the old item's indentation check above.
         # Its prior paragraph has already been flushed before this scan.
         following = lines[index + 1].content if index + 1 < len(lines) else None
         view, explicit = _container_prefix(
             inherited, interrupting_paragraph=bool(fragment),
             following=following, parents=container_context,
+            preserve_list_code_indent=cue_anchors,
         )
         containers = container_context + explicit
         if explicit:
@@ -644,8 +648,8 @@ def _reference_labels(blocks: list[tuple[list[_ProseLine], bool]]) -> frozenset[
 
 
 def markdown_reference_labels(text: str, *, start: int) -> frozenset[str]:
-    """Return reference keys from Markdown starting at the given zero-based line."""
-    return _reference_labels(_document_blocks(_lines(text), start))
+    """Return reference keys for Cue Card anchors from the zero-based start line."""
+    return _reference_labels(_document_blocks(_lines(text), start, cue_anchors=True))
 
 
 def _document_comments(document: MarkdownDocument, file: str,
