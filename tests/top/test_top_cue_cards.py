@@ -161,6 +161,23 @@ Excluded text.
             "artifacts/whole-file.md",
             "<!-- mycel:cues {type: literal, match: Intro} -->\n\nBody.\n \t\n",
         )
+        first = "<!-- mycel:cues {type: literal, match: First} -->"
+        example = "  <!-- mycel:cues {type: literal, match: Example} -->"
+        second = "<!-- mycel:cues {type: literal, match: Second} -->"
+        blank_start_list = self.write(
+            "artifacts/blank-start-list.md", f"## Alpha\n{first}\n-\n  ```\n{example}\n{second}\n",
+        )
+        empty_list = self.write(
+            "artifacts/empty-list.md", f"## Alpha\n{first}\n-\n\n  ```\n{example}\n{second}\n",
+        )
+        nested_list = self.write(
+            "artifacts/nested-list.md", f"## Alpha\n{first}\n- -\n    ~~~\n  ```\n{example}\n{second}\n",
+        )
+        html_heading = '<span title="a>b">Alpha</span>'
+        inline_html = self.write(
+            "artifacts/inline-html.md",
+            f"## {html_heading}\n<!-- mycel:cues {{type: literal, match: HTML}} -->\n",
+        )
 
         reply = self.command("cues", "compile")
         catalog = json.loads(self.catalog.read_bytes())
@@ -171,8 +188,10 @@ Excluded text.
             [(str(declarations), line) for line in (9, 15, 20, 26)],
         )
         self.assertEqual(reply["cards"], len(catalog["cards"]))
-        self.assertEqual(reply["sources"], 6)
-        boundary_paths = {str(paragraph), str(backticks), str(whole)}
+        self.assertEqual(reply["sources"], 10)
+        boundary_paths = {str(path) for path in (
+            paragraph, backticks, whole, blank_start_list, empty_list, nested_list, inline_html,
+        )}
         named, local, glossary = [
             card for card in catalog["cards"] if card["declared_at"]["path"] not in boundary_paths
         ]
@@ -215,6 +234,7 @@ Excluded text.
                 "sha256": sha256(target.read_bytes()).hexdigest(),
             },
         )
+        self.maxDiff = None
         for document, written, anchor, end, text, declarations in (
             (
                 paragraph, "Alpha", "alpha", 5, "## Alpha\nSome prose\n2. ```",
@@ -228,6 +248,24 @@ Excluded text.
             (
                 whole, None, None, 4, "Body.\n \t",
                 (("outer:whole-file.md", "Intro", 1),),
+            ),
+            (
+                blank_start_list, "Alpha", "alpha", 6, f"## Alpha\n-\n  ```\n{example}",
+                (("outer:blank-start-list.md#alpha", "First", 2),
+                 ("outer:blank-start-list.md#alpha~2", "Second", 6)),
+            ),
+            (
+                empty_list, "Alpha", "alpha", 7, f"## Alpha\n-\n\n  ```\n{example}\n{second}",
+                (("outer:empty-list.md#alpha", "First", 2),),
+            ),
+            (
+                nested_list, "Alpha", "alpha", 7, f"## Alpha\n- -\n    ~~~\n  ```\n{example}",
+                (("outer:nested-list.md#alpha", "First", 2),
+                 ("outer:nested-list.md#alpha~2", "Second", 7)),
+            ),
+            (
+                inline_html, html_heading, "alpha", 2, f"## {html_heading}",
+                (("outer:inline-html.md#alpha", "HTML", 2),),
             ),
         ):
             with self.subTest(document=document.name):
