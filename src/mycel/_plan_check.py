@@ -1,9 +1,13 @@
 """Read the numbered checkbox tree of a Beat's implementation plan (MYC-20.13)."""
 
 from dataclasses import dataclass, field
+from pathlib import Path
 import re
 
+from ._errors import MycelError
 from ._markdown import outline_markdown
+from ._scope import RepositoryLocations
+from ._source_refs import SourceAddressError, parse_source_address
 
 
 _STEP_LIKE = re.compile(r"^[ \t]*(?:[-*+][ \t]+|\[[^\]]*\][ \t]+|[0-9]+(?:\.[0-9]+)*[.)](?=[ \t]|$))")
@@ -103,3 +107,68 @@ def _read_plan(text: str, fallback: str) -> tuple[str, list[Step], list[tuple[in
         all_steps.extend(steps)
         problems.extend(faults)
     return beat, all_steps, problems
+
+
+_REPO_PREFIX = r"[A-Za-z0-9_][A-Za-z0-9_.-]*:"
+_PATH_TOKEN = re.compile(r"`([^`]+)`|(?<![\w.:-])(" + _REPO_PREFIX + r"[^\s,;)`]+)")
+_REPO_PATH = re.compile(_REPO_PREFIX)
+_FILE_FIELD = re.compile(r"\bFiles:[ \t]*(.*?)(?=\s+(?:Serves|Produces)\b|$)")
+
+
+def _path_names(text: str, *, file_field: bool):
+    for match in _PATH_TOKEN.finditer(text):
+        value = match[1] or match[2].rstrip(".;")
+        if not (repo := _REPO_PATH.match(value)):
+            continue
+        path = value[repo.end():]
+        if path.startswith("//"):
+            continue
+        if file_field or "/" in path or "." in path:
+            yield value
+
+
+def _named_files(step: Step) -> tuple[str, ...]:
+    text = " ".join(step.lines)
+    fields = _FILE_FIELD.findall(text)
+    paths = (path for field in fields for path in _path_names(field, file_field=True)) if fields else (
+        _path_names(text, file_field=False)
+    )
+    return tuple(dict.fromkeys(paths))
+
+
+def _file_problem(spelling: str, locations: RepositoryLocations) -> str | None:
+    folder = spelling.endswith("/")
+    try:
+        address = parse_source_address(spelling.removesuffix("/"))
+    except SourceAddressError:
+        return "Use a repository name and a relative code path."
+    if address.root not in (None, "code") or address.name is not None:
+        return "Use a code path without a chunk selector."
+    try:
+        matches = locations.named(address.repository)
+    except MycelError:
+        return "No configured code checkout has this repository name."
+    if len(matches) != 1 or matches[0].name != address.repository:
+        return "No configured code checkout has this repository name."
+    repository = matches[0].at(locations.cwd)
+    if repository.fault or repository.code is None:
+        return "The configured code checkout could not be resolved."
+    try:
+        root = repository.code.path.resolve()
+        path = (root / Path(address.path)).resolve()
+        if not path.is_relative_to(root):
+            return "The path resolves outside its configured code checkout."
+        if path.exists():
+            return "The path is a file, but a folder was named." if folder and not path.is_dir() else None
+        if not path.parent.is_dir():
+            return "Neither the path nor its containing folder exists."
+    except (OSError, RuntimeError, ValueError):
+        return "The path could not be resolved in its configured code checkout."
+    return None
+
+
+def _check_files(steps: list[Step], locations: RepositoryLocations) -> None:
+    for step in steps:
+        for spelling in _named_files(step):
+            if problem := _file_problem(spelling, locations):
+                step.problem("file", f"{spelling}: {problem}")
