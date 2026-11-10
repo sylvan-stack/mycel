@@ -49,7 +49,7 @@ _CUE_HTML_LITERAL_END = {
     "'": re.compile("'"),
 }
 _CUE_HTML_RAW_END = {
-    f"<{tag}": re.compile(rf"</{tag}[ \t]*>", re.IGNORECASE)
+    f"<{tag}": re.compile(rf"</{tag}(?=[ \t\f/>]|$)", re.IGNORECASE)
     for tag in _RAW_HTML_TAGS
 }
 _TABLE_ROW = re.compile(r"^ {0,3}\|.*\|[ \t]*$")
@@ -371,10 +371,11 @@ class _CueHTML:
     def __init__(self) -> None:
         self.tag: str | None = None
         self.literal_end: re.Pattern[str] | None = None
+        self.raw_end: re.Pattern[str] | None = None
 
     @property
     def pending(self) -> bool:
-        return self.tag is not None or self.literal_end is not None
+        return self.tag is not None or self.literal_end is not None or self.raw_end is not None
 
     def scan(self, content: str) -> bool:
         starts_cue = False
@@ -386,12 +387,19 @@ class _CueHTML:
                     break
                 self.literal_end = None
                 position = closing.end()
+            elif self.raw_end is not None:
+                closing = self.raw_end.search(content, position)
+                if closing is None:
+                    break
+                self.tag = closing.group().lower()
+                self.raw_end = None
+                position = closing.end()
             elif self.tag is not None:
                 mark = _CUE_HTML_TAG_MARK.search(content, position)
                 if mark is None:
                     break
                 if mark.group() == ">":
-                    self.literal_end = _CUE_HTML_RAW_END.get(self.tag)
+                    self.raw_end = _CUE_HTML_RAW_END.get(self.tag)
                     self.tag = None
                 else:
                     self.literal_end = _CUE_HTML_LITERAL_END[mark.group()]
