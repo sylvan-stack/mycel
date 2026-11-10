@@ -10,7 +10,7 @@ completely or the catalog cannot be written (MYC-D94).
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -33,6 +33,7 @@ from ._errors import ErrorCode, MycelError
 from ._markdown import _YAML_INPUT_ERRORS, CueComment, MarkdownOutline, OutlineHeading, outline_markdown
 from ._scope import Repository, RepositoryLocations
 from ._settings import SettingsSnapshot
+from ._source_refs import _LinkBracket, _reference_key, _reference_label, markdown_reference_labels
 
 
 CATALOG_VERSION = 1
@@ -122,16 +123,17 @@ def _blank(line: str) -> bool:
 
 
 _CODE_SPAN = re.compile(r"(`+)(.+?)(?<!`)\1(?!`)", re.DOTALL)
-_IMAGE_OR_LINK = re.compile(r"!?\[([^\[\]]*)\]")
-_LINK_REFERENCE = re.compile(r"\[[^\]]*\]")
+_LINK_REFERENCE = re.compile(r"\[([^\[\]]*+)\]")
 _LINK_ANGLE_DESTINATION = re.compile(r"<[^<>\n]*>")
 _LINK_DESTINATION_MARK = re.compile(r"[() \t]")
 _LINK_TRAILER = re.compile(r"""(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^()]*\)))?[ \t]*\)""")
 _AUTOLINK = re.compile(r"<((?:https?|ftp|mailto):[^<>\s]*|[^<>\s@]+@[^<>\s@]+)>", re.IGNORECASE)
 _TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?/?>|<!--.*?-->")
+_LINK_BRACKET = re.compile(rf"{_TAG.pattern}|(?P<bracket>!?\[|\])")
 _ESCAPE = re.compile(r"\\([!\"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])")
 _EMPHASIS_UNDERSCORE = re.compile(r"(?<![^\W_])_+|_+(?![^\W_])")
 _EMPHASIS_OTHER = re.compile(r"[*~]+")
+_HEADING_TOKEN = re.compile(r"\0([0-9]+)\0")
 
 
 def _inline_link_end(text: str, opening: int) -> int | None:
@@ -160,54 +162,100 @@ def _inline_link_end(text: str, opening: int) -> int | None:
     return None
 
 
-def _link_labels(text: str) -> str:
+def _heading_reference_end(text: str, opener: _LinkBracket, closing: int,
+                           references: frozenset[str], source_text: Callable[[str], str]) -> int | None:
+    suffix = _LINK_REFERENCE.match(text, closing)
+    if suffix and suffix[1]:
+        written = source_text(suffix[0])
+    elif not opener.bracket_after:
+        written = source_text(text[opener.beginning:closing])
+    else:
+        return None
+    label = _reference_label(written, 0)
+    if label and label[1] == len(written) and _reference_key(label[0]) in references:
+        return suffix.end() if suffix else closing
+    return None
+
+
+def _link_labels(text: str, references: frozenset[str], source_text: Callable[[str], str]) -> str:
+    """Keep the rendered text of links and leave unmatched bracket syntax as text."""
+    brackets: list[_LinkBracket] = []
+    removals: list[tuple[int, int]] = []
+    consumed, last_link_start = 0, -1
+    for mark in _LINK_BRACKET.finditer(text):
+        bracket = mark["bracket"]
+        if bracket is None or mark.start() < consumed:
+            continue
+        if bracket != "]":
+            if brackets:
+                brackets[-1].bracket_after = True
+            brackets.append(_LinkBracket(mark.end() - 1, image=bracket == "!["))
+            continue
+        if not brackets:
+            continue
+        opener = brackets.pop()
+        # A link may contain images but cannot contain another link.
+        if not opener.image and opener.beginning < last_link_start:
+            continue
+        closing = mark.end()
+        ending = _inline_link_end(text, closing) if text.startswith("(", closing) else None
+        if ending is None and references:
+            ending = _heading_reference_end(text, opener, closing, references, source_text)
+        if ending is None:
+            continue
+        opening = opener.beginning - 1 if opener.image else opener.beginning
+        removals.append((opening, opener.beginning + 1))
+        removals.append((mark.start(), ending))
+        consumed = ending
+        if not opener.image:
+            last_link_start = opener.beginning
+
     parts: list[str] = []
     end = 0
-    for label in _IMAGE_OR_LINK.finditer(text):
-        if label.start() < end:
-            continue
-        parts.extend((text[end:label.start()], label[1]))
-        end = label.end()
-        if text.startswith("(", end):
-            end = _inline_link_end(text, end) or end
-        elif reference := _LINK_REFERENCE.match(text, end):
-            end = reference.end()
+    for start, stop in sorted(removals):
+        parts.append(text[end:start])
+        end = stop
     parts.append(text[end:])
     return "".join(parts)
 
 
-def _rendered(title: str) -> str:
+def _rendered(title: str, references: frozenset[str]) -> str:
     """A heading's rendered text: links, emphasis, code spans and inline HTML reduced to text."""
-    kept: list[str] = []
+    kept: list[tuple[str, str]] = []
 
-    def keep(text: str) -> str:
-        kept.append(text)
+    def source_text(text: str) -> str:
+        return _HEADING_TOKEN.sub(lambda match: kept[int(match[1])][0], text)
+
+    def rendered_text(text: str) -> str:
+        return _HEADING_TOKEN.sub(lambda match: kept[int(match[1])][1], text)
+
+    def keep(source: str, rendered: str) -> str:
+        kept.append((source_text(source), rendered_text(rendered)))
         return f"\0{len(kept) - 1}\0"
 
-    def code(content: str) -> str:
+    def code(match: re.Match[str]) -> str:
+        content = match[2]
         # CommonMark strips one space from each side of a code span that has
         # both and is not only spaces.
         if len(content) > 1 and content[0] == content[-1] == " " and content.strip(" "):
             content = content[1:-1]
-        return keep(content)
+        return keep(match[0], content)
 
     # CommonMark renders a source NUL as U+FFFD. Reserve NUL for placeholders.
-    text = _CODE_SPAN.sub(lambda match: code(match[2]), title.replace("\0", "\ufffd"))
-    text = _ESCAPE.sub(lambda match: keep(match[1]), text)
-    text = _AUTOLINK.sub(lambda match: keep(match[1]), text)
-    previous = None
-    while previous != text:
-        previous, text = text, _link_labels(text)
+    text = _CODE_SPAN.sub(code, title.replace("\0", "\ufffd"))
+    text = _ESCAPE.sub(lambda match: keep(match[0], match[1]), text)
+    text = _AUTOLINK.sub(lambda match: keep(match[0], match[1]), text)
+    text = _link_labels(text, references, source_text)
     text = _TAG.sub("", text)
     text = _EMPHASIS_UNDERSCORE.sub("", text)
     text = _EMPHASIS_OTHER.sub("", text)
     text = html.unescape(text)
-    return re.sub(r"\0(\d+)\0", lambda match: kept[int(match[1])], text)
+    return rendered_text(text)
 
 
-def _slug(title: str) -> str:
+def _slug(title: str, references: frozenset[str]) -> str:
     """GitHub's anchor for a heading, before repeats are numbered."""
-    text = _rendered(title).lower()
+    text = _rendered(title, references).lower()
     text = "".join(character for character in text
                    if character in "-_ " or unicodedata.category(character)[0] in "LMN")
     return text.replace(" ", "-")
@@ -218,13 +266,17 @@ def _sections(outline: MarkdownOutline) -> tuple[_Section, ...]:
     stack: list[OutlineHeading] = []
     seen: dict[str, int] = {}
     headings = outline.headings
+    references: frozenset[str] = frozenset()
+    if any("[" in heading.title for heading in headings):
+        source = "\n".join(outline.lines).replace("\0", "\ufffd")
+        references = markdown_reference_labels(source, start=outline.body_start - 1)
     for position, heading in enumerate(headings):
         while stack and stack[-1].level >= heading.level:
             stack.pop()
         stack.append(heading)
         end = next((later.line - 1 for later in headings[position + 1:] if later.level <= heading.level),
                    len(outline.lines))
-        base = _slug(heading.title)
+        base = _slug(heading.title, references)
         anchor = base
         while anchor in seen:
             seen[base] += 1
