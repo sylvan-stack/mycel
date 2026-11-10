@@ -33,7 +33,7 @@ from ._errors import ErrorCode, MycelError
 from ._markdown import _YAML_INPUT_ERRORS, CueComment, MarkdownOutline, OutlineHeading, outline_markdown
 from ._scope import Repository, RepositoryLocations
 from ._settings import SettingsSnapshot
-from ._source_refs import _LinkBracket, _reference_key, _reference_label, markdown_reference_labels
+from ._source_refs import _AUTOLINK, _LinkBracket, _reference_key, _reference_label, markdown_reference_labels
 
 
 CATALOG_VERSION = 1
@@ -122,15 +122,18 @@ def _blank(line: str) -> bool:
     return not line.strip(" \t")
 
 
-_CODE_SPAN = re.compile(r"(`+)(.+?)(?<!`)\1(?!`)", re.DOTALL)
+_HEADING_LITERAL = re.compile(
+    r"(?P<ticks>`+)(?P<code>.+?)(?<!`)(?P=ticks)(?!`)"
+    r"""|\\(?P<escape>[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])"""
+    rf"|{_AUTOLINK.pattern}",
+    re.DOTALL,
+)
 _LINK_REFERENCE = re.compile(r"\[([^\[\]]*+)\]")
 _LINK_ANGLE_DESTINATION = re.compile(r"<[^<>\n]*>")
 _LINK_DESTINATION_MARK = re.compile(r"[() \t]")
 _LINK_TRAILER = re.compile(r"""(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^()]*\)))?[ \t]*\)""")
-_AUTOLINK = re.compile(r"<((?:https?|ftp|mailto):[^<>\s]*|[^<>\s@]+@[^<>\s@]+)>", re.IGNORECASE)
 _TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?/?>|<!--.*?-->")
 _LINK_BRACKET = re.compile(rf"{_TAG.pattern}|(?P<bracket>!?\[|\])")
-_ESCAPE = re.compile(r"\\([!\"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])")
 _EMPHASIS_UNDERSCORE = re.compile(r"(?<![^\W_])_+|_+(?![^\W_])")
 _EMPHASIS_OTHER = re.compile(r"[*~]+")
 _HEADING_TOKEN = re.compile(r"\0([0-9]+)\0")
@@ -229,22 +232,21 @@ def _rendered(title: str, references: frozenset[str]) -> str:
     def rendered_text(text: str) -> str:
         return _HEADING_TOKEN.sub(lambda match: kept[int(match[1])][1], text)
 
-    def keep(source: str, rendered: str) -> str:
-        kept.append((source_text(source), rendered_text(rendered)))
+    def keep_literal(match: re.Match[str]) -> str:
+        source = match[0]
+        if (content := match["code"]) is not None:
+            # CommonMark strips one space from both ends of a nonblank span.
+            if content[0] == content[-1] == " " and content.strip(" "):
+                content = content[1:-1]
+        elif (escape := match["escape"]) is not None:
+            content = escape
+        else:
+            content = html.unescape(source[1:-1])
+        kept.append((source, content))
         return f"\0{len(kept) - 1}\0"
 
-    def code(match: re.Match[str]) -> str:
-        content = match[2]
-        # CommonMark strips one space from each side of a code span that has
-        # both and is not only spaces.
-        if len(content) > 1 and content[0] == content[-1] == " " and content.strip(" "):
-            content = content[1:-1]
-        return keep(match[0], content)
-
     # CommonMark renders a source NUL as U+FFFD. Reserve NUL for placeholders.
-    text = _CODE_SPAN.sub(code, title.replace("\0", "\ufffd"))
-    text = _ESCAPE.sub(lambda match: keep(match[0], match[1]), text)
-    text = _AUTOLINK.sub(lambda match: keep(match[0], match[1]), text)
+    text = _HEADING_LITERAL.sub(keep_literal, title.replace("\0", "\ufffd"))
     text = _link_labels(text, references, source_text)
     text = _TAG.sub("", text)
     text = _EMPHASIS_UNDERSCORE.sub("", text)
