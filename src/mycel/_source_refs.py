@@ -19,7 +19,7 @@ import unicodedata
 from urllib.parse import quote, unquote_to_bytes
 
 from mycel._markdown import (MarkdownDocument, _ATX, _FENCE, _SETEXT, _THEMATIC,
-                             _container_prefix, _html_block, _html_ends,
+                             _Line, _container_prefix, _html_block, _html_ends,
                              _in_container, _lines, _link_reference_end)
 
 
@@ -526,15 +526,7 @@ def _comments(fragment: list[_ProseLine], *, inline: bool,
     return result
 
 
-def _document_comments(document: MarkdownDocument, file: str,
-                       diagnostics: list[DeclarationDiagnostic]) -> tuple[tuple[str, DeclaredSource], ...]:
-    lines = _lines(document.text)
-    # A leading unreadable YAML block remains source text for lossless storage,
-    # but it is still a declaration block rather than a declaration comment.
-    start = (document.frontmatter_span.line_end if document.frontmatter_span is not None else
-             len(lines) if document.frontmatter_present else 0)
-    chunk_for_line = {line: chunk.name for chunk in document.chunks
-                      for line in range(chunk.span.line_start, chunk.span.line_end + 1)}
+def _document_blocks(lines: tuple[_Line, ...], start: int) -> list[tuple[list[_ProseLine], bool]]:
     fragment: list[_ProseLine] = []
     blocks: list[tuple[list[_ProseLine], bool]] = []
     container_context: tuple[tuple[str, int], ...] = ()
@@ -630,6 +622,10 @@ def _document_comments(document: MarkdownDocument, file: str,
         if single_line:
             flush()
     flush(inline=html_kind not in {"comment", "blank"})
+    return blocks
+
+
+def _reference_labels(blocks: list[tuple[list[_ProseLine], bool]]) -> frozenset[str]:
     # Definitions may occur after their uses, in any eligible paragraph or
     # container. Collect their existence first; duplicate destinations/titles
     # do not affect whether a label binds and need no value interpretation.
@@ -637,7 +633,25 @@ def _document_comments(document: MarkdownDocument, file: str,
     for block, inline in blocks:
         if inline:
             references.update(_reference_prefix("".join(line.text for line in block))[1])
-    reference_labels = frozenset(references)
+    return frozenset(references)
+
+
+def markdown_reference_labels(text: str, *, start: int) -> frozenset[str]:
+    """Return reference keys from Markdown starting at the given zero-based line."""
+    return _reference_labels(_document_blocks(_lines(text), start))
+
+
+def _document_comments(document: MarkdownDocument, file: str,
+                       diagnostics: list[DeclarationDiagnostic]) -> tuple[tuple[str, DeclaredSource], ...]:
+    lines = _lines(document.text)
+    # A leading unreadable YAML block remains source text for lossless storage,
+    # but it is still a declaration block rather than a declaration comment.
+    start = (document.frontmatter_span.line_end if document.frontmatter_span is not None else
+             len(lines) if document.frontmatter_present else 0)
+    chunk_for_line = {line: chunk.name for chunk in document.chunks
+                      for line in range(chunk.span.line_start, chunk.span.line_end + 1)}
+    blocks = _document_blocks(lines, start)
+    reference_labels = _reference_labels(blocks)
     return tuple(ref for block, inline in blocks
                  for ref in _comments(block, inline=inline, file=file,
                                       chunk_for_line=chunk_for_line, diagnostics=diagnostics,
