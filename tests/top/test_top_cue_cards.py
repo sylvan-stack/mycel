@@ -202,6 +202,14 @@ Excluded text.
             "   <!-- mycel:cues {type: literal, match: Probe} -->\n"
             "   Body.\n",
         )
+        outer_list_reference = self.write(
+            "artifacts/outer-list-reference.md",
+            "## [Alpha][label]\n"
+            "<!-- mycel:cues {type: literal, match: Probe} -->\n\n"
+            "1. Outer\n"
+            "   - Inner\n\n"
+            "    [label]: /url\n",
+        )
 
         reply = self.command("cues", "compile")
         catalog = json.loads(self.catalog.read_bytes())
@@ -212,10 +220,11 @@ Excluded text.
             [(str(declarations), line) for line in (9, 15, 20, 26)],
         )
         self.assertEqual(reply["cards"], len(catalog["cards"]))
-        self.assertEqual(reply["sources"], 14)
+        self.assertEqual(reply["sources"], 15)
         boundary_paths = {str(path) for path in (
             paragraph, backticks, whole, blank_start_list, empty_list, nested_list, inline_html,
             atx_list_heading, setext_list_heading, list_reference, outer_list_heading,
+            outer_list_reference,
         )}
         named, local, glossary = [
             card for card in catalog["cards"] if card["declared_at"]["path"] not in boundary_paths
@@ -307,6 +316,11 @@ Excluded text.
             (
                 outer_list_heading, "Child", "child", 6, 8, "    ## Child\n   Body.",
                 (("outer:outer-list-heading.md#child", "Probe", 7),),
+            ),
+            (
+                outer_list_reference, "[Alpha][label]", "alpha", 1, 7,
+                "## [Alpha][label]\n1. Outer\n   - Inner\n\n    [label]: /url",
+                (("outer:outer-list-reference.md#alpha", "Probe", 2),),
             ),
         ):
             with self.subTest(document=document.name):
