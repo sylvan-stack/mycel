@@ -4,13 +4,13 @@
 
 Follow [TESTS.md](TESTS.md), [MID_TIER.md](MID_TIER.md), the linked inventory and
 the owner's [Test Strategy](/Users/msix/Artifacts/mycel/operations/test-strategy.md).
-**All test work belongs to a separate task explicitly requested by the owner.**
-There is no top-tier exception during implementation. Write and polish code
-first; only the owner decides when it is ready for tests and requests that work.
+**Test work belongs to the Arc's testing Beat or a separate testing task.**
+Testing Beats start under normal Beat eligibility. Outside a Saga, the owner
+explicitly requests the testing task. Use test-free checks during implementation.
 Do not add, edit, fix, refactor, classify, retire, restore or run tests, fixtures,
 snapshots, runners or inventories as part of implementation. Existing tests may
-be read as source reference. Report relevant test impact; do not start testing,
-create a testing task yourself or relabel an implementation step as a testing task.
+be read as source reference. Record relevant test impact for the testing Beat
+or separate task.
 
 Keep runnable suites small. A new function, branch or option does not need a
 matching test automatically. Each retained case must add distinct consequential
@@ -24,12 +24,12 @@ marked `LOW TIER — DO NOT ENABLE OR RECREATE`, with original ID, reason, retai
 evidence when applicable and source revision. An entirely low-tier file is
 comment-only. Record low/commented status and footer location in the inventory.
 Never use skipped tests, disabled suites or executable wrappers as archives.
-New evidence and the owner's testing request are required for re-admission.
+Re-admission requires new evidence and testing scope that covers it.
 
 Keep retained top/mid source in the repository's documented layout and state.
-A separately requested testing/Build task runs the whole top tier through the
-Build gate; no test-running Build or hook runs during implementation. Mid-tier
-execution additionally requires the owner's request for that scope. Do not
+A testing Beat or separate task that calls for a Build runs the whole top tier
+through the Build gate. Mid-tier execution additionally requires the owner's
+request for that scope. Do not
 bypass a gate or call a reduced selection full qualification. Test-free static
 syntax, type and compilation checks remain available. Report checks not run.
 This policy supersedes older automatic testing and top-tier exceptions.
