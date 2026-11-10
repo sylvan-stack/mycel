@@ -555,6 +555,20 @@ def catalog_path(snapshot: SettingsSnapshot) -> Path:
     return home / ".mycel" / "cues" / "catalog.json"
 
 
+def _read_catalog_cards(path: Path) -> list[dict[str, Any]]:
+    """Read the cards in catalog order, with no cards when the catalog is unavailable."""
+    try:
+        catalog = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, RecursionError):
+        return []
+    if not isinstance(catalog, dict):
+        return []
+    version, cards = catalog.get("version"), catalog.get("cards")
+    if type(version) is not int or version != CATALOG_VERSION or not isinstance(cards, list):
+        return []
+    return [card for card in cards if isinstance(card, dict)]
+
+
 def write_catalog(path: Path, catalog: Mapping[str, Any]) -> None:
     """Write the whole catalog to a temporary file beside it, then move it into place."""
     encoded = (json.dumps(catalog, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
