@@ -338,6 +338,9 @@ Numbered heading.
 ### Alpha
 Repeated heading.
 
+### [Example](https://example.com/a(b))
+Linked heading.
+
 ## Remaining
 <!-- mycel:cues {match: [Parent alias]} -->
 
@@ -374,6 +377,12 @@ Still in Parent.
                 [target["anchor"] for target in targets],
                 ["alpha", "alpha-1", "alpha-2"],
             )
+        with self.subTest("rendered link anchor"):
+            heading = "[Example](https://example.com/a(b))"
+            linked = next(card for card in glossary if card["title"] == heading)
+            self.assertEqual(linked["cue_target"]["anchor"], "example")
+            self.assertEqual(linked["cue_target"]["heading"], heading)
+            self.assertEqual(linked["text"], f"### {heading}\nLinked heading.")
 
     def test_invalid_escaped_scalars_report_faults_without_losing_valid_cards(self):
         source = self.write(
@@ -448,12 +457,13 @@ Valid content.
 <div>
 <!-- Ordinary comment
 <!-- mycel:cues {{type: literal, match: Nested}} -->
-{declaration}
-Visible prose.
-<script>
+<script type="text/plain">
 
 <!-- mycel:cues {{type: literal, match: Script}} -->
-</script>
+</script
+>
+{declaration}
+Visible prose.
 </div>
 
 ```markdown
@@ -471,6 +481,32 @@ Visible prose.
         self.assertEqual(
             card["text"], text.replace(f"{declaration}\n", "", 1).rstrip("\n")
         )
+
+    def test_literal_nul_in_heading_preserves_catalog_publication(self):
+        heading = "Rules \x000\x00"
+        self.write(
+            "artifacts/nul.md",
+            f"## {heading}\n"
+            "<!-- mycel:cues {type: literal, match: Rules} -->\n"
+            "Rules content.\n",
+        )
+        self.write(
+            "artifacts/other.md",
+            "## Other\n<!-- mycel:cues {type: literal, match: Other} -->\n",
+        )
+
+        reply = self.command("cues", "compile")
+        self.assertEqual(reply["faults"], [])
+        self.assertEqual(reply["cards"], 2)
+        cards = {
+            tuple(card["match"]): card
+            for card in json.loads(self.catalog.read_bytes())["cards"]
+        }
+        self.assertEqual(set(cards), {("Rules",), ("Other",)})
+        rules = cards[("Rules",)]
+        self.assertEqual(rules["cue_target"]["anchor"], "rules-0")
+        self.assertEqual(rules["cue_target"]["heading"], heading)
+        self.assertEqual(rules["text"], f"## {heading}\nRules content.")
 
     def test_malformed_front_matter_keeps_scanning_cue_files(self):
         malformed = self.write(
