@@ -2,6 +2,8 @@
 
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -109,10 +111,10 @@ def _adopt_state(paths: _Paths) -> _State:
     raise MycelError(ErrorCode.REFUSED, "The Hub copies disagree. Select hub on or hub off to align them.")
 
 
-def _read_state(paths: _Paths) -> _State:
+def _saved_state(paths: _Paths) -> _State | None:
     saved = _read(paths.state)
     if saved is None:
-        return _adopt_state(paths)
+        return None
     try:
         value = json.loads(saved.contents)
         if isinstance(value, dict):
@@ -251,6 +253,8 @@ def _backup(change: _Change) -> None:
         os.link(scratch, change.backup)
     except FileExistsError:
         pass
+    else:
+        _fsync_parent(change.backup)
     finally:
         scratch.unlink(missing_ok=True)
 
@@ -265,3 +269,70 @@ def _staged_copies(changes: list[_Change]):
             _backup(change)
             staged.append((change, scratch))
         yield staged
+
+
+def _read_state(paths: _Paths) -> _State:
+    return _saved_state(paths) or _adopt_state(paths)
+
+
+@contextmanager
+def _hub_lock(paths: _Paths):
+    paths.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    descriptor = os.open(paths.root / "sync.lock", os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise MycelError(ErrorCode.BUSY, "Another invocation is syncing the Instructions Hub.") from None
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_parent(path: Path) -> None:
+    descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _replace(scratch: Path, path: Path) -> None:
+    os.replace(scratch, path)
+    _fsync_parent(path)
+
+
+def _save_state(paths: _Paths, state: _State) -> None:
+    payload = {"version": _STATE_VERSION, **state.reply()}
+    scratch = _temporary(paths.state, (json.dumps(payload) + "\n").encode("utf-8"), 0o600)
+    try:
+        _replace(scratch, paths.state)
+    finally:
+        scratch.unlink(missing_ok=True)
+
+
+def _apply_mode(paths: _Paths, state: _State, mode: str) -> _State:
+    if _imports(paths) != {_ACTIVE_IMPORT}:
+        raise MycelError(ErrorCode.REFUSED, "Complete the Claude Code Hub import cutover before switching modes.")
+    changes = _copy_changes(paths, mode)
+    with _staged_copies(changes) as staged:
+        for change, _ in staged:
+            _require_unchanged(change)
+        if changes:
+            _save_state(paths, _State(mode, state.last_sync, pending=True))
+        for change, scratch in staged:
+            _require_unchanged(change)
+            _replace(scratch, change.path)
+    settled = _State(mode, datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    _save_state(paths, settled)
+    return settled
+
+
+def _require_unchanged(change: _Change) -> None:
+    if _read(change.path) != change.previous:
+        raise MycelError(ErrorCode.BUSY, "A Hub copy changed while it was being prepared. Retry the sync.")
+
+
+def _switch(paths: _Paths, mode: str) -> _State:
+    with _hub_lock(paths):
+        return _apply_mode(paths, _saved_state(paths) or _State(mode), mode)
