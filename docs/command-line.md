@@ -1,6 +1,6 @@
 # Command line and settings
 
-This checkout implements the SYL-98 command boundary, SYL-99 strict settings and SYL-100 repository resolution/listing. Start it with `PYTHONPATH=src python3 -m mycel --help`, or install its `mycel` console command in a development environment. `info` reports settings/store diagnostics, `repos` lists configured repositories, `init` creates or explicitly changes the private store, `refs` reports retained declarations and faults, `derive` asserts or withdraws one guarded dependency selection, `relate` asserts or withdraws one exact directed relation, `confirm` records exact guarded verification, `justify` states an Origin Link with verification, `origins` reports Origin Coverage, `recovery` judges local Origin candidates and reviews model claims, `audit` disputes Origin claims and records human settlements, `verifications` lists applicable records or retained history, `ingest` publishes complete scoped captures and their dependency/detection/collection changes, `activity` lists ordered history and reads exact entry details, `embed` runs finite scoped embedding, `evaluate` validates evaluation files, measures retrieval through normal search and exercises non-live Drift fixtures, `read` returns one current indexed chunk, `search` returns evidence-bearing schema3 results, `undocumented` lists code without describing sections, `overview` prints stored code directory outlines, `classify` explicitly executes bounded classification, `drifts`, `stale` and `status` report local provenance, `cues compile` writes the Cue Card catalog, `cues match` reports which cards a text fires, `plan check` checks a Beat plan, and `grep` can append a read-only related search after literal system grep. Other accepted feature commands return `settings` when preflight fails, then `refused` until their implementation tasks supply handlers. A numbered staged package adds its lowercase hexadecimal `build` to `info` and records activity for actual mutations, including initialization and ingest. Unnumbered source development has no Build number and deliberately records no activity; a numbered package with a missing or damaged identity fails with `internal`. A changing ingest has one activity entry for its repository with the exact reply counts and file/identity details; a no-op has none. The independent installed launcher selects numbered Builds; see the [Build guide](builds.md) for installation, explicit selection and maintenance. No unavailable command returns an empty success reply. The [settings guide](settings.md) describes the complete validated schema, defaults and reviewer setup. The [store guide](store.md) describes configured acceptance for initialization, compatibility and connection-owned guards.
+This checkout implements the SYL-98 command boundary, SYL-99 strict settings and SYL-100 repository resolution/listing. Start it with `PYTHONPATH=src python3 -m mycel --help`, or install its `mycel` console command in a development environment. `info` reports settings/store diagnostics, `repos` lists configured repositories, `init` creates or explicitly changes the private store, `refs` reports retained declarations and faults, `derive` asserts or withdraws one guarded dependency selection, `relate` asserts or withdraws one exact directed relation, `confirm` records exact guarded verification, `justify` states an Origin Link with verification, `origins` reports Origin Coverage, `recovery` judges local Origin candidates and reviews model claims, `audit` disputes Origin claims and records human settlements, `verifications` lists applicable records or retained history, `ingest` publishes complete scoped captures and their dependency/detection/collection changes, `activity` lists ordered history and reads exact entry details, `embed` runs finite scoped embedding, `evaluate` validates evaluation files, measures retrieval through normal search and exercises non-live Drift fixtures, `read` returns one current indexed chunk, `search` returns evidence-bearing schema3 results, `undocumented` lists code without describing sections, `overview` prints stored code directory outlines, `classify` explicitly executes bounded classification, `drifts`, `stale` and `status` report local provenance, `cues compile` writes the Cue Card catalog, `cues match` reports which cards a text fires, `hub` switches the Instructions Hub for new sessions, `plan check` checks a Beat plan, and `grep` can append a read-only related search after literal system grep. Other accepted feature commands return `settings` when preflight fails, then `refused` until their implementation tasks supply handlers. A numbered staged package adds its lowercase hexadecimal `build` to `info` and records activity for actual mutations, including initialization and ingest. Unnumbered source development has no Build number and deliberately records no activity; a numbered package with a missing or damaged identity fails with `internal`. A changing ingest has one activity entry for its repository with the exact reply counts and file/identity details; a no-op has none. The independent installed launcher selects numbered Builds; see the [Build guide](builds.md) for installation, explicit selection and maintenance. No unavailable command returns an empty success reply. The [settings guide](settings.md) describes the complete validated schema, defaults and reviewer setup. The [store guide](store.md) describes configured acceptance for initialization, compatibility and connection-owned guards.
 
 Help is one JSON object and works without settings. Use `--help` or `-h`, or `<command> --help` for a reserved command. With no arguments, Mycel returns help. The scope boundary preserves repeatable literal `--repo <name>` selections; `ingest`, `embed`, `classify`, `status` and `activity` also accept `--all`. Combining both is invalid. An absent selection resolves from the longest configured folder containing the current directory. Configured `code_clones` are locations of the same repository; a command inside one uses its checkout and policy. `readonly_root` selects the retained `main` baseline for Origin Coverage changes. Organization selectors and directories outside their member folders expand to enabled configured members; explicit repository selection preserves exact names. Folder faults affect the selected repository alone. The resolver has no special repository aliases; MYC-D37 explicitly permits only the prescribed named shared selections and scan exclusions as packaged data. Option abbreviation and unknown options are invalid.
 
@@ -704,6 +704,19 @@ no ingest or embedding and preserves verifications and source policy. See the
         ]
       },
       {
+        "name": "hub",
+        "description": "Switch the Instructions Hub for new sessions or show its state",
+        "available": true,
+        "rawArguments": false,
+        "options": [
+          "-h",
+          "--help",
+          "on",
+          "off",
+          "status"
+        ]
+      },
+      {
         "name": "api-key",
         "description": "Store a Voyage or Jev API key in the login Keychain",
         "available": true,
@@ -802,6 +815,57 @@ An unavailable catalog or a text that fires no cards gives
 
 <!-- sources:
 mycel:@code/src/mycel/_cues.py#_match_cards
+-->
+
+## Switching the Instructions Hub
+
+`mycel hub on` and `mycel hub off` select which Hub instructions new sessions
+load. Claude Code reads `~/.mycel/hub/active.md`, Codex reads the top-level
+`developer_instructions` key in `~/.codex/config.toml`, and other tools can
+read `~/.agents/AGENTS.md`. With the Hub on, the last two copies have the
+Hub's explanatory header. With the Hub off, the Markdown copies are empty
+and the Codex key is absent. Running sessions keep the instructions they
+already loaded.
+
+`mycel hub status` reads `state` (`on` or `off`), `last_sync` (UTC time
+or null before the first recorded sync) and `pending`. A pending state
+records an interrupted switch. The scheduled job resumes it. Original
+files are backed up once under `~/.mycel/hub/backups/`. Changes preserve
+other Codex settings. An installation using the direct Claude Code import
+must complete its import cutover before switching modes.
+
+### Installing the replacement job
+
+Use a separately approved installed Mycel Build whose help shows both
+`hub` and `cues`. Record the current Hub state and preserve the existing
+copies, the Claude Code import file, and the old launchd plist and script
+before replacing anything. If Claude Code still imports the Hub directly,
+prepare `active.md` for the existing mode before replacing just the Hub
+import with `@~/.mycel/hub/active.md`. Where the import is already migrated,
+adopt the observed mode.
+
+From the source checkout, render a candidate plist and validate it before
+putting it in `~/Library/LaunchAgents/local.mycel.hub-sync.plist`:
+
+```sh
+hub_agent_preview=$(mktemp -t mycel-hub-sync)
+python3 scripts/render_hub_launch_agent.py \
+  --launcher "$HOME/.local/bin/mycel" \
+  --hub "$HOME/Artifacts/mycel/README.md" > "$hub_agent_preview"
+plutil -lint "$hub_agent_preview"
+```
+
+Preserve any replaced plist. Unload the old `local.agent-hub.codex-sync`
+job if present, then load the replacement in the same user's launchd
+domain. Restore the prior launchd configuration if loading fails. The
+replacement runs the same sync action on load, every 900 seconds and
+when the Hub source changes. It refreshes the copies while on and compiles
+the Cue Card catalog in either mode. Forester's separate Cue Cards switch
+controls delivery.
+
+<!-- sources:
+mycel:@code/src/mycel/_hub.py#handle_hub
+mycel:@code/scripts/render_hub_launch_agent.py
 -->
 
 ## Read-only one-time replacement planning
