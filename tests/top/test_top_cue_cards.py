@@ -321,7 +321,7 @@ instructions: Check leaves.
         )
 
     def test_heading_cards_preserve_prose_aliases_and_unique_anchors(self):
-        self.write(
+        defined = self.write(
             "artifacts/headings.md",
             """# Parent
 <!-- mycel:cues {literal: section_headings, heading-levels: [1, 3]} -->
@@ -341,10 +341,23 @@ Repeated heading.
 ### [Example](https://example.com/a(b))
 Linked heading.
 
+### [Reference][Guide Label]
+Defined reference.
+
+[guide  label]: https://example.com/guide
+
 ## Remaining
 <!-- mycel:cues {match: [Parent alias]} -->
 
 Still in Parent.
+""",
+        )
+        undefined = self.write(
+            "artifacts/undefined.md",
+            """<!-- mycel:cues {literal: section_headings, heading-levels: [3]} -->
+
+### [Reference][Guide Label]
+Undefined reference.
 """,
         )
         reply = self.command("cues", "compile")
@@ -383,6 +396,37 @@ Still in Parent.
             self.assertEqual(linked["cue_target"]["anchor"], "example")
             self.assertEqual(linked["cue_target"]["heading"], heading)
             self.assertEqual(linked["text"], f"### {heading}\nLinked heading.")
+
+        heading = "[Reference][Guide Label]"
+        for document, anchor, body in (
+            (
+                defined,
+                "reference",
+                "Defined reference.\n\n[guide  label]: https://example.com/guide",
+            ),
+            (undefined, "referenceguide-label", "Undefined reference."),
+        ):
+            with self.subTest(document=document.name):
+                card = next(
+                    card
+                    for card in glossary
+                    if card["title"] == heading
+                    and card["cue_target"]["path"] == str(document)
+                )
+                self.assertEqual(
+                    (
+                        card["cue_target"]["anchor"],
+                        card["id"],
+                        card["cue_target"]["heading"],
+                        card["text"],
+                    ),
+                    (
+                        anchor,
+                        f"outer:{document.name}#{anchor}",
+                        heading,
+                        f"### {heading}\n{body}",
+                    ),
+                )
 
     def test_invalid_escaped_scalars_report_faults_without_losing_valid_cards(self):
         source = self.write(
