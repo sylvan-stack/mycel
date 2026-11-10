@@ -27,8 +27,10 @@ _NON_PARAGRAPH = re.compile(r"^ {0,3}(?:>|(?:[-+*]|[0-9]{1,9}[.)])[ \t]+|<(?:[A-
 _THEMATIC = re.compile(r"^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$")
 _CONTAINER = re.compile(r"^ {0,3}(?:>[ ]?|(?:[-+*]|[0-9]{1,9}[.)])[ ]+)")
 _QUOTE = re.compile(r"^ {0,3}>[ ]?")
-_RAW_HTML_OPEN = re.compile(r"^ {0,3}<(?:pre|script|style|textarea)(?=[ \t>]|$)", re.IGNORECASE)
-_RAW_HTML_CLOSE = re.compile(r"</(?:pre|script|style|textarea)>", re.IGNORECASE)
+_RAW_HTML_TAGS = ("pre", "script", "style", "textarea")
+_RAW_HTML_TAG_PATTERN = "(?:" + "|".join(_RAW_HTML_TAGS) + ")"
+_RAW_HTML_OPEN = re.compile(r"^ {0,3}<" + _RAW_HTML_TAG_PATTERN + r"(?=[ \t>]|$)", re.IGNORECASE)
+_RAW_HTML_CLOSE = re.compile(r"</" + _RAW_HTML_TAG_PATTERN + r">", re.IGNORECASE)
 _HTML_BLOCK_TAGS = ("address article aside base basefont blockquote body caption center col colgroup dd "
                     "details dialog dir div dl dt fieldset figcaption figure footer form frame frameset "
                     "h1 h2 h3 h4 h5 h6 head header hr html iframe legend li link main menu menuitem nav "
@@ -36,6 +38,20 @@ _HTML_BLOCK_TAGS = ("address article aside base basefont blockquote body caption
                     "th thead title tr track ul")
 _BLOCK_HTML_OPEN = re.compile(r"^ {0,3}</?(?:" + "|".join(_HTML_BLOCK_TAGS.split())
                               + r")(?=[ \t/>]|$)", re.IGNORECASE)
+_CUE_OPENER = re.compile(r" {0,3}<!-- mycel:cues(?=\s|-->|$)")
+_CUE_HTML_TOKEN = re.compile(r"<!--|<!\[CDATA\[|<\?|<![A-Za-z]|</?[A-Za-z][A-Za-z0-9:-]*(?=[ \t/>]|$)")
+_CUE_HTML_TAG_MARK = re.compile(r"""[>"']""")
+_CUE_HTML_LITERAL_END = {
+    "<!--": re.compile("-->"),
+    "<![CDATA[": re.compile(r"\]\]>"),
+    "<?": re.compile(r"\?>"),
+    '"': re.compile('"'),
+    "'": re.compile("'"),
+}
+_CUE_HTML_RAW_END = {
+    f"<{tag}": re.compile(rf"</{tag}[ \t]*>", re.IGNORECASE)
+    for tag in _RAW_HTML_TAGS
+}
 _TABLE_ROW = re.compile(r"^ {0,3}\|.*\|[ \t]*$")
 _DELIMITER_ROW = re.compile(r"^ {0,3}\|(?:[ \t]*:?-+:?[ \t]*\|)+[ \t]*$")
 _ENTITY_CELL = re.compile(r"^(?P<id>[A-Z][A-Z0-9]*-(?:D[1-9][0-9]*|[0-9]+\.[1-9][0-9]*))"
@@ -169,6 +185,12 @@ class _FrontmatterError(yaml.YAMLError):
         super().__init__(message)
 
 
+# Invalid explicitly tagged scalars can raise Python constructor errors.
+_YAML_INPUT_ERRORS = (
+    yaml.YAMLError, AttributeError, LookupError, OverflowError, RecursionError, TypeError, ValueError,
+)
+
+
 class _SettingsLoader(yaml.SafeLoader):
     """Safe YAML, with explicit duplicate and non-text-key faults."""
 
@@ -277,7 +299,7 @@ def _frontmatter(lines: tuple[_Line, ...]) -> tuple[Mapping[str, Any], bool, boo
         if not isinstance(settings, dict):
             raise _FrontmatterError("Frontmatter must be a settings mapping.")
         settings = _immutable(settings)
-    except (yaml.YAMLError, RecursionError, ValueError, TypeError) as error:
+    except _YAML_INPUT_ERRORS as error:
         mark = getattr(error, "problem_mark", None)
         line = mark.line + 2 if mark is not None else 1
         message = (error.problem if isinstance(error, _FrontmatterError)
@@ -341,6 +363,51 @@ def _html_ends(kind: str, content: str) -> bool:
     if kind == "blank":
         return not content.strip(" \t")
     return {"comment": "-->", "processing": "?>", "declaration": ">", "cdata": "]]>"}[kind] in content
+
+
+class _CueHTML:
+    """Track open HTML tokens while collecting cues in ordinary HTML blocks."""
+
+    def __init__(self) -> None:
+        self.tag: str | None = None
+        self.literal_end: re.Pattern[str] | None = None
+
+    @property
+    def pending(self) -> bool:
+        return self.tag is not None or self.literal_end is not None
+
+    def scan(self, content: str) -> bool:
+        starts_cue = False
+        position = 0
+        while position < len(content):
+            if self.literal_end is not None:
+                closing = self.literal_end.search(content, position)
+                if closing is None:
+                    break
+                self.literal_end = None
+                position = closing.end()
+            elif self.tag is not None:
+                mark = _CUE_HTML_TAG_MARK.search(content, position)
+                if mark is None:
+                    break
+                if mark.group() == ">":
+                    self.literal_end = _CUE_HTML_RAW_END.get(self.tag)
+                    self.tag = None
+                else:
+                    self.literal_end = _CUE_HTML_LITERAL_END[mark.group()]
+                position = mark.end()
+            else:
+                opening = _CUE_HTML_TOKEN.search(content, position)
+                if opening is None:
+                    break
+                token = opening.group()
+                if token == "<!--" and not content[:opening.start()].strip(" "):
+                    starts_cue = _CUE_OPENER.match(content) is not None
+                self.literal_end = _CUE_HTML_LITERAL_END.get(token)
+                if self.literal_end is None:
+                    self.tag = token.lower()
+                position = opening.end()
+        return starts_cue
 
 
 class _ReferenceCursor:
@@ -482,7 +549,8 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
     fence_containers: tuple[tuple[str, int], ...] = ()
     container_context: tuple[tuple[str, int], ...] = ()
     html_kind: str | None = None
-    nested_html_kind: str | None = None
+    html_cues: _CueHTML | None = None
+    html_block_ended = False
     html_containers: tuple[tuple[str, int], ...] = ()
     reference_end = start
     paragraph_start: int | None = None
@@ -506,22 +574,16 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
         if html_kind is not None:
             view = _in_container(content, html_containers)
             if view is None:
-                html_kind = nested_html_kind = None
+                html_kind = html_cues = None
+                html_block_ended = False
                 container_context = ()
             else:
-                if comments is not None and html_kind == "blank":
-                    # Ordinary HTML containers can contain comments, while
-                    # nested comments and verbatim blocks hide their contents.
-                    if nested_html_kind is None:
-                        nested = _html_block(view, can_start_type_seven=False)
-                        if nested == "comment" and _CUE_OPENER.match(content):
-                            comments.append(index)
-                        if nested != "blank":
-                            nested_html_kind = nested
-                    if nested_html_kind is not None and _html_ends(nested_html_kind, view):
-                        nested_html_kind = None
-                if _html_ends(html_kind, view):
-                    html_kind, nested_html_kind = nested_html_kind, None
+                if html_cues is not None and html_cues.scan(content) and comments is not None:
+                    comments.append(index)
+                html_block_ended = html_block_ended or _html_ends(html_kind, view)
+                if html_block_ended and (html_cues is None or not html_cues.pending):
+                    html_kind = html_cues = None
+                    html_block_ended = False
                 continue
         inherited = _in_container(content, container_context)
         if inherited is None:
@@ -545,6 +607,9 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
                 comments.append(index)
             if not _html_ends(block, view):
                 html_kind, html_containers = block, containers
+                if comments is not None and block == "blank":
+                    html_cues = _CueHTML()
+                    html_cues.scan(content)
             paragraph_start = None
             continue
         if paragraph_start is None:
@@ -603,9 +668,6 @@ class MarkdownOutline:
     body_start: int
     headings: tuple[OutlineHeading, ...]
     comments: tuple[CueComment, ...]
-
-
-_CUE_OPENER = re.compile(r" {0,3}<!-- mycel:cues(?=\s|-->|$)")
 
 
 def outline_markdown(text: str) -> MarkdownOutline:

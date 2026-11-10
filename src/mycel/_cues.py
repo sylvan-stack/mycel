@@ -30,7 +30,7 @@ import yaml
 from ._capture import ArtifactDocument, artifact_documents
 from ._cli import Invocation, Result
 from ._errors import ErrorCode, MycelError
-from ._markdown import CueComment, MarkdownOutline, OutlineHeading, outline_markdown
+from ._markdown import _YAML_INPUT_ERRORS, CueComment, MarkdownOutline, OutlineHeading, outline_markdown
 from ._scope import Repository, RepositoryLocations
 from ._settings import SettingsSnapshot
 
@@ -262,8 +262,7 @@ def _declaration(comment: CueComment) -> _Declaration:
         data = yaml.load(comment.body, Loader=_Loader)
     except _Fault:
         raise
-    except (yaml.YAMLError, AttributeError, LookupError, OverflowError, RecursionError, TypeError, ValueError):
-        # Malformed explicitly tagged values can fail in PyYAML's constructors.
+    except _YAML_INPUT_ERRORS:
         raise _Fault("the body is not readable YAML") from None
     if not isinstance(data, dict):
         raise _Fault("the body is not a YAML mapping")
