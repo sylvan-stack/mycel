@@ -569,6 +569,28 @@ def _read_catalog_cards(path: Path) -> list[dict[str, Any]]:
     return [card for card in cards if isinstance(card, dict)]
 
 
+def _match_cards(cards: list[dict[str, Any]], text: str) -> list[dict[str, Any]]:
+    """Report matches by first appearance, with catalog order for ties."""
+    found: list[tuple[int, dict[str, Any]]] = []
+    for card in cards:
+        identifier, expression, terms = card.get("id"), card.get("pattern"), card.get("match")
+        target = card.get("cue_target")
+        if not isinstance(identifier, str) or not identifier or not isinstance(expression, str):
+            continue
+        if not isinstance(terms, list) or not all(isinstance(term, str) for term in terms):
+            continue
+        if "cue_target" not in card or (target is not None and not isinstance(target, dict)):
+            continue
+        try:
+            match = re.search(expression, text)
+        except (re.error, RecursionError, OverflowError, ValueError):
+            continue
+        if match is not None:
+            found.append((match.start(), {"id": identifier, "match": terms, "cue_target": target}))
+    found.sort(key=lambda item: item[0])
+    return [card for _, card in found]
+
+
 def write_catalog(path: Path, catalog: Mapping[str, Any]) -> None:
     """Write the whole catalog to a temporary file beside it, then move it into place."""
     encoded = (json.dumps(catalog, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
