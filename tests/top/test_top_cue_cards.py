@@ -190,6 +190,18 @@ Excluded text.
             "  <!-- mycel:cues {type: literal, match: Child} -->\n"
             "  Child body.\n\n## After\n",
         )
+        list_reference = self.write(
+            "artifacts/list-reference.md",
+            "## Parent\n\n- [label]: /url\n  ---\n"
+            "  <!-- mycel:cues {type: literal, match: Probe} -->\n"
+            "  Body.\n",
+        )
+        outer_list_heading = self.write(
+            "artifacts/outer-list-heading.md",
+            "## Parent\n\n1. Outer\n   - Inner\n\n    ## Child\n"
+            "   <!-- mycel:cues {type: literal, match: Probe} -->\n"
+            "   Body.\n",
+        )
 
         reply = self.command("cues", "compile")
         catalog = json.loads(self.catalog.read_bytes())
@@ -200,10 +212,10 @@ Excluded text.
             [(str(declarations), line) for line in (9, 15, 20, 26)],
         )
         self.assertEqual(reply["cards"], len(catalog["cards"]))
-        self.assertEqual(reply["sources"], 12)
+        self.assertEqual(reply["sources"], 14)
         boundary_paths = {str(path) for path in (
             paragraph, backticks, whole, blank_start_list, empty_list, nested_list, inline_html,
-            atx_list_heading, setext_list_heading,
+            atx_list_heading, setext_list_heading, list_reference, outer_list_heading,
         )}
         named, local, glossary = [
             card for card in catalog["cards"] if card["declared_at"]["path"] not in boundary_paths
@@ -287,6 +299,14 @@ Excluded text.
             (
                 setext_list_heading, "Child", "child", 4, 7, "- Child\n  ---\n  Child body.",
                 (("outer:setext-list-heading.md#child", "Child", 6),),
+            ),
+            (
+                list_reference, "Parent", "parent", 1, 6, "## Parent\n\n- [label]: /url\n  ---\n  Body.",
+                (("outer:list-reference.md#parent", "Probe", 5),),
+            ),
+            (
+                outer_list_heading, "Child", "child", 6, 8, "    ## Child\n   Body.",
+                (("outer:outer-list-heading.md#child", "Probe", 7),),
             ),
         ):
             with self.subTest(document=document.name):
