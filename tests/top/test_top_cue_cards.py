@@ -360,6 +360,30 @@ Still in Parent.
 Undefined reference.
 """,
         )
+        boundaries = (
+            (
+                "list-paragraph.md",
+                "alphabeta",
+                "## [Alpha][Beta]\n\nSome prose\n2. [Beta]: /beta",
+            ),
+            (
+                "uri-autolink.md",
+                "alphasshexamplecomqbeta",
+                "## [Alpha<ssh://example.com/?q=][Beta]>\n\n[Beta]: /beta",
+            ),
+        )
+        boundary_documents = [
+            (
+                self.write(
+                    f"artifacts/{name}",
+                    "<!-- mycel:cues {literal: section_headings, heading-levels: [2]} -->\n\n"
+                    f"{text}\n",
+                ),
+                anchor,
+                text,
+            )
+            for name, anchor, text in boundaries
+        ]
         reply = self.command("cues", "compile")
         cards = json.loads(self.catalog.read_bytes())["cards"]
         glossary = [card for card in cards if card["group"] == "glossary"]
@@ -397,16 +421,22 @@ Undefined reference.
             self.assertEqual(linked["cue_target"]["heading"], heading)
             self.assertEqual(linked["text"], f"### {heading}\nLinked heading.")
 
-        heading = "[Reference][Guide Label]"
-        for document, anchor, body in (
+        for document, anchor, text in (
             (
                 defined,
                 "reference",
-                "Defined reference.\n\n[guide  label]: https://example.com/guide",
+                "### [Reference][Guide Label]\nDefined reference.\n\n"
+                "[guide  label]: https://example.com/guide",
             ),
-            (undefined, "referenceguide-label", "Undefined reference."),
+            (
+                undefined,
+                "referenceguide-label",
+                "### [Reference][Guide Label]\nUndefined reference.",
+            ),
+            *boundary_documents,
         ):
             with self.subTest(document=document.name):
+                heading = text.split("\n", 1)[0].partition(" ")[2]
                 card = next(
                     card
                     for card in glossary
@@ -424,7 +454,7 @@ Undefined reference.
                         anchor,
                         f"outer:{document.name}#{anchor}",
                         heading,
-                        f"### {heading}\n{body}",
+                        text,
                     ),
                 )
 
