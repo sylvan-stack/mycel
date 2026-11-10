@@ -11,8 +11,10 @@ completely or the catalog cannot be written (MYC-D94).
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import fcntl
 from hashlib import sha256
 import html
 import json
@@ -619,15 +621,35 @@ def write_catalog(path: Path, catalog: Mapping[str, Any]) -> None:
                 pass
 
 
+@contextmanager
+def _catalog_lock(path: Path):
+    """Hold the catalog lock from the first source read through publication."""
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        descriptor = os.open(path.parent / "compile.lock", os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    except OSError:
+        raise MycelError(ErrorCode.IO, "The Cue Card compile lock could not be opened.") from None
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+        except OSError:
+            raise MycelError(ErrorCode.IO, "The Cue Card compile lock could not be acquired.") from None
+        yield
+    finally:
+        os.close(descriptor)
+
+
 def compile_catalog(snapshot: SettingsSnapshot) -> dict[str, Any]:
     """Compile every enabled repository's declarations and write the catalog (MYC-21.1 to 21.7)."""
     snapshot.require_valid(require_store=False)
-    try:
-        files = _read_files(snapshot)
-    except OSError:
-        raise MycelError(ErrorCode.IO, "An artifact root could not be read completely.") from None
-    catalog = build_catalog(files, datetime.now(timezone.utc))
-    write_catalog(catalog_path(snapshot), catalog)
+    path = catalog_path(snapshot)
+    with _catalog_lock(path):
+        try:
+            files = _read_files(snapshot)
+        except OSError:
+            raise MycelError(ErrorCode.IO, "An artifact root could not be read completely.") from None
+        catalog = build_catalog(files, datetime.now(timezone.utc))
+        write_catalog(path, catalog)
     return {"cards": len(catalog["cards"]), "sources": len(catalog["sources"]), "faults": catalog["faults"]}
 
 

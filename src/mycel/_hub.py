@@ -336,3 +336,29 @@ def _require_unchanged(change: _Change) -> None:
 def _switch(paths: _Paths, mode: str) -> _State:
     with _hub_lock(paths):
         return _apply_mode(paths, _saved_state(paths) or _State(mode), mode)
+
+
+def _refresh_copies(paths: _Paths) -> _State:
+    with _hub_lock(paths):
+        state = _read_state(paths)
+        if state.pending or state.mode == "on":
+            return _apply_mode(paths, state, state.mode)
+        return state
+
+
+def _sync(paths: _Paths, settings: SettingsSnapshot) -> dict:
+    """One scheduled pass keeps the Hub copies and Cue Card catalog current."""
+    from ._cues import compile_catalog
+
+    state, copy_problem = None, None
+    try:
+        state = _refresh_copies(paths)
+    except MycelError as error:
+        copy_problem = error
+    except (OSError, UnicodeError):
+        copy_problem = MycelError(ErrorCode.IO, "The Instructions Hub copies could not be synced.")
+    catalog = compile_catalog(settings)
+    if copy_problem is not None:
+        raise copy_problem from None
+    assert state is not None
+    return {"hub": state.reply(), "catalog": catalog}
