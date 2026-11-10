@@ -1,11 +1,15 @@
 # Test inventory: mycel
 
-SYL-327 source review of `560e2e2b1623066240ebd128bfa1e552f0a4f25f`. No tests executed. Top selections are unchanged. Entries distinguish Python definitions, scenarios and orchestration; do not sum overlapping entries as runtime cases. Earlier removals retain their original historical rationale; references in those historical reasons describe the suite at their removal date.
+SYL-327 source review of `560e2e2b1623066240ebd128bfa1e552f0a4f25f`. No tests executed. That review retained the existing top selections. SYL-361 adds four Cue Card and Hub checks. Entries distinguish Python definitions, scenarios and orchestration; do not sum overlapping entries as runtime cases. Earlier removals retain their original historical rationale; references in those historical reasons describe the suite at their removal date.
 
 ## Retained selections
 
 | Tier | Kind | Selection | Justification |
 | --- | --- | --- | --- |
+| top | python | [`test_compile_keeps_exact_cross_root_targets_and_reports_faults`](../tests/top/test_top_cue_cards.py#L67) | A real multi-root scan and published catalog show innermost ownership, fenced examples, fault isolation, and exact cross-file targets and source metadata. |
+| top | python | [`test_fatal_compile_leaves_previous_catalog_bytes`](../tests/top/test_top_cue_cards.py#L197) | An unusable artifact root and a failed atomic replacement both leave the prior catalog byte-for-byte usable and clean up staging files. |
+| top | python | [`test_match_uses_published_patterns_over_the_whole_message`](../tests/top/test_top_cue_cards.py#L223) | The public matcher consumes the real catalog and distinguishes first appearance, fenced and multiline matches, plural suffixes, and false word-boundary matches. |
+| top | python | [`test_interrupted_hub_switch_resumes_and_preserves_first_backups`](../tests/top/test_top_cue_cards.py#L265) | A real partial copy publication leaves durable pending state. Retrying and switching off restore agreement, preserve unrelated Codex bytes, and keep the first backups. |
 | mid | program | [`check_real`](../tests/mid/archived/scripts/check_real.py#L1) | Copies real repositories and corpora into an isolated disposable database, mutates a source during ingest, and compares the next pass and exact audit history. Retained as an explicitly requested operational integration; no Build qualification is claimed. |
 | mid | entrypoint | [`run_operation`](../tests/mid/archived/scripts/qualify_providers.py#L328) | Coordinates the explicitly requested same-process live provider group and its original proof objects. Necessary release-gate orchestration for the retained live provider checks; not an additional behavioral test. |
 | mid | python | [`test_fixed_embedding_compatibility`](../tests/mid/archived/src/mycel/_provider_checks.py#L54) | Explicit live-provider qualification must establish that the configured embedding endpoint produces compatible vectors; an actual external contract cannot be established by local mocks. |
