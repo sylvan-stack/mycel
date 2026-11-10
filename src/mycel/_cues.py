@@ -179,11 +179,10 @@ def _sections(outline: MarkdownOutline) -> tuple[_Section, ...]:
                    len(outline.lines))
         base = _slug(heading.title)
         anchor = base
-        if base in seen:
+        while anchor in seen:
             seen[base] += 1
             anchor = f"{base}-{seen[base]}"
-        else:
-            seen[base] = 0
+        seen[anchor] = 0
         result.append(_Section(heading, tuple(item.title for item in stack), end, anchor))
     return tuple(result)
 
@@ -203,12 +202,20 @@ def _section_of(sections: tuple[_Section, ...], line: int) -> _Section | None:
 
 
 class _Loader(yaml.SafeLoader):
-    """Safe YAML whose dates stay text and whose repeated keys are refused."""
+    """Safe YAML with UTF-8 text, textual dates and unique keys."""
 
     yaml_implicit_resolvers = {
         key: [(tag, expression) for tag, expression in values if tag != "tag:yaml.org,2002:timestamp"]
         for key, values in yaml.SafeLoader.yaml_implicit_resolvers.items()
     }
+
+    def construct_scalar(self, node: yaml.Node) -> str:
+        value = super().construct_scalar(node)
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError:
+            raise _Fault("a scalar contains invalid Unicode text") from None
+        return value
 
     def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[Any, Any]:
         keys = set()
@@ -385,8 +392,8 @@ class _Compiler:
                                                  if section.heading.level in form.levels)
 
         def selected_section(line: int) -> _Section | None:
-            before = next((section for section in reversed(selected) if section.heading.line < line), None)
-            return before if before is not None and line <= before.end else None
+            return next((section for section in reversed(selected)
+                         if section.heading.line < line <= section.end), None)
 
         excluded: set[int] = set()
         added: dict[int, list[str]] = {}
@@ -477,19 +484,25 @@ def pattern(terms: Iterable[str]) -> str:
 
 
 def _target_text(target: _Target) -> str:
-    """The target's lines without its declaration comments, each with one blank line after it."""
+    """Remove declaration comments and one blank line after each comment-only line."""
     outline = target.file.outline
     removed: set[int] = set()
+    trailing_text: dict[int, str] = {}
     for comment in outline.comments:
         if comment.body is None:
             continue  # an unclosed comment is no declaration and stays
         if comment.last_line < target.first_line or comment.first_line > target.last_line:
             continue
-        removed.update(range(comment.first_line, comment.last_line + 1))
+        removed.update(range(comment.first_line, comment.last_line))
+        if not _blank(comment.trailing_text):
+            trailing_text[comment.last_line] = comment.trailing_text
+            continue
+        removed.add(comment.last_line)
         after = comment.last_line + 1
         if after <= target.last_line and _blank(outline.lines[after - 1]):
             removed.add(after)
-    lines = [outline.lines[number - 1] for number in range(target.first_line, target.last_line + 1)
+    lines = [trailing_text.get(number, outline.lines[number - 1])
+             for number in range(target.first_line, target.last_line + 1)
              if number not in removed]
     while lines and _blank(lines[-1]):
         lines.pop()

@@ -580,6 +580,7 @@ class CueComment:
     first_line: int
     last_line: int
     body: str | None
+    trailing_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -616,16 +617,18 @@ def outline_markdown(text: str) -> MarkdownOutline:
         opener = _CUE_OPENER.match(contents[index])
         rest = contents[index][opener.end():]
         body, closed = [], None
+        trailing_text = ""
         for position in range(index, len(contents)):
             piece = rest if position == index else contents[position]
             end = piece.find("-->")
             if end >= 0:
                 body.append(piece[:end])
                 closed = position
+                trailing_text = piece[end + 3:]
                 break
             body.append(piece)
         comments.append(CueComment(index + 1, len(contents) if closed is None else closed + 1,
-                                   None if closed is None else "\n".join(body)))
+                                   None if closed is None else "\n".join(body), trailing_text))
     return MarkdownOutline(tuple(contents), start + 1,
                            tuple(OutlineHeading(heading.title, heading.level, heading.start + 1, heading.end)
                                  for heading in headings),
