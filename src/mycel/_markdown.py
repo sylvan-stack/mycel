@@ -474,14 +474,15 @@ def _link_reference_end(lines: tuple[_Line, ...], beginning: int) -> int | None:
 def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None = None) -> tuple[_Heading, ...]:
     """Headings outside fenced code and HTML blocks; ``comments`` collects cue lines.
 
-    When ``comments`` is given, the index of every line that opens an HTML
-    comment block with ``<!-- mycel:cues`` at the start of the line is added.
+    When ``comments`` is given, the index of every line that opens a
+    ``<!-- mycel:cues`` comment is added, including in ordinary HTML blocks.
     """
     result: list[_Heading] = []
     fence_character, fence_length = None, 0
     fence_containers: tuple[tuple[str, int], ...] = ()
     container_context: tuple[tuple[str, int], ...] = ()
     html_kind: str | None = None
+    nested_html_kind: str | None = None
     html_containers: tuple[tuple[str, int], ...] = ()
     reference_end = start
     paragraph_start: int | None = None
@@ -505,11 +506,22 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
         if html_kind is not None:
             view = _in_container(content, html_containers)
             if view is None:
-                html_kind = None
+                html_kind = nested_html_kind = None
                 container_context = ()
             else:
+                if comments is not None and html_kind == "blank":
+                    # Ordinary HTML containers can contain comments, while
+                    # nested comments and verbatim blocks hide their contents.
+                    if nested_html_kind is None:
+                        nested = _html_block(view, can_start_type_seven=False)
+                        if nested == "comment" and _CUE_OPENER.match(content):
+                            comments.append(index)
+                        if nested != "blank":
+                            nested_html_kind = nested
+                    if nested_html_kind is not None and _html_ends(nested_html_kind, view):
+                        nested_html_kind = None
                 if _html_ends(html_kind, view):
-                    html_kind = None
+                    html_kind, nested_html_kind = nested_html_kind, None
                 continue
         inherited = _in_container(content, container_context)
         if inherited is None:

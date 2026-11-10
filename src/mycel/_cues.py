@@ -262,7 +262,8 @@ def _declaration(comment: CueComment) -> _Declaration:
         data = yaml.load(comment.body, Loader=_Loader)
     except _Fault:
         raise
-    except (yaml.YAMLError, RecursionError, ValueError, TypeError):
+    except (yaml.YAMLError, AttributeError, LookupError, OverflowError, RecursionError, TypeError, ValueError):
+        # Malformed explicitly tagged values can fail in PyYAML's constructors.
         raise _Fault("the body is not readable YAML") from None
     if not isinstance(data, dict):
         raise _Fault("the body is not a YAML mapping")
