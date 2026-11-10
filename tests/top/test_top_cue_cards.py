@@ -178,6 +178,18 @@ Excluded text.
             "artifacts/inline-html.md",
             f"## {html_heading}\n<!-- mycel:cues {{type: literal, match: HTML}} -->\n",
         )
+        atx_list_heading = self.write(
+            "artifacts/atx-list-heading.md",
+            "## Parent\nParent intro.\n\n- ## Child\n"
+            "  <!-- mycel:cues {type: literal, match: Child} -->\n"
+            "  Child body.\n\n## After\n",
+        )
+        setext_list_heading = self.write(
+            "artifacts/setext-list-heading.md",
+            "## Parent\nParent intro.\n\n- Child\n  ---\n"
+            "  <!-- mycel:cues {type: literal, match: Child} -->\n"
+            "  Child body.\n\n## After\n",
+        )
 
         reply = self.command("cues", "compile")
         catalog = json.loads(self.catalog.read_bytes())
@@ -188,9 +200,10 @@ Excluded text.
             [(str(declarations), line) for line in (9, 15, 20, 26)],
         )
         self.assertEqual(reply["cards"], len(catalog["cards"]))
-        self.assertEqual(reply["sources"], 10)
+        self.assertEqual(reply["sources"], 12)
         boundary_paths = {str(path) for path in (
             paragraph, backticks, whole, blank_start_list, empty_list, nested_list, inline_html,
+            atx_list_heading, setext_list_heading,
         )}
         named, local, glossary = [
             card for card in catalog["cards"] if card["declared_at"]["path"] not in boundary_paths
@@ -235,37 +248,45 @@ Excluded text.
             },
         )
         self.maxDiff = None
-        for document, written, anchor, end, text, declarations in (
+        for document, written, anchor, start, end, text, declarations in (
             (
-                paragraph, "Alpha", "alpha", 5, "## Alpha\nSome prose\n2. ```",
+                paragraph, "Alpha", "alpha", 1, 5, "## Alpha\nSome prose\n2. ```",
                 (("outer:paragraph.md#alpha", "First", 2),
                  ("outer:paragraph.md#alpha~2", "Second", 5)),
             ),
             (
-                backticks, heading, "abc", 2, f"## {heading}",
+                backticks, heading, "abc", 1, 2, f"## {heading}",
                 (("outer:backticks.md#abc", "Backticks", 2),),
             ),
             (
-                whole, None, None, 4, "Body.\n \t",
+                whole, None, None, 1, 4, "Body.\n \t",
                 (("outer:whole-file.md", "Intro", 1),),
             ),
             (
-                blank_start_list, "Alpha", "alpha", 6, f"## Alpha\n-\n  ```\n{example}",
+                blank_start_list, "Alpha", "alpha", 1, 6, f"## Alpha\n-\n  ```\n{example}",
                 (("outer:blank-start-list.md#alpha", "First", 2),
                  ("outer:blank-start-list.md#alpha~2", "Second", 6)),
             ),
             (
-                empty_list, "Alpha", "alpha", 7, f"## Alpha\n-\n\n  ```\n{example}\n{second}",
+                empty_list, "Alpha", "alpha", 1, 7, f"## Alpha\n-\n\n  ```\n{example}\n{second}",
                 (("outer:empty-list.md#alpha", "First", 2),),
             ),
             (
-                nested_list, "Alpha", "alpha", 7, f"## Alpha\n- -\n    ~~~\n  ```\n{example}",
+                nested_list, "Alpha", "alpha", 1, 7, f"## Alpha\n- -\n    ~~~\n  ```\n{example}",
                 (("outer:nested-list.md#alpha", "First", 2),
                  ("outer:nested-list.md#alpha~2", "Second", 7)),
             ),
             (
-                inline_html, html_heading, "alpha", 2, f"## {html_heading}",
+                inline_html, html_heading, "alpha", 1, 2, f"## {html_heading}",
                 (("outer:inline-html.md#alpha", "HTML", 2),),
+            ),
+            (
+                atx_list_heading, "Child", "child", 4, 6, "- ## Child\n  Child body.",
+                (("outer:atx-list-heading.md#child", "Child", 5),),
+            ),
+            (
+                setext_list_heading, "Child", "child", 4, 7, "- Child\n  ---\n  Child body.",
+                (("outer:setext-list-heading.md#child", "Child", 6),),
             ),
         ):
             with self.subTest(document=document.name):
@@ -280,7 +301,7 @@ Excluded text.
                     [
                         (card_id, [term], written or document.name,
                          {"path": path, "heading": written, "anchor": anchor,
-                          "first_line": 1, "last_line": end},
+                          "first_line": start, "last_line": end},
                          {"path": path, "first_line": line, "last_line": line}, text)
                         for card_id, term, line in declarations
                     ],
