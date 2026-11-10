@@ -426,6 +426,9 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         except UnicodeError:
             raise MycelError(ErrorCode.INVALID_INPUT, "The identifier purpose must be valid UTF-8 text.") from None
         return Invocation(name, arguments=(action, series, purpose))
+    if name == "plan" and (len(parsed.arguments) != 2 or parsed.arguments[0] != "check"
+                           or not parsed.arguments[1].strip() or "\0" in parsed.arguments[1]):
+        raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel plan check <Beat file>.")
     if name == "cues" and tuple(parsed.arguments) != ("compile",):
         raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel cues compile.")
     if name == "api-key" and tuple(parsed.arguments) not in {("voyage",), ("jev",)}:
@@ -618,6 +621,8 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
             selected_handlers["pieces"] = handle_pieces
             from ._cues import handle_cues
             selected_handlers["cues"] = handle_cues
+            from ._plan_check import handle_plan_check
+            selected_handlers["plan"] = handle_plan_check
             from ._search import handle_search
             selected_handlers["search"] = handle_search
             from ._undocumented import handle_undocumented

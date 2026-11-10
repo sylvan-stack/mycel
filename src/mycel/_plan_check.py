@@ -1,10 +1,11 @@
-"""Read the numbered checkbox tree of a Beat's implementation plan (MYC-20.13)."""
+"""Check a Beat implementation plan without writing to disk or the Index Store (MYC-20.13)."""
 
 from dataclasses import dataclass, field
 from pathlib import Path
 import re
 
-from ._errors import MycelError
+from ._cli import Invocation, Result, invocation_store
+from ._errors import ErrorCode, MycelError
 from ._locks import read_snapshot
 from ._markdown import outline_markdown
 from ._scope import RepositoryLocations
@@ -199,9 +200,7 @@ def _resolved_origin_names(connection, names: list[str]) -> set[str]:
     return {name for (name,) in rows}
 
 
-def _check_origins(invocation, steps: list[Step]) -> None:
-    from ._cli import invocation_store
-
+def _check_origins(invocation: Invocation, steps: list[Step]) -> None:
     named = [(step, _origin_names(step)) for step in steps]
     names = sorted({name for _, ids in named for name in ids})
     if not names:
@@ -212,3 +211,26 @@ def _check_origins(invocation, steps: list[Step]) -> None:
         for name in ids:
             if name not in resolved:
                 step.problem("origin", f"{name} does not resolve to an indexed requirement or decision.")
+
+
+def handle_plan_check(invocation: Invocation) -> Result:
+    if invocation.settings is None:
+        raise MycelError(ErrorCode.INTERNAL, "Settings were not loaded for this invocation.")
+    _, spelling = invocation.arguments
+    try:
+        path = Path(spelling).expanduser()
+        if not path.is_file():
+            raise OSError()
+        source = path.read_text(encoding="utf-8")
+    except (OSError, RuntimeError, UnicodeError, ValueError):
+        raise MycelError(ErrorCode.IO, "The Beat file could not be read as UTF-8 text.") from None
+
+    beat, steps, problems = _read_plan(source, path.stem)
+    _check_files(steps, RepositoryLocations(invocation.settings))
+    _check_origins(invocation, steps)
+    problems.extend((step.line, problem) for step in steps for problem in step.problems)
+    return Result({
+        "beat": beat,
+        "steps": [{"number": step.number, "done": step.done} for step in steps],
+        "problems": [problem for _, problem in sorted(problems, key=lambda item: item[0])],
+    })

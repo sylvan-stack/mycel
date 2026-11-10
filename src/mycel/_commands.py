@@ -57,6 +57,7 @@ COMMANDS = (
     CommandSpec("pieces", "List one file's working and committed chunks", scope=False,
                 extra_options=("<repo>:@code/<path>",)),
     CommandSpec("cues", "Compile the Cue Card catalog", scope=False, extra_options=("compile",)),
+    CommandSpec("plan", "Check a Beat implementation plan", scope=False, extra_options=("check <Beat file>",)),
     CommandSpec("api-key", "Store a Voyage or Jev API key in the login Keychain", scope=False,
                 extra_options=("voyage|jev",)),
     CommandSpec("info", "Report program and configuration diagnostics", scope=False),
@@ -72,7 +73,7 @@ def help_reply(command: str | None = None) -> dict:
         "version": "2.0.0",
         "usage": "mycel <command> [arguments]",
         "commands": [
-            {"name": s.name, "description": s.description, "available": s.name in {"audit", "recovery", "origins", "justify", "api-key", "info", "grep", "repos", "init", "ids", "pieces", "cues", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
+            {"name": s.name, "description": s.description, "available": s.name in {"audit", "recovery", "origins", "justify", "api-key", "info", "grep", "repos", "init", "ids", "pieces", "cues", "plan", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
              "rawArguments": s.raw_arguments,
              "options": ([] if s.raw_arguments else
                          ["-h", "--help"] + (["--repo <name>"] if s.scope else []) +
