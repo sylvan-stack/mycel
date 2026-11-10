@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 
 from ._errors import MycelError
+from ._locks import read_snapshot
 from ._markdown import outline_markdown
 from ._scope import RepositoryLocations
 from ._source_refs import SourceAddressError, parse_source_address
@@ -172,3 +173,42 @@ def _check_files(steps: list[Step], locations: RepositoryLocations) -> None:
         for spelling in _named_files(step):
             if problem := _file_problem(spelling, locations):
                 step.problem("file", f"{spelling}: {problem}")
+
+
+_ORIGIN_ID = re.compile(
+    r"(?<![\w./-])[A-Z][A-Z0-9]*-(?:D[0-9]+|[0-9]+\.[0-9]+)"
+    r"(?![\w/-]|\.[A-Za-z0-9])"
+)
+
+
+def _origin_names(step: Step) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(_ORIGIN_ID.findall(" ".join(step.lines))))
+
+
+def _resolved_origin_names(connection, names: list[str]) -> set[str]:
+    with read_snapshot(connection):
+        rows = connection.execute("""
+            SELECT DISTINCT l.metadata->>'name'
+            FROM public.mycel_locations l
+            JOIN public.mycel_chunk_versions v ON v.id = l.chunk_version
+            JOIN public.mycel_chunks c ON c.id = v.chunk_id
+            WHERE c.kind IN ('req', 'dec')
+              AND l.kind = 'disk' AND l.file_location IS NOT NULL
+              AND l.metadata->>'name' = ANY(%s)
+        """, (names,)).fetchall()
+    return {name for (name,) in rows}
+
+
+def _check_origins(invocation, steps: list[Step]) -> None:
+    from ._cli import invocation_store
+
+    named = [(step, _origin_names(step)) for step in steps]
+    names = sorted({name for _, ids in named for name in ids})
+    if not names:
+        return
+    with invocation_store(invocation) as (connection, _):
+        resolved = _resolved_origin_names(connection, names)
+    for step, ids in named:
+        for name in ids:
+            if name not in resolved:
+                step.problem("origin", f"{name} does not resolve to an indexed requirement or decision.")
