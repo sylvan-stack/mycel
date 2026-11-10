@@ -148,4 +148,4 @@ Source remains available; writing or running these checks requires a separate te
 
 ## Separate testing and low-tier history — SYL-330
 
-All test work, including top tier, belongs to a separate task explicitly requested by the owner. Only the owner decides when implementation is ready for tests. Previous low-tier removals are preserved as commented file-end examples, with reasons and source revisions in [the inventory](docs/test-inventory.md#commented-low-tier-source--syl-330). They add no retained mid-tier cases and must not be enabled or recreated.
+Test work belongs to a testing Beat or a separate testing task under the [Test Strategy](/Users/msix/Artifacts/mycel/operations/test-strategy.md#when-testing-starts). Mid-tier execution requires explicit owner scope. Previous low-tier removals are preserved as commented file-end examples, with reasons and source revisions in [the inventory](docs/test-inventory.md#commented-low-tier-source--syl-330). They add no retained mid-tier cases and must not be enabled or recreated.

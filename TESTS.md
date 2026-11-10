@@ -1,6 +1,6 @@
 # Tests: mycel
 
-All test work, including top-tier cases, requires a separate task explicitly requested by the owner. Implement and polish code first; only the owner decides when it is ready for tests. Do not write, edit, maintain or run tests during implementation. Keep existing source in its documented state and low-tier examples commented at file ends.
+Follow the [Test Strategy](/Users/msix/Artifacts/mycel/operations/test-strategy.md#when-testing-starts). Test work belongs to an eligible testing Beat or, outside a Saga, a separate testing task requested by the owner. Use test-free checks during implementation and keep low-tier examples commented at file ends.
 
 [Mid-tier descriptions and justifications](MID_TIER.md) · [Complete inventory and tier justifications](docs/test-inventory.md) · [Machine-readable inventory](test-tiers.json)
 
@@ -43,7 +43,7 @@ Reviewed revision: `560e2e2b1623066240ebd128bfa1e552f0a4f25f` under SYL-327 (29 
 
 Case bodies are separated into [`tests/top/`](tests/top/) and [`tests/mid/`](tests/mid/). The former mixed test modules retain shared fixture classes, helper functions and imports at their established paths, with no inventoried test methods. This preserves existing subprocess paths, patch targets and fixture imports without copying helpers into both tiers. Compatibility entries preserve original package and resource paths while loading the mid-tier implementation. Product-side test APIs load it only when invoked and refuse if the test source is absent.
 
-## Running a selected top-tier case in an owner-requested testing task
+## Running a selected top-tier case
 
 Select an exact method when it resolves a concrete uncertainty; no run is required after an edit. The new module names begin with test_top_ so they cannot shadow the shared fixture modules. Do not run whole folders or discovery as a substitute. Original prerequisites, skips and environment limitations still apply. A focused result is not full qualification.
 
@@ -55,7 +55,7 @@ PYTHONPATH=src python scripts/run_checks.py --select test_top_source_refs.Source
 
 ## Mid-tier execution
 
-[MID_TIER.md](MID_TIER.md) lists the descriptions, tier reasons and review status. The source is now uncommented and stays that way. Writing or running it still requires a separately requested testing task. Do not run tests automatically after edits or merges. Inspect prerequisites and indirect calls before invoking a program or qualification entry point. A focused result is not full qualification.
+[MID_TIER.md](MID_TIER.md) lists the descriptions, tier reasons and review status. The retained source stays uncommented. Mid-tier work belongs to a testing Beat or separate testing task, with explicit owner scope for execution. Inspect prerequisites and indirect calls before invoking a program or qualification entry point. A focused result is not full qualification.
 
 For a Python method, use the same fixture setup as the top tier, put the mid folder on PYTHONPATH, and select `test_mid_<module>.Class.test_method`. Mycel's fixture-aware runner accepts `--tests tests/mid --select test_mid_<module>.Class.test_method`; store cases require explicit disposable-store settings. Archived scenarios and programs retain their original compatibility entry paths.
 
@@ -71,18 +71,17 @@ The review used an AST census of calls, assertions and patch boundaries, followe
 
 Since SYL-329 (29 October 2026) a Build runs the top tier only (MYC-D73). Its automatic gate selects every `unit` and `store` check under `tests/top/` and no mid-tier check, and refuses when `tests/top/` has no test source or a top-tier source is commented. The mid tier runs only when the owner asks for a mid-tier run. A passing top-only Build is not full qualification and does not rewrite the named checks.
 
-## Owner-controlled testing and archived examples — SYL-330
+## Separate testing and archived examples
 
 All test work is separate from implementation, including top-tier regressions,
 fixtures, snapshots, classification, archival maintenance and runner changes.
-Only the owner decides readiness and requests the testing task; do not create
-one autonomously or widen implementation into testing. A test-running Build
-also belongs to a separately requested testing/Build task; its gate stays intact.
-A test review, writing or archival task does not itself authorize execution.
+Use the testing Beat's documented scope or the scope of the owner's separate
+request. A test-running Build keeps its full top-tier gate. A test review,
+writing or archival task does not itself authorize execution.
 
 Read the retained cases and the `LOW TIER — DO NOT ENABLE OR RECREATE` footers
 before adding related tests. They preserve rejected historical source, reasons
 and revisions, so obvious or redundant checks are not generated again. All
 archived lines are comments, including imports and registrations. They add no
-runnable coverage. Re-admission needs distinct new evidence and owner-requested
-test work; a testing request alone does not make low-tier cases useful.
+runnable coverage. Re-admission requires distinct new evidence and testing
+scope that covers the change.
