@@ -11,7 +11,7 @@ completely or the catalog cannot be written (MYC-D94).
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import fcntl
@@ -606,11 +606,6 @@ def write_catalog(path: Path, catalog: Mapping[str, Any]) -> None:
             os.fsync(stream.fileno())
         os.replace(temporary, path)
         temporary = None
-        folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(folder)
-        finally:
-            os.close(folder)
     except OSError:
         raise MycelError(ErrorCode.IO, "The Cue Card catalog could not be written; the previous one is kept.") from None
     finally:
@@ -619,6 +614,14 @@ def write_catalog(path: Path, catalog: Mapping[str, Any]) -> None:
                 os.unlink(temporary)
             except OSError:
                 pass
+    # Replacement has already published the new catalog. Sync its directory
+    # entry for durability when possible.
+    with suppress(OSError):
+        folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(folder)
+        finally:
+            os.close(folder)
 
 
 @contextmanager
