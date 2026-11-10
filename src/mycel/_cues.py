@@ -33,7 +33,8 @@ from ._errors import ErrorCode, MycelError
 from ._markdown import _YAML_INPUT_ERRORS, CueComment, MarkdownOutline, OutlineHeading, outline_markdown
 from ._scope import Repository, RepositoryLocations
 from ._settings import SettingsSnapshot
-from ._source_refs import _AUTOLINK, _LinkBracket, _reference_key, _reference_label, markdown_reference_labels
+from ._source_refs import (_AUTOLINK, _HTML_TAG, _LinkBracket, _reference_key, _reference_label,
+                           markdown_reference_labels)
 
 
 CATALOG_VERSION = 1
@@ -126,6 +127,7 @@ _HEADING_LITERAL = re.compile(
     # Consume the whole opener even if there is no equal-length closer.
     r"(?P<ticks>`++)(?:(?P<code>.+?)(?<!`)(?P=ticks)(?!`))?"
     r"""|\\(?P<escape>[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])"""
+    rf"|(?P<tag>{_HTML_TAG.pattern}|<!--.*?-->)"
     rf"|{_AUTOLINK.pattern}",
     re.DOTALL,
 )
@@ -133,8 +135,7 @@ _LINK_REFERENCE = re.compile(r"\[([^\[\]]*+)\]")
 _LINK_ANGLE_DESTINATION = re.compile(r"<[^<>\n]*>")
 _LINK_DESTINATION_MARK = re.compile(r"[() \t]")
 _LINK_TRAILER = re.compile(r"""(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^()]*\)))?[ \t]*\)""")
-_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?/?>|<!--.*?-->")
-_LINK_BRACKET = re.compile(rf"{_TAG.pattern}|(?P<bracket>!?\[|\])")
+_LINK_BRACKET = re.compile(r"!?\[|\]")
 _EMPHASIS_UNDERSCORE = re.compile(r"(?<![^\W_])_+|_+(?![^\W_])")
 _EMPHASIS_OTHER = re.compile(r"[*~]+")
 _HEADING_TOKEN = re.compile(r"\0([0-9]+)\0")
@@ -187,9 +188,9 @@ def _link_labels(text: str, references: frozenset[str], source_text: Callable[[s
     removals: list[tuple[int, int]] = []
     consumed, last_link_start = 0, -1
     for mark in _LINK_BRACKET.finditer(text):
-        bracket = mark["bracket"]
-        if bracket is None or mark.start() < consumed:
+        if mark.start() < consumed:
             continue
+        bracket = mark[0]
         if bracket != "]":
             if brackets:
                 brackets[-1].bracket_after = True
@@ -235,7 +236,9 @@ def _rendered(title: str, references: frozenset[str]) -> str:
 
     def keep_literal(match: re.Match[str]) -> str:
         source = match[0]
-        if (content := match["code"]) is not None:
+        if match["tag"] is not None:
+            content = ""
+        elif (content := match["code"]) is not None:
             # CommonMark strips one space from both ends of a nonblank span.
             if content[0] == content[-1] == " " and content.strip(" "):
                 content = content[1:-1]
@@ -251,7 +254,8 @@ def _rendered(title: str, references: frozenset[str]) -> str:
     # CommonMark renders a source NUL as U+FFFD. Reserve NUL for placeholders.
     text = _HEADING_LITERAL.sub(keep_literal, title.replace("\0", "\ufffd"))
     text = _link_labels(text, references, source_text)
-    text = _TAG.sub("", text)
+    # Tags are opaque during link parsing and contribute no text to the anchor.
+    text = _HEADING_TOKEN.sub(lambda match: match[0] if kept[int(match[1])][1] else "", text)
     text = _EMPHASIS_UNDERSCORE.sub("", text)
     text = _EMPHASIS_OTHER.sub("", text)
     text = html.unescape(text)
