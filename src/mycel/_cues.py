@@ -608,8 +608,9 @@ def _target_text(target: _Target) -> str:
     lines = [trailing_text.get(number, outline.lines[number - 1])
              for number in range(target.first_line, target.last_line + 1)
              if number not in removed]
-    while lines and _blank(lines[-1]):
-        lines.pop()
+    if target.section is not None:
+        while lines and _blank(lines[-1]):
+            lines.pop()
     return "\n".join(lines)
 
 
