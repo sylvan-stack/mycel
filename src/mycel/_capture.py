@@ -803,7 +803,10 @@ class _Capture:
                 rules.add(prefix, self.read_disk(ignore))
         return rules
 
-    def disk_candidates(self, binding: _Binding) -> Iterator[tuple[Path, FileAlias, Corpus, bytes, tuple[int, int]]]:
+    def disk_candidates(self, binding: _Binding, *, excluded: frozenset[Path] = frozenset(),
+                        ) -> Iterator[tuple[Path, FileAlias, Corpus, bytes, tuple[int, int]]]:
+        # ``excluded`` names folders, as resolved paths below the binding, that
+        # the walk leaves out; ingest passes none, so its scan is unchanged.
         rules = self.disk_rules(binding)
         if binding.prefix and (self.skipped(binding.prefix, directory=True) or rules.ignored(binding.prefix, directory=True)):
             return
@@ -835,7 +838,8 @@ class _Capture:
                     if stat.S_ISLNK(info.st_mode):
                         continue  # Never follow file/directory links, loops or escapes.
                     if stat.S_ISDIR(info.st_mode):
-                        if entry.name in self.scan["skip_folders"] or rules.ignored(path, directory=True):
+                        if (entry.name in self.scan["skip_folders"] or rules.ignored(path, directory=True)
+                                or directory / entry.name in excluded):
                             continue
                         child = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
                         try:
@@ -1212,6 +1216,54 @@ def capture_file_versions(
         raise MycelError("io", error.message) from None
     except (OSError, RuntimeError, UnicodeError):
         raise MycelError("io", "The working path or its Git version could not be read safely.") from None
+
+
+@dataclass(frozen=True)
+class ArtifactDocument:
+    """One Markdown file of an artifact root, with the observation it was read under."""
+
+    path: Path
+    relative: str
+    source: bytes = field(repr=False)
+    size: int
+    mtime_ns: int
+
+
+def artifact_documents(snapshot: SettingsSnapshot, repository: Repository, *,
+                       excluded: frozenset[Path] = frozenset()) -> Iterator[ArtifactDocument]:
+    """Walk one repository's artifact root with MYC-1.6's disk scan (MYC-D94).
+
+    Only files whose names end in ``scan.document_endings`` are read, under
+    ``scan.skip_folders``, every ``.gitignore`` and no followed link. A root
+    that does not exist yields nothing. A root that exists but cannot be read
+    completely, or a file that changes while it is read, raises ``io``.
+    ``excluded`` holds the resolved folders of other repositories' artifact
+    roots nested inside this one, which the walk leaves to those repositories.
+    """
+    folder = repository.documents
+    if folder is None:
+        return
+    try:
+        root = folder.path.resolve(strict=True)
+    except FileNotFoundError:
+        return
+    except (OSError, RuntimeError):
+        raise MycelError("io", f"The artifact root of {repository.name!r} could not be resolved.") from None
+    if not root.is_dir():
+        raise MycelError("io", f"The artifact root of {repository.name!r} is not a folder.")
+    capture = _Capture(snapshot, repository, None, run_git, None)
+    try:
+        checkout = capture.checkout(root)
+        if checkout is not None:
+            capture.git_ignorecase[checkout] = capture.ignorecase(checkout)
+        binding = _Binding("artifact", root, checkout or root, checkout)
+        for path, alias, corpus, source, _ in capture.disk_candidates(binding, excluded=excluded):
+            if corpus != "documents":
+                continue
+            observed = capture.observed[path]
+            yield ArtifactDocument(path, alias.path, source, observed[3], observed[4])
+    except _CaptureFailure as error:
+        raise MycelError("io", f"The artifact root of {repository.name!r}: {error.message}") from None
 
 
 def capture_repository(snapshot: SettingsSnapshot, repository: Repository | str, *,

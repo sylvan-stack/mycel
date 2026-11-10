@@ -1,6 +1,6 @@
 # Command line and settings
 
-This checkout implements the SYL-98 command boundary, SYL-99 strict settings and SYL-100 repository resolution/listing. Start it with `PYTHONPATH=src python3 -m mycel --help`, or install its `mycel` console command in a development environment. `info` reports settings/store diagnostics, `repos` lists configured repositories, `init` creates or explicitly changes the private store, `refs` reports retained declarations and faults, `derive` asserts or withdraws one guarded dependency selection, `relate` asserts or withdraws one exact directed relation, `confirm` records exact guarded verification, `justify` states an Origin Link with verification, `origins` reports Origin Coverage, `recovery` judges local Origin candidates and reviews model claims, `audit` disputes Origin claims and records human settlements, `verifications` lists applicable records or retained history, `ingest` publishes complete scoped captures and their dependency/detection/collection changes, `activity` lists ordered history and reads exact entry details, `embed` runs finite scoped embedding, `evaluate` validates evaluation files, measures retrieval through normal search and exercises non-live Drift fixtures, `read` returns one current indexed chunk, `search` returns evidence-bearing schema3 results, `undocumented` lists code without describing sections, `overview` prints stored code directory outlines, `classify` explicitly executes bounded classification, `drifts`, `stale` and `status` report local provenance, and `grep` can append a read-only related search after literal system grep. Other accepted feature commands return `settings` when preflight fails, then `refused` until their implementation tasks supply handlers. A numbered staged package adds its lowercase hexadecimal `build` to `info` and records activity for actual mutations, including initialization and ingest. Unnumbered source development has no Build number and deliberately records no activity; a numbered package with a missing or damaged identity fails with `internal`. A changing ingest has one activity entry for its repository with the exact reply counts and file/identity details; a no-op has none. The independent installed launcher selects numbered Builds; see the [Build guide](builds.md) for installation, explicit selection and maintenance. No unavailable command returns an empty success reply. The [settings guide](settings.md) describes the complete validated schema, defaults and reviewer setup. The [store guide](store.md) describes configured acceptance for initialization, compatibility and connection-owned guards.
+This checkout implements the SYL-98 command boundary, SYL-99 strict settings and SYL-100 repository resolution/listing. Start it with `PYTHONPATH=src python3 -m mycel --help`, or install its `mycel` console command in a development environment. `info` reports settings/store diagnostics, `repos` lists configured repositories, `init` creates or explicitly changes the private store, `refs` reports retained declarations and faults, `derive` asserts or withdraws one guarded dependency selection, `relate` asserts or withdraws one exact directed relation, `confirm` records exact guarded verification, `justify` states an Origin Link with verification, `origins` reports Origin Coverage, `recovery` judges local Origin candidates and reviews model claims, `audit` disputes Origin claims and records human settlements, `verifications` lists applicable records or retained history, `ingest` publishes complete scoped captures and their dependency/detection/collection changes, `activity` lists ordered history and reads exact entry details, `embed` runs finite scoped embedding, `evaluate` validates evaluation files, measures retrieval through normal search and exercises non-live Drift fixtures, `read` returns one current indexed chunk, `search` returns evidence-bearing schema3 results, `undocumented` lists code without describing sections, `overview` prints stored code directory outlines, `classify` explicitly executes bounded classification, `drifts`, `stale` and `status` report local provenance, `cues compile` writes the Cue Card catalog, and `grep` can append a read-only related search after literal system grep. Other accepted feature commands return `settings` when preflight fails, then `refused` until their implementation tasks supply handlers. A numbered staged package adds its lowercase hexadecimal `build` to `info` and records activity for actual mutations, including initialization and ingest. Unnumbered source development has no Build number and deliberately records no activity; a numbered package with a missing or damaged identity fails with `internal`. A changing ingest has one activity entry for its repository with the exact reply counts and file/identity details; a no-op has none. The independent installed launcher selects numbered Builds; see the [Build guide](builds.md) for installation, explicit selection and maintenance. No unavailable command returns an empty success reply. The [settings guide](settings.md) describes the complete validated schema, defaults and reviewer setup. The [store guide](store.md) describes configured acceptance for initialization, compatibility and connection-owned guards.
 
 Help is one JSON object and works without settings. Use `--help` or `-h`, or `<command> --help` for a reserved command. With no arguments, Mycel returns help. The scope boundary preserves repeatable literal `--repo <name>` selections; `ingest`, `embed`, `classify`, `status` and `activity` also accept `--all`. Combining both is invalid. An absent selection resolves from the longest configured folder containing the current directory. Configured `code_clones` are locations of the same repository; a command inside one uses its checkout and policy. `readonly_root` selects the retained `main` baseline for Origin Coverage changes. Organization selectors and directories outside their member folders expand to enabled configured members; explicit repository selection preserves exact names. Folder faults affect the selected repository alone. The resolver has no special repository aliases; MYC-D37 explicitly permits only the prescribed named shared selections and scan exclusions as packaged data. Option abbreviation and unknown options are invalid.
 
@@ -639,6 +639,40 @@ no ingest or embedding and preserves verifications and source policy. See the
         ]
       },
       {
+        "name": "ids",
+        "description": "Issue or list identifiers in the index store",
+        "available": true,
+        "rawArguments": false,
+        "options": [
+          "-h",
+          "--help",
+          "next <series> --for <purpose>",
+          "list <series>"
+        ]
+      },
+      {
+        "name": "pieces",
+        "description": "List one file's working and committed chunks",
+        "available": true,
+        "rawArguments": false,
+        "options": [
+          "-h",
+          "--help",
+          "<repo>:@code/<path>"
+        ]
+      },
+      {
+        "name": "cues",
+        "description": "Compile the Cue Card catalog",
+        "available": true,
+        "rawArguments": false,
+        "options": [
+          "-h",
+          "--help",
+          "compile"
+        ]
+      },
+      {
         "name": "api-key",
         "description": "Store a Voyage or Jev API key in the login Keychain",
         "available": true,
@@ -688,6 +722,39 @@ no ingest or embedding and preserves verifications and source policy. See the
 }
 ```
 <!-- command-contract:end -->
+
+## Compiling Cue Cards
+
+`mycel cues compile` reads every `mycel:cues` declaration and writes the Cue
+Card catalog, `~/.mycel/cues/catalog.json`, in the home folder the settings
+were loaded from. MYC-21 gives the declaration form and the catalog's keys.
+The command takes no `--repo`: it reads the Markdown files, those whose names
+end in one of `scan.document_endings`, under the artifact root of every
+enabled repository. It uses ingest's disk scan, so it skips
+`scan.skip_folders` and what `.gitignore` files exclude, and follows no link.
+A disabled repository gives no cards. A file under two artifact roots belongs
+to the inner one's repository. An artifact root that does not exist gives no
+cards and is not an error. It needs no Index Store connection.
+
+The reply counts the cards and the source files their text comes from, and
+lists the declarations that did not compile, each with its file, the first
+line of its comment and the problem:
+
+```json
+{"cards": 233, "sources": 2, "faults": [{"file": "/Users/me/Artifacts/notes/a.md", "line": 12, "problem": "unknown type: meaning"}]}
+```
+
+A faulty declaration does not stop the compile; the other cards are written.
+The catalog is written whole to a temporary file beside it and moved into
+place. When an artifact root exists but cannot be read completely, or the
+catalog cannot be written, the command fails with `io` and the previous
+catalog stays as it was.
+
+<!-- sources:
+mycel:@code/src/mycel/_cues.py
+mycel:@code/src/mycel/_capture.py#artifact_documents
+mycel:@code/src/mycel/_markdown.py#outline_markdown
+-->
 
 ## Read-only one-time replacement planning
 

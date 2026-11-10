@@ -471,7 +471,12 @@ def _link_reference_end(lines: tuple[_Line, ...], beginning: int) -> int | None:
     return _reference_title(cursor) if had_space else None
 
 
-def _headings(lines: tuple[_Line, ...], start: int) -> tuple[_Heading, ...]:
+def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None = None) -> tuple[_Heading, ...]:
+    """Headings outside fenced code and HTML blocks; ``comments`` collects cue lines.
+
+    When ``comments`` is given, the index of every line that opens an HTML
+    comment block with ``<!-- mycel:cues`` at the start of the line is added.
+    """
     result: list[_Heading] = []
     fence_character, fence_length = None, 0
     fence_containers: tuple[tuple[str, int], ...] = ()
@@ -524,6 +529,8 @@ def _headings(lines: tuple[_Line, ...], start: int) -> tuple[_Heading, ...]:
                 continue
         block = _html_block(view, can_start_type_seven=paragraph_start is None)
         if block is not None:
+            if comments is not None and block == "comment" and _CUE_OPENER.match(content):
+                comments.append(index)
             if not _html_ends(block, view):
                 html_kind, html_containers = block, containers
             paragraph_start = None
@@ -554,6 +561,75 @@ def _headings(lines: tuple[_Line, ...], start: int) -> tuple[_Heading, ...]:
         elif paragraph_start is None:
             paragraph_start = index
     return tuple(result)
+
+
+@dataclass(frozen=True)
+class OutlineHeading:
+    """A heading as written: no ``#`` marks, closing ``#``s or outer spaces."""
+
+    title: str
+    level: int
+    line: int
+    last_line: int
+
+
+@dataclass(frozen=True)
+class CueComment:
+    """A ``mycel:cues`` HTML comment; ``body`` is None when it has no ``-->``."""
+
+    first_line: int
+    last_line: int
+    body: str | None
+
+
+@dataclass(frozen=True)
+class MarkdownOutline:
+    """Lines (without line endings), the first line after front matter, headings, cue comments."""
+
+    lines: tuple[str, ...]
+    body_start: int
+    headings: tuple[OutlineHeading, ...]
+    comments: tuple[CueComment, ...]
+
+
+_CUE_OPENER = re.compile(r" {0,3}<!-- mycel:cues(?=\s|-->|$)")
+
+
+def outline_markdown(text: str) -> MarkdownOutline:
+    """The outline the Cue Card compiler reads (MYC-21, MYC-D91).
+
+    It walks blocks as ``split_markdown`` does, so a heading or a comment in a
+    fenced code block or inside another HTML comment is neither. A comment
+    begins a line, with at most three spaces before ``<!-- mycel:cues``, and
+    its body runs to the first ``-->``; one without ``-->`` is unclosed and has
+    no body. Lines count from 1.
+    """
+    lines = _lines(text)
+    _, _, _, start, _, _, _ = _frontmatter(lines)
+    found: list[int] = []
+    headings = _headings(lines, start, found)
+    contents = [line.content for line in lines]
+    if contents:
+        contents[0] = contents[0].removeprefix("\ufeff")
+    comments = []
+    for index in found:
+        opener = _CUE_OPENER.match(contents[index])
+        rest = contents[index][opener.end():]
+        body, closed = [], None
+        for position in range(index, len(contents)):
+            piece = rest if position == index else contents[position]
+            end = piece.find("-->")
+            if end >= 0:
+                body.append(piece[:end])
+                closed = position
+                break
+            body.append(piece)
+        comments.append(CueComment(index + 1, len(contents) if closed is None else closed + 1,
+                                   None if closed is None else "\n".join(body)))
+    return MarkdownOutline(tuple(contents), start + 1,
+                           tuple(OutlineHeading(heading.title, heading.level, heading.start + 1, heading.end)
+                                 for heading in headings),
+                           tuple(comments))
 
 
 def _names(bases: tuple[str, ...]) -> tuple[str, ...]:
