@@ -23,7 +23,7 @@ _ATX = re.compile(r"^ {0,3}(#{1,6})([ \t].*|$)")
 _SETEXT = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _DELIMITER = re.compile(r"^(?:---|\.\.\.)[ \t]*$")
-_NON_PARAGRAPH = re.compile(r"^ {0,3}(?:>|(?:[-+*]|[0-9]{1,9}[.)])[ \t]+|<(?:[A-Za-z!/]|\?))")
+_HTML_LINE = re.compile(r"^ {0,3}<(?:[A-Za-z!/]|\?)")
 _THEMATIC = re.compile(r"^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$")
 _CONTAINER = re.compile(r"^ {0,3}(?:>[ ]?|(?:[-+*]|(?P<number>[0-9]{1,9})[.)])[ ]+)")
 _QUOTE = re.compile(r"^ {0,3}>[ ]?")
@@ -605,11 +605,15 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
         inherited = _in_container(content, container_context)
         if inherited is None:
             container_context = ()
+            paragraph_start = None
             inherited = content
-        view, explicit_containers = _container_prefix(inherited)
+        view, explicit_containers = _container_prefix(
+            inherited, interrupting_paragraph=paragraph_start is not None,
+        )
         containers = container_context + explicit_containers
         if explicit_containers:
             container_context = containers
+            paragraph_start = None
         opener = _FENCE.fullmatch(view)
         if opener is not None:
             marker, info = opener.groups()
@@ -650,7 +654,7 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
             paragraph_start = None
             continue
         if (not content.strip(" \t") or (content.startswith(("    ", "\t")) and paragraph_start is None)
-                or _NON_PARAGRAPH.match(content) or _THEMATIC.fullmatch(content)):
+                or explicit_containers or _HTML_LINE.match(content) or _THEMATIC.fullmatch(content)):
             paragraph_start = None
         elif paragraph_start is None:
             paragraph_start = index
