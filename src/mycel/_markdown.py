@@ -25,7 +25,7 @@ _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _DELIMITER = re.compile(r"^(?:---|\.\.\.)[ \t]*$")
 _NON_PARAGRAPH = re.compile(r"^ {0,3}(?:>|(?:[-+*]|[0-9]{1,9}[.)])[ \t]+|<(?:[A-Za-z!/]|\?))")
 _THEMATIC = re.compile(r"^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$")
-_CONTAINER = re.compile(r"^ {0,3}(?:>[ ]?|(?:[-+*]|[0-9]{1,9}[.)])[ ]+)")
+_CONTAINER = re.compile(r"^ {0,3}(?:>[ ]?|(?:[-+*]|(?P<number>[0-9]{1,9})[.)])[ ]+)")
 _QUOTE = re.compile(r"^ {0,3}>[ ]?")
 _RAW_HTML_TAGS = ("pre", "script", "style", "textarea")
 _RAW_HTML_TAG_PATTERN = "(?:" + "|".join(_RAW_HTML_TAGS) + ")"
@@ -309,14 +309,23 @@ def _frontmatter(lines: tuple[_Line, ...]) -> tuple[Mapping[str, Any], bool, boo
     return settings, True, True, ending + 1, span, raw, ()
 
 
-def _container_prefix(content: str) -> tuple[str, tuple[tuple[str, int], ...]]:
+def _container_prefix(
+    content: str, *, interrupting_paragraph: bool = False,
+) -> tuple[str, tuple[tuple[str, int], ...]]:
     """Read explicit quote/list chains for block state, without altering source."""
     view = content.expandtabs(4)
     containers = []
     while marker := _CONTAINER.match(view):
         prefix = marker.group()
-        containers.append(("quote" if ">" in prefix else "list", len(prefix)))
-        view = view[marker.end():]
+        is_quote = ">" in prefix
+        remainder = view[marker.end():]
+        if interrupting_paragraph and not is_quote:
+            number = marker["number"]
+            if not remainder or (number is not None and int(number) != 1):
+                break
+        containers.append(("quote" if is_quote else "list", len(prefix)))
+        view = remainder
+        interrupting_paragraph = False
     return view, tuple(containers)
 
 

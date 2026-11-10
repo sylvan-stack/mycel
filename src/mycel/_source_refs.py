@@ -586,7 +586,9 @@ def _document_blocks(lines: tuple[_Line, ...], start: int) -> list[tuple[list[_P
             else:
                 flush()
                 container_context, inherited = (), content
-        view, explicit = _container_prefix(inherited)
+        # A sibling list item fails the old item's indentation check above.
+        # Its prior paragraph has already been flushed before this scan.
+        view, explicit = _container_prefix(inherited, interrupting_paragraph=bool(fragment))
         containers = container_context + explicit
         if explicit:
             flush()
