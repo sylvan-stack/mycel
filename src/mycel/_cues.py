@@ -632,8 +632,12 @@ def compile_catalog(snapshot: SettingsSnapshot) -> dict[str, Any]:
 
 
 def handle_cues(invocation: Invocation) -> Result:
-    if invocation.arguments != ("compile",):
-        raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel cues compile.")
+    arguments = invocation.arguments
+    if arguments != ("compile",) and (len(arguments) != 2 or arguments[0] != "match"):
+        raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel cues compile or mycel cues match <text>.")
     if invocation.settings is None:
         raise MycelError(ErrorCode.INTERNAL, "Settings were not loaded for this invocation.")
-    return Result(compile_catalog(invocation.settings))
+    if arguments == ("compile",):
+        return Result(compile_catalog(invocation.settings))
+    cards = _read_catalog_cards(catalog_path(invocation.settings))
+    return Result({"cards": _match_cards(cards, arguments[1])})

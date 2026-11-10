@@ -429,8 +429,9 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "plan" and (len(parsed.arguments) != 2 or parsed.arguments[0] != "check"
                            or not parsed.arguments[1].strip() or "\0" in parsed.arguments[1]):
         raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel plan check <Beat file>.")
-    if name == "cues" and tuple(parsed.arguments) != ("compile",):
-        raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel cues compile.")
+    if name == "cues" and parsed.arguments != ["compile"] and (
+            len(parsed.arguments) != 2 or parsed.arguments[0] != "match"):
+        raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel cues compile or mycel cues match <text>.")
     if name == "api-key" and tuple(parsed.arguments) not in {("voyage",), ("jev",)}:
         raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel api-key voyage|jev.")
     if name == "search" and (len(parsed.arguments) > 1 or (parsed.arguments and not parsed.arguments[0].strip())
