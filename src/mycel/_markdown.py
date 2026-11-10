@@ -462,22 +462,33 @@ class _CueHTML:
 
 
 class _ReferenceCursor:
-    """A bounded-lookahead character cursor over original physical lines."""
+    """A bounded-lookahead cursor over physical lines within a Markdown block."""
 
-    def __init__(self, lines: tuple[_Line, ...], line: int, column: int = 0):
+    def __init__(self, lines: tuple[_Line, ...], line: int, column: int,
+                 content: str, containers: tuple[tuple[str, int], ...]):
         self.lines, self.line, self.column = lines, line, column
+        self.content: str | None = content
+        self.containers = containers
 
     def peek(self) -> str | None:
-        if self.line >= len(self.lines):
+        if self.content is None:
             return None
-        content = self.lines[self.line].content
-        if self.column < len(content):
-            return content[self.column]
+        if self.column < len(self.content):
+            return self.content[self.column]
         return "\n" if self.lines[self.line].text.endswith(("\r", "\n")) else None
 
     def advance(self) -> None:
         if self.peek() == "\n":
             self.line, self.column = self.line + 1, 0
+            self.content = None
+            if self.line < len(self.lines):
+                content = self.lines[self.line].content
+                if self.containers:
+                    view = _in_container(content, self.containers)
+                    if view is not None:
+                        self.content = _written_view(content, view)
+                else:
+                    self.content = content
         else:
             self.column += 1
 
@@ -504,7 +515,7 @@ def _reference_title(cursor: _ReferenceCursor) -> int | None:
             return None
         if character == "\n":
             cursor.advance()
-            if cursor.line < len(cursor.lines) and not cursor.lines[cursor.line].content.strip(" \t"):
+            if cursor.content is None or not cursor.content.strip(" \t"):
                 return None
         elif character == "\\":
             cursor.advance()
@@ -515,18 +526,22 @@ def _reference_title(cursor: _ReferenceCursor) -> int | None:
     return None
 
 
-def _link_reference_end(lines: tuple[_Line, ...], beginning: int) -> int | None:
-    """Consume a valid top-level CommonMark definition before section headings.
+def _link_reference_end(
+    lines: tuple[_Line, ...], beginning: int, *, view: str | None = None,
+    containers: tuple[tuple[str, int], ...] = (),
+) -> int | None:
+    """Consume a CommonMark reference definition from raw or list-relative lines.
 
     Definitions stay in their exact preamble/body text. They are not heading
     paragraphs, including when a destination or optional title uses later
     physical lines. Failed title lookahead on a later line keeps a valid URL
     definition on its own line, rather than consuming ordinary document text.
     """
-    marker = re.match(r"^ {0,3}\[", lines[beginning].content)
+    content = lines[beginning].content if view is None else view
+    marker = re.match(r"^ {0,3}\[", content)
     if marker is None:
         return None
-    cursor = _ReferenceCursor(lines, beginning, marker.end())
+    cursor = _ReferenceCursor(lines, beginning, marker.end(), content, containers)
     label = []
     while (character := cursor.peek()) is not None and character != "]":
         if character == "[" or len(label) >= 999:
@@ -536,7 +551,7 @@ def _link_reference_end(lines: tuple[_Line, ...], beginning: int) -> int | None:
         if character == "\\" and cursor.peek() in _ESCAPABLE:
             label.append(cursor.peek())
             cursor.advance()
-        elif character == "\n" and (cursor.line >= len(lines) or not lines[cursor.line].content.strip(" \t")):
+        elif character == "\n" and (cursor.content is None or not cursor.content.strip(" \t")):
             return None
     if cursor.peek() != "]" or len(label) > 999 or not "".join(label).strip():
         return None
@@ -625,11 +640,11 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
             else:
                 continue
         if html_kind is not None:
-            view = _in_container(content, html_containers)
-            if view is None:
+            view, depth = _container_view(content, html_containers)
+            if depth < len(html_containers):
                 html_kind = html_cues = None
                 html_block_ended = False
-                container_context = ()
+                container_context = html_containers[:depth] if comments is not None else ()
             else:
                 if html_cues is not None and html_cues.scan(content) and comments is not None:
                     comments.append(index)
@@ -638,11 +653,14 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
                     html_kind = html_cues = None
                     html_block_ended = False
                 continue
-        inherited = _in_container(content, container_context)
-        if inherited is None:
-            container_context = ()
+        inherited, depth = _container_view(content, container_context)
+        if depth < len(container_context):
             paragraph_start = None
-            inherited = content
+            if comments is not None:
+                container_context = container_context[:depth]
+            else:
+                container_context = ()
+                inherited = content
         following = lines[index + 1].content if index + 1 < len(lines) else None
         view, explicit_containers = _container_prefix(
             inherited, interrupting_paragraph=paragraph_start is not None,
@@ -672,13 +690,16 @@ def _headings(lines: tuple[_Line, ...], start: int, comments: list[int] | None =
                     html_cues.scan(content)
             paragraph_start = None
             continue
+        in_list = comments is not None and any(kind == "list" for kind, _ in containers)
+        heading_content = _written_view(content, view) if in_list else content
         if paragraph_start is None:
-            definition_end = _link_reference_end(lines, index)
+            definition_end = _link_reference_end(
+                lines, index, view=heading_content if in_list else None,
+                containers=containers if in_list else (),
+            )
             if definition_end is not None:
                 reference_end = definition_end
                 continue
-        in_list = comments is not None and any(kind == "list" for kind, _ in containers)
-        heading_content = _written_view(content, view) if in_list else content
         heading = _ATX.fullmatch(heading_content)
         if heading is not None:
             marks, title = heading.groups()
