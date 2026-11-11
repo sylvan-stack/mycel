@@ -6,7 +6,7 @@
   "counting": "Static definitions and separately labelled programs/scenario functions; not runtime-discovered cases.",
   "mid_review": "Individually reviewed against the raised mid-tier bar under SYL-327; source inspection only, no execution.",
   "counts": {
-    "python_active": 157,
+    "python_active": 158,
     "python_commented": 0,
     "programs_active": 2,
     "node_cases_commented": 0,
@@ -20,11 +20,26 @@
       "entrypoint": 1,
       "python": 133
     },
-    "top_available": 24,
+    "top_available": 25,
     "low_removed_SYL_327": 1653,
     "low_removed_total": 1679
   },
   "tests": [
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_plan_check.py",
+      "id": "tests/top/test_top_plan_check.py::PlanCheckTests.test_reports_ordered_faults_and_preserves_inputs",
+      "name": "test_reports_ordered_faults_and_preserves_inputs",
+      "class": "PlanCheckTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "A malformed step in a mixed plan must keep its own and later file and Origin faults visible in plan order. A real checkout distinguishes an allowed new file from a missing folder and an escaping symlink. The CLI preserves the fixture and uses a read-only store boundary without reaching a model.",
+      "review": "individual",
+      "line": 16,
+      "file_sha256": "cfe19e3eb2a35ad0aba0687a4ac9e1d317ab998c59ce808a1a5e88a14734a9ac",
+      "selector": "test_top_plan_check.PlanCheckTests.test_reports_ordered_faults_and_preserves_inputs"
+    },
     {
       "repo": "mycel",
       "file": "tests/top/test_top_cue_cards.py",
