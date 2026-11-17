@@ -392,3 +392,26 @@ def _allocate_words(
         dispositions.append(_disposition(key, "selected", "The whole verified unit fit"))
 
     return selected, dispositions
+
+
+def assemble_summary(
+    groups: Sequence[Record],
+    verdicts: Sequence[Record],
+    passages: Sequence[Record],
+    *,
+    word_cap: int,
+) -> Record:
+    """Assemble whole supported revisions within the word cap.
+
+    Pass groups recomputed over the current supported revisions, alongside the
+    validated verdicts and passages for the same request.
+    """
+    ranked = _rank_supported_members(groups, verdicts, passages)
+    selected, dispositions = _allocate_words(ranked, word_cap)
+    summary = "\n".join(unit["prose"] for unit in selected)
+    return {
+        "summary": summary or None,
+        "word_count": len(summary.split()),
+        "selected_units": selected,
+        "dispositions": dispositions,
+    }
