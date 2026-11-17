@@ -209,3 +209,59 @@ class NarratorVerificationTests(unittest.TestCase):
             (row["unit_id"], row["revision"], row["outcome"], row["previous_revision"])
             for row in dispositions if row["stage"] == "repair"
         ], [("correction", 2, "repaired", 1), ("override", 2, "repair_unsupported", 1)])
+
+    def test_repair_budget_preserves_the_original_verified_subset(self):
+        request = source_request({
+            "logging": "Every restore attempt is logged.",
+            "child": "A generated child can be restored only after its audit record is complete.",
+        })
+        original = unit("logging", "Every restore attempt is logged.", ["logging"], revision=2)
+        unsafe = unit("child", "Restore generated children without waiting for an audit record.", ["child"])
+        support = verdict("logging", 2, ["logging"])
+        rejection = eligible(
+            verdict("child", 1, ["child"], affected_part="without waiting for an audit record",
+                    reason="The audit record must be complete before restoration."),
+            "An operator might restore a child before the audit is complete.", ["child"],
+        )
+        repaired_prose = "Restore a generated child only after its audit record is complete."
+        initial = verification.verify_units(
+            *request, [original, unsafe], assess_repair=True,
+            judge=lambda _instructions, _payload: [support, rejection],
+        )
+
+        for stage, expected_calls, expected_revision, previous_revision in (
+            ("admit", ["admit"], 1, None),
+            ("repair", ["admit", "repair"], 1, None),
+            ("recheck", ["admit", "repair", "recheck"], 2, 1),
+        ):
+            with self.subTest(stage=stage):
+                calls = []
+
+                def admit():
+                    calls.append("admit")
+                    return stage != "admit"
+
+                def repair(_instructions, _payload):
+                    calls.append("repair")
+                    if stage == "repair":
+                        raise verification.RepairBudgetExhausted
+                    return [correction("child", 1, repaired_prose, ["child"])]
+
+                def recheck(_instructions, payload):
+                    calls.append("recheck")
+                    fresh, = payload["units"]
+                    self.assertEqual((fresh["unit_id"], fresh["revision"], fresh["prose"]),
+                                     ("child", 2, repaired_prose))
+                    raise verification.RepairBudgetExhausted
+
+                supported, verdicts, dispositions = verification.repair_units(
+                    *request, initial, admit=admit, repair=repair, recheck=recheck,
+                )
+
+                self.assertEqual(calls, expected_calls)
+                self.assertEqual(supported, [original])
+                self.assertEqual(verdicts, [support, rejection])
+                self.assertEqual([
+                    (row["unit_id"], row["revision"], row["outcome"], row.get("previous_revision"))
+                    for row in dispositions if row["stage"] == "repair"
+                ], [("child", expected_revision, "budget_exhausted", previous_revision)])
