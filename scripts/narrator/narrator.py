@@ -34,7 +34,7 @@ MAX_CANDIDATES = 40
 NEIGHBORS_PER_CANDIDATE = 2
 PACKAGED_PROMPTS = Path(__file__).resolve().parents[2] / "src/mycel/data/summary-prompts.json"
 SECTION_PLACE = re.compile(r"[^\r\n\0]+ › [^\r\n\0]*")
-CUT_LINE = re.compile(r"^\[Mycel: source text cut at request limit\]\r?$", re.MULTILINE)
+CUT_SUFFIX = "\n\n[Mycel: source text cut at request limit]"
 PARAGRAPH_GAP = re.compile(r"\r?\n(?:[ \t]*\r?\n)+")
 JSON_FENCE = re.compile(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL)
 ATTEMPT_SECONDS = 270
@@ -126,23 +126,17 @@ def _source_spans(text: str, prefix: str, suffix: str) -> tuple[tuple[int, int],
     start, end = len(prefix), len(text) - len(suffix)
     if start >= end or not text.startswith(prefix) or not text.endswith(suffix):
         raise NarratorError("summary request does not match the prompt profile")
+    # Mycel fills the request limit before appending this reserved suffix
+    # inside the section window. Identical source text at that boundary is
+    # indistinguishable from the notice.
+    if len(text) == REQUEST_CHARACTERS and text.endswith(CUT_SUFFIX, start, end):
+        end -= len(CUT_SUFFIX)
     place_end = text.find("\n", start, end)
     if place_end < 0 or SECTION_PLACE.fullmatch(text, start, place_end) is None:
         raise NarratorError("summary request has no admitted document section")
-
-    # The template identifies the source window. The renderer's horizontal
-    # rule is unescaped and cannot distinguish structure from document prose.
-    spans: list[tuple[int, int]] = []
-    cursor = start
-    for cut in CUT_LINE.finditer(text, start, end):
-        if cursor < cut.start():
-            spans.append((cursor, cut.start()))
-        cursor = cut.end()
-    if cursor < end:
-        spans.append((cursor, end))
-    if not any(text[max(begin, place_end + 1):stop].strip() for begin, stop in spans):
+    if not text[place_end + 1:end].strip():
         raise NarratorError("summary request has no admitted document text")
-    return tuple(spans)
+    return ((start, end),)
 
 
 def _passages(text: str, spans: tuple[tuple[int, int], ...], digest: str) -> tuple[Passage, ...]:
