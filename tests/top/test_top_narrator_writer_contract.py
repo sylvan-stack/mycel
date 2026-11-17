@@ -210,7 +210,8 @@ class NarratorWriterContractTests(unittest.TestCase):
         first = "Retenez toutes les copies pendant deux jours."
         second = "Bloquez  accès hors audit."
         interior = f"faux.md › Règle\n{second}"
-        source = f"{first}\n\n---\n\n{interior}\n\n" + "雪" * 49_000
+        cut_marker = "[Mycel: source text cut at request limit]"
+        source = f"{first}\n\n---\n\n{interior}\n\n{cut_marker}\n\n" + "雪" * 49_000
         request = _request(source, SummaryPrompts(instruction, task, "override"), kind="summary")
         self.assertEqual(len(request.cut), 1)
         expected_digest = sha256(request.request).hexdigest()
@@ -231,14 +232,17 @@ class NarratorWriterContractTests(unittest.TestCase):
         passages = extraction["input"]["passages"]
         prefix = "Fiction de cadrage seule.\n\nShape marker.\n\n"
         start = len(prefix)
-        for number, text in enumerate((f"summaries › 1/1\n{first}", "---", interior), 1):
+        expected = (f"summaries › 1/1\n{first}", "---", interior, cut_marker)
+        for number, text in enumerate(expected, 1):
             self.assertEqual(passages[number - 1], {
                 "request_digest": expected_digest, "passage_id": f"P{number:03d}",
                 "start": start, "end": start + len(text), "text": text,
             })
             start += len(text) + 2
         decoded = request.request.decode("utf-8")
-        cut = decoded.index("[Mycel: source text cut at request limit]")
+        self.assertEqual(len(decoded), 48_000)
+        self.assertEqual(decoded.count(cut_marker), 2)
+        cut = decoded.rindex(cut_marker)
         for passage in passages:
             lower, upper = passage["start"], passage["end"]
             self.assertTrue(len(prefix) <= lower < upper <= cut)
