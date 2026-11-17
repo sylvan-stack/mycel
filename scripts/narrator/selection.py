@@ -27,8 +27,14 @@ extra details. Give equally consequential units the same rank.
 Compare related units using their cited evidence. Mark a pair equivalent only when
 substituting either unit for the other would lead to the same decision under the
 same scope, prerequisites, conditions, status and authority. Use matching scope
-and condition descriptions for equivalent units. Optional candidate neighbors are
-suggestions for what to compare and carry no weight for equivalence or priority.
+and condition descriptions for equivalent units. For a non-equivalent pair, mark
+one side as optional detail only when the other side already governs its case
+with the same operative effect, prerequisites, conditions, status and authority.
+Use matching condition descriptions for such a pair. Detail may cover a subset
+of the governing rule's scope. Keep exceptions, changed outcomes, conflicting
+authority, superseded rules and unresolved conditions distinct. Optional
+candidate neighbors suggest what to compare and carry no weight for equivalence
+or priority.
 
 Return only a JSON object with arrays `units` and `comparisons`. Each unit has a
 unique nonempty string `unit_id`, integer `revision` equal to 1, exact `prose`,
@@ -36,8 +42,11 @@ nonempty string `scope`, string array `conditions`, string arrays
 `originating_candidate_ids` and `cited_passage_ids`, and integer `consequence_rank`.
 Each comparison has `left` and `right` objects with `unit_id` and `revision`, a
 boolean `equivalent`, and a short nonempty `reason`. Include each pair you establish
-as equivalent and any closely related pair whose distinction matters. An absent
-comparison leaves the units separate.
+as equivalent and any closely related pair whose distinction matters. For a
+non-equivalent pair with optional detail, add `detail` equal to `left` or `right`
+to identify the side that adds detail and explain its relation to the covering
+rule in `reason`. Omit `detail` in all other comparisons. An absent comparison
+leaves the units separate.
 """
 
 
@@ -60,6 +69,8 @@ def _comparison_keys(comparison: Record) -> tuple[UnitKey, UnitKey]:
         raise ValueError("A comparison requires two unit keys")
     if type(equivalent) is not bool or not isinstance(reason, str) or not reason.strip():
         raise ValueError("A comparison requires an equivalence decision and reason")
+    if "detail" in comparison and (equivalent or comparison["detail"] not in ("left", "right")):
+        raise ValueError("Optional detail requires a direction on a non-equivalent comparison")
     return _unit_key(left), _unit_key(right)
 
 
