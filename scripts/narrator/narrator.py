@@ -810,7 +810,14 @@ def _run_writer(
         try:
             summary = _run_arm(options, mode, request, candidates, meter, trace)
             output = _summary_bytes(summary, options.source_characters)
-            arm.update({"outcome": "complete", "summary": summary})
+            summary_characters = len(summary)
+            arm.update({
+                "outcome": "complete",
+                "summary": summary,
+                "source_characters": options.source_characters,
+                "summary_characters": summary_characters,
+                "summary_to_source_ratio": summary_characters / options.source_characters,
+            })
         except NarratorError as failure:
             arm["failure"] = str(failure)
             if not compare:
