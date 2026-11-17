@@ -147,14 +147,54 @@ def _unit_key(record: object) -> _UnitKey | None:
     return unit_id, revision
 
 
-def _disposition(key: _UnitKey, outcome: str, reason: str) -> _Record:
+def _disposition(key: _UnitKey, outcome: str, reason: str, *, stage: str = "verification") -> _Record:
     return {
         "unit_id": key[0],
         "revision": key[1],
-        "stage": "verification",
+        "stage": stage,
         "outcome": outcome,
         "reason": reason,
     }
+
+
+def _repair_disposition(
+    key: _UnitKey, outcome: str, reason: str, *, previous_revision: int | None = None
+) -> _Record:
+    disposition = _disposition(key, outcome, reason, stage="repair")
+    if previous_revision is not None:
+        disposition["previous_revision"] = previous_revision
+    return disposition
+
+
+def _resolve_citations(
+    cited_ids: list[object], passages: Mapping[str, _Passage]
+) -> tuple[list[str], list[tuple[int, object]]]:
+    surviving_ids: list[str] = []
+    invalid_citations: list[tuple[int, object]] = []
+    for position, passage_id in enumerate(cited_ids, start=1):
+        if isinstance(passage_id, str) and passage_id in passages:
+            surviving_ids.append(passage_id)
+        else:
+            invalid_citations.append((position, passage_id))
+    return surviving_ids, invalid_citations
+
+
+def _citation_dispositions(
+    key: _UnitKey,
+    previous_revision: int,
+    invalid_citations: list[tuple[int, object]],
+    *,
+    stage: str = "verification",
+) -> list[_Record]:
+    dispositions: list[_Record] = []
+    for position, passage_id in invalid_citations:
+        excluded = _disposition(key, "invalid_citation", "citation does not resolve", stage=stage)
+        excluded["previous_revision"] = previous_revision
+        excluded["citation_position"] = position
+        if isinstance(passage_id, str):
+            excluded["passage_id"] = passage_id
+        dispositions.append(excluded)
+    return dispositions
 
 
 def _normalize_units(
@@ -176,23 +216,10 @@ def _normalize_units(
         cited_ids = unit.get("cited_passage_ids")
         if not isinstance(cited_ids, list):
             raise ValueError("verification needs a list of cited passage IDs")
-        surviving_ids = []
-        invalid_citations = []
-        for position, passage_id in enumerate(cited_ids, start=1):
-            if isinstance(passage_id, str) and passage_id in passages:
-                surviving_ids.append(passage_id)
-            else:
-                invalid_citations.append((position, passage_id))
-
+        surviving_ids, invalid_citations = _resolve_citations(cited_ids, passages)
         revision = previous_revision + 1 if invalid_citations else previous_revision
         current_key = (unit_id, revision)
-        for position, passage_id in invalid_citations:
-            excluded = _disposition(current_key, "invalid_citation", "citation does not resolve")
-            excluded["previous_revision"] = previous_revision
-            excluded["citation_position"] = position
-            if isinstance(passage_id, str):
-                excluded["passage_id"] = passage_id
-            dispositions.append(excluded)
+        dispositions.extend(_citation_dispositions(current_key, previous_revision, invalid_citations))
 
         if surviving_ids:
             checked.append({**unit, "revision": revision, "cited_passage_ids": surviving_ids})
@@ -210,6 +237,17 @@ def _normalize_units(
     return checked, verdicts, dispositions
 
 
+def _unit_text(unit: Mapping[str, object]) -> tuple[str, str, list[str]]:
+    prose, scope, conditions = unit.get("prose"), unit.get("scope"), unit.get("conditions")
+    if not isinstance(prose, str) or not prose.strip():
+        raise ValueError("verification needs nonempty unit prose")
+    if not isinstance(scope, str) or not scope.strip():
+        raise ValueError("verification needs a nonempty unit scope")
+    if not isinstance(conditions, list) or any(not isinstance(item, str) for item in conditions):
+        raise ValueError("verification needs a list of unit conditions")
+    return prose, scope, conditions
+
+
 def _verification_payload(
     checked_units: Sequence[_Record],
     passages: Mapping[str, _Passage],
@@ -217,15 +255,9 @@ def _verification_payload(
 ) -> _Record:
     units: list[_Record] = []
     for unit in checked_units:
-        prose, scope, conditions = unit.get("prose"), unit.get("scope"), unit.get("conditions")
+        prose, scope, conditions = _unit_text(unit)
         cited_ids = unit["cited_passage_ids"]
         assert isinstance(cited_ids, list)
-        if not isinstance(prose, str) or not prose.strip():
-            raise ValueError("verification needs nonempty unit prose")
-        if not isinstance(scope, str) or not scope.strip():
-            raise ValueError("verification needs a nonempty unit scope")
-        if not isinstance(conditions, list) or any(not isinstance(item, str) for item in conditions):
-            raise ValueError("verification needs a list of unit conditions")
 
         units.append({
             "unit_id": unit["unit_id"],
@@ -338,6 +370,31 @@ def _read_verdict(
     return verdict
 
 
+def _units_by_key(units: Sequence[_Record]) -> dict[_UnitKey, _Record]:
+    indexed: dict[_UnitKey, _Record] = {}
+    for unit in units:
+        key = _unit_key(unit)
+        assert key is not None
+        indexed[key] = unit
+    return indexed
+
+
+def _matching_rows(
+    rows: list[object], expected: Mapping[_UnitKey, _Record]
+) -> tuple[dict[_UnitKey, Mapping[str, object]], set[_UnitKey]]:
+    matching: dict[_UnitKey, Mapping[str, object]] = {}
+    duplicates: set[_UnitKey] = set()
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        key = _unit_key(row)
+        if key is not None and key in expected:
+            if key in matching:
+                duplicates.add(key)
+            matching[key] = row
+    return matching, duplicates
+
+
 def _read_verdicts(
     rows: object,
     checked_units: Sequence[_Record],
@@ -345,26 +402,14 @@ def _read_verdicts(
     *,
     assess_repair: bool,
 ) -> tuple[list[_Record], list[_Record]]:
-    expected: dict[_UnitKey, _Record] = {}
-    for unit in checked_units:
-        key = _unit_key(unit)
-        assert key is not None
-        expected[key] = unit
-
+    expected = _units_by_key(checked_units)
     if not isinstance(rows, list):
         return [], [
             _disposition(key, "invalid_verdict", "verification response must be an array")
             for key in expected
         ]
 
-    matching: dict[_UnitKey, Mapping[str, object]] = {}
-    duplicates: set[_UnitKey] = set()
-    for row in rows:
-        key = _unit_key(row)
-        if key is not None and key in expected:
-            if key in matching:
-                duplicates.add(key)
-            matching[key] = row
+    matching, duplicates = _matching_rows(rows, expected)
 
     verdicts: list[_Record] = []
     dispositions: list[_Record] = []
@@ -387,6 +432,77 @@ def _read_verdicts(
             assert isinstance(reason, str)
             dispositions.append(_disposition(key, "unsupported", reason))
     return verdicts, dispositions
+
+
+def _read_correction(
+    key: _UnitKey, unit: _Record, row: Mapping[str, object], passages: Mapping[str, _Passage]
+) -> tuple[_Record | None, list[_Record]]:
+    status = row.get("repair")
+    if status == "refused":
+        reason = row.get("reason")
+        if isinstance(reason, str) and reason.strip():
+            return None, [_repair_disposition(key, "repair_refused", reason)]
+
+    cited_ids = row.get("cited_passage_ids")
+    if status != "corrected" or not isinstance(cited_ids, list):
+        return None, [_repair_disposition(key, "invalid_repair", "malformed repair result")]
+
+    try:
+        prose, scope, conditions = _unit_text(row)
+    except ValueError as error:
+        return None, [_repair_disposition(key, "invalid_repair", str(error))]
+
+    cited_ids, invalid = _resolve_citations(cited_ids, passages)
+    unit_id, previous_revision = key
+    revised_key = (unit_id, previous_revision + 1)
+    dispositions = _citation_dispositions(revised_key, previous_revision, invalid, stage="repair")
+    problem = None
+    if not cited_ids:
+        problem = "no cited passage resolves to the request"
+    elif prose == unit["prose"] and cited_ids == unit["cited_passage_ids"]:
+        problem = "repair leaves the prose and resolved citations unchanged"
+
+    if problem is not None:
+        dispositions.append(_repair_disposition(
+            revised_key, "invalid_repair", problem, previous_revision=previous_revision
+        ))
+        return None, dispositions
+
+    return {
+        **unit,
+        "revision": revised_key[1],
+        "prose": prose,
+        "scope": scope,
+        "conditions": conditions.copy(),
+        "cited_passage_ids": cited_ids,
+    }, dispositions
+
+
+def _read_repairs(
+    rows: object, units: Sequence[_Record], passages: Mapping[str, _Passage]
+) -> tuple[list[_Record], list[_Record]]:
+    expected = _units_by_key(units)
+    if not isinstance(rows, list):
+        return [], [
+            _repair_disposition(key, "invalid_repair", "repair response must be an array")
+            for key in expected
+        ]
+
+    matching, duplicates = _matching_rows(rows, expected)
+    revisions: list[_Record] = []
+    dispositions: list[_Record] = []
+    for key, unit in expected.items():
+        if key in duplicates:
+            dispositions.append(_repair_disposition(key, "invalid_repair", "duplicate repair results"))
+            continue
+        if key not in matching:
+            dispositions.append(_repair_disposition(key, "missing_repair", "no repair for this revision"))
+            continue
+        revision, repair_dispositions = _read_correction(key, unit, matching[key], passages)
+        dispositions.extend(repair_dispositions)
+        if revision is not None:
+            revisions.append(revision)
+    return revisions, dispositions
 
 
 def verify_units(
