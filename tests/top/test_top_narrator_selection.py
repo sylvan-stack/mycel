@@ -186,3 +186,44 @@ class NarratorSelectionTests(unittest.TestCase):
         self.assertEqual(contractor_selected["originating_candidate_ids"], ["claim-contractor"])
         self.assertEqual([unit["scope"] for unit in current["selected_units"]],
                          ["lab samples", "lab samples"])
+
+    def test_oversized_member_leaves_room_for_distinct_rule_and_shorter_equivalent(self):
+        passages = _passages(
+            "Keep the laboratory samples for thirty days.",
+            "Seal bags before transport.",
+        )
+        candidates, (shorter, transport, oversized) = zip(
+            _proposal("shorter", "Retain  samples\tfor thirty days.", 1, ("p1",)),
+            _proposal("transport", "Seal\tbags  before transport.", 2, ("p2",),
+                      conditions=("transport",)),
+            _proposal("oversized", "The rule requires that the laboratory samples be held for thirty days.",
+                      3, ("p1",)),
+        )
+        units = [shorter, transport, oversized]
+        grouped = selection.select_distinct_units(
+            units, candidates, passages, [_comparison(oversized, shorter)]
+        )
+        verdicts = [_supported(unit) for unit in units]
+        exact = selection.assemble_summary(grouped["groups"], verdicts, passages, word_cap=9)
+        self.assertEqual([unit["unit_id"] for unit in exact["selected_units"]],
+                         ["transport", "shorter"])
+        self.assertEqual(exact["summary"],
+                         "Seal\tbags  before transport.\nRetain  samples\tfor thirty days.")
+        self.assertEqual(exact["word_count"], 9)
+        skip, = [item for item in exact["dispositions"] if item["outcome"] == "skipped_for_budget"]
+        self.assertEqual(_key(skip), {"unit_id": "oversized", "revision": 1})
+        self.assertEqual((skip["required_words"], skip["remaining_words"]), (12, 9))
+
+        no_fit = selection.assemble_summary(grouped["groups"], verdicts, passages, word_cap=3)
+        self.assertIsNone(no_fit["summary"])
+        self.assertEqual(no_fit["word_count"], 0)
+        self.assertEqual(no_fit["selected_units"], [])
+        self.assertEqual([
+            (item["unit_id"], item["revision"], item["outcome"],
+             item["required_words"], item["remaining_words"])
+            for item in no_fit["dispositions"]
+        ], [
+            ("oversized", 1, "skipped_for_budget", 12, 3),
+            ("transport", 1, "skipped_for_budget", 4, 3),
+            ("shorter", 1, "skipped_for_budget", 5, 3),
+        ])
