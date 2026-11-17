@@ -37,6 +37,34 @@ def verdict(unit_id, revision, evidence, *, affected_part=None, reason=None):
     }
 
 
+def source_request(sections):
+    request = "\n".join(sections.values())
+    digest = sha256(request.encode("utf-8")).hexdigest()
+    passages = []
+    for passage_id, text in sections.items():
+        start = request.index(text)
+        passages.append({
+            "request_digest": digest, "passage_id": passage_id,
+            "start": start, "end": start + len(text), "text": text,
+        })
+    return request, digest, [(0, len(request))], passages
+
+
+def eligible(rejection, consequence, correction_passage_ids):
+    return dict(rejection, repair_eligibility={
+        "omission_consequence": consequence,
+        "correction_passage_ids": correction_passage_ids,
+    })
+
+
+def correction(unit_id, revision, prose, cited_ids, *, conditions=()):
+    return {
+        "unit_id": unit_id, "revision": revision, "repair": "corrected",
+        "prose": prose, "scope": "restore hold", "conditions": list(conditions),
+        "cited_passage_ids": list(cited_ids),
+    }
+
+
 class NarratorVerificationTests(unittest.TestCase):
     def test_exact_nonadjacent_passages_require_a_current_verdict(self):
         request = "Objet: épreuve\nRule: hold.\nGap\nException: audit.\nOutro"
@@ -92,3 +120,92 @@ class NarratorVerificationTests(unittest.TestCase):
                     self.assertIn(("hold", 4, "missing_verdict"), exclusions)
                 else:
                     self.assertEqual(supported, [verdict("hold", 4, ["rule", "exception"])])
+
+    def test_repair_handoff_contains_only_fresh_supported_revisions(self):
+        request = source_request({
+            "approval": "Approved correction can lift the restore hold 24 hours after approval.",
+            "audit": "That correction applies only to a generated child with a complete audit record.",
+            "override": "A manual override expires 48 hours after issue unless a recorded extension applies.",
+            "logging": "Operators log every override.",
+            "causality": "Shorter holds coincided with fewer retries. The cause remains unresolved.",
+        })
+        original = unit("logging", "Operators log every override.", ["logging"], revision=2)
+        overclaim = unit("correction", "Only correction lifts the hold 24 hours after ingestion.", ["approval"])
+        override = unit("override", "Manual overrides never expire.", ["override"])
+        causal = unit("causal", "Shorter holds caused fewer retries.", ["causality"])
+        correction_rejection = eligible(
+            verdict("correction", 1, ["approval", "audit"],
+                    affected_part="Only correction lifts the hold 24 hours after ingestion",
+                    reason="The source permits correction without making it exclusive and starts the clock at approval."),
+            "An operator might lift a hold too early or deny another authorized path.", ["approval", "audit"],
+        )
+        override_rejection = eligible(
+            verdict("override", 1, ["override"], affected_part="never expire",
+                    reason="Manual overrides expire unless a recorded extension applies."),
+            "An operator might rely on an expired override.", ["override"],
+        )
+        causal_rejection = verdict(
+            "causal", 1, ["causality"], affected_part="caused", reason="The causal claim is unresolved.",
+        )
+        original_support = verdict("logging", 2, ["logging"])
+        initial = verification.verify_units(
+            *request, [original, overclaim, override, causal], assess_repair=True,
+            judge=lambda _instructions, _payload: [
+                original_support, correction_rejection, override_rejection, causal_rejection,
+            ],
+        )
+
+        repaired_prose = (
+            "An approved correction can lift the restore hold 24 hours after approval "
+            "for a generated child with a complete audit record."
+        )
+        conditions = ["generated child", "complete audit record", "24 hours after approval"]
+        incomplete_prose = "A manual override expires 48 hours after issue."
+        fresh_support = verdict("correction", 2, ["approval", "audit"])
+        fresh_rejection = verdict(
+            "override", 2, ["override"], affected_part="expires 48 hours after issue",
+            reason="The prose omits the recorded-extension exception.",
+        )
+        calls = []
+
+        def admit():
+            calls.append("admit")
+            return True
+
+        def repair(_instructions, payload):
+            calls.append("repair")
+            self.assertEqual(payload["rejections"], [correction_rejection, override_rejection])
+            self.assertEqual([row["unit_id"] for row in payload["units"]], ["correction", "override"])
+            return [
+                correction("correction", 1, repaired_prose, ["approval", "audit"], conditions=conditions),
+                correction("override", 1, incomplete_prose, ["override"]),
+            ]
+
+        def recheck(_instructions, payload):
+            calls.append("recheck")
+            self.assertEqual([
+                (row["unit_id"], row["revision"], row["prose"], row["conditions"], row["cited_passage_ids"])
+                for row in payload["units"]
+            ], [
+                ("correction", 2, repaired_prose, conditions, ["approval", "audit"]),
+                ("override", 2, incomplete_prose, [], ["override"]),
+            ])
+            return [fresh_support, fresh_rejection, verdict("override", 1, ["override"])]
+
+        supported, verdicts, dispositions = verification.repair_units(
+            *request, initial, admit=admit, repair=repair, recheck=recheck,
+        )
+
+        self.assertEqual(calls, ["admit", "repair", "recheck"])
+        self.assertEqual(supported, [original, dict(
+            overclaim, revision=2, prose=repaired_prose, conditions=conditions,
+            cited_passage_ids=["approval", "audit"],
+        )])
+        self.assertEqual(verdicts, [
+            original_support, correction_rejection, override_rejection, causal_rejection,
+            fresh_support, fresh_rejection,
+        ])
+        self.assertEqual([
+            (row["unit_id"], row["revision"], row["outcome"], row["previous_revision"])
+            for row in dispositions if row["stage"] == "repair"
+        ], [("correction", 2, "repaired", 1), ("override", 2, "repair_unsupported", 1)])
