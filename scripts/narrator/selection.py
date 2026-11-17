@@ -349,3 +349,46 @@ def _rank_supported_members(
 
     ranked.sort(key=lambda row: row[0])
     return [(group_index, unit) for _, group_index, unit in ranked]
+
+
+def _allocate_words(
+    ranked: Sequence[tuple[int, Record]], word_cap: int
+) -> tuple[list[Record], list[Record]]:
+    if type(word_cap) is not int or word_cap < 0:
+        raise ValueError("Summary word cap must be a nonnegative integer")
+
+    selected: list[Record] = []
+    dispositions: list[Record] = []
+    representatives: dict[int, UnitKey] = {}
+    remaining_words = word_cap
+    for group_index, unit in ranked:
+        key = _unit_key(unit)
+        representative = representatives.get(group_index)
+        if representative is not None:
+            disposition = _disposition(
+                key, "equivalent_not_selected", "An equivalent revision was selected"
+            )
+            representative_id, representative_revision = representative
+            disposition["representative_unit_id"] = representative_id
+            disposition["representative_revision"] = representative_revision
+            dispositions.append(disposition)
+            continue
+
+        required_words = len(unit["prose"].split())
+        if not required_words:
+            raise ValueError("An admitted summary unit requires nonempty prose")
+        if required_words > remaining_words:
+            disposition = _disposition(
+                key, "skipped_for_budget", "The whole unit exceeds the remaining word budget"
+            )
+            disposition["required_words"] = required_words
+            disposition["remaining_words"] = remaining_words
+            dispositions.append(disposition)
+            continue
+
+        selected.append(unit)
+        representatives[group_index] = key
+        remaining_words -= required_words
+        dispositions.append(_disposition(key, "selected", "The whole verified unit fit"))
+
+    return selected, dispositions
