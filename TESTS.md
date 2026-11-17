@@ -8,12 +8,15 @@ Reviewed revision: `560e2e2b1623066240ebd128bfa1e552f0a4f25f` under SYL-327 (29 
 
 ## Selection and limits
 
-28 top-tier inventory entries and 135 mid-tier entries are available. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Retained mid-tier sources remain uncommented.
+31 top-tier inventory entries and 135 mid-tier entries are available. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Retained mid-tier sources remain uncommented.
 
 ## Active top tier
 
 | Exact selector or program | Why this case earns a place |
 | --- | --- |
+| [`test_top_narrator_selection.NarratorSelectionTests.test_supported_regrouping_preserves_late_exception`](tests/top/test_top_narrator_selection.py#L80) | Grouping before filtering an unsupported proposal can put supported equivalents in separate groups and use the exception's words on a duplicate rule. Regrouping restores the exception. An earlier equivalence judgment cannot merge a freshly verified revision. |
+| [`test_top_narrator_selection.NarratorSelectionTests.test_authority_and_exact_evidence_survive_selection`](tests/top/test_top_narrator_selection.py#L143) | A misleading comparison must preserve contradictory units from different authorities. The check observes nonadjacent evidence references and shows that an unresolved citation or a verdict for an earlier revision cannot authorize output. |
+| [`test_top_narrator_selection.NarratorSelectionTests.test_oversized_member_leaves_room_for_distinct_rule_and_shorter_equivalent`](tests/top/test_top_narrator_selection.py#L190) | An oversized preferred unit leaves room for an intervening distinct rule and its own shorter equivalent. Exact-cap prose preserves internal whitespace, and a cap below every complete unit keeps the budget exclusions. |
 | [`test_top_cue_cards.CueCardTests.test_compile_keeps_exact_cross_root_targets_and_reports_faults`](tests/top/test_top_cue_cards.py#L68) | A real multi-root scan and published catalog show innermost ownership, fault isolation, and exact cross-file targets and source metadata. Review regressions check declaration and text boundaries at paragraph, empty list and nested list fences, written headings and anchor IDs with unequal backticks or a quoted HTML attribute, exact targets under ATX and Setext list headings, and whole-file trailing whitespace. The list cases also distinguish a reference definition followed by a thematic break from a Setext heading and preserve a heading in the surviving outer item. The anchor also resolves a reference defined in the outer item after its nested item ends. |
 | [`test_top_cue_cards.CueCardTests.test_fatal_compile_leaves_previous_catalog_bytes`](tests/top/test_top_cue_cards.py#L344) | An unusable artifact root and a failed atomic replacement both leave the prior catalog byte-for-byte usable and clean up staging files. |
 | [`test_top_cue_cards.CueCardTests.test_match_uses_published_patterns_over_the_whole_message`](tests/top/test_top_cue_cards.py#L370) | The public matcher consumes the real catalog and distinguishes first appearance, fenced and multiline matches, plural suffixes, and false word-boundary matches. |

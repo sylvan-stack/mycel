@@ -6,7 +6,7 @@
   "counting": "Static definitions and separately labelled programs/scenario functions; not runtime-discovered cases.",
   "mid_review": "Individually reviewed against the raised mid-tier bar under SYL-327; source inspection only, no execution.",
   "counts": {
-    "python_active": 161,
+    "python_active": 164,
     "python_commented": 0,
     "programs_active": 2,
     "node_cases_commented": 0,
@@ -20,11 +20,56 @@
       "entrypoint": 1,
       "python": 133
     },
-    "top_available": 28,
+    "top_available": 31,
     "low_removed_SYL_327": 1653,
     "low_removed_total": 1679
   },
   "tests": [
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_narrator_selection.py",
+      "id": "tests/top/test_top_narrator_selection.py::NarratorSelectionTests.test_supported_regrouping_preserves_late_exception",
+      "name": "test_supported_regrouping_preserves_late_exception",
+      "class": "NarratorSelectionTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "Grouping before filtering an unsupported proposal can put supported equivalents in separate groups and use the exception's words on a duplicate rule. Regrouping restores the exception. An earlier equivalence judgment cannot merge a freshly verified revision.",
+      "review": "individual",
+      "line": 80,
+      "file_sha256": "7451a3241c3d72f1dd4aa8b8ecc5fa7b0ffa31b78810ba6688c4fd9d4fc04230",
+      "selector": "test_top_narrator_selection.NarratorSelectionTests.test_supported_regrouping_preserves_late_exception"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_narrator_selection.py",
+      "id": "tests/top/test_top_narrator_selection.py::NarratorSelectionTests.test_authority_and_exact_evidence_survive_selection",
+      "name": "test_authority_and_exact_evidence_survive_selection",
+      "class": "NarratorSelectionTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "A misleading comparison must preserve contradictory units from different authorities. The check observes nonadjacent evidence references and shows that an unresolved citation or a verdict for an earlier revision cannot authorize output.",
+      "review": "individual",
+      "line": 143,
+      "file_sha256": "7451a3241c3d72f1dd4aa8b8ecc5fa7b0ffa31b78810ba6688c4fd9d4fc04230",
+      "selector": "test_top_narrator_selection.NarratorSelectionTests.test_authority_and_exact_evidence_survive_selection"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_narrator_selection.py",
+      "id": "tests/top/test_top_narrator_selection.py::NarratorSelectionTests.test_oversized_member_leaves_room_for_distinct_rule_and_shorter_equivalent",
+      "name": "test_oversized_member_leaves_room_for_distinct_rule_and_shorter_equivalent",
+      "class": "NarratorSelectionTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "An oversized preferred unit leaves room for an intervening distinct rule and its own shorter equivalent. Exact-cap prose preserves internal whitespace, and a cap below every complete unit keeps the budget exclusions.",
+      "review": "individual",
+      "line": 190,
+      "file_sha256": "7451a3241c3d72f1dd4aa8b8ecc5fa7b0ffa31b78810ba6688c4fd9d4fc04230",
+      "selector": "test_top_narrator_selection.NarratorSelectionTests.test_oversized_member_leaves_room_for_distinct_rule_and_shorter_equivalent"
+    },
     {
       "repo": "mycel",
       "file": "tests/top/test_top_narrator_verification.py",
