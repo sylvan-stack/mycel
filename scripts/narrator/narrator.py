@@ -12,9 +12,17 @@ import re
 import selectors
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 from typing import BinaryIO, TypedDict
+
+if __package__:
+    from . import selection, verification
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import selection
+    import verification
 
 
 REQUEST_CHARACTERS = 48_000
@@ -320,12 +328,21 @@ def _run_command(
         raise NarratorError("configured command could not exchange data") from None
 
 
+def _finite_number(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("non-finite JSON number")
+    return number
+
+
 def _json_value(data: bytes | str) -> object:
     try:
         text = data.decode("utf-8") if isinstance(data, bytes) else data
         text = text.strip()
         fenced = JSON_FENCE.fullmatch(text)
-        return json.loads(fenced[1] if fenced else text)
+        return json.loads(
+            fenced[1] if fenced else text, parse_float=_finite_number, parse_constant=_finite_number
+        )
     except (ValueError, RecursionError):
         raise FormatError("command response is not valid JSON") from None
 
@@ -544,3 +561,64 @@ def similarity_hints(
 
     claims = json.dumps([candidate["claim"] for candidate in candidates]).encode("utf-8")
     return meter.call(argv, claims, "embedding", validate, embedding=True)
+
+
+def _array_reply(value: object) -> list[object]:
+    if not isinstance(value, list):
+        raise ValueError("expected an array response")
+    return value
+
+
+def summarize_arm(
+    request: Request, candidates: list[Candidate], meter: Meter, argv: tuple[str, ...],
+    trace: dict[str, object], *, word_cap: int, candidate_neighbors: list[tuple[str, str]],
+) -> str:
+    """Turn one set of candidates into a summary of exact supported revisions."""
+    instructions, payload = selection.consolidation_request(
+        candidates, request.passages, candidate_neighbors=candidate_neighbors,
+    )
+    proposed, comparisons = meter.text(
+        argv, "consolidation", instructions, payload,
+        lambda value: selection.parse_consolidation_response(value, candidates), retry=True,
+    )
+    trace["proposed_units"] = proposed
+    trace["comparisons"] = comparisons
+
+    def judge(prompt: str, data: dict[str, object]) -> list[object]:
+        return meter.text(argv, "verification", prompt, data, _array_reply, retry=True)
+
+    evidence = (request.text, request.digest, request.source_spans, request.passages)
+    initial = verification.verify_units(*evidence, proposed, judge=judge, assess_repair=True)
+    trace["checked_units"], trace["initial_verdicts"], trace["initial_dispositions"] = initial
+
+    def optional_reply(stage: str, prompt: str, data: dict[str, object]) -> list[object]:
+        try:
+            return meter.text(argv, stage, prompt, data, _array_reply)
+        except BudgetExhausted:
+            raise verification.RepairBudgetExhausted from None
+        except NarratorError:
+            raise verification.RepairUnavailable from None
+
+    def repair(prompt: str, data: dict[str, object]) -> list[object]:
+        return optional_reply("repair", prompt, data)
+
+    def recheck(prompt: str, data: dict[str, object]) -> list[object]:
+        trace["revised_units"] = data["units"]
+        return optional_reply("fresh_verification", prompt, data)
+
+    current, verdicts, dispositions = verification.repair_units(
+        *evidence, initial, admit=meter.admit_repair, repair=repair, recheck=recheck,
+    )
+    trace["current_supported_units"] = current
+    trace["verdicts"] = verdicts
+    trace["verification_dispositions"] = dispositions
+    regrouped = selection.select_distinct_units(current, candidates, request.passages, comparisons)
+    trace["selection"] = regrouped
+    assembled = selection.assemble_summary(
+        regrouped["groups"], verdicts, request.passages, word_cap=word_cap,
+    )
+    trace["assembly"] = assembled
+    summary = assembled["summary"]
+    if not isinstance(summary, str) or not summary.strip():
+        raise NarratorError("no whole supported unit fits the word cap")
+    return summary
