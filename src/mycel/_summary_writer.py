@@ -74,21 +74,28 @@ class SummaryWriter:
 
     def write(self, request: bytes) -> WriterResult:
         self._validate_request(request)
-        return self._write(request, threading.Event())
+        return self._write(request, threading.Event(), None)
 
-    def write_many(self, requests: tuple[bytes, ...]) -> tuple[WriterResult, ...]:
+    def write_many(self, requests: tuple[bytes, ...], *,
+                   source_characters: tuple[int, ...] | None = None) -> tuple[WriterResult, ...]:
         if not isinstance(requests, tuple):
             raise MycelError("invalid_input", "Summary requests must be a tuple of bytes.")
         for request in requests:
             self._validate_request(request)
+        if source_characters is not None and (
+                not isinstance(source_characters, tuple) or len(source_characters) != len(requests)
+                or any(type(count) is not int or count < 0 for count in source_characters)):
+            raise MycelError("invalid_input", "Summary source lengths must match the requests.")
         if not requests:
             return ()
+        counts = source_characters if source_characters is not None else (None,) * len(requests)
         stopped = threading.Event()
         executor = ThreadPoolExecutor(max_workers=min(self.at_once, len(requests)),
                                       thread_name_prefix="mycel-summary")
         futures = []
         try:
-            futures = [executor.submit(self._write, request, stopped) for request in requests]
+            futures = [executor.submit(self._write, request, stopped, count)
+                       for request, count in zip(requests, counts, strict=True)]
             return tuple(future.result() for future in futures)
         except BaseException:
             stopped.set()
@@ -97,28 +104,30 @@ class SummaryWriter:
             with _defer_cleanup_signals():
                 executor.shutdown(wait=True, cancel_futures=True)
 
-    def _write(self, request: bytes, stopped: threading.Event) -> WriterResult:
+    def _write(self, request: bytes, stopped: threading.Event, source_characters: int | None) -> WriterResult:
         while not self._slots.acquire(timeout=_POLL_SECONDS):
             _check_stopped(stopped)
         try:
             for attempt in (1, 2):
                 _check_stopped(stopped)
-                response, reason = self._attempt(request, stopped)
+                response, reason = self._attempt(request, stopped, source_characters)
                 if reason is None:
                     return WriterResult(response, None, attempt)
             return WriterResult(None, reason, 2)
         finally:
             self._slots.release()
 
-    def _attempt(self, request: bytes, stopped: threading.Event) -> tuple[bytes | None, str | None]:
+    def _attempt(self, request: bytes, stopped: threading.Event,
+                 source_characters: int | None) -> tuple[bytes | None, str | None]:
         try:
             # A new directory belongs to this attempt alone, including retries.
             with tempfile.TemporaryDirectory(prefix="mycel-summary-") as directory:
-                return self._run(request, stopped, directory)
+                return self._run(request, stopped, directory, source_characters)
         except OSError:
             return None, "io_failure"
 
-    def _run(self, request: bytes, stopped: threading.Event, directory: str) -> tuple[bytes | None, str | None]:
+    def _run(self, request: bytes, stopped: threading.Event, directory: str,
+             source_characters: int | None) -> tuple[bytes | None, str | None]:
         _check_stopped(stopped)
         deadline = time.monotonic() + self._timeout
         try:
@@ -131,8 +140,10 @@ class SummaryWriter:
         if self._before_launch is not None:
             self._before_launch()
         try:
-            process = subprocess.Popen(command, shell=False, cwd=directory,
-                                       env=safe_child_environment(home, Path(directory)),
+            environment = safe_child_environment(home, Path(directory))
+            if source_characters is not None:
+                environment["MYCEL_SUMMARY_SOURCE_CHARACTERS"] = str(source_characters)
+            process = subprocess.Popen(command, shell=False, cwd=directory, env=environment,
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE, bufsize=0, close_fds=True,
                                        start_new_session=True)

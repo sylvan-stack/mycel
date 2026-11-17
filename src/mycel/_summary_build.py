@@ -151,7 +151,8 @@ def build_summary_tree(connection, settings, repository, identity, *, activity=N
             if writer is None:
                 writer = SummaryWriter(command, settings.values["summaries"]["at_once"],
                                        before_launch=configuration)
-            results = writer.write_many(tuple(request.request for request in requests))
+            results = writer.write_many(tuple(request.request for request in requests),
+                                        source_characters=tuple(request.source_characters for request in requests))
             if len(results) != len(requests):
                 raise MycelError("internal", "The summary writer returned an incomplete level.")
             pending = []

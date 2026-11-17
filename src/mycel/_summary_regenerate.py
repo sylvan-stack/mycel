@@ -192,7 +192,7 @@ def regenerate_summary_set(connection, settings, repository, identity, *, activi
                 configuration()
                 if writer is None:
                     writer = SummaryWriter(command, settings.values["summaries"]["at_once"], before_launch=configuration)
-                results = writer.write_many((request.request,))
+                results = writer.write_many((request.request,), source_characters=(request.source_characters,))
                 if len(results) != 1:
                     raise MycelError("internal", "The summary writer returned an incomplete regeneration.")
                 result, = results
