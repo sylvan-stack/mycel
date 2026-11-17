@@ -8,12 +8,15 @@ Reviewed revision: `560e2e2b1623066240ebd128bfa1e552f0a4f25f` under SYL-327 (29 
 
 ## Selection and limits
 
-32 top-tier inventory entries and 135 mid-tier entries are available. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Retained mid-tier sources remain uncommented.
+35 top-tier inventory entries and 135 mid-tier entries are available. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Retained mid-tier sources remain uncommented.
 
 ## Active top tier
 
 | Exact selector or program | Why this case earns a place |
 | --- | --- |
+| [`test_top_narrator_writer_contract.NarratorWriterContractTests.test_framed_request_emits_only_whole_verified_units`](tests/top/test_top_narrator_writer_contract.py#L205) | A rendered Unicode child request puts a literal cut marker inside source and the real notice at the boundary. Through the real launcher, framing stays out of evidence and an oversized unit leaves the exact supported prose at the cap. |
+| [`test_top_narrator_writer_contract.NarratorWriterContractTests.test_invalid_verifier_output_fails_both_writer_attempts_safely`](tests/top/test_top_narrator_writer_contract.py#L253) | Malformed verification and its format retry fail across both real Mycel attempts. Child traces reveal excess launches, changed request identity, unsupported prose or exposed diagnostics. |
+| [`test_top_narrator_writer_contract.NarratorWriterContractTests.test_failed_similarity_preserves_the_isolated_reasoned_arm`](tests/top/test_top_narrator_writer_contract.py#L286) | A failed embedding leaves a repaired reasoned summary and exact call counts. Nested local credential processes with inherited pipes stop on completion and an outer deadline. |
 | [`test_top_narrator_selection.NarratorSelectionTests.test_supported_regrouping_preserves_late_exception`](tests/top/test_top_narrator_selection.py#L80) | Grouping before filtering an unsupported proposal can put supported equivalents in separate groups and use the exception's words on a duplicate rule. Regrouping restores the exception. An earlier equivalence judgment cannot merge a freshly verified revision. |
 | [`test_top_narrator_selection.NarratorSelectionTests.test_authority_and_exact_evidence_survive_selection`](tests/top/test_top_narrator_selection.py#L143) | A misleading comparison must preserve contradictory units from different authorities. The check observes nonadjacent evidence references and shows that an unresolved citation or a verdict for an earlier revision cannot authorize output. |
 | [`test_top_narrator_selection.NarratorSelectionTests.test_oversized_member_leaves_room_for_distinct_rule_and_shorter_equivalent`](tests/top/test_top_narrator_selection.py#L190) | An oversized preferred unit leaves room for an intervening distinct rule and its own shorter equivalent. Exact-cap prose preserves internal whitespace, and a cap below every complete unit keeps the budget exclusions. |

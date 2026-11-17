@@ -6,7 +6,7 @@
   "counting": "Static definitions and separately labelled programs/scenario functions; not runtime-discovered cases.",
   "mid_review": "Individually reviewed against the raised mid-tier bar under SYL-327; source inspection only, no execution.",
   "counts": {
-    "python_active": 165,
+    "python_active": 168,
     "python_commented": 0,
     "programs_active": 2,
     "node_cases_commented": 0,
@@ -20,11 +20,56 @@
       "entrypoint": 1,
       "python": 133
     },
-    "top_available": 32,
+    "top_available": 35,
     "low_removed_SYL_327": 1653,
     "low_removed_total": 1679
   },
   "tests": [
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_narrator_writer_contract.py",
+      "id": "tests/top/test_top_narrator_writer_contract.py::NarratorWriterContractTests.test_framed_request_emits_only_whole_verified_units",
+      "name": "test_framed_request_emits_only_whole_verified_units",
+      "class": "NarratorWriterContractTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "A rendered Unicode child request puts a literal cut marker inside source and the real notice at the boundary. Through the real launcher, framing stays out of evidence and an oversized unit leaves the exact supported prose at the cap.",
+      "review": "individual",
+      "line": 205,
+      "file_sha256": "a4c4ca1af3d52f0a2bfc2ea9b924d6c04bc09b22a0b7e4e211660bf7a0419346",
+      "selector": "test_top_narrator_writer_contract.NarratorWriterContractTests.test_framed_request_emits_only_whole_verified_units"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_narrator_writer_contract.py",
+      "id": "tests/top/test_top_narrator_writer_contract.py::NarratorWriterContractTests.test_invalid_verifier_output_fails_both_writer_attempts_safely",
+      "name": "test_invalid_verifier_output_fails_both_writer_attempts_safely",
+      "class": "NarratorWriterContractTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "Malformed verification and its format retry fail across both real Mycel attempts. Child traces reveal excess launches, changed request identity, unsupported prose or exposed diagnostics.",
+      "review": "individual",
+      "line": 253,
+      "file_sha256": "a4c4ca1af3d52f0a2bfc2ea9b924d6c04bc09b22a0b7e4e211660bf7a0419346",
+      "selector": "test_top_narrator_writer_contract.NarratorWriterContractTests.test_invalid_verifier_output_fails_both_writer_attempts_safely"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_narrator_writer_contract.py",
+      "id": "tests/top/test_top_narrator_writer_contract.py::NarratorWriterContractTests.test_failed_similarity_preserves_the_isolated_reasoned_arm",
+      "name": "test_failed_similarity_preserves_the_isolated_reasoned_arm",
+      "class": "NarratorWriterContractTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "A failed embedding leaves a repaired reasoned summary and exact call counts. Nested local credential processes with inherited pipes stop on completion and an outer deadline.",
+      "review": "individual",
+      "line": 286,
+      "file_sha256": "a4c4ca1af3d52f0a2bfc2ea9b924d6c04bc09b22a0b7e4e211660bf7a0419346",
+      "selector": "test_top_narrator_writer_contract.NarratorWriterContractTests.test_failed_similarity_preserves_the_isolated_reasoned_arm"
+    },
     {
       "repo": "mycel",
       "file": "tests/top/test_top_narrator_selection.py",
