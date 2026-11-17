@@ -417,6 +417,43 @@ def _rank_supported_members(
     return [(group_index, unit) for _, group_index, unit in ranked]
 
 
+def _prioritize_details(
+    ranked: Sequence[tuple[int, Record]], groups: Sequence[Record]
+) -> tuple[list[tuple[int, Record]], list[Record]]:
+    eligible_groups = {_unit_key(unit): index for index, unit in ranked}
+    links: dict[UnitKey, list[tuple[UnitKey, str]]] = {}
+    for group_index, group in enumerate(groups):
+        for link in group.get("detail_links", ()):
+            detail = _unit_key(link["detail"])
+            covering = _unit_key(link["covering"])
+            if eligible_groups.get(detail) != group_index or covering not in eligible_groups:
+                continue
+            if eligible_groups[covering] == group_index:
+                continue
+            links.setdefault(detail, []).append((covering, link["reason"]))
+
+    # Use the same eligible sources throughout so neither chains nor cycles
+    # acquire a covering rule as a side effect of traversal or allocation.
+    eligible_detail_sources = set(links)
+    ordinary: list[tuple[int, Record]] = []
+    deferred: list[tuple[int, Record]] = []
+    dispositions = []
+    for entry in ranked:
+        detail = _unit_key(entry[1])
+        usable_link = min(
+            ((covering, reason) for covering, reason in links.get(detail, ())
+             if covering not in eligible_detail_sources),
+            default=None,
+        )
+        if usable_link is None:
+            ordinary.append(entry)
+            continue
+        covering, reason = usable_link
+        deferred.append(entry)
+        dispositions.append(_detail_disposition(detail, covering, "deferred_detail", reason))
+    return ordinary + deferred, dispositions
+
+
 def _allocate_words(
     ranked: Sequence[tuple[int, Record]], word_cap: int
 ) -> tuple[list[Record], list[Record]]:
@@ -467,17 +504,18 @@ def assemble_summary(
     *,
     word_cap: int,
 ) -> Record:
-    """Assemble whole supported revisions within the word cap.
+    """Assemble whole supported revisions, giving distinct rules the first opportunity.
 
     Pass groups recomputed over the current supported revisions, alongside the
     validated verdicts and passages for the same request.
     """
     ranked = _rank_supported_members(groups, verdicts, passages)
-    selected, dispositions = _allocate_words(ranked, word_cap)
+    prioritized, priority_dispositions = _prioritize_details(ranked, groups)
+    selected, budget_dispositions = _allocate_words(prioritized, word_cap)
     summary = "\n".join(unit["prose"] for unit in selected)
     return {
         "summary": summary or None,
         "word_count": len(summary.split()),
         "selected_units": selected,
-        "dispositions": dispositions,
+        "dispositions": priority_dispositions + budget_dispositions,
     }
