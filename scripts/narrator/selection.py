@@ -169,6 +169,12 @@ def _disposition(key: UnitKey, outcome: str, reason: str) -> Record:
     }
 
 
+def _detail_disposition(detail: UnitKey, covering: UnitKey, outcome: str, reason: str) -> Record:
+    disposition = _disposition(detail, outcome, reason)
+    disposition["covering_unit_id"], disposition["covering_revision"] = covering
+    return disposition
+
+
 def _resolve_citations(
     unit: Record, key: UnitKey, passages: dict[str, Record]
 ) -> tuple[list[Record], list[Record]]:
@@ -197,8 +203,9 @@ def _unit_order(
 
 def _comparison_decisions(
     comparisons: Sequence[Record], current_revisions: dict[str, int]
-) -> dict[UnitPair, Record]:
+) -> tuple[dict[UnitPair, Record], list[Record]]:
     decisions: dict[UnitPair, Record] = {}
+    detail_comparisons: dict[UnitPair, Record] = {}
     for comparison in comparisons:
         keys = _comparison_keys(comparison)
         if keys[0] == keys[1] or any(
@@ -206,19 +213,30 @@ def _comparison_decisions(
         ):
             continue
         pair = frozenset(keys)
+        if pair in decisions:
+            detail_comparisons.pop(pair, None)
+        elif "detail" in comparison:
+            detail_comparisons[pair] = comparison
         if comparison["equivalent"]:
             decisions.setdefault(pair, comparison)
         else:
             decisions[pair] = comparison
-    return decisions
+    return decisions, list(detail_comparisons.values())
 
 
-def _authorities(unit: Record, candidates: dict[str, Record]) -> set[str]:
+def _authorities(
+    unit: Record, candidates: dict[str, Record], *, require_all: bool = False
+) -> set[str]:
     authorities = set()
     for origin in unit["originating_candidate_ids"]:
         authority = candidates[origin].get("authority")
-        if isinstance(authority, str) and authority.strip():
-            authorities.add(authority)
+        if not isinstance(authority, str) or not authority.strip():
+            if require_all:
+                return set()
+            continue
+        if require_all and authority.strip().casefold() == "unknown":
+            return set()
+        authorities.add(authority)
     return authorities
 
 
@@ -275,6 +293,41 @@ def _group_dispositions(
     return dispositions
 
 
+def _attach_detail_links(
+    groups: list[Record], detail_comparisons: Sequence[Record], candidates: dict[str, Record]
+) -> list[Record]:
+    memberships = {
+        _unit_key(unit): (index, unit)
+        for index, group in enumerate(groups)
+        for unit in group["members"]
+    }
+    dispositions = []
+    for comparison in detail_comparisons:
+        detail_side = comparison["detail"]
+        covering_side = "right" if detail_side == "left" else "left"
+        detail = _unit_key(comparison[detail_side])
+        covering = _unit_key(comparison[covering_side])
+        detail_group, detail_unit = memberships[detail]
+        covering_group, covering_unit = memberships[covering]
+        if detail_group == covering_group:
+            continue
+        if set(detail_unit["conditions"]) != set(covering_unit["conditions"]):
+            continue
+        detail_authorities = _authorities(detail_unit, candidates, require_all=True)
+        covering_authorities = _authorities(covering_unit, candidates, require_all=True)
+        if not detail_authorities or detail_authorities != covering_authorities:
+            continue
+
+        reason = comparison["reason"]
+        groups[detail_group].setdefault("detail_links", []).append({
+            "detail": {"unit_id": detail[0], "revision": detail[1]},
+            "covering": {"unit_id": covering[0], "revision": covering[1]},
+            "reason": reason,
+        })
+        dispositions.append(_detail_disposition(detail, covering, "detail_candidate", reason))
+    return dispositions
+
+
 def select_distinct_units(
     units: Sequence[Record],
     candidates: Sequence[Record],
@@ -301,7 +354,7 @@ def select_distinct_units(
         ordered_units.append((_unit_order(unit, unit_id, evidence), unit))
         dispositions.extend(invalid_citations)
 
-    decisions = _comparison_decisions(comparisons, current_revisions)
+    decisions, detail_comparisons = _comparison_decisions(comparisons, current_revisions)
     ordered_units.sort(key=lambda row: row[0])
     groups: list[list[Record]] = []
     for _, unit in ordered_units:
@@ -312,7 +365,9 @@ def select_distinct_units(
         else:
             groups.append([unit])
     dispositions.extend(_group_dispositions(groups, decisions, candidates_by_id))
-    return {"groups": [{"members": group} for group in groups], "dispositions": dispositions}
+    result_groups = [{"members": group} for group in groups]
+    dispositions.extend(_attach_detail_links(result_groups, detail_comparisons, candidates_by_id))
+    return {"groups": result_groups, "dispositions": dispositions}
 
 
 def _verdicts_by_key(verdicts: Sequence[Record]) -> dict[UnitKey, Record]:
