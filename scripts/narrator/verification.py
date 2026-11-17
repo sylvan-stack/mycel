@@ -42,6 +42,16 @@ clause and explain the missing, contradicted, or unsupported condition. Copy
 unit identifiers and revision numbers exactly. Do not rewrite the units.
 """
 
+_REPAIR_ELIGIBILITY_INSTRUCTIONS = """
+After deciding support independently, assess repair only for unsupported
+verdicts. Include repair_eligibility as null unless omitting the corrected claim
+would change a reader's interpretation or action and the unit's cited evidence,
+read in the admitted source context, allows a precise correction to its affected
+part. When both are true, give repair_eligibility as an object with
+omission_consequence describing the concrete change in interpretation or action,
+and correction_passage_ids listing resolved passages that establish the correction.
+"""
+
 
 def _source_context(
     request_text: str, source_spans: Sequence[tuple[int, int]]
@@ -225,8 +235,29 @@ def _verification_payload(
     }
 
 
+def _read_repair_eligibility(value: object, passages: Mapping[str, _Passage]) -> _Record | None:
+    if not isinstance(value, Mapping):
+        return None
+    consequence = value.get("omission_consequence")
+    evidence = value.get("correction_passage_ids")
+    if (
+        not isinstance(consequence, str)
+        or not consequence.strip()
+        or not isinstance(evidence, list)
+        or not evidence
+        or any(not isinstance(passage_id, str) or passage_id not in passages for passage_id in evidence)
+    ):
+        return None
+    return {"omission_consequence": consequence, "correction_passage_ids": evidence.copy()}
+
+
 def _read_verdict(
-    key: _UnitKey, row: Mapping[str, object], unit: _Record, passages: Mapping[str, _Passage]
+    key: _UnitKey,
+    row: Mapping[str, object],
+    unit: _Record,
+    passages: Mapping[str, _Passage],
+    *,
+    assess_repair: bool,
 ) -> _Record | None:
     status = row.get("verdict")
     if status not in ("supported", "unsupported"):
@@ -254,7 +285,7 @@ def _read_verdict(
     ):
         return None
 
-    return {
+    verdict: _Record = {
         "unit_id": key[0],
         "revision": key[1],
         "verdict": status,
@@ -262,10 +293,19 @@ def _read_verdict(
         "reason": reason,
         "evidence_passage_ids": evidence.copy(),
     }
+    if assess_repair and status == "unsupported":
+        assessment = _read_repair_eligibility(row.get("repair_eligibility"), passages)
+        if assessment is not None:
+            verdict["repair_eligibility"] = assessment
+    return verdict
 
 
 def _read_verdicts(
-    rows: object, checked_units: Sequence[_Record], passages: Mapping[str, _Passage]
+    rows: object,
+    checked_units: Sequence[_Record],
+    passages: Mapping[str, _Passage],
+    *,
+    assess_repair: bool,
 ) -> tuple[list[_Record], list[_Record]]:
     expected: dict[_UnitKey, _Record] = {}
     for unit in checked_units:
@@ -298,7 +338,7 @@ def _read_verdicts(
             dispositions.append(_disposition(key, "missing_verdict", "no verdict for this revision"))
             continue
 
-        verdict = _read_verdict(key, matching[key], unit, passages)
+        verdict = _read_verdict(key, matching[key], unit, passages, assess_repair=assess_repair)
         if verdict is None:
             dispositions.append(_disposition(key, "invalid_verdict", "malformed verdict"))
             continue
@@ -319,19 +359,26 @@ def verify_units(
     units: Sequence[Mapping[str, object]],
     *,
     judge: Callable[[str, _Record], object],
+    assess_repair: bool = False,
 ) -> tuple[list[_Record], list[_Record], list[_Record]]:
     """Return checked unit revisions, verdicts and dispositions for one request.
 
     The writer supplies the request digest and admitted source spans. The judge
     receives instructions and plain data and returns a decoded verdict array.
     A checked unit is eligible for assembly only with its own supported verdict.
+    With assess_repair, a usable assessment is attached to an unsupported verdict.
     """
     resolved, context = _resolve_passages(request_text, request_digest, source_spans, passages)
     checked_units, verdicts, dispositions = _normalize_units(units, resolved)
     if checked_units:
         payload = _verification_payload(checked_units, resolved, context)
-        rows = judge(_VERIFICATION_INSTRUCTIONS, payload)
-        checked_verdicts, verdict_dispositions = _read_verdicts(rows, checked_units, resolved)
+        instructions = _VERIFICATION_INSTRUCTIONS
+        if assess_repair:
+            instructions += _REPAIR_ELIGIBILITY_INSTRUCTIONS
+        rows = judge(instructions, payload)
+        checked_verdicts, verdict_dispositions = _read_verdicts(
+            rows, checked_units, resolved, assess_repair=assess_repair
+        )
         verdicts.extend(checked_verdicts)
         dispositions.extend(verdict_dispositions)
     return checked_units, verdicts, dispositions
