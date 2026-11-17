@@ -223,3 +223,89 @@ def _verification_payload(
         "passages": [dict(passage) for passage in ordered_passages],
         "source_context": [dict(section) for section in context],
     }
+
+
+def _read_verdict(
+    key: _UnitKey, row: Mapping[str, object], unit: _Record, passages: Mapping[str, _Passage]
+) -> _Record | None:
+    status = row.get("verdict")
+    if status not in ("supported", "unsupported"):
+        return None
+
+    evidence = row.get("evidence_passage_ids")
+    if not isinstance(evidence, list) or any(
+        not isinstance(passage_id, str) or passage_id not in passages for passage_id in evidence
+    ):
+        return None
+
+    affected_part, reason = row.get("affected_part"), row.get("reason")
+    if status == "supported":
+        cited_ids = unit["cited_passage_ids"]
+        assert isinstance(cited_ids, list)
+        if affected_part is not None or reason is not None:
+            return None
+        if not any(passage_id in cited_ids for passage_id in evidence):
+            return None
+    elif (
+        not isinstance(affected_part, str)
+        or not affected_part.strip()
+        or not isinstance(reason, str)
+        or not reason.strip()
+    ):
+        return None
+
+    return {
+        "unit_id": key[0],
+        "revision": key[1],
+        "verdict": status,
+        "affected_part": affected_part,
+        "reason": reason,
+        "evidence_passage_ids": evidence.copy(),
+    }
+
+
+def _read_verdicts(
+    rows: object, checked_units: Sequence[_Record], passages: Mapping[str, _Passage]
+) -> tuple[list[_Record], list[_Record]]:
+    expected: dict[_UnitKey, _Record] = {}
+    for unit in checked_units:
+        key = _unit_key(unit)
+        assert key is not None
+        expected[key] = unit
+
+    if not isinstance(rows, list):
+        return [], [
+            _disposition(key, "invalid_verdict", "verification response must be an array")
+            for key in expected
+        ]
+
+    matching: dict[_UnitKey, Mapping[str, object]] = {}
+    duplicates: set[_UnitKey] = set()
+    for row in rows:
+        key = _unit_key(row)
+        if key is not None and key in expected:
+            if key in matching:
+                duplicates.add(key)
+            matching[key] = row
+
+    verdicts: list[_Record] = []
+    dispositions: list[_Record] = []
+    for key, unit in expected.items():
+        if key in duplicates:
+            dispositions.append(_disposition(key, "invalid_verdict", "duplicate verdicts"))
+            continue
+        if key not in matching:
+            dispositions.append(_disposition(key, "missing_verdict", "no verdict for this revision"))
+            continue
+
+        verdict = _read_verdict(key, matching[key], unit, passages)
+        if verdict is None:
+            dispositions.append(_disposition(key, "invalid_verdict", "malformed verdict"))
+            continue
+
+        verdicts.append(verdict)
+        if verdict["verdict"] == "unsupported":
+            reason = verdict["reason"]
+            assert isinstance(reason, str)
+            dispositions.append(_disposition(key, "unsupported", reason))
+    return verdicts, dispositions
