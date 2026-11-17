@@ -139,3 +139,50 @@ class NarratorSelectionTests(unittest.TestCase):
         fresh = selection.assemble_summary(current["groups"], [*verdicts, _supported(revised)],
                                            passages, word_cap=10)
         self.assertEqual(fresh["selected_units"], [preferred, revised])
+
+    def test_authority_and_exact_evidence_survive_selection(self):
+        passages = _passages(
+            "The laboratory board requires a thirty-day hold.",
+            "The handling log records tags by batch.",
+            "The board starts the hold at intake.",
+            "The disposal contractor asks for immediate disposal.",
+        )
+        candidates, (board, contractor_previous, invalid) = zip(
+            _proposal("board", "The board requires 30 days from intake.", 2, ("p1", "p3"),
+                      authority="laboratory board"),
+            _proposal("contractor", "Contractor requests immediate sample disposal.", 1, ("p4",),
+                      authority="disposal contractor"),
+            _proposal("uncited", "Destroy all samples upon arrival.", 3, ("p999",)),
+        )
+        contractor = contractor_previous | {
+            "revision": 2, "prose": "The contractor requests immediate disposal.",
+        }
+        grouped = selection.select_distinct_units(
+            [board, contractor, invalid], candidates, passages, [_comparison(board, contractor)]
+        )
+        self.assertEqual([group["members"] for group in grouped["groups"]],
+                         [[invalid], [board], [contractor]])
+        self.assertIn(("uncited", 1, "invalid_citation"), [
+            (item["unit_id"], item["revision"], item["outcome"])
+            for item in grouped["dispositions"]
+        ])
+
+        verdicts = [_supported(board), _supported(contractor_previous),
+                    _supported(invalid, consulted=["p1"])]
+        earlier = selection.assemble_summary(grouped["groups"], verdicts, passages, word_cap=12)
+        self.assertEqual(earlier["summary"], "The board requires 30 days from intake.")
+
+        current = selection.assemble_summary(grouped["groups"], [*verdicts, _supported(contractor)],
+                                            passages, word_cap=12)
+        self.assertEqual(current["summary"],
+                         "The board requires 30 days from intake.\n"
+                         "The contractor requests immediate disposal.")
+        board_selected, contractor_selected = current["selected_units"]
+        self.assertEqual(_key(board_selected), {"unit_id": "board", "revision": 1})
+        self.assertEqual(_key(contractor_selected), {"unit_id": "contractor", "revision": 2})
+        self.assertEqual(board_selected["cited_passage_ids"], ["p1", "p3"])
+        self.assertEqual(contractor_selected["cited_passage_ids"], ["p4"])
+        self.assertEqual(board_selected["originating_candidate_ids"], ["claim-board"])
+        self.assertEqual(contractor_selected["originating_candidate_ids"], ["claim-contractor"])
+        self.assertEqual([unit["scope"] for unit in current["selected_units"]],
+                         ["lab samples", "lab samples"])
