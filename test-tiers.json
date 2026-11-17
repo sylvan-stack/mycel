@@ -6,7 +6,7 @@
   "counting": "Static definitions and separately labelled programs/scenario functions; not runtime-discovered cases.",
   "mid_review": "Individually reviewed against the raised mid-tier bar under SYL-327; source inspection only, no execution.",
   "counts": {
-    "python_active": 158,
+    "python_active": 161,
     "python_commented": 0,
     "programs_active": 2,
     "node_cases_commented": 0,
@@ -20,11 +20,56 @@
       "entrypoint": 1,
       "python": 133
     },
-    "top_available": 25,
+    "top_available": 28,
     "low_removed_SYL_327": 1653,
     "low_removed_total": 1679
   },
   "tests": [
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_narrator_verification.py",
+      "id": "tests/top/test_top_narrator_verification.py::NarratorVerificationTests.test_exact_nonadjacent_passages_require_a_current_verdict",
+      "name": "test_exact_nonadjacent_passages_require_a_current_verdict",
+      "class": "NarratorVerificationTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "Two nonadjacent Unicode source spans survive exclusion of an exact-text instruction citation. Only support for the revised citation set can authorize the unit.",
+      "review": "individual",
+      "line": 69,
+      "file_sha256": "5278f12ef4d5b0b03d2703622dbf426d68495439203af86417878b8f47e5bcaa",
+      "selector": "test_top_narrator_verification.NarratorVerificationTests.test_exact_nonadjacent_passages_require_a_current_verdict"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_narrator_verification.py",
+      "id": "tests/top/test_top_narrator_verification.py::NarratorVerificationTests.test_repair_handoff_contains_only_fresh_supported_revisions",
+      "name": "test_repair_handoff_contains_only_fresh_supported_revisions",
+      "class": "NarratorVerificationTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "A mixed repair batch restores a generated-child audit condition and its approval clock while a stale supported verdict cannot override the current rejection of a different correction.",
+      "review": "individual",
+      "line": 124,
+      "file_sha256": "5278f12ef4d5b0b03d2703622dbf426d68495439203af86417878b8f47e5bcaa",
+      "selector": "test_top_narrator_verification.NarratorVerificationTests.test_repair_handoff_contains_only_fresh_supported_revisions"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_narrator_verification.py",
+      "id": "tests/top/test_top_narrator_verification.py::NarratorVerificationTests.test_repair_budget_preserves_the_original_verified_subset",
+      "name": "test_repair_budget_preserves_the_original_verified_subset",
+      "class": "NarratorVerificationTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "Shared budget refusal before admission and exhaustion during either stage preserve the original verified unit and prevent additional calls or selection of an unchecked revision.",
+      "review": "individual",
+      "line": 213,
+      "file_sha256": "5278f12ef4d5b0b03d2703622dbf426d68495439203af86417878b8f47e5bcaa",
+      "selector": "test_top_narrator_verification.NarratorVerificationTests.test_repair_budget_preserves_the_original_verified_subset"
+    },
     {
       "repo": "mycel",
       "file": "tests/top/test_top_plan_check.py",

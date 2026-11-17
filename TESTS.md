@@ -8,7 +8,7 @@ Reviewed revision: `560e2e2b1623066240ebd128bfa1e552f0a4f25f` under SYL-327 (29 
 
 ## Selection and limits
 
-25 top-tier inventory entries and 135 mid-tier entries are available. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Retained mid-tier sources remain uncommented.
+28 top-tier inventory entries and 135 mid-tier entries are available. 1653 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Retained mid-tier sources remain uncommented.
 
 ## Active top tier
 
@@ -39,6 +39,9 @@ Reviewed revision: `560e2e2b1623066240ebd128bfa1e552f0a4f25f` under SYL-327 (29 
 | [`test_top_pieces.FilePiecesTests.test_working_and_head_match_ingest_across_rename_and_body_edit`](tests/top/test_top_pieces.py#L27) | A real Git index holds a third version, distinct from HEAD and the working file. Compares both reported sides with ingest and checks exact-byte digests and rename keys across a rename and a body edit. |
 | [`test_top_pieces.FilePiecesTests.test_absent_and_unsafe_versions_are_distinct_without_mutation`](tests/top/test_top_pieces.py#L101) | An unborn and then deleted file exercise opposite version boundaries. An external symlink and invalid file bytes must be refused, with the checkout, Git metadata and external file preserved. |
 | [`test_top_plan_check.PlanCheckTests.test_reports_ordered_faults_and_preserves_inputs`](tests/top/test_top_plan_check.py#L16) | A malformed step in a mixed plan must keep its own and later file and Origin faults visible in plan order. A real checkout distinguishes an allowed new file from a missing folder and an escaping symlink. The CLI preserves the fixture and uses a read-only store boundary without reaching a model. |
+| [`test_top_narrator_verification.NarratorVerificationTests.test_exact_nonadjacent_passages_require_a_current_verdict`](tests/top/test_top_narrator_verification.py#L69) | Two nonadjacent Unicode source spans survive exclusion of an exact-text instruction citation. Only support for the revised citation set can authorize the unit. |
+| [`test_top_narrator_verification.NarratorVerificationTests.test_repair_handoff_contains_only_fresh_supported_revisions`](tests/top/test_top_narrator_verification.py#L124) | A mixed repair batch restores a generated-child audit condition and its approval clock while a stale supported verdict cannot override the current rejection of a different correction. |
+| [`test_top_narrator_verification.NarratorVerificationTests.test_repair_budget_preserves_the_original_verified_subset`](tests/top/test_top_narrator_verification.py#L213) | Shared budget refusal before admission and exhaustion during either stage preserve the original verified unit and prevent additional calls or selection of an unchecked revision. |
 
 ## Layout and shared support
 
