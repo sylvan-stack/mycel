@@ -227,3 +227,87 @@ class NarratorSelectionTests(unittest.TestCase):
             ("transport", 1, "skipped_for_budget", 4, 3),
             ("shorter", 1, "skipped_for_budget", 5, 3),
         ])
+
+    def test_distinct_rule_fits_before_covered_detail(self):
+        passages = _passages(
+            "Store sealed samples for thirty days.",
+            "Retain sealed freezer samples for thirty days.",
+            "Revoke expired credentials before granting access.",
+        )
+        cover_claim, cover = _proposal("cover", passages[0]["text"], 3, ("p1",),
+                                       conditions=("sealed",))
+        detail_claim, detail = _proposal("detail", passages[1]["text"], 2, ("p2",),
+                                          conditions=("sealed",))
+        distinct_claim, distinct = _proposal("distinct", passages[2]["text"], 1, ("p3",))
+        detail_claim["scope"] = detail["scope"] = "freezer samples"
+        distinct_claim["scope"] = distinct["scope"] = "lab access"
+        candidates = [cover_claim, detail_claim, distinct_claim]
+        reason = "The sealed-sample policy already governs sealed freezer samples."
+        comparison = {
+            "left": _key(cover), "right": _key(detail), "equivalent": False,
+            "detail": "right", "reason": reason,
+        }
+        units, comparisons = selection.parse_consolidation_response({
+            "units": [cover, detail, distinct], "comparisons": [comparison],
+        }, candidates)
+        grouped = selection.select_distinct_units(units, candidates, passages, comparisons)
+        self.assertEqual([
+            [(unit["unit_id"], unit["scope"]) for unit in group["members"]]
+            for group in grouped["groups"]
+        ], [[("cover", "lab samples")], [("detail", "freezer samples")], [("distinct", "lab access")]])
+
+        other_verdicts = [_supported(detail), _supported(distinct)]
+        covered = selection.assemble_summary(grouped["groups"], [_supported(cover), *other_verdicts],
+                                            passages, word_cap=13)
+        self.assertEqual(covered["summary"],
+                         "Store sealed samples for thirty days.\n"
+                         "Revoke expired credentials before granting access.")
+        self.assertEqual(covered["word_count"], 12)
+        self.assertIn({
+            "stage": "selection", "unit_id": "detail", "revision": 1, "outcome": "deferred_detail",
+            "covering_unit_id": "cover", "covering_revision": 1, "reason": reason,
+        }, covered["dispositions"])
+
+        unsupported = {
+            **_key(cover), "verdict": "unsupported", "affected_part": "thirty days",
+            "reason": "The covering rule did not pass this check.", "evidence_passage_ids": ["p1"],
+        }
+        uncovered = selection.assemble_summary(grouped["groups"], [unsupported, *other_verdicts],
+                                              passages, word_cap=13)
+        self.assertEqual(uncovered["summary"],
+                         "Retain sealed freezer samples for thirty days.\n"
+                         "Revoke expired credentials before granting access.")
+        self.assertNotIn("deferred_detail", {item["outcome"] for item in uncovered["dispositions"]})
+
+        replacement = cover | {"revision": 2, "prose": "Hold sealed samples for thirty days."}
+        revised_groups = selection.select_distinct_units(
+            [replacement, detail, distinct], candidates, passages, comparisons
+        )["groups"]
+        revised = selection.assemble_summary(revised_groups, [_supported(replacement), *other_verdicts],
+                                            passages, word_cap=13)
+        self.assertEqual(revised["summary"],
+                         "Hold sealed samples for thirty days.\n"
+                         "Retain sealed freezer samples for thirty days.")
+        self.assertNotIn("deferred_detail", {item["outcome"] for item in revised["dispositions"]})
+
+        # A separate consolidation proposal supplies an exact comparison for the longer cover.
+        oversized = cover | {"prose":
+            "The laboratory retention policy requires all sealed samples covered by this rule "
+            "to be stored for thirty days.",
+        }
+        long_units, long_comparisons = selection.parse_consolidation_response({
+            "units": [oversized, detail, distinct], "comparisons": [comparison],
+        }, candidates)
+        long_groups = selection.select_distinct_units(long_units, candidates, passages,
+                                                     long_comparisons)["groups"]
+        fallback = selection.assemble_summary(long_groups, [_supported(oversized), *other_verdicts],
+                                             passages, word_cap=13)
+        self.assertEqual(fallback["summary"],
+                         "Revoke expired credentials before granting access.\n"
+                         "Retain sealed freezer samples for thirty days.")
+        self.assertEqual(fallback["word_count"], 13)
+        self.assertIn(("cover", 1, "skipped_for_budget", 18, 13), [
+            (item["unit_id"], item["revision"], item["outcome"],
+             item["required_words"], item["remaining_words"])
+            for item in fallback["dispositions"] if item["outcome"] == "skipped_for_budget"
+        ])
