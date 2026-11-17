@@ -1,9 +1,11 @@
 """Write source-grounded summaries for Mycel's optional RAPTOR command."""
 
+import argparse
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from hashlib import sha256
+from io import BytesIO
 import json
 import math
 import os
@@ -36,6 +38,7 @@ CUT_LINE = re.compile(r"^\[Mycel: source text cut at request limit\]\r?$", re.MU
 PARAGRAPH_GAP = re.compile(r"\r?\n(?:[ \t]*\r?\n)+")
 JSON_FENCE = re.compile(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL)
 ATTEMPT_SECONDS = 270
+DEFAULT_WORD_CAP = 220
 TEXT_LIMIT = 8
 EMBEDDING_LIMIT = 1
 MODEL_OUTPUT_BYTES = 1024 * 1024
@@ -622,3 +625,86 @@ def summarize_arm(
     if not isinstance(summary, str) or not summary.strip():
         raise NarratorError("no whole supported unit fits the word cap")
     return summary
+
+
+class _ArgumentParser(argparse.ArgumentParser):
+    def error(self, _message: str) -> None:
+        raise NarratorError("invalid writer command arguments")
+
+
+def _arguments(argv: list[str] | None) -> argparse.Namespace:
+    parser = _ArgumentParser(description=__doc__, allow_abbrev=False)
+    parser.add_argument("--model-command", required=True, type=command_argument,
+                        help="absolute executable and arguments as JSON argv")
+    parser.add_argument("--embedding-command", type=command_argument,
+                        help="absolute executable and arguments as JSON argv")
+    parser.add_argument("--mode", choices=("reasoned", "semantic"), default="reasoned")
+    parser.add_argument("--word-cap", type=int, default=DEFAULT_WORD_CAP)
+    parser.add_argument("--instructions", type=Path, help="absolute Mycel prompt override directory")
+    options = parser.parse_args(argv)
+    if options.word_cap < 1:
+        raise NarratorError("the word cap must be positive")
+    if options.instructions is not None and not options.instructions.is_absolute():
+        raise NarratorError("the instructions directory must be absolute")
+    if options.mode == "semantic" and options.embedding_command is None:
+        raise NarratorError("semantic mode requires an embedding command")
+    return options
+
+
+def _read_input(deadline: float, instructions: Path | None) -> Request:
+    data = bytearray()
+    fd = sys.stdin.fileno()
+    with selectors.SelectSelector() as selector:
+        selector.register(fd, selectors.EVENT_READ)
+        while len(data) < REQUEST_BYTES + 1:
+            if not selector.select(_time_left(deadline)):
+                continue
+            chunk = os.read(fd, min(65536, REQUEST_BYTES + 1 - len(data)))
+            if not chunk:
+                break
+            data.extend(chunk)
+    return read_request(BytesIO(data), instructions)
+
+
+def _run_arm(
+    options: argparse.Namespace, mode: str, request: Request, candidates: list[Candidate],
+    meter: Meter, trace: dict[str, object],
+) -> str:
+    hints = similarity_hints(candidates, meter, options.embedding_command) if mode == "semantic" else []
+    trace["candidate_neighbors"] = hints
+    return summarize_arm(
+        request, candidates, meter, options.model_command, trace,
+        word_cap=options.word_cap, candidate_neighbors=hints,
+    )
+
+
+def _summary_bytes(summary: str, word_cap: int) -> bytes:
+    raw = summary.encode("utf-8")
+    if "\0" in summary or len(raw) > MODEL_OUTPUT_BYTES or not 0 < len(summary.split()) <= word_cap:
+        raise NarratorError("assembled summary is outside the output contract")
+    return raw
+
+
+def main(argv: list[str] | None = None) -> int:
+    started = time.monotonic()
+    try:
+        options = _arguments(argv)
+        with _interrupt_on_termination():
+            meter = Meter(started + ATTEMPT_SECONDS)
+            request = _read_input(meter.deadline, options.instructions)
+            candidates = extract_candidates(request, meter, options.model_command, [])
+            summary = _run_arm(options, options.mode, request, candidates, meter, {})
+            sys.stdout.buffer.write(_summary_bytes(summary, options.word_cap))
+        return 0
+    except KeyboardInterrupt:
+        print("Narrator interrupted", file=sys.stderr)
+        return 130
+    except NarratorError as failure:
+        print(f"Narrator: {failure}", file=sys.stderr)
+    except (OSError, ValueError):
+        print("Narrator writer input or output failed", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
