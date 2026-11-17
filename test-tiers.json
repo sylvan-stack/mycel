@@ -6,7 +6,7 @@
   "counting": "Static definitions and separately labelled programs/scenario functions; not runtime-discovered cases.",
   "mid_review": "Individually reviewed against the raised mid-tier bar under SYL-327; source inspection only, no execution.",
   "counts": {
-    "python_active": 164,
+    "python_active": 165,
     "python_commented": 0,
     "programs_active": 2,
     "node_cases_commented": 0,
@@ -20,7 +20,7 @@
       "entrypoint": 1,
       "python": 133
     },
-    "top_available": 31,
+    "top_available": 32,
     "low_removed_SYL_327": 1653,
     "low_removed_total": 1679
   },
@@ -37,7 +37,7 @@
       "reason": "Grouping before filtering an unsupported proposal can put supported equivalents in separate groups and use the exception's words on a duplicate rule. Regrouping restores the exception. An earlier equivalence judgment cannot merge a freshly verified revision.",
       "review": "individual",
       "line": 80,
-      "file_sha256": "7451a3241c3d72f1dd4aa8b8ecc5fa7b0ffa31b78810ba6688c4fd9d4fc04230",
+      "file_sha256": "17ab78fca458813d3c5f63752046c0c030b1f626c3f66e770fc458d69c1293bc",
       "selector": "test_top_narrator_selection.NarratorSelectionTests.test_supported_regrouping_preserves_late_exception"
     },
     {
@@ -52,7 +52,7 @@
       "reason": "A misleading comparison must preserve contradictory units from different authorities. The check observes nonadjacent evidence references and shows that an unresolved citation or a verdict for an earlier revision cannot authorize output.",
       "review": "individual",
       "line": 143,
-      "file_sha256": "7451a3241c3d72f1dd4aa8b8ecc5fa7b0ffa31b78810ba6688c4fd9d4fc04230",
+      "file_sha256": "17ab78fca458813d3c5f63752046c0c030b1f626c3f66e770fc458d69c1293bc",
       "selector": "test_top_narrator_selection.NarratorSelectionTests.test_authority_and_exact_evidence_survive_selection"
     },
     {
@@ -67,8 +67,23 @@
       "reason": "An oversized preferred unit leaves room for an intervening distinct rule and its own shorter equivalent. Exact-cap prose preserves internal whitespace, and a cap below every complete unit keeps the budget exclusions.",
       "review": "individual",
       "line": 190,
-      "file_sha256": "7451a3241c3d72f1dd4aa8b8ecc5fa7b0ffa31b78810ba6688c4fd9d4fc04230",
+      "file_sha256": "17ab78fca458813d3c5f63752046c0c030b1f626c3f66e770fc458d69c1293bc",
       "selector": "test_top_narrator_selection.NarratorSelectionTests.test_oversized_member_leaves_room_for_distinct_rule_and_shorter_equivalent"
+    },
+    {
+      "repo": "mycel",
+      "file": "tests/top/test_top_narrator_selection.py",
+      "id": "tests/top/test_top_narrator_selection.py::NarratorSelectionTests.test_distinct_rule_fits_before_covered_detail",
+      "name": "test_distinct_rule_fits_before_covered_detail",
+      "class": "NarratorSelectionTests",
+      "kind": "python",
+      "tier": "top",
+      "status": "active",
+      "reason": "Higher-ranked optional detail can crowd out a distinct rule. A supported direct cover defers the detail, an unsupported or stale cover leaves it in ordinary rank, and an oversized cover leaves it eligible after the distinct rule fits.",
+      "review": "individual",
+      "line": 231,
+      "file_sha256": "17ab78fca458813d3c5f63752046c0c030b1f626c3f66e770fc458d69c1293bc",
+      "selector": "test_top_narrator_selection.NarratorSelectionTests.test_distinct_rule_fits_before_covered_detail"
     },
     {
       "repo": "mycel",
