@@ -6,6 +6,7 @@ from typing import Any
 
 type Record = dict[str, Any]
 type UnitKey = tuple[str, int]
+type UnitPair = frozenset[UnitKey]
 
 
 _CONSOLIDATION_INSTRUCTIONS = """\
@@ -169,17 +170,55 @@ def _resolve_citations(
     return evidence, dispositions
 
 
+def _comparison_decisions(comparisons: Sequence[Record]) -> dict[UnitPair, Record]:
+    decisions: dict[UnitPair, Record] = {}
+    for comparison in comparisons:
+        pair = frozenset(_comparison_keys(comparison))
+        if comparison["equivalent"]:
+            decisions.setdefault(pair, comparison)
+        else:
+            decisions[pair] = comparison
+    return decisions
+
+
+def _authorities(unit: Record, candidates: dict[str, Record]) -> set[str]:
+    authorities = set()
+    for origin in unit["originating_candidate_ids"]:
+        authority = candidates[origin].get("authority")
+        if isinstance(authority, str) and authority.strip():
+            authorities.add(authority)
+    return authorities
+
+
+def _interchangeable(
+    first: Record,
+    second: Record,
+    decisions: dict[UnitPair, Record],
+    candidates: dict[str, Record],
+) -> bool:
+    decision = decisions.get(frozenset((_unit_key(first), _unit_key(second))))
+    if decision is None or not decision["equivalent"]:
+        return False
+    if first["scope"] != second["scope"] or set(first["conditions"]) != set(second["conditions"]):
+        return False
+    first_authorities = _authorities(first, candidates)
+    second_authorities = _authorities(second, candidates)
+    if first_authorities and second_authorities:
+        return first_authorities == second_authorities
+    return True
+
+
 def select_distinct_units(
     units: Sequence[Record],
     candidates: Sequence[Record],
     passages: Sequence[Record],
     comparisons: Sequence[Record],
 ) -> Record:
-    """Prepare unchanged revisions using passages already validated for this request."""
-    candidate_ids = {candidate["candidate_id"] for candidate in candidates}
+    """Group unchanged revisions using passages already validated for this request."""
+    candidates_by_id = {candidate["candidate_id"]: candidate for candidate in candidates}
+    candidate_ids = set(candidates_by_id)
     passages_by_id = {passage["passage_id"]: passage for passage in passages}
-    for comparison in comparisons:
-        _comparison_keys(comparison)
+    decisions = _comparison_decisions(comparisons)
 
     seen_ids: set[str] = set()
     ordered_units = []
@@ -198,4 +237,12 @@ def select_distinct_units(
         dispositions.extend(invalid_citations)
 
     ordered_units.sort(key=lambda row: row[0])
-    return {"groups": [{"members": [unit]} for _, unit in ordered_units], "dispositions": dispositions}
+    groups: list[list[Record]] = []
+    for _, unit in ordered_units:
+        for group in groups:
+            if all(_interchangeable(unit, member, decisions, candidates_by_id) for member in group):
+                group.append(unit)
+                break
+        else:
+            groups.append([unit])
+    return {"groups": [{"members": group} for group in groups], "dispositions": dispositions}
