@@ -147,6 +147,17 @@ def parse_consolidation_response(
     return units, comparisons
 
 
+def _disposition(key: UnitKey, outcome: str, reason: str) -> Record:
+    unit_id, revision = key
+    return {
+        "unit_id": unit_id,
+        "revision": revision,
+        "stage": "selection",
+        "outcome": outcome,
+        "reason": reason,
+    }
+
+
 def _resolve_citations(
     unit: Record, key: UnitKey, passages: dict[str, Record]
 ) -> tuple[list[Record], list[Record]]:
@@ -160,13 +171,9 @@ def _resolve_citations(
         if isinstance(passage_id, str) and passage_id in passages:
             evidence.append(passages[passage_id])
             continue
-        dispositions.append({
-            "unit_id": key[0],
-            "revision": key[1],
-            "stage": "selection",
-            "outcome": "invalid_citation",
-            "reason": f"Citation {position} does not resolve to a request passage",
-        })
+        dispositions.append(_disposition(
+            key, "invalid_citation", f"Citation {position} does not resolve to a request passage"
+        ))
     return evidence, dispositions
 
 
@@ -208,6 +215,43 @@ def _interchangeable(
     return True
 
 
+def _group_dispositions(
+    groups: list[list[Record]],
+    decisions: dict[UnitPair, Record],
+    candidates: dict[str, Record],
+) -> list[Record]:
+    units_by_key = {_unit_key(unit): unit for group in groups for unit in group}
+    distinctions: dict[UnitKey, str] = {}
+    for pair, decision in decisions.items():
+        if len(pair) != 2 or not pair <= units_by_key.keys():
+            continue
+        left, right = pair
+        if not decision["equivalent"]:
+            reason = decision["reason"]
+        elif not _interchangeable(units_by_key[left], units_by_key[right], decisions, candidates):
+            reason = "The proposed equivalence conflicts with recorded scope, conditions or authority"
+        else:
+            continue
+        distinctions.setdefault(left, reason)
+        distinctions.setdefault(right, reason)
+
+    dispositions = []
+    for group in groups:
+        representative = _unit_key(group[0])
+        if len(group) == 1:
+            reason = distinctions.get(
+                representative, "No interchangeability was established with every member of a group"
+            )
+            dispositions.append(_disposition(representative, "distinct", reason))
+            continue
+        for index, unit in enumerate(group):
+            key = _unit_key(unit)
+            other = representative if index else _unit_key(group[1])
+            reason = decisions[frozenset((key, other))]["reason"]
+            dispositions.append(_disposition(key, "equivalent", reason))
+    return dispositions
+
+
 def select_distinct_units(
     units: Sequence[Record],
     candidates: Sequence[Record],
@@ -233,7 +277,7 @@ def select_distinct_units(
         _validate_candidate_origins(unit, candidate_ids)
         evidence, invalid_citations = _resolve_citations(unit, key, passages_by_id)
         first_citation = min((passage["start"] for passage in evidence), default=float("inf"))
-        ordered_units.append(((first_citation, unit_id), unit))
+        ordered_units.append(((-_consequence_rank(unit), first_citation, unit_id), unit))
         dispositions.extend(invalid_citations)
 
     ordered_units.sort(key=lambda row: row[0])
@@ -245,4 +289,5 @@ def select_distinct_units(
                 break
         else:
             groups.append([unit])
+    dispositions.extend(_group_dispositions(groups, decisions, candidates_by_id))
     return {"groups": [{"members": group} for group in groups], "dispositions": dispositions}
