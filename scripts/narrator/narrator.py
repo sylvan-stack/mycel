@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from hashlib import sha256
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -20,6 +21,7 @@ REQUEST_CHARACTERS = 48_000
 REQUEST_BYTES = REQUEST_CHARACTERS * 4
 PASSAGE_CHARACTERS = 1_600
 MAX_CANDIDATES = 40
+NEIGHBORS_PER_CANDIDATE = 2
 PACKAGED_PROMPTS = Path(__file__).resolve().parents[2] / "src/mycel/data/summary-prompts.json"
 SECTION_PLACE = re.compile(r"[^\r\n\0]+ › [^\r\n\0]*")
 CUT_LINE = re.compile(r"^\[Mycel: source text cut at request limit\]\r?$", re.MULTILINE)
@@ -202,6 +204,22 @@ def _time_left(deadline: float) -> float:
     if remaining <= 0:
         raise BudgetExhausted("writer time limit reached")
     return remaining
+
+
+def command_argument(value: str) -> tuple[str, ...]:
+    """Read literal JSON argv with an absolute executable path."""
+    diagnostic = "expected a JSON argv array with an absolute executable"
+    try:
+        argv = json.loads(value)
+    except (ValueError, RecursionError):
+        raise ValueError(diagnostic) from None
+    if (
+        not isinstance(argv, list) or not argv
+        or any(not isinstance(argument, str) or "\0" in argument for argument in argv)
+        or not Path(argv[0]).is_absolute()
+    ):
+        raise ValueError(diagnostic)
+    return tuple(argv)
 
 
 def _child_environment(directory: str) -> dict[str, str]:
@@ -463,3 +481,66 @@ def extract_candidates(
 
     payload = {"request_digest": request.digest, "passages": request.passages}
     return meter.text(argv, "extraction", EXTRACTION_INSTRUCTIONS, payload, validate, retry=True)
+
+
+def _embedding_vectors(value: object, count: int) -> list[list[float]]:
+    if not isinstance(value, list) or len(value) != count:
+        raise ValueError("embedding response has the wrong number of vectors")
+    vectors: list[list[float]] = []
+    for vector in value:
+        if (
+            not isinstance(vector, list) or not vector
+            or (vectors and len(vector) != len(vectors[0]))
+            or any(type(component) not in (int, float) for component in vector)
+        ):
+            raise ValueError("embedding response has an invalid vector")
+        try:
+            numbers = [float(component) for component in vector]
+        except OverflowError:
+            raise ValueError("embedding response has an out-of-range component") from None
+        if not any(numbers) or not all(map(math.isfinite, numbers)):
+            raise ValueError("embedding response has a zero or non-finite vector")
+        vectors.append(numbers)
+    return vectors
+
+
+def _nearest_pairs(vectors: list[list[float]]) -> list[tuple[int, int]]:
+    unit_vectors = []
+    for vector in vectors:
+        # Scale first so a finite nonzero vector has a representable norm.
+        scale = max(map(abs, vector))
+        scaled = [component / scale for component in vector]
+        norm = math.hypot(*scaled)
+        unit_vectors.append([component / norm for component in scaled])
+
+    neighbors: list[list[tuple[float, int]]] = [[] for _ in unit_vectors]
+    for right, vector in enumerate(unit_vectors):
+        for left in range(right):
+            score = math.fsum(a * b for a, b in zip(unit_vectors[left], vector))
+            if score > 0:
+                neighbors[left].append((-score, right))
+                neighbors[right].append((-score, left))
+    pairs = {
+        (min(index, other), max(index, other)): score
+        for index, ranked in enumerate(neighbors)
+        for score, other in sorted(ranked)[:NEIGHBORS_PER_CANDIDATE]
+    }
+    return sorted(pairs, key=lambda pair: (pairs[pair], pair))
+
+
+def similarity_hints(
+    candidates: list[Candidate], meter: Meter, argv: tuple[str, ...],
+) -> list[tuple[str, str]]:
+    """Suggest pairs of candidate IDs for consolidation to compare."""
+    if len(candidates) < 2:
+        return []
+
+    def validate(value: object) -> list[tuple[str, str]]:
+        vectors = _embedding_vectors(value, len(candidates))
+        return [
+            (candidates[left]["candidate_id"], candidates[right]["candidate_id"])
+            for left, right in _nearest_pairs(vectors)
+        ]
+
+    claims = json.dumps([candidate["claim"] for candidate in candidates]).encode("utf-8")
+    return meter.call(argv, claims, "embedding", validate, embedding=True)
