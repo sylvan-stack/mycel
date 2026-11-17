@@ -3,7 +3,6 @@
 import argparse
 from http.client import HTTPException, HTTPSConnection
 import json
-import os
 import sys
 import time
 
@@ -15,6 +14,7 @@ from narrator import (
     NarratorError,
     _embedding_vectors,
     _interrupt_on_termination,
+    _read_stdin,
     _run_command,
     _time_left,
     command_argument,
@@ -32,8 +32,8 @@ class _ArgumentParser(argparse.ArgumentParser):
         raise ValueError("invalid Voyage adapter arguments")
 
 
-def _read_claims() -> list[str]:
-    raw = sys.stdin.buffer.read(INPUT_BYTES + 1)
+def _read_claims(deadline: float) -> list[str]:
+    raw = _read_stdin(deadline, INPUT_BYTES)
     if len(raw) > INPUT_BYTES:
         raise ValueError("embedding input exceeds its byte limit")
     claims = json.loads(raw.decode("utf-8"))
@@ -46,10 +46,7 @@ def _read_claims() -> list[str]:
 
 
 def _read_key(argv: tuple[str, ...], deadline: float) -> str:
-    # The writer starts its embedding command in a new session. Keep nested
-    # credential processes in that group so an outer timeout can kill them all.
-    inherit_group = os.getsid(0) == os.getpid()
-    raw = _run_command(argv, b"", deadline, output_limit=KEY_BYTES, inherit_group=inherit_group)
+    raw = _run_command(argv, b"", deadline, output_limit=KEY_BYTES, cleanup_grace=0)
     key = raw.decode("ascii").strip()
     if not key or any(not 33 <= ord(character) <= 126 for character in key):
         raise ValueError("invalid credential command response")
@@ -105,10 +102,12 @@ def main() -> int:
         command = command_argument(args.key_command)
         deadline = time.monotonic() + ATTEMPT_SECONDS
         with _interrupt_on_termination():
-            claims = _read_claims()
+            claims = _read_claims(deadline)
             key = _read_key(command, deadline)
             result = _embed(claims, args.model, key, deadline)
-        print(json.dumps(result, allow_nan=False, separators=(",", ":")))
+            output = json.dumps(result, allow_nan=False, separators=(",", ":"))
+            _time_left(deadline)
+            print(output)
     except (HTTPException, KeyboardInterrupt, NarratorError, OSError, RecursionError, ValueError):
         print("Voyage embedding adapter failed", file=sys.stderr)
         return 1
