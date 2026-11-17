@@ -3,8 +3,10 @@
 Narrator is an optional Mycel command that reads one complete MYC-8 summary
 request from stdin. It extracts claims with exact citations, checks proposed
 units independently, gives eligible rejections one repair and recheck, and
-assembles whole supported units within the word cap. The default mode is
-`reasoned`, with a cap of 220 whitespace-delimited words.
+assembles whole supported units up to the original source length. The default
+mode is `reasoned`. Length is measured in Unicode code points, including the
+newlines between summary units. Any amount of compression is valid, including
+an output of the same length as the source.
 
 ## Configure a disposable Mycel run
 
@@ -20,14 +22,14 @@ command = [
   "/absolute/checkout/mycel/scripts/narrator/narrator.py",
   "--model-command",
   '["/absolute/path/to/reasoning-adapter", "--model", "pinned-model"]',
-  "--word-cap",
-  "220",
 ]
 ```
 
-Set `MYCEL_CONFIG` to that disposable file and run the installed numbered
-Mycel Build against the fixture repository. The repository's store, source
-folders and embeddings come from that configuration.
+Set `MYCEL_CONFIG` to that disposable file and run a numbered Mycel Build
+that supplies `MYCEL_SUMMARY_SOURCE_CHARACTERS` to the writer. The count comes
+from the original section bodies, before adding generated place lines and
+separators or cutting an oversized request. The repository's store, source
+folders and embeddings come from its configuration.
 
 ```sh
 MYCEL_CONFIG=/absolute/private/path/mycel.toml \
@@ -97,20 +99,25 @@ It emits empty stdout. If either arm fails, it exits nonzero and keeps any
 completed arm and the failure in the receipt.
 
 Direct `reasoned` or `semantic` runs can also provide a new `--report` path.
-They still emit the same prose on success. Leave the report option out of
-the Mycel command for ordinary concurrent summary generation.
+For any direct run, pass `--source-characters N` with the sum of the original
+section bodies' Unicode code point counts. Count the original text before
+Mycel adds framing or cuts an oversized input. The direct writer still emits
+the same prose on success. Leave `--source-characters` and `--report` out of
+the Mycel command for ordinary generation.
 
 The receipt records the request digest and exact admitted passages,
 extraction outcomes, per-arm starting allowance and events, supported and
 repaired revisions, Selection and budget dispositions, prose and physical
-launch totals. It hashes the adapter argv instead of storing it verbatim.
+launch totals. Each completed arm reports source and summary character counts
+and the summary-to-source ratio. The receipt hashes the adapter argv.
 
 ## Qualify a pinned candidate
 
 Record the exact source revision and file digests for the writer, Selection,
 Verification and any adapters. Pin interpreter path and version, Mycel Build
 and numerical dependencies, the prompt bytes, literal adapter argv and model
-settings, the word cap, and the disposable Mycel configuration. Retain
+settings, the original source character count for each input, and the disposable
+Mycel configuration. Retain
 provider-free command-check results separately from live results.
 
 The live qualification manifest also pins provider dispositions, the total
