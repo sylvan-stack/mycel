@@ -126,6 +126,10 @@ class SummaryRequest:
     def hash(self):
         return sha256(self.request).hexdigest()
 
+    @property
+    def source_characters(self) -> int:
+        return sum(len(section.member.chunk.source.decode("utf-8")) for section in self.sections)
+
     def report(self):
         return {"members": [section.member.place.address for section in self.sections],
                 "characters": len(self.request.decode("utf-8")), "requestHash": self.hash,
