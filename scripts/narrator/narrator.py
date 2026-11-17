@@ -38,7 +38,7 @@ CUT_SUFFIX = "\n\n[Mycel: source text cut at request limit]"
 PARAGRAPH_GAP = re.compile(r"\r?\n(?:[ \t]*\r?\n)+")
 JSON_FENCE = re.compile(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL)
 ATTEMPT_SECONDS = 270
-DEFAULT_WORD_CAP = 220
+SOURCE_CHARACTERS_ENV = "MYCEL_SUMMARY_SOURCE_CHARACTERS"
 TEXT_LIMIT = 8
 EMBEDDING_LIMIT = 1
 MODEL_OUTPUT_BYTES = 1024 * 1024
@@ -599,7 +599,7 @@ def _array_reply(value: object) -> list[object]:
 
 def summarize_arm(
     request: Request, candidates: list[Candidate], meter: Meter, argv: tuple[str, ...],
-    trace: dict[str, object], *, word_cap: int, candidate_neighbors: list[tuple[str, str]],
+    trace: dict[str, object], *, source_characters: int, candidate_neighbors: list[tuple[str, str]],
 ) -> str:
     """Turn one set of candidates into a summary of exact supported revisions."""
     instructions, payload = selection.consolidation_request(
@@ -643,12 +643,12 @@ def summarize_arm(
     regrouped = selection.select_distinct_units(current, candidates, request.passages, comparisons)
     trace["selection"] = regrouped
     assembled = selection.assemble_summary(
-        regrouped["groups"], verdicts, request.passages, word_cap=word_cap,
+        regrouped["groups"], verdicts, request.passages, source_characters=source_characters,
     )
     trace["assembly"] = assembled
     summary = assembled["summary"]
     if not isinstance(summary, str) or not summary.strip():
-        raise NarratorError("no whole supported unit fits the word cap")
+        raise NarratorError("no whole supported unit fits the source length")
     return summary
 
 
@@ -664,12 +664,21 @@ def _arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--embedding-command", type=command_argument,
                         help="absolute executable and arguments as JSON argv")
     parser.add_argument("--mode", choices=("reasoned", "semantic", "compare"), default="reasoned")
-    parser.add_argument("--word-cap", type=int, default=DEFAULT_WORD_CAP)
+    parser.add_argument("--source-characters", type=int, help="original source length for a direct invocation")
     parser.add_argument("--instructions", type=Path, help="absolute Mycel prompt override directory")
     parser.add_argument("--report", type=Path, help="absolute new path for a private run receipt")
     options = parser.parse_args(argv)
-    if options.word_cap < 1:
-        raise NarratorError("the word cap must be positive")
+    environment_count = os.environ.get(SOURCE_CHARACTERS_ENV)
+    if environment_count is not None:
+        try:
+            count = int(environment_count)
+        except ValueError:
+            raise NarratorError("the Mycel source character count is invalid") from None
+        if options.source_characters not in (None, count):
+            raise NarratorError("the configured source character counts disagree")
+        options.source_characters = count
+    if options.source_characters is None or options.source_characters < 1:
+        raise NarratorError("a positive original source character count is required")
     if options.instructions is not None and not options.instructions.is_absolute():
         raise NarratorError("the instructions directory must be absolute")
     if options.mode in ("semantic", "compare") and options.embedding_command is None:
@@ -709,15 +718,14 @@ def _run_arm(
     trace["candidate_neighbors"] = hints
     return summarize_arm(
         request, candidates, meter, options.model_command, trace,
-        word_cap=options.word_cap, candidate_neighbors=hints,
+        source_characters=options.source_characters, candidate_neighbors=hints,
     )
 
 
-def _summary_bytes(summary: str, word_cap: int) -> bytes:
-    raw = summary.encode("utf-8")
-    if "\0" in summary or len(raw) > MODEL_OUTPUT_BYTES or not 0 < len(summary.split()) <= word_cap:
+def _summary_bytes(summary: str, source_characters: int) -> bytes:
+    if "\0" in summary or not summary.strip() or len(summary) > source_characters:
         raise NarratorError("assembled summary is outside the output contract")
-    return raw
+    return summary.encode("utf-8")
 
 
 @contextmanager
@@ -757,9 +765,9 @@ def _run_writer(
     shared: dict[str, object] = {"outcome": "failed", "extraction_attempts": attempts}
     physical = {"text_calls": 0, "embedding_calls": 0}
     report.update({
-        "schema_version": 1,
+        "schema_version": 2,
         "mode": options.mode,
-        "word_cap": options.word_cap,
+        "source_characters": options.source_characters,
         "profile": "override" if options.instructions else "mycel-summary-prompts-v1",
         "model_command_sha256": _command_digest(options.model_command),
         "embedding_command_sha256": (
@@ -801,7 +809,7 @@ def _run_writer(
         })
         try:
             summary = _run_arm(options, mode, request, candidates, meter, trace)
-            output = _summary_bytes(summary, options.word_cap)
+            output = _summary_bytes(summary, options.source_characters)
             arm.update({"outcome": "complete", "summary": summary})
         except NarratorError as failure:
             arm["failure"] = str(failure)

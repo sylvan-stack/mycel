@@ -454,16 +454,16 @@ def _prioritize_details(
     return ordinary + deferred, dispositions
 
 
-def _allocate_words(
-    ranked: Sequence[tuple[int, Record]], word_cap: int
+def _allocate_characters(
+    ranked: Sequence[tuple[int, Record]], source_characters: int
 ) -> tuple[list[Record], list[Record]]:
-    if type(word_cap) is not int or word_cap < 0:
-        raise ValueError("Summary word cap must be a nonnegative integer")
+    if type(source_characters) is not int or source_characters < 0:
+        raise ValueError("Summary source length must be a nonnegative integer")
 
     selected: list[Record] = []
     dispositions: list[Record] = []
     representatives: dict[int, UnitKey] = {}
-    remaining_words = word_cap
+    remaining_characters = source_characters
     for group_index, unit in ranked:
         key = _unit_key(unit)
         representative = representatives.get(group_index)
@@ -477,21 +477,22 @@ def _allocate_words(
             dispositions.append(disposition)
             continue
 
-        required_words = len(unit["prose"].split())
-        if not required_words:
+        prose = unit["prose"]
+        if not prose.strip():
             raise ValueError("An admitted summary unit requires nonempty prose")
-        if required_words > remaining_words:
+        required_characters = len(prose) + (1 if selected else 0)
+        if required_characters > remaining_characters:
             disposition = _disposition(
-                key, "skipped_for_budget", "The whole unit exceeds the remaining word budget"
+                key, "skipped_for_budget", "The whole unit exceeds the remaining source character budget"
             )
-            disposition["required_words"] = required_words
-            disposition["remaining_words"] = remaining_words
+            disposition["required_characters"] = required_characters
+            disposition["remaining_characters"] = remaining_characters
             dispositions.append(disposition)
             continue
 
         selected.append(unit)
         representatives[group_index] = key
-        remaining_words -= required_words
+        remaining_characters -= required_characters
         dispositions.append(_disposition(key, "selected", "The whole verified unit fit"))
 
     return selected, dispositions
@@ -502,7 +503,7 @@ def assemble_summary(
     verdicts: Sequence[Record],
     passages: Sequence[Record],
     *,
-    word_cap: int,
+    source_characters: int,
 ) -> Record:
     """Assemble whole supported revisions, giving distinct rules the first opportunity.
 
@@ -511,11 +512,11 @@ def assemble_summary(
     """
     ranked = _rank_supported_members(groups, verdicts, passages)
     prioritized, priority_dispositions = _prioritize_details(ranked, groups)
-    selected, budget_dispositions = _allocate_words(prioritized, word_cap)
+    selected, budget_dispositions = _allocate_characters(prioritized, source_characters)
     summary = "\n".join(unit["prose"] for unit in selected)
     return {
         "summary": summary or None,
-        "word_count": len(summary.split()),
+        "character_count": len(summary),
         "selected_units": selected,
         "dispositions": priority_dispositions + budget_dispositions,
     }
