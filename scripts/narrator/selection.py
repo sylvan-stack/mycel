@@ -177,10 +177,17 @@ def _resolve_citations(
     return evidence, dispositions
 
 
-def _comparison_decisions(comparisons: Sequence[Record]) -> dict[UnitPair, Record]:
+def _comparison_decisions(
+    comparisons: Sequence[Record], current_revisions: dict[str, int]
+) -> dict[UnitPair, Record]:
     decisions: dict[UnitPair, Record] = {}
     for comparison in comparisons:
-        pair = frozenset(_comparison_keys(comparison))
+        keys = _comparison_keys(comparison)
+        if keys[0] == keys[1] or any(
+            current_revisions.get(unit_id) != revision for unit_id, revision in keys
+        ):
+            continue
+        pair = frozenset(keys)
         if comparison["equivalent"]:
             decisions.setdefault(pair, comparison)
         else:
@@ -223,8 +230,6 @@ def _group_dispositions(
     units_by_key = {_unit_key(unit): unit for group in groups for unit in group}
     distinctions: dict[UnitKey, str] = {}
     for pair, decision in decisions.items():
-        if len(pair) != 2 or not pair <= units_by_key.keys():
-            continue
         left, right = pair
         if not decision["equivalent"]:
             reason = decision["reason"]
@@ -258,21 +263,20 @@ def select_distinct_units(
     passages: Sequence[Record],
     comparisons: Sequence[Record],
 ) -> Record:
-    """Group unchanged revisions using passages already validated for this request."""
+    """Regroup current revisions against exact comparisons and validated passages."""
     candidates_by_id = {candidate["candidate_id"]: candidate for candidate in candidates}
     candidate_ids = set(candidates_by_id)
     passages_by_id = {passage["passage_id"]: passage for passage in passages}
-    decisions = _comparison_decisions(comparisons)
 
-    seen_ids: set[str] = set()
+    current_revisions: dict[str, int] = {}
     ordered_units = []
     dispositions = []
     for unit in units:
         key = _unit_key(unit)
-        unit_id, _ = key
-        if unit_id in seen_ids:
+        unit_id, revision = key
+        if unit_id in current_revisions:
             raise ValueError("Selection requires one current revision per unit_id")
-        seen_ids.add(unit_id)
+        current_revisions[unit_id] = revision
 
         _validate_candidate_origins(unit, candidate_ids)
         evidence, invalid_citations = _resolve_citations(unit, key, passages_by_id)
@@ -280,6 +284,7 @@ def select_distinct_units(
         ordered_units.append(((-_consequence_rank(unit), first_citation, unit_id), unit))
         dispositions.extend(invalid_citations)
 
+    decisions = _comparison_decisions(comparisons, current_revisions)
     ordered_units.sort(key=lambda row: row[0])
     groups: list[list[Record]] = []
     for _, unit in ordered_units:
