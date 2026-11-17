@@ -1,6 +1,6 @@
 """Check Narrator summary units against the exact RAPTOR request evidence."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from itertools import pairwise
 from typing import TypedDict
 
@@ -309,3 +309,29 @@ def _read_verdicts(
             assert isinstance(reason, str)
             dispositions.append(_disposition(key, "unsupported", reason))
     return verdicts, dispositions
+
+
+def verify_units(
+    request_text: str,
+    request_digest: str,
+    source_spans: Sequence[tuple[int, int]],
+    passages: Sequence[Mapping[str, object]],
+    units: Sequence[Mapping[str, object]],
+    *,
+    judge: Callable[[str, _Record], object],
+) -> tuple[list[_Record], list[_Record], list[_Record]]:
+    """Return checked unit revisions, verdicts and dispositions for one request.
+
+    The writer supplies the request digest and admitted source spans. The judge
+    receives instructions and plain data and returns a decoded verdict array.
+    A checked unit is eligible for assembly only with its own supported verdict.
+    """
+    resolved, context = _resolve_passages(request_text, request_digest, source_spans, passages)
+    checked_units, verdicts, dispositions = _normalize_units(units, resolved)
+    if checked_units:
+        payload = _verification_payload(checked_units, resolved, context)
+        rows = judge(_VERIFICATION_INSTRUCTIONS, payload)
+        checked_verdicts, verdict_dispositions = _read_verdicts(rows, checked_units, resolved)
+        verdicts.extend(checked_verdicts)
+        dispositions.extend(verdict_dispositions)
+    return checked_units, verdicts, dispositions
