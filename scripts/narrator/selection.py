@@ -177,6 +177,13 @@ def _resolve_citations(
     return evidence, dispositions
 
 
+def _unit_order(
+    unit: Record, unit_id: str, evidence: Sequence[Record]
+) -> tuple[int, int | float, str]:
+    first_citation = min((passage["start"] for passage in evidence), default=float("inf"))
+    return -_consequence_rank(unit), first_citation, unit_id
+
+
 def _comparison_decisions(
     comparisons: Sequence[Record], current_revisions: dict[str, int]
 ) -> dict[UnitPair, Record]:
@@ -280,8 +287,7 @@ def select_distinct_units(
 
         _validate_candidate_origins(unit, candidate_ids)
         evidence, invalid_citations = _resolve_citations(unit, key, passages_by_id)
-        first_citation = min((passage["start"] for passage in evidence), default=float("inf"))
-        ordered_units.append(((-_consequence_rank(unit), first_citation, unit_id), unit))
+        ordered_units.append((_unit_order(unit, unit_id, evidence), unit))
         dispositions.extend(invalid_citations)
 
     decisions = _comparison_decisions(comparisons, current_revisions)
@@ -296,3 +302,50 @@ def select_distinct_units(
             groups.append([unit])
     dispositions.extend(_group_dispositions(groups, decisions, candidates_by_id))
     return {"groups": [{"members": group} for group in groups], "dispositions": dispositions}
+
+
+def _verdicts_by_key(verdicts: Sequence[Record]) -> dict[UnitKey, Record]:
+    indexed: dict[UnitKey, Record] = {}
+    duplicates: set[UnitKey] = set()
+    for verdict in verdicts:
+        if not isinstance(verdict, dict):
+            continue
+        try:
+            key = _unit_key(verdict)
+        except ValueError:
+            continue
+        if key in indexed:
+            duplicates.add(key)
+        indexed[key] = verdict
+    for key in duplicates:
+        del indexed[key]
+    return indexed
+
+
+def _rank_supported_members(
+    groups: Sequence[Record], verdicts: Sequence[Record], passages: Sequence[Record]
+) -> list[tuple[int, Record]]:
+    verdicts_by_key = _verdicts_by_key(verdicts)
+    passages_by_id = {passage["passage_id"]: passage for passage in passages}
+    ranked = []
+    for group_index, group in enumerate(groups):
+        for unit in group["members"]:
+            key = _unit_key(unit)
+            verdict = verdicts_by_key.get(key)
+            if verdict is None or verdict.get("verdict") != "supported":
+                continue
+            evidence, invalid_citations = _resolve_citations(unit, key, passages_by_id)
+            consulted = verdict.get("evidence_passage_ids")
+            if (
+                invalid_citations
+                or verdict.get("affected_part") is not None
+                or verdict.get("reason") is not None
+                or not isinstance(consulted, list)
+                or any(not isinstance(p, str) or p not in passages_by_id for p in consulted)
+                or all(passage["passage_id"] not in consulted for passage in evidence)
+            ):
+                continue
+            ranked.append((_unit_order(unit, key[0], evidence), group_index, unit))
+
+    ranked.sort(key=lambda row: row[0])
+    return [(group_index, unit) for _, group_index, unit in ranked]
