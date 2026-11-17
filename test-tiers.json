@@ -34,10 +34,10 @@
       "kind": "python",
       "tier": "top",
       "status": "active",
-      "reason": "A rendered Unicode child request puts a literal cut marker inside source and the real notice at the boundary. Through the real launcher, framing stays out of evidence and an oversized unit leaves the exact supported prose at the cap.",
+      "reason": "A cut Unicode child request retains its original source size. The real writer excludes instructions and the terminal cut notice from evidence and emits verified prose above 220 words intact.",
       "review": "individual",
-      "line": 205,
-      "file_sha256": "a4c4ca1af3d52f0a2bfc2ea9b924d6c04bc09b22a0b7e4e211660bf7a0419346",
+      "line": 211,
+      "file_sha256": "4e36c43b8dc218255218eb8219fcafb09eab6ff0264821f9b010d38109065b01",
       "selector": "test_top_narrator_writer_contract.NarratorWriterContractTests.test_framed_request_emits_only_whole_verified_units"
     },
     {
@@ -51,8 +51,8 @@
       "status": "active",
       "reason": "Malformed verification and its format retry fail across both real Mycel attempts. Child traces reveal excess launches, changed request identity, unsupported prose or exposed diagnostics.",
       "review": "individual",
-      "line": 253,
-      "file_sha256": "a4c4ca1af3d52f0a2bfc2ea9b924d6c04bc09b22a0b7e4e211660bf7a0419346",
+      "line": 264,
+      "file_sha256": "4e36c43b8dc218255218eb8219fcafb09eab6ff0264821f9b010d38109065b01",
       "selector": "test_top_narrator_writer_contract.NarratorWriterContractTests.test_invalid_verifier_output_fails_both_writer_attempts_safely"
     },
     {
@@ -66,8 +66,8 @@
       "status": "active",
       "reason": "A failed embedding leaves a repaired reasoned summary and exact call counts. Nested local credential processes with inherited pipes stop on completion and an outer deadline.",
       "review": "individual",
-      "line": 286,
-      "file_sha256": "a4c4ca1af3d52f0a2bfc2ea9b924d6c04bc09b22a0b7e4e211660bf7a0419346",
+      "line": 300,
+      "file_sha256": "4e36c43b8dc218255218eb8219fcafb09eab6ff0264821f9b010d38109065b01",
       "selector": "test_top_narrator_writer_contract.NarratorWriterContractTests.test_failed_similarity_preserves_the_isolated_reasoned_arm"
     },
     {
@@ -79,10 +79,10 @@
       "kind": "python",
       "tier": "top",
       "status": "active",
-      "reason": "Grouping before filtering an unsupported proposal can put supported equivalents in separate groups and use the exception's words on a duplicate rule. Regrouping restores the exception. An earlier equivalence judgment cannot merge a freshly verified revision.",
+      "reason": "Grouping before filtering an unsupported proposal can put supported equivalents in separate groups and spend the source budget on a duplicate rule. Regrouping restores the exception. An earlier equivalence judgment cannot merge a freshly verified revision.",
       "review": "individual",
       "line": 80,
-      "file_sha256": "17ab78fca458813d3c5f63752046c0c030b1f626c3f66e770fc458d69c1293bc",
+      "file_sha256": "0cd3e369c405e37bae932de545bca1c4f026e6c97b1e7e63e2d4139016c78246",
       "selector": "test_top_narrator_selection.NarratorSelectionTests.test_supported_regrouping_preserves_late_exception"
     },
     {
@@ -96,8 +96,8 @@
       "status": "active",
       "reason": "A misleading comparison must preserve contradictory units from different authorities. The check observes nonadjacent evidence references and shows that an unresolved citation or a verdict for an earlier revision cannot authorize output.",
       "review": "individual",
-      "line": 143,
-      "file_sha256": "17ab78fca458813d3c5f63752046c0c030b1f626c3f66e770fc458d69c1293bc",
+      "line": 144,
+      "file_sha256": "0cd3e369c405e37bae932de545bca1c4f026e6c97b1e7e63e2d4139016c78246",
       "selector": "test_top_narrator_selection.NarratorSelectionTests.test_authority_and_exact_evidence_survive_selection"
     },
     {
@@ -109,10 +109,10 @@
       "kind": "python",
       "tier": "top",
       "status": "active",
-      "reason": "An oversized preferred unit leaves room for an intervening distinct rule and its own shorter equivalent. Exact-cap prose preserves internal whitespace, and a cap below every complete unit keeps the budget exclusions.",
+      "reason": "An oversized preferred unit leaves room for a distinct rule and its shorter equivalent. Exact-cap prose preserves whitespace. A one-character reduction leaves too little room for the joining newline, and a smaller source keeps all budget exclusions.",
       "review": "individual",
-      "line": 190,
-      "file_sha256": "17ab78fca458813d3c5f63752046c0c030b1f626c3f66e770fc458d69c1293bc",
+      "line": 192,
+      "file_sha256": "0cd3e369c405e37bae932de545bca1c4f026e6c97b1e7e63e2d4139016c78246",
       "selector": "test_top_narrator_selection.NarratorSelectionTests.test_oversized_member_leaves_room_for_distinct_rule_and_shorter_equivalent"
     },
     {
@@ -126,8 +126,8 @@
       "status": "active",
       "reason": "Higher-ranked optional detail can crowd out a distinct rule. A supported direct cover defers the detail, an unsupported or stale cover leaves it in ordinary rank, and an oversized cover leaves it eligible after the distinct rule fits.",
       "review": "individual",
-      "line": 231,
-      "file_sha256": "17ab78fca458813d3c5f63752046c0c030b1f626c3f66e770fc458d69c1293bc",
+      "line": 240,
+      "file_sha256": "0cd3e369c405e37bae932de545bca1c4f026e6c97b1e7e63e2d4139016c78246",
       "selector": "test_top_narrator_selection.NarratorSelectionTests.test_distinct_rule_fits_before_covered_detail"
     },
     {
