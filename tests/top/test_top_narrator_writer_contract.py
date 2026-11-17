@@ -3,38 +3,107 @@
 from hashlib import sha256
 from importlib.resources import files
 import json
+import os
 from pathlib import Path
+import signal
+import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 from mycel._resolver import ResolvedChunk, SelectionMember
 from mycel._source_refs import SourceAddress
 from mycel._summary_request import SummaryPrompts, SummarySection, plan_summary_requests
 from mycel._summary_writer import SummaryWriter, WriterResult
+from test_summary_writer import _process_running
 
 
 NARRATOR = Path(__file__).resolve().parents[2] / "scripts/narrator/narrator.py"
 PYTHON = str(Path(sys.executable).absolute())
-STAND_IN = """\
+PROBE = """\
 import json
+import os
 import pathlib
+import subprocess
 import sys
+import time
+
+def launch_record(argv):
+    return {"argv": argv, "cwd": os.getcwd(), "empty": not os.listdir("."),
+            "environment_marker": os.environ.get("NARRATOR_CONTRACT_PRIVATE"),
+            "pid": os.getpid(), "group": os.getpgrp()}
+
+def start_descendant():
+    return subprocess.Popen((sys.executable, "-I", "-B", "-c", "import time; time.sleep(60)"),
+                            stdin=subprocess.DEVNULL)
+
+"""
+STAND_IN = PROBE + """\
 
 plan, trace = map(pathlib.Path, sys.argv[1:3])
 replies = json.loads(plan.read_text(encoding="utf-8"))
 index = len(trace.read_text(encoding="utf-8").splitlines()) if trace.exists() else 0
 request = sys.stdin.read()
 prompt, _, payload = request.rpartition("\\n\\n")
+record = launch_record(sys.argv[3:])
 with trace.open("a", encoding="utf-8") as stream:
-    stream.write(json.dumps({"prompt": prompt, "input": json.loads(payload)}) + "\\n")
+    stream.write(json.dumps(dict(record, prompt=prompt, input=json.loads(payload))) + "\\n")
 reply = replies[index]
 if isinstance(reply, dict) and "raw" in reply:
     sys.stderr.write(reply.get("stderr", ""))
     sys.stdout.write(reply["raw"])
 else:
     sys.stdout.write(json.dumps(reply))
+"""
+CREDENTIAL_STAND_IN = PROBE + """\
+trace, mode, *literal = sys.argv[1:]
+record = launch_record(literal)
+descendant = start_descendant()
+record["descendant"] = descendant.pid
+pathlib.Path(trace).write_text(json.dumps(record), encoding="utf-8")
+if mode == "block":
+    time.sleep(60)
+print("fixture-token")
+"""
+EMBEDDING_STAND_IN = PROBE + """\
+narrator, key_argv, trace, *literal = sys.argv[1:]
+sys.path.insert(0, narrator)
+from narrator import _interrupt_on_termination
+from voyage_embeddings import _read_key
+
+record = launch_record(literal)
+record["input"] = json.load(sys.stdin)
+path = pathlib.Path(trace)
+path.write_text(json.dumps(record), encoding="utf-8")
+try:
+    with _interrupt_on_termination():
+        started = time.monotonic()
+        record["credential_ok"] = _read_key(tuple(json.loads(key_argv)), started + 5) == "fixture-token"
+        record["credential_seconds"] = time.monotonic() - started
+        descendant = start_descendant()
+        record["descendant"] = descendant.pid
+        path.write_text(json.dumps(record), encoding="utf-8")
+        sys.stderr.write("fixture-private-embedding-diagnostic")
+        sys.stdout.write("{")
+except KeyboardInterrupt:
+    sys.exit(1)
+"""
+OUTER_DEADLINE = """\
+import json
+import sys
+import time
+
+sys.path.insert(0, sys.argv[1])
+from narrator import BudgetExhausted, _run_command
+
+try:
+    _run_command(tuple(json.loads(sys.argv[2])), b'["first", "second"]', time.monotonic() + 3)
+except BudgetExhausted:
+    print("outer deadline expired")
+else:
+    sys.exit("outer deadline did not expire")
 """
 
 
@@ -78,6 +147,21 @@ def _read_trace(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def _stop_fixture_processes(path):
+    if not path.exists():
+        return
+    trace = json.loads(path.read_text(encoding="utf-8"))
+    for field in ("descendant", "pid"):
+        pid = trace.get(field)
+        if pid is None:
+            continue
+        try:
+            if os.getpgid(pid) == trace["group"]:
+                os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 class NarratorWriterContractTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory(prefix="narrator-contract-")
@@ -86,12 +170,34 @@ class NarratorWriterContractTests(unittest.TestCase):
         self.stand_in = self.root / "stand-in.py"
         self.stand_in.write_text(STAND_IN, encoding="utf-8")
 
-    def _stand_in(self, name, replies):
+    def _stand_in(self, name, replies, *arguments):
         plan = self.root / f"{name}.json"
         plan.write_text(json.dumps(replies), encoding="utf-8")
         trace = self.root / f"{name}.jsonl"
-        argv = [PYTHON, "-I", "-B", str(self.stand_in), str(plan), str(trace)]
+        argv = [PYTHON, "-I", "-B", str(self.stand_in), str(plan), str(trace), *arguments]
         return argv, trace
+
+    def _child(self, name, source, *arguments):
+        path = self.root / f"{name}.py"
+        path.write_text(source, encoding="utf-8")
+        return [PYTHON, "-I", "-B", str(path), *arguments]
+
+    def _embedding(self, mode, literal):
+        credentials = self.root / f"credentials-{mode}.json"
+        transport = self.root / f"embedding-{mode}.json"
+        self.addCleanup(_stop_fixture_processes, transport)
+        self.addCleanup(_stop_fixture_processes, credentials)
+        key = self._child("credential", CREDENTIAL_STAND_IN, str(credentials), mode, literal)
+        embedding = self._child("embedding", EMBEDDING_STAND_IN, str(NARRATOR.parent),
+                                json.dumps(key), str(transport), literal)
+        return embedding, transport, credentials
+
+    def _assert_exited(self, *identifiers):
+        deadline = time.monotonic() + 2
+        while any(map(_process_running, identifiers)):
+            if time.monotonic() >= deadline:
+                self.fail(f"fixture processes survived their command: {identifiers}")
+            time.sleep(0.01)
 
     def _writer(self, model, *options):
         return (PYTHON, "-I", "-B", str(NARRATOR), "--model-command", json.dumps(model), *options)
@@ -172,3 +278,86 @@ class NarratorWriterContractTests(unittest.TestCase):
             self.assertEqual([row["unit_id"] for row in initial["input"]["units"]], ["retention"])
             self.assertEqual(retry["input"], initial["input"])
             self.assertIn("The preceding response had the wrong format.", retry["prompt"])
+
+    def test_failed_similarity_preserves_the_isolated_reasoned_arm(self):
+        first, second = "Releases require an audit.", "Log every release."
+        request = _packaged_request(f"{first}\n\n{second}")
+        unit = _unit("release", "Releases require no audit.", "C001", "P001")
+        rejection = dict(_support(unit), verdict="unsupported", affected_part="no audit",
+                         reason="The policy requires an audit.", repair_eligibility={
+                             "omission_consequence": "An operator could allow an unaudited release.",
+                             "correction_passage_ids": ["P001"],
+                         })
+        correction = {"unit_id": "release", "revision": 1, "repair": "corrected", "prose": first,
+                      "scope": "archive", "conditions": ["audit"], "cited_passage_ids": ["P001"]}
+        repaired = dict(unit, revision=2, prose=first, conditions=["audit"])
+        literal = f"$(touch {self.root / 'expanded'})"
+        malformed = {"raw": "{"}
+        model, model_trace = self._stand_in("model", [
+            malformed, [_candidate(first, "P001"), _candidate(second, "P002")],
+            malformed, {"units": [unit], "comparisons": []},
+            malformed, [rejection], [correction], [_support(repaired)],
+        ], literal)
+        embedding, embedding_trace, credential_trace = self._embedding("return", literal)
+        report_path = self.root / "summary-report.json"
+        argv = self._writer(model, "--mode", "compare", "--report", str(report_path),
+                            "--embedding-command", json.dumps(embedding))
+        direct = subprocess.run(argv, input=request, capture_output=True, cwd=self.root,
+                                timeout=15, check=False,
+                                env={**os.environ, "NARRATOR_CONTRACT_PRIVATE": "private-fixture-value"})
+        self.assertEqual(direct.returncode, 1)
+        self.assertEqual(direct.stdout, b"")
+        self.assertIn(b"Narrator comparison did not complete both arms", direct.stderr)
+        self.assertNotIn(b"fixture-private-embedding-diagnostic", direct.stderr)
+        self.assertEqual(stat.S_IMODE(report_path.stat().st_mode), 0o600)
+
+        launches = _read_trace(model_trace)
+        self.assertEqual(len(launches), 8)
+        embed_record = json.loads(embedding_trace.read_text(encoding="utf-8"))
+        credential_record = json.loads(credential_trace.read_text(encoding="utf-8"))
+        self.assertEqual(embed_record["input"], [first, second])
+        self.assertTrue(embed_record["credential_ok"])
+        self.assertLess(embed_record["credential_seconds"], 5)
+        self.assertNotEqual(credential_record["group"], embed_record["group"])
+        self._assert_exited(credential_record["descendant"], embed_record["descendant"])
+        workdirs = set()
+        for record in (*launches, embed_record, credential_record):
+            self.assertEqual(record["argv"], [literal])
+            self.assertTrue(record["empty"])
+            self.assertIsNone(record["environment_marker"])
+            self.assertNotIn(record["cwd"], workdirs)
+            workdirs.add(record["cwd"])
+        self.assertFalse((self.root / "expanded").exists())
+
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["shared"]["request"]["sha256"], sha256(request).hexdigest())
+        self.assertEqual(report["shared"]["text_calls"], 2)
+        self.assertEqual(report["physical_calls"], {"text_calls": len(launches), "embedding_calls": 1})
+        reasoned, semantic = (report["arms"][mode] for mode in ("reasoned", "semantic"))
+        budget = reasoned["starting_budget"]
+        self.assertEqual(budget, semantic["starting_budget"])
+        self.assertEqual(budget["text_calls"], 6)
+        self.assertGreater(budget["seconds"], 0)
+        self.assertEqual((reasoned["outcome"], reasoned["text_calls"], reasoned["embedding_calls"]),
+                         ("complete", 8, 0))
+        self.assertEqual([event["stage"] for event in reasoned["events"]],
+                         ["consolidation", "consolidation", "verification", "verification",
+                          "repair", "fresh_verification"])
+        revised, = reasoned["trace"]["revised_units"]
+        self.assertEqual(revised, launches[-1]["input"]["units"][0])
+        self.assertEqual((revised["unit_id"], revised["revision"], revised["prose"], reasoned["summary"]),
+                         ("release", 2, first, first))
+        self.assertEqual((semantic["outcome"], semantic["text_calls"], semantic["embedding_calls"]),
+                         ("failed", 2, 1))
+        self.assertEqual([event["stage"] for event in semantic["events"]], ["embedding"])
+        self.assertNotIn("summary", semantic)
+
+        blocked, blocked_trace, blocked_credentials = self._embedding("block", literal)
+        outer = self._child("outer-deadline", OUTER_DEADLINE, str(NARRATOR.parent), json.dumps(blocked))
+        stopped = subprocess.run(outer, capture_output=True, cwd=self.root, timeout=12, check=False)
+        self.assertEqual((stopped.returncode, stopped.stdout), (0, b"outer deadline expired\n"), stopped.stderr)
+        active_embedding = json.loads(blocked_trace.read_text(encoding="utf-8"))
+        active_credential = json.loads(blocked_credentials.read_text(encoding="utf-8"))
+        self.assertNotEqual(active_credential["group"], active_embedding["group"])
+        self.assertNotIn("credential_ok", active_embedding)
+        self._assert_exited(active_embedding["pid"], active_credential["pid"], active_credential["descendant"])
