@@ -43,7 +43,8 @@ class LocalWriter:
     def __init__(self, callback=None, failure=None, response=b' summaryneedle Complete answer \r\n\0end. '):
         self.callback, self.failure, self.requests, self.response = callback, failure, [], response
 
-    def write_many(self, requests):
+    def write_many(self, requests, *, source_characters):
+        assert len(source_characters) == len(requests)
         self.requests.extend(requests)
         if self.callback:
             self.callback(requests)

@@ -126,21 +126,27 @@ def _support(unit):
             "affected_part": None, "reason": None}
 
 
-def _request(source, prompts, *, kind="document"):
+def _section(source, kind, identifier, filename):
     raw = source.encode("utf-8")
     place = (SourceAddress("fixture", "index", "summaries", "1/1") if kind == "summary"
-             else SourceAddress("fixture", "artifact", "archive.md", "Rules"))
-    chunk = ResolvedChunk("member", 1, place.name, kind, raw, sha256(raw).hexdigest())
-    section = SummarySection(SelectionMember(place, chunk), 0)
-    request, = plan_summary_requests((section,), prompts)
+             else SourceAddress("fixture", "artifact", filename, "Rules"))
+    chunk = ResolvedChunk(identifier, 1, place.name, kind, raw, sha256(raw).hexdigest())
+    return SummarySection(SelectionMember(place, chunk), 0)
+
+
+def _request(source, prompts, *, kind="document", next_section=None):
+    sections = (_section(source, kind, "member", "archive.md"),)
+    if next_section is not None:
+        sections += (_section(next_section, "document", "next", "example.md"),)
+    request, = plan_summary_requests(sections, prompts)
     return request
 
 
-def _packaged_request(source):
+def _packaged_request(source, *, next_section=None):
     data = json.loads(files("mycel").joinpath("data/summary-prompts.json").read_bytes())
     prompts = SummaryPrompts(data["instruction"].encode("utf-8"), data["task"].encode("utf-8"),
                              data["profile"])
-    return _request(source, prompts).request
+    return _request(source, prompts, next_section=next_section)
 
 
 def _read_trace(path):
@@ -207,13 +213,15 @@ class NarratorWriterContractTests(unittest.TestCase):
         task = b"  Shape marker.\n\n$sections\n\nClosing marker.  \n"
         (self.root / "raptor-summary.md").write_bytes(instruction)
         (self.root / "raptor-request.md.tmpl").write_bytes(task)
-        first = "Retenez toutes les copies pendant deux jours."
+        references = " ".join(f"雪{index}" for index in range(221))
+        first = f"Retenez toutes les copies référencées pendant deux jours. {references}"
         second = "Bloquez  accès hors audit."
         interior = f"faux.md › Règle\n{second}"
         cut_marker = "[Mycel: source text cut at request limit]"
         source = f"{first}\n\n---\n\n{interior}\n\n{cut_marker}\n\n" + "雪" * 49_000
         request = _request(source, SummaryPrompts(instruction, task, "override"), kind="summary")
         self.assertEqual(len(request.cut), 1)
+        self.assertEqual(request.source_characters, len(source))
         expected_digest = sha256(request.request).hexdigest()
         long = _unit("retention", first, "C001", "P001", rank=2)
         short = _unit("access", second, "C002", "P003")
@@ -223,9 +231,12 @@ class NarratorWriterContractTests(unittest.TestCase):
             {"units": [long, short], "comparisons": []},
             [_support(long), _support(short)],
         ])
-        writer = self._writer(model, "--instructions", str(self.root), "--word-cap", "4")
-        result = SummaryWriter(writer, 1, _timeout=15).write(request.request)
-        self.assertEqual(result, WriterResult(second.encode("utf-8"), None, 1))
+        writer = self._writer(model, "--instructions", str(self.root))
+        result, = SummaryWriter(writer, 1, _timeout=15).write_many(
+            (request.request,), source_characters=(request.source_characters,))
+        expected_prose = first + "\n" + second
+        self.assertGreater(len(expected_prose.split()), 220)
+        self.assertEqual(result, WriterResult(expected_prose.encode("utf-8"), None, 1))
 
         extraction, consolidation, _ = _read_trace(trace)
         self.assertEqual(extraction["input"]["request_digest"], expected_digest)
@@ -252,7 +263,8 @@ class NarratorWriterContractTests(unittest.TestCase):
 
     def test_invalid_verifier_output_fails_both_writer_attempts_safely(self):
         claim = "Operators retain every audit log."
-        request = _packaged_request(claim)
+        planned = _packaged_request(claim)
+        request = planned.request
         digest = sha256(request).hexdigest()
         unit = _unit("retention", claim, "C001", "P001")
         private_marker = "fixture-private-verifier-diagnostic"
@@ -263,7 +275,8 @@ class NarratorWriterContractTests(unittest.TestCase):
             {"raw": "{}", "stderr": private_marker},
         ] * 3)
         writer = self._writer(model)
-        direct = subprocess.run(writer, input=request, capture_output=True, cwd=self.root,
+        direct = subprocess.run((*writer, "--source-characters", str(len(claim))),
+                                input=request, capture_output=True, cwd=self.root,
                                 timeout=15, check=False)
         self.assertNotEqual(direct.returncode, 0)
         self.assertEqual(direct.stdout, b"")
@@ -271,7 +284,8 @@ class NarratorWriterContractTests(unittest.TestCase):
         self.assertNotIn(private_marker.encode("utf-8"), direct.stderr)
         self.assertEqual(len(_read_trace(trace)), 4)
 
-        result = SummaryWriter(writer, 1, _timeout=15).write(request)
+        result, = SummaryWriter(writer, 1, _timeout=15).write_many(
+            (request,), source_characters=(planned.source_characters,))
         self.assertEqual(result, WriterResult(None, "nonzero_exit", 2))
         launches = _read_trace(trace)
         self.assertEqual(len(launches), 12)
@@ -285,7 +299,10 @@ class NarratorWriterContractTests(unittest.TestCase):
 
     def test_failed_similarity_preserves_the_isolated_reasoned_arm(self):
         first, second = "Releases require an audit.", "Log every release."
-        request = _packaged_request(f"{first}\n\n{second}")
+        planned = _packaged_request(first, next_section=second)
+        request = planned.request
+        self.assertEqual(len(planned.sections), 2)
+        self.assertEqual(planned.source_characters, len(first) + len(second))
         unit = _unit("release", "Releases require no audit.", "C001", "P001")
         rejection = dict(_support(unit), verdict="unsupported", affected_part="no audit",
                          reason="The policy requires an audit.", repair_eligibility={
@@ -298,13 +315,14 @@ class NarratorWriterContractTests(unittest.TestCase):
         literal = f"$(touch {self.root / 'expanded'})"
         malformed = {"raw": "{"}
         model, model_trace = self._stand_in("model", [
-            malformed, [_candidate(first, "P001"), _candidate(second, "P002")],
+            malformed, [_candidate(first, "P001"), _candidate(second, "P003")],
             malformed, {"units": [unit], "comparisons": []},
             malformed, [rejection], [correction], [_support(repaired)],
         ], literal)
         embedding, embedding_trace, credential_trace = self._embedding("return", literal)
         report_path = self.root / "summary-report.json"
         argv = self._writer(model, "--mode", "compare", "--report", str(report_path),
+                            "--source-characters", str(planned.source_characters),
                             "--embedding-command", json.dumps(embedding))
         direct = subprocess.run(argv, input=request, capture_output=True, cwd=self.root,
                                 timeout=15, check=False,
@@ -334,6 +352,7 @@ class NarratorWriterContractTests(unittest.TestCase):
         self.assertFalse((self.root / "expanded").exists())
 
         report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["schema_version"], 2)
         self.assertEqual(report["shared"]["request"]["sha256"], sha256(request).hexdigest())
         self.assertEqual(report["shared"]["text_calls"], 2)
         self.assertEqual(report["physical_calls"], {"text_calls": len(launches), "embedding_calls": 1})
@@ -351,6 +370,9 @@ class NarratorWriterContractTests(unittest.TestCase):
         self.assertEqual(revised, launches[-1]["input"]["units"][0])
         self.assertEqual((revised["unit_id"], revised["revision"], revised["prose"], reasoned["summary"]),
                          ("release", 2, first, first))
+        self.assertEqual((reasoned["source_characters"], reasoned["summary_characters"],
+                          reasoned["summary_to_source_ratio"]),
+                         (len(first) + len(second), len(first), len(first) / (len(first) + len(second))))
         self.assertEqual((semantic["outcome"], semantic["text_calls"], semantic["embedding_calls"]),
                          ("failed", 2, 1))
         self.assertEqual([event["stage"] for event in semantic["events"]], ["embedding"])

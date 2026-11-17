@@ -112,7 +112,8 @@ class NarratorSelectionTests(unittest.TestCase):
         }
         supported = [preferred, alternative, exception]
         verdicts = [rejected_verdict, *(_supported(unit) for unit in supported)]
-        frozen_groups = selection.assemble_summary(initial["groups"], verdicts, passages, word_cap=10)
+        ceiling = len(preferred["prose"] + "\n" + exception["prose"])
+        frozen_groups = selection.assemble_summary(initial["groups"], verdicts, passages, source_characters=ceiling)
         self.assertEqual(frozen_groups["selected_units"], [preferred, alternative])
         self.assertIn(("exception", 1, "skipped_for_budget"), [
             (item["unit_id"], item["revision"], item["outcome"])
@@ -120,11 +121,11 @@ class NarratorSelectionTests(unittest.TestCase):
         ])
 
         regrouped = selection.select_distinct_units(supported, candidates, passages, comparisons)
-        summary = selection.assemble_summary(regrouped["groups"], verdicts, passages, word_cap=10)
+        summary = selection.assemble_summary(regrouped["groups"], verdicts, passages, source_characters=ceiling)
         self.assertEqual(summary["selected_units"], [preferred, exception])
         self.assertEqual(summary["summary"],
                          "Keep samples for thirty days.\nDiscard contaminated samples before storage.")
-        self.assertEqual(summary["word_count"], 10)
+        self.assertEqual(summary["character_count"], ceiling)
         equivalent = next(item for item in summary["dispositions"]
                           if item["outcome"] == "equivalent_not_selected")
         self.assertEqual((equivalent["unit_id"], equivalent["revision"],
@@ -137,7 +138,7 @@ class NarratorSelectionTests(unittest.TestCase):
         self.assertEqual([group["members"] for group in current["groups"]],
                          [[preferred], [revised], [exception]])
         fresh = selection.assemble_summary(current["groups"], [*verdicts, _supported(revised)],
-                                           passages, word_cap=10)
+                                           passages, source_characters=ceiling)
         self.assertEqual(fresh["selected_units"], [preferred, revised])
 
     def test_authority_and_exact_evidence_survive_selection(self):
@@ -169,11 +170,12 @@ class NarratorSelectionTests(unittest.TestCase):
 
         verdicts = [_supported(board), _supported(contractor_previous),
                     _supported(invalid, consulted=["p1"])]
-        earlier = selection.assemble_summary(grouped["groups"], verdicts, passages, word_cap=12)
+        ceiling = len(board["prose"] + "\n" + contractor["prose"])
+        earlier = selection.assemble_summary(grouped["groups"], verdicts, passages, source_characters=ceiling)
         self.assertEqual(earlier["summary"], "The board requires 30 days from intake.")
 
         current = selection.assemble_summary(grouped["groups"], [*verdicts, _supported(contractor)],
-                                            passages, word_cap=12)
+                                            passages, source_characters=ceiling)
         self.assertEqual(current["summary"],
                          "The board requires 30 days from intake.\n"
                          "The contractor requests immediate disposal.")
@@ -204,28 +206,35 @@ class NarratorSelectionTests(unittest.TestCase):
             units, candidates, passages, [_comparison(oversized, shorter)]
         )
         verdicts = [_supported(unit) for unit in units]
-        exact = selection.assemble_summary(grouped["groups"], verdicts, passages, word_cap=9)
+        expected = "Seal\tbags  before transport.\nRetain  samples\tfor thirty days."
+        exact = selection.assemble_summary(grouped["groups"], verdicts, passages, source_characters=len(expected))
         self.assertEqual([unit["unit_id"] for unit in exact["selected_units"]],
                          ["transport", "shorter"])
-        self.assertEqual(exact["summary"],
-                         "Seal\tbags  before transport.\nRetain  samples\tfor thirty days.")
-        self.assertEqual(exact["word_count"], 9)
+        self.assertEqual(exact["summary"], expected)
+        self.assertEqual(exact["character_count"], len(expected))
         skip, = [item for item in exact["dispositions"] if item["outcome"] == "skipped_for_budget"]
         self.assertEqual(_key(skip), {"unit_id": "oversized", "revision": 1})
-        self.assertEqual((skip["required_words"], skip["remaining_words"]), (12, 9))
+        self.assertEqual((skip["required_characters"], skip["remaining_characters"]),
+                         (len(oversized["prose"]), len(expected)))
 
-        no_fit = selection.assemble_summary(grouped["groups"], verdicts, passages, word_cap=3)
+        one_short = selection.assemble_summary(grouped["groups"], verdicts, passages,
+                                               source_characters=len(expected) - 1)
+        self.assertEqual(one_short["selected_units"], [transport])
+        short_skip = next(item for item in one_short["dispositions"] if item["unit_id"] == "shorter")
+        self.assertEqual((short_skip["required_characters"], short_skip["remaining_characters"]),
+                         (len(shorter["prose"]) + 1, len(shorter["prose"])))
+
+        no_fit = selection.assemble_summary(grouped["groups"], verdicts, passages, source_characters=3)
         self.assertIsNone(no_fit["summary"])
-        self.assertEqual(no_fit["word_count"], 0)
+        self.assertEqual(no_fit["character_count"], 0)
         self.assertEqual(no_fit["selected_units"], [])
         self.assertEqual([
             (item["unit_id"], item["revision"], item["outcome"],
-             item["required_words"], item["remaining_words"])
+             item["required_characters"], item["remaining_characters"])
             for item in no_fit["dispositions"]
         ], [
-            ("oversized", 1, "skipped_for_budget", 12, 3),
-            ("transport", 1, "skipped_for_budget", 4, 3),
-            ("shorter", 1, "skipped_for_budget", 5, 3),
+            (unit["unit_id"], 1, "skipped_for_budget", len(unit["prose"]), 3)
+            for unit in (oversized, transport, shorter)
         ])
 
     def test_distinct_rule_fits_before_covered_detail(self):
@@ -257,12 +266,13 @@ class NarratorSelectionTests(unittest.TestCase):
         ], [[("cover", "lab samples")], [("detail", "freezer samples")], [("distinct", "lab access")]])
 
         other_verdicts = [_supported(detail), _supported(distinct)]
+        ceiling = len(distinct["prose"] + "\n" + detail["prose"])
         covered = selection.assemble_summary(grouped["groups"], [_supported(cover), *other_verdicts],
-                                            passages, word_cap=13)
+                                            passages, source_characters=ceiling)
         self.assertEqual(covered["summary"],
                          "Store sealed samples for thirty days.\n"
                          "Revoke expired credentials before granting access.")
-        self.assertEqual(covered["word_count"], 12)
+        self.assertEqual(covered["character_count"], len(cover["prose"] + "\n" + distinct["prose"]))
         self.assertIn({
             "stage": "selection", "unit_id": "detail", "revision": 1, "outcome": "deferred_detail",
             "covering_unit_id": "cover", "covering_revision": 1, "reason": reason,
@@ -273,7 +283,7 @@ class NarratorSelectionTests(unittest.TestCase):
             "reason": "The covering rule did not pass this check.", "evidence_passage_ids": ["p1"],
         }
         uncovered = selection.assemble_summary(grouped["groups"], [unsupported, *other_verdicts],
-                                              passages, word_cap=13)
+                                              passages, source_characters=ceiling)
         self.assertEqual(uncovered["summary"],
                          "Retain sealed freezer samples for thirty days.\n"
                          "Revoke expired credentials before granting access.")
@@ -284,7 +294,7 @@ class NarratorSelectionTests(unittest.TestCase):
             [replacement, detail, distinct], candidates, passages, comparisons
         )["groups"]
         revised = selection.assemble_summary(revised_groups, [_supported(replacement), *other_verdicts],
-                                            passages, word_cap=13)
+                                            passages, source_characters=ceiling)
         self.assertEqual(revised["summary"],
                          "Hold sealed samples for thirty days.\n"
                          "Retain sealed freezer samples for thirty days.")
@@ -301,13 +311,13 @@ class NarratorSelectionTests(unittest.TestCase):
         long_groups = selection.select_distinct_units(long_units, candidates, passages,
                                                      long_comparisons)["groups"]
         fallback = selection.assemble_summary(long_groups, [_supported(oversized), *other_verdicts],
-                                             passages, word_cap=13)
+                                             passages, source_characters=ceiling)
         self.assertEqual(fallback["summary"],
                          "Revoke expired credentials before granting access.\n"
                          "Retain sealed freezer samples for thirty days.")
-        self.assertEqual(fallback["word_count"], 13)
-        self.assertIn(("cover", 1, "skipped_for_budget", 18, 13), [
+        self.assertEqual(fallback["character_count"], ceiling)
+        self.assertIn(("cover", 1, "skipped_for_budget", len(oversized["prose"]), ceiling), [
             (item["unit_id"], item["revision"], item["outcome"],
-             item["required_words"], item["remaining_words"])
+             item["required_characters"], item["remaining_characters"])
             for item in fallback["dispositions"] if item["outcome"] == "skipped_for_budget"
         ])

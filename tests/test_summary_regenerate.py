@@ -28,7 +28,8 @@ class SequentialWriter:
     def __init__(self, *, fail_at=None, interrupt_at=None, callback=None):
         self.requests, self.fail_at, self.interrupt_at, self.callback = [], fail_at, interrupt_at, callback
 
-    def write_many(self, requests):
+    def write_many(self, requests, *, source_characters):
+        assert len(source_characters) == len(requests)
         self.requests.extend(requests)
         number = len(self.requests)
         if self.callback:
