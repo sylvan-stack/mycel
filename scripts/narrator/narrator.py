@@ -638,16 +638,21 @@ def _arguments(argv: list[str] | None) -> argparse.Namespace:
                         help="absolute executable and arguments as JSON argv")
     parser.add_argument("--embedding-command", type=command_argument,
                         help="absolute executable and arguments as JSON argv")
-    parser.add_argument("--mode", choices=("reasoned", "semantic"), default="reasoned")
+    parser.add_argument("--mode", choices=("reasoned", "semantic", "compare"), default="reasoned")
     parser.add_argument("--word-cap", type=int, default=DEFAULT_WORD_CAP)
     parser.add_argument("--instructions", type=Path, help="absolute Mycel prompt override directory")
+    parser.add_argument("--report", type=Path, help="absolute new path for a private run receipt")
     options = parser.parse_args(argv)
     if options.word_cap < 1:
         raise NarratorError("the word cap must be positive")
     if options.instructions is not None and not options.instructions.is_absolute():
         raise NarratorError("the instructions directory must be absolute")
-    if options.mode == "semantic" and options.embedding_command is None:
-        raise NarratorError("semantic mode requires an embedding command")
+    if options.mode in ("semantic", "compare") and options.embedding_command is None:
+        raise NarratorError("semantic and compare modes require an embedding command")
+    if options.mode == "compare" and options.report is None:
+        raise NarratorError("compare mode requires a private report path")
+    if options.report is not None and not options.report.is_absolute():
+        raise NarratorError("the private report path must be absolute")
     return options
 
 
@@ -685,17 +690,125 @@ def _summary_bytes(summary: str, word_cap: int) -> bytes:
     return raw
 
 
+@contextmanager
+def _open_report(path: Path | None):
+    if path is None:
+        yield None
+        return
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except OSError:
+        raise NarratorError("could not create a new private report") from None
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        os.fchmod(stream.fileno(), 0o600)
+        yield stream
+
+
+def _statistics(meter: Meter, started: float) -> dict[str, object]:
+    return {
+        "seconds": time.monotonic() - started,
+        "text_calls": meter.text_calls,
+        "embedding_calls": meter.embedding_calls,
+        "events": meter.events.copy(),
+    }
+
+
+def _command_digest(argv: tuple[str, ...]) -> str:
+    return sha256(json.dumps(argv, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _run_writer(
+    options: argparse.Namespace, started: float, report: dict[str, object],
+) -> tuple[int, bytes | None]:
+    compare = options.mode == "compare"
+    modes = ("reasoned", "semantic") if compare else (options.mode,)
+    arms: dict[str, dict[str, object]] = {mode: {"outcome": "not_run"} for mode in modes}
+    attempts: list[dict[str, object]] = []
+    shared: dict[str, object] = {"outcome": "failed", "extraction_attempts": attempts}
+    physical = {"text_calls": 0, "embedding_calls": 0}
+    report.update({
+        "schema_version": 1,
+        "mode": options.mode,
+        "word_cap": options.word_cap,
+        "profile": "override" if options.instructions else "mycel-summary-prompts-v1",
+        "model_command_sha256": _command_digest(options.model_command),
+        "embedding_command_sha256": (
+            _command_digest(options.embedding_command) if options.embedding_command else None
+        ),
+        "shared": shared,
+        "arms": arms,
+        "physical_calls": physical,
+    })
+
+    extraction = Meter(started + ATTEMPT_SECONDS)
+    try:
+        request = _read_input(extraction.deadline, options.instructions)
+        shared["request"] = {
+            "sha256": request.digest, "source_spans": request.source_spans, "passages": request.passages,
+        }
+        candidates = extract_candidates(request, extraction, options.model_command, attempts)
+        remaining = _time_left(extraction.deadline)
+        shared["outcome"] = "complete"
+    except (NarratorError, OSError, ValueError):
+        for arm in arms.values():
+            arm["failure"] = "shared request or extraction failed"
+        raise
+    finally:
+        shared.update(_statistics(extraction, started))
+        physical["text_calls"] = extraction.text_calls
+
+    output = None
+    for mode in modes:
+        arm = arms[mode]
+        arm_started = time.monotonic()
+        deadline = arm_started + remaining if compare else extraction.deadline
+        meter = Meter(deadline, text_calls=extraction.text_calls)
+        trace: dict[str, object] = {}
+        arm.update({
+            "outcome": "failed",
+            "starting_budget": {"seconds": remaining, "text_calls": TEXT_LIMIT - extraction.text_calls},
+            "trace": trace,
+        })
+        try:
+            summary = _run_arm(options, mode, request, candidates, meter, trace)
+            output = _summary_bytes(summary, options.word_cap)
+            arm.update({"outcome": "complete", "summary": summary})
+        except NarratorError as failure:
+            arm["failure"] = str(failure)
+            if not compare:
+                raise
+        except (OSError, ValueError):
+            arm["failure"] = "writer arm input or output failed"
+            if not compare:
+                raise
+        finally:
+            arm.update(_statistics(meter, arm_started))
+            physical["text_calls"] += meter.text_calls - extraction.text_calls
+            physical["embedding_calls"] += meter.embedding_calls
+
+    if compare:
+        return (0 if all(arm["outcome"] == "complete" for arm in arms.values()) else 1), None
+    return 0, output
+
+
 def main(argv: list[str] | None = None) -> int:
     started = time.monotonic()
     try:
         options = _arguments(argv)
-        with _interrupt_on_termination():
-            meter = Meter(started + ATTEMPT_SECONDS)
-            request = _read_input(meter.deadline, options.instructions)
-            candidates = extract_candidates(request, meter, options.model_command, [])
-            summary = _run_arm(options, options.mode, request, candidates, meter, {})
-            sys.stdout.buffer.write(_summary_bytes(summary, options.word_cap))
-        return 0
+        report: dict[str, object] = {"outcome": "failed"}
+        with _interrupt_on_termination(), _open_report(options.report) as stream:
+            try:
+                status, output = _run_writer(options, started, report)
+                report["outcome"] = "complete" if status == 0 else "failed"
+            finally:
+                if stream is not None:
+                    json.dump(report, stream, allow_nan=False, indent=2)
+                    stream.write("\n")
+            if output is not None:
+                sys.stdout.buffer.write(output)
+        if status != 0:
+            print("Narrator comparison did not complete both arms", file=sys.stderr)
+        return status
     except KeyboardInterrupt:
         print("Narrator interrupted", file=sys.stderr)
         return 130
