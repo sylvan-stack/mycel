@@ -19,6 +19,8 @@ class _Passage(_SourceSlice):
 
 type _Record = dict[str, object]
 type _UnitKey = tuple[str, int]
+type _Judge = Callable[[str, _Record], object]
+type _VerificationResult = tuple[list[_Record], list[_Record], list[_Record]]
 
 
 _VERIFICATION_INSTRUCTIONS = """Check each proposed unit revision independently.
@@ -505,6 +507,61 @@ def _read_repairs(
     return revisions, dispositions
 
 
+def _judge_units(
+    units: Sequence[_Record],
+    passages: Mapping[str, _Passage],
+    context: Sequence[_SourceSlice],
+    *,
+    judge: _Judge,
+    assess_repair: bool = False,
+) -> tuple[list[_Record], list[_Record]]:
+    if not units:
+        return [], []
+    instructions = _VERIFICATION_INSTRUCTIONS
+    if assess_repair:
+        instructions += _REPAIR_ELIGIBILITY_INSTRUCTIONS
+    rows = judge(instructions, _verification_payload(units, passages, context))
+    return _read_verdicts(rows, units, passages, assess_repair=assess_repair)
+
+
+def _supported_units(units: Sequence[_Record], verdicts: Sequence[_Record]) -> list[_Record]:
+    supported = {_unit_key(verdict) for verdict in verdicts if verdict["verdict"] == "supported"}
+    return [unit for unit in units if _unit_key(unit) in supported]
+
+
+def _recheck_repairs(
+    revisions: Sequence[_Record],
+    passages: Mapping[str, _Passage],
+    context: Sequence[_SourceSlice],
+    initial_supported: _VerificationResult,
+    *,
+    recheck: _Judge,
+) -> _VerificationResult:
+    fresh_verdicts, check_dispositions = _judge_units(revisions, passages, context, judge=recheck)
+    recovered = _supported_units(revisions, fresh_verdicts)
+    recovered_keys = {_unit_key(unit) for unit in recovered}
+    failures = {_unit_key(disposition): disposition for disposition in check_dispositions}
+    repair_dispositions: list[_Record] = []
+    for key in _units_by_key(revisions):
+        if key in recovered_keys:
+            outcome = "repaired"
+            reason = "fresh verification supports the corrected revision"
+        else:
+            failure = failures[key]
+            outcome = "repair_unsupported" if failure["outcome"] == "unsupported" else "repair_unverified"
+            reason = str(failure["reason"])
+        repair_dispositions.append(_repair_disposition(
+            key, outcome, reason, previous_revision=key[1] - 1
+        ))
+
+    supported, verdicts, dispositions = initial_supported
+    return (
+        supported + recovered,
+        verdicts + fresh_verdicts,
+        dispositions + check_dispositions + repair_dispositions,
+    )
+
+
 def verify_units(
     request_text: str,
     request_digest: str,
@@ -512,9 +569,9 @@ def verify_units(
     passages: Sequence[Mapping[str, object]],
     units: Sequence[Mapping[str, object]],
     *,
-    judge: Callable[[str, _Record], object],
+    judge: _Judge,
     assess_repair: bool = False,
-) -> tuple[list[_Record], list[_Record], list[_Record]]:
+) -> _VerificationResult:
     """Return checked unit revisions, verdicts and dispositions for one request.
 
     The writer supplies the request digest and admitted source spans. The judge
@@ -524,15 +581,9 @@ def verify_units(
     """
     resolved, context = _resolve_passages(request_text, request_digest, source_spans, passages)
     checked_units, verdicts, dispositions = _normalize_units(units, resolved)
-    if checked_units:
-        payload = _verification_payload(checked_units, resolved, context)
-        instructions = _VERIFICATION_INSTRUCTIONS
-        if assess_repair:
-            instructions += _REPAIR_ELIGIBILITY_INSTRUCTIONS
-        rows = judge(instructions, payload)
-        checked_verdicts, verdict_dispositions = _read_verdicts(
-            rows, checked_units, resolved, assess_repair=assess_repair
-        )
-        verdicts.extend(checked_verdicts)
-        dispositions.extend(verdict_dispositions)
+    checked_verdicts, verdict_dispositions = _judge_units(
+        checked_units, resolved, context, judge=judge, assess_repair=assess_repair
+    )
+    verdicts.extend(checked_verdicts)
+    dispositions.extend(verdict_dispositions)
     return checked_units, verdicts, dispositions
