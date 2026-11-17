@@ -16,6 +16,10 @@ class _Passage(_SourceSlice):
     passage_id: str
 
 
+type _Record = dict[str, object]
+type _UnitKey = tuple[str, int]
+
+
 def _source_context(
     request_text: str, source_spans: Sequence[tuple[int, int]]
 ) -> list[_SourceSlice]:
@@ -84,3 +88,78 @@ def _resolve_passages(
             "text": text,
         }
     return resolved, context
+
+
+def _unit_key(record: object) -> _UnitKey | None:
+    if not isinstance(record, Mapping):
+        return None
+    unit_id = record.get("unit_id")
+    revision = record.get("revision")
+    if not isinstance(unit_id, str) or not unit_id.strip():
+        return None
+    if type(revision) is not int or revision < 1:
+        return None
+    return unit_id, revision
+
+
+def _disposition(key: _UnitKey, outcome: str, reason: str) -> _Record:
+    return {
+        "unit_id": key[0],
+        "revision": key[1],
+        "stage": "verification",
+        "outcome": outcome,
+        "reason": reason,
+    }
+
+
+def _normalize_units(
+    units: Sequence[Mapping[str, object]], passages: Mapping[str, _Passage]
+) -> tuple[list[_Record], list[_Record], list[_Record]]:
+    checked: list[_Record] = []
+    verdicts: list[_Record] = []
+    dispositions: list[_Record] = []
+    seen_ids: set[str] = set()
+    for unit in units:
+        key = _unit_key(unit)
+        if key is None:
+            raise ValueError("verification needs a unit_id and positive integer revision")
+        unit_id, previous_revision = key
+        if unit_id in seen_ids:
+            raise ValueError("verification needs one current revision per unit_id")
+        seen_ids.add(unit_id)
+
+        cited_ids = unit.get("cited_passage_ids")
+        if not isinstance(cited_ids, list):
+            raise ValueError("verification needs a list of cited passage IDs")
+        surviving_ids = []
+        invalid_citations = []
+        for position, passage_id in enumerate(cited_ids, start=1):
+            if isinstance(passage_id, str) and passage_id in passages:
+                surviving_ids.append(passage_id)
+            else:
+                invalid_citations.append((position, passage_id))
+
+        revision = previous_revision + 1 if invalid_citations else previous_revision
+        current_key = (unit_id, revision)
+        for position, passage_id in invalid_citations:
+            excluded = _disposition(current_key, "invalid_citation", "citation does not resolve")
+            excluded["previous_revision"] = previous_revision
+            excluded["citation_position"] = position
+            if isinstance(passage_id, str):
+                excluded["passage_id"] = passage_id
+            dispositions.append(excluded)
+
+        if surviving_ids:
+            checked.append({**unit, "revision": revision, "cited_passage_ids": surviving_ids})
+        else:
+            reason = "no cited passage resolves to the request"
+            verdicts.append({
+                "unit_id": unit_id,
+                "revision": revision,
+                "verdict": "unsupported",
+                "affected_part": "whole unit",
+                "reason": reason,
+                "evidence_passage_ids": [],
+            })
+            dispositions.append(_disposition(current_key, "unsupported", reason))
+    return checked, verdicts, dispositions
