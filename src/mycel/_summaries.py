@@ -20,6 +20,12 @@ def handle_summaries(invocation):
     if invocation.settings is None:
         raise MycelError("internal", "Settings were not loaded for this invocation.")
     arguments = invocation.arguments
+    if arguments[:1] == ("browse",):
+        if (len(arguments) != 3 or arguments[1] != "--output" or not arguments[2].strip()
+                or "\0" in arguments[2] or invocation.repositories or invocation.all_repositories):
+            raise MycelError("invalid_input", "Use summaries browse --output <file>.")
+        from ._summary_browser import export_summary_browser
+        return export_summary_browser(invocation, arguments[2])
     dry_run = "--dry-run" in arguments
     actions = tuple(argument for argument in arguments if argument != "--dry-run")
     if (actions not in {(), ("status",), ("build",), ("regenerate",), ("remove",), ("labels",)}

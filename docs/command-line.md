@@ -242,6 +242,11 @@ retains independent committed successes and blocks parents of stale members.
 Removal atomically deletes the current set and returns its actual removed count.
 The [summary guide](summaries.md) describes lifecycle guards and complete replies.
 
+`mycel summaries browse --output <file>` exports all published nonempty summary
+sets from one read-only snapshot to a private HTML file. Open the file offline
+to navigate each tree. See the [browser guide](summaries.md#browse-published-summary-trees)
+for the controls.
+
 `mycel summaries labels --repo <name>` backfills missing sentence labels on
 published summary versions. It calls Narrator only when labels are missing and
 keeps the existing summary prose and vectors.
@@ -573,14 +578,15 @@ no ingest or embedding and preserves verifications and source policy. See the
       },
       {
         "name": "summaries",
-        "description": "Report, build, regenerate, label or remove summaries",
+        "description": "Report, build, regenerate, label, browse or remove summaries",
         "available": true,
         "rawArguments": false,
         "options": [
           "-h",
           "--help",
           "--repo <name>",
-          "--dry-run"
+          "--dry-run",
+          "--output <file>"
         ]
       },
       {

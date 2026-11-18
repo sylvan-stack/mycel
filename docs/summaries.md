@@ -224,3 +224,41 @@ Inspect the loaded job with `launchctl print "gui/$(id -u)/$maintenance_label"`.
 Use `launchctl bootout "gui/$(id -u)/$maintenance_label"` to stop scheduling
 and remove that plist from `~/Library/LaunchAgents` to keep it off at login.
 Jobs are opt-in.
+
+## Browse published summary trees
+
+Export all published, nonempty summary sets in the configured index store
+to one private HTML file.
+
+```sh
+mycel summaries browse --output ~/summary-trees.html
+```
+
+Open the file in a browser and choose a repository. Its top summary labels
+appear in place of the repository picker. Cmd+Click a label to open the text,
+then Cmd+Click the text to reveal its children. Shift+Click reverses one
+step along the branch you took. Holding either modifier outlines the block
+under the pointer. The page also offers normal clickable labels, a
+**Show children** button and **Back** for keyboard and touch navigation.
+A source child opens the exact retained version pinned by its parent.
+An affected branch uses the current published Summary Nodes and can show
+stale summaries.
+
+The file contains the exported text and labels and works offline. It is a
+snapshot. Export to a fresh path to read later publications.
+
+### Summary labels
+
+Build and regeneration ask Narrator for one sentence of up to 20 words,
+counting function words, from each new summary text. The label is stored
+with that exact summary version. A reused version keeps its existing label.
+An unlabeled entry uses its address as the label. An explicit backfill
+labels existing entries using the configured Narrator adapter.
+
+```sh
+mycel summaries labels --repo mycel
+```
+
+Backfill sends the text of missing-label summaries to Narrator and stores
+the labels without regenerating prose or embeddings. It can be rerun after
+a failure. Browse reads the index and requires no model adapter.

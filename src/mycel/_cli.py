@@ -372,6 +372,8 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         parser.add_argument("--k", type=int)
     if name == "embed":
         parser.add_argument("--retry-failed", action="store_true")
+    if name == "summaries":
+        parser.add_argument("--output")
     if name == "ingest":
         parser.add_argument("--embed", action="store_true")
         parser.add_argument("--confirm-empty", action="store_true")
@@ -490,6 +492,12 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         _validate(repos, all_repositories, activity_entry, parsed.kind, activity_count)
     if name == 'ingest' and parsed.arguments:
         raise MycelError(ErrorCode.INVALID_INPUT, 'Ingest takes repository selectors and --embed or --confirm-empty only.')
+    if name == "summaries" and parsed.arguments == ["browse"]:
+        if repos or parsed.dry_run or not parsed.output or not parsed.output.strip() or "\0" in parsed.output:
+            raise MycelError(ErrorCode.INVALID_INPUT, "Use summaries browse --output <file>.")
+        return Invocation(name, arguments=("browse", "--output", parsed.output))
+    if name == "summaries" and parsed.output is not None:
+        raise MycelError(ErrorCode.INVALID_INPUT, "--output is available for summaries browse.")
     if name == "summaries" and (len(repos) > 1 or tuple(parsed.arguments) not in
             {(), ("status",), ("build",), ("regenerate",), ("remove",), ("labels",)} or
             (tuple(parsed.arguments) == ("labels",) and len(repos) != 1) or
