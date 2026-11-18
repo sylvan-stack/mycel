@@ -28,7 +28,7 @@ from ._source_refs import SourceAddress
 from ._store import checked_store
 from ._summary_evidence import (GenerationCapture, GenerationEvidenceStore,
     GenerationLease, _KIND, _OWNER_SQL, _REFERENCES_SQL, _INSERT_OWNER_SQL, _INSERT_REFERENCE_SQL)
-from ._summary_labels import read_summary_label, retain_summary_label
+from ._summary_labels import read_summary_label
 from ._summary_store import PublishedSummaryState, SummarySetMetadata, summary_set_identifier
 
 
@@ -243,8 +243,7 @@ class SummaryPublicationStore:
             result = publisher.publish_in_transaction(self.settings, self.invocation, staged.lease,
                 chunk_id=UUID(staged.member.chunk.identifier), place=staged.member.place, level=staged.level,
                 metadata=metadata, guarded_repositories=guarded_repositories,
-                reserved_version=staged.member.chunk.version)
-            retain_summary_label(self.connection, result.chunk_version, staged.label)
+                reserved_version=staged.member.chunk.version, label=staged.label)
             results.append(result)
             plans.append((self._write_embedding(result, value), value))
         sentinel = summary_set_identifier(self.repository)

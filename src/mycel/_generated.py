@@ -23,7 +23,7 @@ from ._source_refs import SourceAddress, parse_source_address
 from ._store import exact_bytes
 from ._summary_evidence import (GenerationEvidenceStore, GenerationLease, _KIND, _OWNER_SQL,
     _REFERENCES_SQL)
-from ._summary_labels import stored_summary_label
+from ._summary_labels import retain_summary_label, stored_summary_label
 from ._summary_store import PublishedSummaryState, SummaryMemberPin, SummarySetMetadata
 
 PIN_SCHEMA = 'mycel-generated-pin-v1'
@@ -213,7 +213,7 @@ class GeneratedPublicationStore:
     def publish_in_transaction(self, settings, invocation, lease: GenerationLease, *,
                                chunk_id: UUID, place: SourceAddress, level: int,
                                metadata: SummarySetMetadata, guarded_repositories: tuple[str, ...],
-                               reserved_version: int | None = None):
+                               reserved_version: int | None = None, label: str | None = None):
         """Publish one produced response with complete request-owned pins.
 
         Requires exact active invocation, checked_store and all involved pass
@@ -280,6 +280,7 @@ class GeneratedPublicationStore:
             version = self.connection.execute('INSERT INTO public.mycel_chunk_versions '
                 '(id,chunk_id,snapshot_hash,source_bytes,text,comparison,metadata) OVERRIDING SYSTEM VALUE '
                 'VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id', (reserved_version, *values)).fetchone()[0]
+        retain_summary_label(self.connection, version, label)
         pins = tuple(SummaryMemberPin(item['id'], item['version'], item['source']['hash'],
             parse_source_address(item['place']['address'])) for item in payload['members'])
         state = PublishedSummaryState(version, level, pins, metadata)
