@@ -24,7 +24,6 @@
     .children { display: flex; }
     .children::before { content: "    "; white-space: pre; }
     .children > div { flex: 1; min-inline-size: 0; }
-    [data-view="repository"] { cursor: pointer; }
     [data-view]:focus-visible { outline: 1px dotted currentColor; outline-offset: .2rem; }
     [data-hover] { outline: 1px solid currentColor; outline-offset: .2rem; }
     [data-hover="open"] { cursor: zoom-in; }
@@ -37,8 +36,8 @@
   <script>
     "use strict";
     const trees = JSON.parse(document.getElementById("summary-data").textContent);
+    const treesByRepository = new Map(trees.map(tree => [tree.repository, tree]));
     const app = document.getElementById("app");
-    let tree = null;
     let pointer = null;
     let highlighted = null;
     let modifiers = { metaKey: false, shiftKey: false };
@@ -55,29 +54,42 @@
       return item;
     }
 
-    function showRepositories(previousId) {
-      tree = null;
-      const items = trees.map(entry => paragraph(entry.repository, "repository", entry.repository));
-      if (!items.length) items.push(paragraph("No published summary trees."));
-      app.replaceChildren(...items);
-      window.scrollTo(0, 0);
-      if (previousId !== undefined) items.find(item => item.dataset.id === previousId)?.focus();
+    function branch(item) {
+      const block = document.createElement("div");
+      block.className = "branch";
+      block.append(item);
+      return block;
     }
 
-    function branches(ids) {
+    function showRepositories() {
+      for (const { repository } of trees) {
+        const block = branch(paragraph(repository, "repository", repository));
+        block.dataset.repository = repository;
+        app.append(block);
+      }
+      if (!trees.length) app.append(paragraph("No published summary trees."));
+    }
+
+    function treeFor(target) {
+      return treesByRepository.get(target.closest("[data-repository]").dataset.repository);
+    }
+
+    function branches(tree, ids) {
       const list = document.createElement("div");
       for (const id of ids) {
-        const branch = document.createElement("div");
-        branch.className = "branch";
-        branch.append(paragraph(tree.nodes[id].label, "label", id));
-        list.append(branch);
+        list.append(branch(paragraph(tree.nodes[id].label, "label", id)));
       }
       return list;
     }
 
     function canOpen(target) {
-      return target.dataset.view !== "text" ||
-        (tree.nodes[target.dataset.id].children.length > 0 && !target.nextElementSibling);
+      if (target.dataset.view === "label") return true;
+      if (target.nextElementSibling) return false;
+      return target.dataset.view === "repository" || treeFor(target).nodes[target.dataset.id].children.length > 0;
+    }
+
+    function canClose(target) {
+      return target.dataset.view !== "repository" || Boolean(target.nextElementSibling);
     }
 
     function updateRole(target) {
@@ -86,21 +98,17 @@
     }
 
     function expand(target, focus) {
+      const tree = treeFor(target);
       const id = target.dataset.id;
-      if (target.dataset.view === "repository") {
-        tree = trees.find(entry => entry.repository === id);
-        const list = branches(tree.roots);
-        app.replaceChildren(list);
-        window.scrollTo(0, 0);
-        if (focus) list.querySelector("[data-view]")?.focus();
-      } else if (target.dataset.view === "label") {
+      if (target.dataset.view === "label") {
         target.dataset.view = "text";
         target.textContent = tree.nodes[id].text ?? "Retained text is unavailable.";
         updateRole(target);
       } else {
+        const ids = target.dataset.view === "repository" ? tree.roots : tree.nodes[id].children;
         const children = document.createElement("div");
         children.className = "children";
-        children.append(branches(tree.nodes[id].children));
+        children.append(branches(tree, ids));
         target.after(children);
         updateRole(target);
         if (focus) children.querySelector("[data-view]")?.focus();
@@ -109,21 +117,16 @@
     }
 
     function collapse(target, focus) {
-      const text = target.dataset.view === "text" ? target :
-        target.closest(".children")?.previousElementSibling;
-      if (!text) {
-        showRepositories(focus ? tree.repository : undefined);
-      } else {
-        const children = text.nextElementSibling;
-        const restoreFocus = focus || children?.contains(document.activeElement);
-        if (children) children.remove();
-        else {
-          text.dataset.view = "label";
-          text.textContent = tree.nodes[text.dataset.id].label;
-        }
-        updateRole(text);
-        if (restoreFocus) text.focus();
+      const text = target.dataset.view === "label" ? target.closest(".children").previousElementSibling : target;
+      const children = text.nextElementSibling;
+      const restoreFocus = focus || children?.contains(document.activeElement);
+      if (children) children.remove();
+      else {
+        text.dataset.view = "label";
+        text.textContent = treeFor(text).nodes[text.dataset.id].label;
       }
+      updateRole(text);
+      if (restoreFocus) text.focus();
       updateHover();
     }
 
@@ -133,7 +136,7 @@
       const target = pointer && document.elementFromPoint(pointer.x, pointer.y)?.closest("[data-view]");
       if (!target) return;
       if (modifiers.shiftKey) {
-        if (!tree) return;
+        if (!canClose(target)) return;
         target.dataset.hover = "close";
       } else if (modifiers.metaKey && canOpen(target)) {
         target.dataset.hover = "open";
@@ -146,20 +149,19 @@
     app.addEventListener("click", event => {
       const target = event.target.closest("[data-view]");
       if (!target) return;
-      if (event.shiftKey && tree) {
+      if (event.shiftKey && canClose(target)) {
         event.preventDefault();
         collapse(target, false);
-      } else if (!event.shiftKey &&
-                 (event.metaKey || event.detail === 0 || target.dataset.view === "repository") && canOpen(target)) {
+      } else if (!event.shiftKey && event.metaKey && canOpen(target)) {
         event.preventDefault();
-        expand(target, event.detail === 0);
+        expand(target, false);
       }
     });
 
     document.addEventListener("keydown", event => {
       const target = document.activeElement?.closest("[data-view]");
       if (!target) return;
-      if (event.key === "Escape" && tree) {
+      if (event.key === "Escape" && canClose(target)) {
         event.preventDefault();
         if (!event.repeat) collapse(target, true);
       } else if ((event.key === "Enter" || event.key === " ") && canOpen(target)) {

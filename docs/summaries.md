@@ -234,12 +234,14 @@ to one private HTML file.
 mycel summaries browse --output ~/summary-trees.html
 ```
 
-Open the file in a browser and click a repository name. Cmd+Click a label to
-read that node’s full text in place. Cmd+Click the summary text to show its
-child labels underneath, indented by four spaces. Siblings stay visible and
-can be opened independently. Shift+Click on expanded text hides its children
-first, then restores the label. Shift+Click on a collapsed label closes its
-parent’s child list or returns to the repository names at the top level.
+Open the file in a browser and Cmd+Click a repository name to show its top
+labels beneath it. Cmd+Click a label to read that node’s full text in place.
+Cmd+Click the summary text to show its child labels underneath. Each child
+level is indented by four spaces, including the labels below a repository
+name. Sibling repositories and branches stay visible and can be opened
+independently. Shift+Click on expanded text hides its children first, then
+restores the label. Shift+Click on a collapsed label closes its parent’s child
+list. Shift+Click on an open repository name closes that repository only.
 Hold either modifier to outline the actionable text under the pointer.
 Use Tab to focus text, Enter or Space to open it, and Escape to collapse it.
 
