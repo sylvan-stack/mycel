@@ -22,13 +22,18 @@ def handle_summaries(invocation):
     arguments = invocation.arguments
     dry_run = "--dry-run" in arguments
     actions = tuple(argument for argument in arguments if argument != "--dry-run")
-    if (actions not in {(), ("status",), ("build",), ("regenerate",), ("remove",)}
+    if (actions not in {(), ("status",), ("build",), ("regenerate",), ("remove",), ("labels",)}
             or arguments.count("--dry-run") > 1 or invocation.all_repositories):
-        raise MycelError("invalid_input", "Use summaries status, build, regenerate or remove for one repository.")
+        raise MycelError("invalid_input", "Use summaries status, build, regenerate, labels or remove for one repository.")
     action = actions[0] if actions else "status"
     if dry_run and action not in {"build", "regenerate"}:
         raise MycelError("invalid_input", "Only summaries build and regenerate accept --dry-run.")
     repository = summary_repository(invocation.settings, invocation.repositories)
+    if action == "labels":
+        if not invocation.repositories:
+            raise MycelError("invalid_input", "Use summaries labels --repo <name>.")
+        from ._summary_labels import backfill_summary_labels
+        return backfill_summary_labels(invocation, repository)
     if action == "build" and not dry_run:
         from ._summary_build import build_summaries
         return build_summaries(invocation)

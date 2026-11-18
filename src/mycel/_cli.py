@@ -491,9 +491,10 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == 'ingest' and parsed.arguments:
         raise MycelError(ErrorCode.INVALID_INPUT, 'Ingest takes repository selectors and --embed or --confirm-empty only.')
     if name == "summaries" and (len(repos) > 1 or tuple(parsed.arguments) not in
-            {(), ("status",), ("build",), ("regenerate",), ("remove",)} or
+            {(), ("status",), ("build",), ("regenerate",), ("remove",), ("labels",)} or
+            (tuple(parsed.arguments) == ("labels",) and len(repos) != 1) or
             (parsed.dry_run and tuple(parsed.arguments) not in {("build",), ("regenerate",)})):
-        raise MycelError(ErrorCode.INVALID_INPUT, "Summaries takes one repository and status, build, regenerate or remove; --dry-run requires build or regenerate.")
+        raise MycelError(ErrorCode.INVALID_INPUT, "Use summaries status, build, regenerate, remove or labels. Labels requires --repo and --dry-run requires build or regenerate.")
     if name == "maintain" and (len(repos) != 1 or parsed.arguments):
         raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel maintain --repo <name>.")
     arguments = (("--unresolved",) if getattr(parsed, "unresolved", False) else ()) + \

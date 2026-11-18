@@ -43,7 +43,7 @@ COMMANDS = (
     CommandSpec("verifications", "Report verification records", extra_options=("--history",)),
     CommandSpec("classify", "Explicitly classify dependency review work", all_repositories=True,
                 extra_options=("--k <count>", "--dry-run")),
-    CommandSpec("summaries", "Report, build, regenerate or remove summaries", extra_options=("--dry-run",)),
+    CommandSpec("summaries", "Report, build, regenerate, label or remove summaries", extra_options=("--dry-run",)),
     CommandSpec("maintain", "Run one quiet-period maintenance check for a repository"),
     CommandSpec("overview", "Read the stored code overview", extra_options=("--dir <directory>",)),
     CommandSpec("grep", "Run grep with a related search tail", scope=False, raw_arguments=True),
