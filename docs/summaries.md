@@ -235,10 +235,13 @@ mycel summaries browse --output ~/summary-trees.html
 ```
 
 Open the file in a browser and click a repository name. Cmd+Click a label to
-replace the list with its full text. Cmd+Click the text to see the child labels
-in its place. Shift+Click steps back along the same branch. Holding either
-modifier outlines the actionable text under the pointer. Use Tab to focus
-text, Enter or Space to open it, and Escape to go back.
+read that node’s full text in place. Cmd+Click the summary text to show its
+child labels underneath, indented by four spaces. Siblings stay visible and
+can be opened independently. Shift+Click on expanded text hides its children
+first, then restores the label. Shift+Click on a collapsed label closes its
+parent’s child list or returns to the repository names at the top level.
+Hold either modifier to outline the actionable text under the pointer.
+Use Tab to focus text, Enter or Space to open it, and Escape to collapse it.
 
 Source children are labeled with their section name or file name and open to
 the exact retained text pinned by their parent. An affected branch uses the

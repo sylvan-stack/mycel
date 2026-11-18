@@ -20,7 +20,10 @@
       padding: 2rem clamp(1rem, 5vw, 2rem) 3rem;
     }
     p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-    p + p { margin-block-start: .65em; }
+    p + p, .branch + .branch, .children { margin-block-start: .65em; }
+    .children { display: flex; }
+    .children::before { content: "    "; white-space: pre; }
+    .children > div { flex: 1; min-inline-size: 0; }
     [data-view="repository"] { cursor: pointer; }
     [data-view]:focus-visible { outline: 1px dotted currentColor; outline-offset: .2rem; }
     [data-hover] { outline: 1px solid currentColor; outline-offset: .2rem; }
@@ -36,7 +39,6 @@
     const trees = JSON.parse(document.getElementById("summary-data").textContent);
     const app = document.getElementById("app");
     let tree = null;
-    const path = [];
     let pointer = null;
     let highlighted = null;
     let modifiers = { metaKey: false, shiftKey: false };
@@ -48,57 +50,81 @@
         item.dataset.view = view;
         item.dataset.id = id;
         item.tabIndex = 0;
-        if (canOpen(item)) item.setAttribute("role", "button");
+        item.setAttribute("role", "button");
       }
       return item;
     }
 
-    function render(focus = false, previousId) {
-      const current = path.at(-1);
-      let items;
-      if (!tree) {
-        items = trees.map(entry => paragraph(entry.repository, "repository", entry.repository));
-        if (!items.length) items.push(paragraph("No published summary trees."));
-      } else if (!current || current.children) {
-        const ids = current ? tree.nodes[current.id].children : tree.roots;
-        items = ids.map(id => paragraph(tree.nodes[id].label, "label", id));
-      } else {
-        const node = tree.nodes[current.id];
-        items = [paragraph(node.text ?? "Retained text is unavailable.", "text", current.id)];
-      }
+    function showRepositories(previousId) {
+      tree = null;
+      const items = trees.map(entry => paragraph(entry.repository, "repository", entry.repository));
+      if (!items.length) items.push(paragraph("No published summary trees."));
       app.replaceChildren(...items);
       window.scrollTo(0, 0);
-      if (focus) {
-        const target = items.find(item => item.dataset.id === previousId) ?? items[0];
-        target?.focus();
+      if (previousId !== undefined) items.find(item => item.dataset.id === previousId)?.focus();
+    }
+
+    function branches(ids) {
+      const list = document.createElement("div");
+      for (const id of ids) {
+        const branch = document.createElement("div");
+        branch.className = "branch";
+        branch.append(paragraph(tree.nodes[id].label, "label", id));
+        list.append(branch);
       }
-      updateHover();
+      return list;
     }
 
     function canOpen(target) {
-      return target.dataset.view !== "text" || tree.nodes[target.dataset.id].children.length > 0;
+      return target.dataset.view !== "text" ||
+        (tree.nodes[target.dataset.id].children.length > 0 && !target.nextElementSibling);
+    }
+
+    function updateRole(target) {
+      if (canOpen(target)) target.setAttribute("role", "button");
+      else target.removeAttribute("role");
     }
 
     function expand(target, focus) {
       const id = target.dataset.id;
-      if (target.dataset.view === "repository") tree = trees.find(entry => entry.repository === id);
-      else if (target.dataset.view === "label") path.push({ id, children: false });
-      else path.at(-1).children = true;
-      render(focus);
+      if (target.dataset.view === "repository") {
+        tree = trees.find(entry => entry.repository === id);
+        const list = branches(tree.roots);
+        app.replaceChildren(list);
+        window.scrollTo(0, 0);
+        if (focus) list.querySelector("[data-view]")?.focus();
+      } else if (target.dataset.view === "label") {
+        target.dataset.view = "text";
+        target.textContent = tree.nodes[id].text ?? "Retained text is unavailable.";
+        updateRole(target);
+      } else {
+        const children = document.createElement("div");
+        children.className = "children";
+        children.append(branches(tree.nodes[id].children));
+        target.after(children);
+        updateRole(target);
+        if (focus) children.querySelector("[data-view]")?.focus();
+      }
+      updateHover();
     }
 
-    function back(focus) {
-      const current = path.at(-1);
-      let previousId;
-      if (current?.children) {
-        current.children = false;
-      } else if (current) {
-        previousId = path.pop().id;
+    function collapse(target, focus) {
+      const text = target.dataset.view === "text" ? target :
+        target.closest(".children")?.previousElementSibling;
+      if (!text) {
+        showRepositories(focus ? tree.repository : undefined);
       } else {
-        previousId = tree.repository;
-        tree = null;
+        const children = text.nextElementSibling;
+        const restoreFocus = focus || children?.contains(document.activeElement);
+        if (children) children.remove();
+        else {
+          text.dataset.view = "label";
+          text.textContent = tree.nodes[text.dataset.id].label;
+        }
+        updateRole(text);
+        if (restoreFocus) text.focus();
       }
-      render(focus, previousId);
+      updateHover();
     }
 
     function updateHover() {
@@ -122,7 +148,7 @@
       if (!target) return;
       if (event.shiftKey && tree) {
         event.preventDefault();
-        back(false);
+        collapse(target, false);
       } else if (!event.shiftKey &&
                  (event.metaKey || event.detail === 0 || target.dataset.view === "repository") && canOpen(target)) {
         event.preventDefault();
@@ -131,12 +157,12 @@
     });
 
     document.addEventListener("keydown", event => {
+      const target = document.activeElement?.closest("[data-view]");
+      if (!target) return;
       if (event.key === "Escape" && tree) {
         event.preventDefault();
-        if (!event.repeat) back(true);
-      } else if (event.key === "Enter" || event.key === " ") {
-        const target = event.target.closest("[data-view]");
-        if (!target || !canOpen(target)) return;
+        if (!event.repeat) collapse(target, true);
+      } else if ((event.key === "Enter" || event.key === " ") && canOpen(target)) {
         event.preventDefault();
         if (!event.repeat) expand(target, true);
       }
@@ -157,7 +183,7 @@
     });
     window.addEventListener("scroll", updateHover, { passive: true });
 
-    render();
+    showRepositories();
   </script>
 </body>
 </html>
