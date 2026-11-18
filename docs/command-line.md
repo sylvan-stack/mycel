@@ -159,7 +159,7 @@ mycel:@code/src/mycel/_grep.py#append_tail
 
 ## Other command behavior
 
-Model and subprocess boundaries are internal. Allowed service purposes are explicit and dry-runs deny all service calls. Ingest may embed only when explicitly requested; searches may embed their queries; neither may classify or review dependencies. Classification and live drift evaluation may use Jev and the configured reviewer; summaries build/regenerate may use the configured writer and embedding. Child environments omit parent credentials and store addresses. Git operations are restricted to validated read-only forms.
+Model and subprocess boundaries are internal. Allowed service purposes are explicit and dry-runs deny all service calls. Ingest may embed only when explicitly requested; searches may embed their queries; neither may classify or review dependencies. Classification and live drift evaluation may use Jev and the configured reviewer. Summary builds and regeneration may use Narrator's configured model adapter and Mycel's embedding service. Child environments omit parent credentials and store addresses. Git operations are restricted to validated read-only forms.
 
 `mycel repos` reads settings only and returns `organizations` (name, checkout root, document root) and `repositories` (exact name, enabled state, optional organization, code/document folders with repository/organization provenance, and optional local fault). Disabled and faulty entries remain visible.
 
@@ -232,10 +232,10 @@ run filesystem scans, freshness, provider work, evidence collection or writes.
 Every member reads the same committed repeatable-read snapshot.
 See the [classification guide](classification.md) and [Drift guide](drifts.md).
 
-`summaries` accepts `--dry-run`. Actual `build` and `regenerate` validate the
-configured writer and prompt overrides before feature dispatch.
-An absent writer returns `settings`; dry runs and report/removal preflight need
-no writer. Actual build stages complete generated levels and real vectors
+`summaries` accepts `--dry-run`. Actual `build` and `regenerate` validate
+bundled Narrator, its configured model adapter and prompt overrides before
+opening the store. A missing or unavailable adapter returns `settings`.
+Dry runs, status and removal need no adapter. Actual build stages complete generated levels and real vectors
 privately, then atomically replaces the tree after final source/settings checks.
 Regeneration repairs stale members lowest-first in their existing places,
 retains independent committed successes and blocks parents of stale members.

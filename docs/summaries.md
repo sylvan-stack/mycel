@@ -19,7 +19,7 @@ documents declared `generated`, code, overview and summaries are excluded.
 current coverage. Status divides those sections into disjoint `inSummary`,
 `inNone` and `notEmbedded` counts; overlapping memberships count each section
 once. It reports summaries in level/number order, stale counts, configured
-writer presence and the set's recorded grouping, Build and numerical metadata.
+reasoning adapter configuration and the set's recorded grouping, Build and numerical metadata.
 
 The initial grouping profile is `mycel-summary-v1`. Canonical root/path/position
 order precedes arithmetic means of every member's embedding parts. PCA uses
@@ -57,8 +57,8 @@ that already needs splitting is marked as requiring a build unless a planned
 lower write can still change its request bytes.
 
 `mycel summaries build [--repo <name>]` builds a complete new tree. Missing or
-invalid generation configuration returns `settings`; an unavailable executable
-is refused before the store is opened. Each level uses complete actual writer
+unavailable Narrator configuration returns `settings` before the store is
+opened. Each level uses complete actual writer
 responses, embeds them with the ordinary current-model planner, and only then
 groups the next level. Statistical singletons move up without a request.
 Requests split by the same bounded framing used by the dry-run. The reply names
@@ -133,9 +133,13 @@ the same budget. Its qualified place appears in the request's `cut` report.
 Framing that leaves no room for source text and the notice is refused before
 a call. UTF-8 byte counts and character counts are distinct.
 
-The writer starts literal `summaries.command` argv without a shell in a fresh,
-empty temporary folder for each attempt. The entire request goes only through
-stdin. At most `summaries.at_once` attempts run concurrently. Each attempt has
+Mycel starts bundled Narrator in reasoned mode without a shell in a fresh,
+empty temporary folder for each attempt. The request goes through stdin.
+Narrator calls the reasoning adapter configured as literal argv in
+`summaries.model_command`. Mycel passes the prompt override and the original
+source character count. For an older `summaries.command` that launched
+Narrator, move its model adapter argv to `summaries.model_command`.
+At most `summaries.at_once` attempts run concurrently. Each attempt has
 five minutes, a 1 MiB stdout cap and a 64 KiB stderr cap. Nonzero exit, invalid
 UTF-8, empty/whitespace-only output, overflow, start/I/O failure or deadline
 failure receives exactly one retry. Successful response bytes remain whole.

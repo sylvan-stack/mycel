@@ -243,7 +243,7 @@ results, finite attempt limits and complete independent-review routing.
 The [reviewer guide](docs/reviewer.md) describes independent adapter setup,
 complete protocol fixtures, credential isolation and bounded process cleanup.
 The [summary guide](docs/summaries.md) describes deterministic grouping,
-read-only plans/reports, complete bounded requests, the configured writer and
+read-only plans/reports, complete bounded requests, the bundled Narrator writer and
 private generation evidence.
 The [relation and verification guide](docs/relations.md) describes declared and asserted
 ownership, one-chunk commands, exact baselines, direct stale warnings and retained verification history.

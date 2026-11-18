@@ -1,10 +1,9 @@
 # Narrator
 
-Narrator is a standalone tool for generating labels and writing summaries.
-Run it directly with plain text and a word limit to get a short label. Mycel
-can also run Narrator as its RAPTOR summary writer when you configure it to
-do so. Mycel sends the writing instructions and the text to summarize.
-Narrator returns the summary.
+Narrator generates labels and writes RAPTOR summaries. Run it directly with
+plain text and a word limit to get a short label. Mycel ships Narrator as its
+RAPTOR writer. For each summary, Mycel sends the writing instructions and
+source text to Narrator, which checks its claims and returns the prose.
 
 ## Generate a label
 
@@ -49,23 +48,20 @@ assembles whole supported units up to the original source length. The default
 mode is `reasoned`. Length is measured in Unicode code points, including the
 newlines between units. A summary can be as long as the source.
 
-Use Python 3.13 or later and an absolute path to `narrator.py` in a Mycel
-checkout. Keep `selection.py`, `verification.py` and the checkout’s packaged
-prompt resource at the same source revision. Add the command to the
-`[summaries]` section of the disposable settings file.
+Add the reasoning adapter to the `[summaries]` section of the disposable
+settings file. Mycel launches the Narrator bundled with that Build.
 
 ```toml
 [summaries]
-command = [
-  "/absolute/path/to/python3.13",
-  "/absolute/checkout/mycel/scripts/narrator/narrator.py",
-  "--model-command",
-  '["/absolute/path/to/reasoning-adapter", "--model", "pinned-model"]',
-]
+model_command = ["/absolute/path/to/reasoning-adapter", "--model", "pinned-model"]
 ```
 
-Set `MYCEL_CONFIG` to that disposable file and run a numbered Mycel Build
-that supplies `MYCEL_SUMMARY_SOURCE_CHARACTERS` to the writer. The count comes
+For an older `summaries.command` that launched Narrator, move the argv from
+its `--model-command` argument into `summaries.model_command` and remove the
+old writer entry.
+
+Set `MYCEL_CONFIG` to that disposable file and use a Mycel Build that bundles
+Narrator. Mycel supplies `MYCEL_SUMMARY_SOURCE_CHARACTERS`. The count comes
 from the original section bodies, before adding generated place lines and
 separators or cutting an oversized request. The repository's store, source
 folders and embeddings come from its configuration.
@@ -80,10 +76,10 @@ environment. Narrator emits only the exact verified UTF-8 prose on success.
 A refusal exits nonzero with a short diagnostic on stderr and empty stdout.
 Mycel can retry the whole command once and owns summary publication.
 
-The default framing is the checkout's
+The default framing is the
 [packaged prompt profile](../../src/mycel/data/summary-prompts.json). For a
-Mycel `summaries.instructions` override, pass the same absolute directory as
-`--instructions` to Narrator. It reads `raptor-summary.md` and
+Mycel `summaries.instructions` override, Mycel passes that directory to
+Narrator as `--instructions`. Narrator reads `raptor-summary.md` and
 `raptor-request.md.tmpl` and matches their exact rendered framing before
 launching a model command.
 
