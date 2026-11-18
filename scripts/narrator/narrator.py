@@ -375,20 +375,28 @@ def _finite_number(value: str) -> float:
     return number
 
 
-def _json_value(data: bytes | str) -> object:
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    decoded = dict(pairs)
+    if len(decoded) != len(pairs):
+        raise ValueError("duplicate JSON object key")
+    return decoded
+
+
+def _json_value(data: bytes | str, *, reject_duplicate_keys: bool = False) -> object:
     try:
         text = data.decode("utf-8") if isinstance(data, bytes) else data
         text = text.strip()
         fenced = JSON_FENCE.fullmatch(text)
         return json.loads(
-            fenced[1] if fenced else text, parse_float=_finite_number, parse_constant=_finite_number
+            fenced[1] if fenced else text, parse_float=_finite_number, parse_constant=_finite_number,
+            object_pairs_hook=_unique_object if reject_duplicate_keys else None,
         )
     except (ValueError, RecursionError):
         raise FormatError("command response is not valid JSON") from None
 
 
-def _metered_value(response: bytes, event: dict[str, object]) -> object:
-    decoded = _json_value(response)
+def _metered_value(response: bytes, event: dict[str, object], *, reject_duplicate_keys: bool = False) -> object:
+    decoded = _json_value(response, reject_duplicate_keys=reject_duplicate_keys)
     if not isinstance(decoded, dict) or set(decoded) != {"response", "usage"}:
         return decoded
     usage = decoded["usage"]
@@ -401,7 +409,7 @@ def _metered_value(response: bytes, event: dict[str, object]) -> object:
             raise FormatError("command usage is not valid")
         event["usage"] = usage
     value = decoded["response"]
-    return _json_value(value) if isinstance(value, str) else value
+    return _json_value(value, reject_duplicate_keys=reject_duplicate_keys) if isinstance(value, str) else value
 
 
 @dataclass
@@ -410,6 +418,7 @@ class Meter:
     text_calls: int = 0
     embedding_calls: int = 0
     events: list[dict[str, object]] = field(default_factory=list)
+    reject_duplicate_keys: bool = False
 
     def admit_repair(self) -> bool:
         return self.text_calls <= TEXT_LIMIT - 2 and time.monotonic() < self.deadline
@@ -433,7 +442,7 @@ class Meter:
         try:
             output_limit = EMBEDDING_OUTPUT_BYTES if embedding else MODEL_OUTPUT_BYTES
             response = _run_command(argv, payload, self.deadline, output_limit=output_limit)
-            value = _metered_value(response, event)
+            value = _metered_value(response, event, reject_duplicate_keys=self.reject_duplicate_keys)
             try:
                 result = validate(value)
             except ValueError:
@@ -745,7 +754,7 @@ def _run_label(argv: list[str], started: float) -> bytes:
     if options.max_words < 1:
         raise NarratorError("the maximum label word count must be positive")
 
-    meter = Meter(started + ATTEMPT_SECONDS)
+    meter = Meter(started + ATTEMPT_SECONDS, reject_duplicate_keys=True)
     raw = _read_stdin(meter.deadline, REQUEST_BYTES)
     if len(raw) > REQUEST_BYTES:
         raise NarratorError("label input exceeds the byte limit")
