@@ -22,22 +22,25 @@ JOIN public.mycel_locations l ON l.chunk_version=v.id
 LEFT JOIN public.mycel_file_locations fl ON fl.id=l.file_location
 LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version AND fv.file_id=c.file_id
 LEFT JOIN public.mycel_files f ON f.id=fv.file_id
-WHERE c.repository=%s ORDER BY v.id,
+WHERE c.repository=%s AND (NOT %s OR
+    (l.kind='disk' AND c.kind='document' AND COALESCE(l.metadata->>'kind',c.kind)='document'))
+ORDER BY v.id,
 CASE l.kind WHEN 'disk' THEN 0 WHEN 'branch' THEN 1 WHEN 'stash' THEN 2 ELSE 3 END,
 COALESCE(fl.metadata->>'root',''),COALESCE(fl.metadata->>'path',f.path,''),l.location,l.id"""
 
 
-def retained_contexts(connection, repository: str, *, in_snapshot=False):
+def retained_contexts(connection, repository: str, *, in_snapshot=False, disk_documents_only=False):
     """Capture a finite inventory and deterministic place metadata from ingest.
 
     Document paths come from their owning location, and full heading paths
     come from that location's exact retained file bytes and original span.
     No checkout, branch, stash or provider is read by this operation.
+    Maintenance can restrict the inventory to document locations on disk.
     """
     if in_snapshot:
         require_read_transaction(connection)
     with nullcontext() if in_snapshot else snapshot_transaction(connection):
-        rows = connection.execute(_CONTEXTS_SQL, (repository,)).fetchall()
+        rows = connection.execute(_CONTEXTS_SQL, (repository, disk_documents_only)).fetchall()
     contexts, documents = {}, {}
     for version, chunk_kind, metadata, file_metadata, path, source in rows:
         if version in contexts:
@@ -155,12 +158,13 @@ def _committed_prefix(writer, prepared):
                    counts=_counts(versions, eligible=prepared.eligible, staged=frozenset(staged)))
 
 
-def embed(invocation, *, _store=None, _activity=None):
+def embed(invocation, *, _store=None, _activity=None, _disk_documents_only=False):
     """Retain already acknowledged progress even if final cleanup loses SQL."""
     from ._cli import Result
     state = {}
     try:
-        return _embed(invocation, state, _store=_store, _activity=_activity)
+        return _embed(invocation, state, _store=_store, _activity=_activity,
+                      disk_documents_only=_disk_documents_only)
     except (MycelError, KeyboardInterrupt) as error:
         if not state.get("started"):
             raise
@@ -175,7 +179,7 @@ def embed(invocation, *, _store=None, _activity=None):
         return Result(reply, 2 if interrupted else 1)
 
 
-def _embed(invocation, state, *, _store=None, _activity=None):
+def _embed(invocation, state, *, _store=None, _activity=None, disk_documents_only=False):
     from ._build_identity import current_build
     from ._cli import Result, invocation_store, repository_result
     from ._credentials import Credentials
@@ -225,7 +229,8 @@ def _embed(invocation, state, *, _store=None, _activity=None):
             before_send=current_guard)
         for repository in selected:
             try:
-                contexts, captured = retained_contexts(connection, repository)
+                contexts, captured = retained_contexts(connection, repository,
+                                                      disk_documents_only=disk_documents_only)
                 initial = writer.prepare(repository, contexts=contexts, _captured=captured)
                 selected_plan = (writer.prepare(repository, contexts=contexts, _captured=captured, retry_failed=True)
                                  if dry_run and retry_failed else initial)
@@ -268,7 +273,8 @@ def _embed(invocation, state, *, _store=None, _activity=None):
             # added versions stay pending and were never added to this send.
             stale_counts = False
             try:
-                final_contexts, final_inventory = retained_contexts(connection, repository)
+                final_contexts, final_inventory = retained_contexts(connection, repository,
+                                                                    disk_documents_only=disk_documents_only)
                 final = writer.prepare(repository, contexts=final_contexts, _captured=final_inventory)
             except (MycelError, KeyboardInterrupt) as failure:
                 final = _committed_prefix(writer, prepared)
