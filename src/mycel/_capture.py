@@ -804,6 +804,7 @@ class _Capture:
         return rules
 
     def disk_candidates(self, binding: _Binding, *, excluded: frozenset[Path] = frozenset(),
+                        documents_only: bool = False,
                         ) -> Iterator[tuple[Path, FileAlias, Corpus, bytes, tuple[int, int]]]:
         # ``excluded`` names folders, as resolved paths below the binding, that
         # the walk leaves out; ingest passes none, so its scan is unchanged.
@@ -851,7 +852,7 @@ class _Capture:
                     elif stat.S_ISREG(info.st_mode) and not rules.ignored(path):
                         alias = FileAlias(binding.root, local)
                         corpus = self.corpus(alias, binding)
-                        if corpus is not None:
+                        if corpus is not None and (not documents_only or corpus == "documents"):
                             alias = self.alias(binding.root, local)
                             source = self.read_disk(directory / entry.name, parent=descriptor, name=entry.name)
                             if self.observed[directory / entry.name][:2] != (info.st_dev, info.st_ino):
@@ -1264,6 +1265,29 @@ def artifact_documents(snapshot: SettingsSnapshot, repository: Repository, *,
             yield ArtifactDocument(path, alias.path, source, observed[3], observed[4])
     except _CaptureFailure as error:
         raise MycelError("io", f"The artifact root of {repository.name!r}: {error.message}") from None
+
+
+def observe_document_inputs(snapshot: SettingsSnapshot, repository: Repository) -> str:
+    """Hash a stable disk observation of the repository's document inputs."""
+    repository.require_folders()
+    capture = _Capture(snapshot, repository, None, run_git, None)
+    digest = sha256(b"mycel-document-observation-v1\n")
+    try:
+        bindings = capture.bindings()
+        checkouts = {binding.checkout for binding in bindings if binding.checkout is not None}
+        for checkout in sorted(checkouts, key=str):
+            capture.git_ignorecase[checkout] = capture.ignorecase(checkout)
+        for binding in bindings:
+            digest.update(_json((binding.root, str(binding.path))) + b"\n")
+            for path, alias, _, source, _ in capture.disk_candidates(binding, documents_only=True):
+                digest.update(_json((alias.root, alias.path, capture.observed[path],
+                                     sha256(source).hexdigest())) + b"\n")
+        capture.verify_disk()
+    except _CaptureFailure as error:
+        raise MycelError("io", error.message) from None
+    if not capture.complete:
+        raise MycelError("io", capture.diagnostics[0].message)
+    return digest.hexdigest()
 
 
 def capture_repository(snapshot: SettingsSnapshot, repository: Repository | str, *,
