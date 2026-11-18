@@ -1,4 +1,4 @@
-# Narrator summary writer
+# Narrator
 
 Narrator is an optional Mycel command that reads one complete MYC-8 summary
 request from stdin. It extracts claims with exact citations, checks proposed
@@ -7,6 +7,27 @@ assembles whole supported units up to the original source length. The default
 mode is `reasoned`. Length is measured in Unicode code points, including the
 newlines between summary units. Any amount of compression is valid, including
 an output of the same length as the source.
+
+## Generate a label
+
+Send one UTF-8 text on stdin and set `--max-words` to a positive integer. The
+same command works for a block, a message or the text of a Chat Session. It
+accepts up to 192,000 input bytes. The label can be a single word or a fragment.
+
+```sh
+printf '%s\n' 'A final summary may be as long as its source.' |
+  /absolute/path/to/python3.13 /absolute/checkout/mycel/scripts/narrator/narrator.py \
+    label --max-words 2 \
+    --model-command '["/absolute/path/to/codex-adapter"]'
+```
+
+The model adapter receives the instructions and a JSON object with `text` and
+`max_words`. Its response contains one `label` string, for example
+`{"label":"Source Length"}`. The metered response form described below is also
+supported. Narrator normalizes whitespace, validates the label against the word
+limit and writes one newline-terminated line. If a reply fails validation,
+Narrator asks once more. Failure leaves stdout empty and writes a diagnostic
+to stderr.
 
 ## Configure a disposable Mycel run
 
