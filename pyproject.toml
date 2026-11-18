@@ -17,4 +17,4 @@ where = ["src"]
 include = ["mycel", "mycel.*"]
 
 [tool.setuptools.package-data]
-mycel = ["data/*.json", "data/*.txt"]
+mycel = ["data/*.json", "data/*.txt", "data/*.html"]

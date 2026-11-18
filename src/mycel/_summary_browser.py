@@ -2,6 +2,11 @@
 
 from collections import defaultdict
 from hashlib import sha256
+from importlib.resources import files
+import json
+import os
+from pathlib import Path
+import tempfile
 
 from ._errors import MycelError
 from ._evidence import EvidenceError, exact_bytes
@@ -121,3 +126,49 @@ def collect_summary_trees(connection) -> list[dict]:
         return _collect(connection)
     except (EvidenceError, ValueError, TypeError):
         _incompatible()
+
+
+def render_summary_browser(trees: list[dict]) -> str:
+    template = files("mycel").joinpath("data/summary-browser.html").read_text(encoding="utf-8")
+    payload = json.dumps(trees, separators=(",", ":")).replace("<", "\\u003c")
+    placeholder = "__MYCEL_SUMMARY_DATA__"
+    if template.count(placeholder) != 1:
+        raise MycelError("internal", "The bundled summary browser template is invalid.")
+    return template.replace(placeholder, payload, 1)
+
+
+def write_summary_browser(output: Path, trees: list[dict]) -> None:
+    """Publish a private standalone report without overwriting a previous export."""
+    staged = None
+    try:
+        if output.exists() or output.is_symlink():
+            raise FileExistsError
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output.parent,
+                                         prefix=".mycel-summary-browser-", delete=False) as stream:
+            staged = Path(stream.name)
+            stream.write(render_summary_browser(trees))
+        os.link(staged, output)
+    except FileExistsError:
+        raise MycelError("refused", "The browser output file already exists.") from None
+    except OSError:
+        raise MycelError("io", "The browser output file could not be written.") from None
+    finally:
+        if staged is not None:
+            staged.unlink(missing_ok=True)
+
+
+def export_summary_browser(invocation, filename: str):
+    from ._cli import Result, invocation_store
+    from ._locks import snapshot_transaction
+
+    try:
+        output = Path(filename).expanduser().absolute()
+    except (RuntimeError, ValueError):
+        raise MycelError("invalid_input", "Choose a valid HTML output path.") from None
+    if output.exists() or output.is_symlink():
+        raise MycelError("refused", "The browser output file already exists.")
+    with invocation_store(invocation) as (connection, _), snapshot_transaction(connection):
+        trees = collect_summary_trees(connection)
+    write_summary_browser(output, trees)
+    return Result({"output": str(output), "trees": len(trees),
+                   "summaries": sum(tree["count"] for tree in trees)})
