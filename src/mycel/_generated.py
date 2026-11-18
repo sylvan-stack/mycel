@@ -23,6 +23,7 @@ from ._source_refs import SourceAddress, parse_source_address
 from ._store import exact_bytes
 from ._summary_evidence import (GenerationEvidenceStore, GenerationLease, _KIND, _OWNER_SQL,
     _REFERENCES_SQL)
+from ._summary_labels import stored_summary_label
 from ._summary_store import PublishedSummaryState, SummaryMemberPin, SummarySetMetadata
 
 PIN_SCHEMA = 'mycel-generated-pin-v1'
@@ -113,7 +114,12 @@ def generated_capture(connection, row):
                 or located['level'] != summary.level or int(name.split('/')[0]) != summary.level
                 or file_location is not None or address != SourceAddress(repository, 'index', 'summaries', name).address):
             _fail()
-        if dependant[5] != {'kind': 'summary', **located}:
+        if not isinstance(dependant[5], dict):
+            _fail()
+        metadata = dict(dependant[5])
+        if 'summaryLabel' in metadata and stored_summary_label(metadata.pop('summaryLabel')) is None:
+            _fail()
+        if metadata != {'kind': 'summary', **located}:
             _fail()
     # Every request member must have exactly one generated pin with this owner.
     siblings = connection.execute('SELECT declaration,state FROM public.mycel_dependencies '
