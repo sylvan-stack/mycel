@@ -496,13 +496,8 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         if repos or parsed.dry_run or not parsed.output or not parsed.output.strip() or "\0" in parsed.output:
             raise MycelError(ErrorCode.INVALID_INPUT, "Use summaries browse --output <file>.")
         return Invocation(name, arguments=("browse", "--output", parsed.output))
-    if name == "summaries" and parsed.arguments[:1] == ["ordered"]:
-        from ._ordered_summary import ordered_arguments
-        arguments = ("ordered", *parsed.arguments[1:], "--output", parsed.output)
-        ordered_arguments(arguments, has_scope=bool(repos) or parsed.dry_run)
-        return Invocation(name, arguments=arguments)
     if name == "summaries" and parsed.output is not None:
-        raise MycelError(ErrorCode.INVALID_INPUT, "--output is available for summaries browse and ordered.")
+        raise MycelError(ErrorCode.INVALID_INPUT, "--output is available for summaries browse.")
     if name == "summaries" and (len(repos) > 1 or tuple(parsed.arguments) not in
             {(), ("status",), ("build",), ("regenerate",), ("remove",), ("labels",)} or
             (tuple(parsed.arguments) == ("labels",) and len(repos) != 1) or
@@ -632,9 +627,7 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
                              grep_plain=parsed.command == "grep" and
                              (os.environ.get("MYCEL_GREP_PLAIN") == "1" or not snapshot.valid))
             if parsed.command not in {"info", "grep"}:
-                local_ordered_export = parsed.command == "summaries" and parsed.arguments[:1] == ("ordered",)
-                if snapshot.exists or not local_ordered_export:
-                    snapshot.require_valid(require_store=parsed.command != "hub" and not local_ordered_export)
+                snapshot.require_valid(require_store=parsed.command != "hub")
             selected_handlers = {"api-key": _api_key, "info": _settings_info, "grep": _plain_grep, "repos": _repos,
                                  "init": _init, "ids": _handle_ids}
             selected_handlers["read"] = _read_chunk

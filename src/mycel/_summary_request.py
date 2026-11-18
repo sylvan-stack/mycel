@@ -91,9 +91,9 @@ def _file_hash(path: Path) -> str:
 def summary_command(settings: SettingsSnapshot, *, operation: str, dry_run: bool = False) -> SummaryProgram | None:
     """Resolve and pin the bundled writer and its configured model adapter."""
     settings.require_valid(require_store=False)
-    if operation not in {"build", "regenerate", "labels", "ordered", "status", "remove", "search"} or type(dry_run) is not bool:
+    if operation not in {"build", "regenerate", "labels", "status", "remove", "search"} or type(dry_run) is not bool:
         raise MycelError("invalid_input", "The summary operation is invalid.")
-    if operation not in {"build", "regenerate", "labels", "ordered"} or dry_run:
+    if operation not in {"build", "regenerate", "labels"} or dry_run:
         return None
     summary_settings = settings.values["summaries"]
     adapter = summary_settings.get("model_command")

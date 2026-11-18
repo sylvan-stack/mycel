@@ -44,7 +44,7 @@ COMMANDS = (
     CommandSpec("classify", "Explicitly classify dependency review work", all_repositories=True,
                 extra_options=("--k <count>", "--dry-run")),
     CommandSpec("summaries", "Report, build, regenerate, label, browse or remove summaries",
-                extra_options=("--dry-run", "--output <file>", "ordered <artifact> [<artifact> ...]")),
+                extra_options=("--dry-run", "--output <file>")),
     CommandSpec("maintain", "Run one quiet-period maintenance check for a repository"),
     CommandSpec("overview", "Read the stored code overview", extra_options=("--dir <directory>",)),
     CommandSpec("grep", "Run grep with a related search tail", scope=False, raw_arguments=True),

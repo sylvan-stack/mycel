@@ -252,30 +252,6 @@ current published Summary Nodes and can show stale summaries.
 The file contains the exported text and labels and works offline. It is a
 snapshot. Export to a fresh path to read later publications.
 
-### Read Artifacts in source order
-
-```sh
-mycel summaries ordered handbook.md playbook.txt --output ~/artifact-summaries.html
-```
-
-The command captures each selected UTF-8 text file once and packages its own
-tree in the offline HTML. It recognizes Markdown headings and splits long
-sections into smaller ranges. It keeps all the exact source text from each
-capture, including preambles, blank lines, and original line endings.
-
-Cmd+Click opens an Artifact, a label, or the next level underneath a
-summary. Opening the children removes the parent summary from the reading
-flow. Other visible branches stay in place. Shift+Click reverses a step.
-After expanding every range, the text reads from the first byte of the
-Artifact to the last. Tab, Enter or Space, and Escape provide keyboard access.
-
-When the configured Narrator adapter is available, the command generates
-summaries for bounded groups of consecutive ranges. A missing adapter or a
-failed summary leaves the source available through the same tree. The reply
-reports the captured SHA-256 and counts generated and unavailable summaries
-per Artifact. The command needs no index or embeddings. Each export is a
-private snapshot and requires a fresh output path.
-
 ### Summary labels
 
 Build and regeneration ask Narrator for one sentence of up to 20 words,
