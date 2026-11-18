@@ -22,6 +22,7 @@ from ._store import checked_store
 from ._summary_evidence import GenerationMember, capture_generation
 from ._summary_grouping import (GROUPING_PROFILE, MAX_LEVELS, TOP_NODES, SummaryNode,
     group_summary_nodes, mean_vector, numerical_versions)
+from ._summary_labels import SummaryLabels
 from ._summary_request import SummarySection, plan_summary_requests, summary_command, summary_configuration_guard
 from ._summary_store import StoreSummaries, SummarySetMetadata, summary_result_reply
 from ._summary_writer import SummaryWriter
@@ -100,6 +101,7 @@ def build_summary_tree(connection, settings, repository, identity, *, activity=N
     program = summary_command(settings, operation="build")
     command, prompts = program.argv, program.prompts
     configuration = summary_configuration_guard(settings, "build", program)
+    labels = SummaryLabels(settings, program, configuration) if writer is None else None
 
     inputs = BuildInputs.capture(connection, settings, repository)
     versions = numerical_versions()
@@ -140,13 +142,20 @@ def build_summary_tree(connection, settings, repository, identity, *, activity=N
                                         source_characters=tuple(request.source_characters for request in requests))
             if len(results) != len(requests):
                 raise MycelError("internal", "The summary writer returned an incomplete level.")
-            pending = []
-            for ordinal, (request, lease, result) in enumerate(zip(requests, leases, results), 1):
-                place = SourceAddress(repository, "index", "summaries", f"{level}/{ordinal}")
+            places = tuple(SourceAddress(repository, "index", "summaries", f"{level}/{ordinal}")
+                           for ordinal in range(1, len(results) + 1))
+            for place, result in zip(places, results, strict=True):
                 if result.response is None:
                     failures.append({"summary": place.address, "reason": result.reason})
-                else:
-                    pending.append(store.stage_response(lease, result.response, place=place, level=level))
+            pending = []
+            if not failures:
+                responses = tuple(result.response for result in results)
+                titles = labels.write_many(responses) if labels is not None else (None,) * len(responses)
+                for place, lease, response, title in zip(places, leases, responses, titles, strict=True):
+                    if labels is not None and title is None:
+                        failures.append({"summary": place.address, "reason": "label_failed"})
+                    else:
+                        pending.append(store.stage_response(lease, response, place=place, level=level, label=title))
             if failures:
                 reply = summary_result_reply(repository, written=0, deleted=0, replaced=False,
                     failed=failures, cut=tuple(cuts.values()), stopped="failed")

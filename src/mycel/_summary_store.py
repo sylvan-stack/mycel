@@ -37,7 +37,7 @@ GROUPING_PROFILE = "mycel-summary-v1"
 _HASH = re.compile(r"[0-9a-f]{64}\Z")
 _SUMMARY_NAME = re.compile(r"([1-5])/([1-9][0-9]*)\Z")
 SUMMARY_FAILURE_REASONS = frozenset({"io_failure", "start_failed", "timeout", "stdout_limit",
-    "stderr_limit", "nonzero_exit", "invalid_utf8", "empty_response", "embedding_failed", "inputs_changed"})
+    "stderr_limit", "nonzero_exit", "invalid_utf8", "empty_response", "label_failed", "embedding_failed", "inputs_changed"})
 
 
 def _bad_state():

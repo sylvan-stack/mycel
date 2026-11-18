@@ -20,6 +20,7 @@ from ._locks import atomic_transaction, invocation_guard, operation_guard, requi
 from ._safeguards import _defer_cleanup_signals
 from ._store import checked_store
 from ._summary_evidence import GenerationEvidenceStore, GenerationLease, _KIND, _OWNER_SQL, _REFERENCES_SQL
+from ._summary_labels import read_summary_label, retain_summary_label
 from ._summary_publication import SummaryPublicationStore
 from ._summary_store import _Summary, _set_metadata, summary_removal_reply, summary_repository, summary_set_identifier
 
@@ -156,7 +157,7 @@ class SummaryLifecycleStore:
         for repository in sorted({self.repository, *(owner for _, owner in owners)}):
             CollectionStore(self.connection).collect_evidence_in_transaction(repository)
 
-    def publish_in_transaction(self, summary, lease, plan, vectors, *, guarded_repositories, guard=None):
+    def publish_in_transaction(self, summary, lease, plan, vectors, *, guarded_repositories, guard=None, label=None):
         self._bound(guarded_repositories)
         self._target(summary)
         if guard is not None:
@@ -182,6 +183,7 @@ class SummaryLifecycleStore:
             metadata=summary.state.metadata, guarded_repositories=guarded_repositories)
         if result.chunk_version != version:
             _fail()
+        retain_summary_label(self.connection, version, label)
         self.connection.execute('DELETE FROM public.mycel_dependencies d USING public.mycel_chunk_versions v '
             "WHERE d.dependant_version=v.id AND v.chunk_id=%s AND v.id<>%s AND d.kind='generated'", (chunk_id, version))
         self.connection.execute('DELETE FROM public.mycel_embedding_plans p USING public.mycel_chunk_versions v '
@@ -189,7 +191,7 @@ class SummaryLifecycleStore:
         value = SimpleNamespace(plan=plan, vectors=vectors)
         identifier = SummaryPublicationStore._write_embedding(self, result, value)
         self._release(owners, guarded_repositories)
-        self._checks.append(('publish', publisher, result, identifier, plan, vectors, guarded_repositories, guard))
+        self._checks.append(('publish', publisher, result, identifier, plan, vectors, guarded_repositories, guard, label))
         self.verify_in_transaction()
         return result
 
@@ -242,9 +244,11 @@ class SummaryLifecycleStore:
         for check in self._checks:
             kind = check[0]
             if kind == 'publish':
-                _, publisher, result, identifier, plan, vectors, repositories, guard = check
+                _, publisher, result, identifier, plan, vectors, repositories, guard, label = check
                 self._bound(repositories)
                 publisher.verify_in_transaction()
+                if label is not None and read_summary_label(self.connection, result.chunk_version) != label:
+                    _fail()
                 row = self.connection.execute('SELECT chunk_version,model,dimensions,plan_hash,place_line,provenance,failure '
                     'FROM public.mycel_embedding_plans WHERE id=%s', (identifier,)).fetchone()
                 if row != (result.chunk_version, plan.model, plan.dimensions, plan.plan_sha256,

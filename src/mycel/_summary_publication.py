@@ -28,6 +28,7 @@ from ._source_refs import SourceAddress
 from ._store import checked_store
 from ._summary_evidence import (GenerationCapture, GenerationEvidenceStore,
     GenerationLease, _KIND, _OWNER_SQL, _REFERENCES_SQL, _INSERT_OWNER_SQL, _INSERT_REFERENCE_SQL)
+from ._summary_labels import read_summary_label, retain_summary_label
 from ._summary_store import PublishedSummaryState, SummarySetMetadata, summary_set_identifier
 
 
@@ -40,6 +41,7 @@ class StagedSummary:
     member: SelectionMember
     lease: GenerationLease
     level: int
+    label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -111,7 +113,7 @@ class SummaryPublicationStore:
         return lease
 
     def stage_response(self, lease: GenerationLease, response: bytes, *, place: SourceAddress,
-                       level: int) -> StagedSummary:
+                       level: int, label: str | None = None) -> StagedSummary:
         """Retain a response and reserve its exact future version without index rows."""
         if (not isinstance(lease, GenerationLease) or not isinstance(place, SourceAddress)
                 or self._leases.get(lease.owner_id) != lease or place.repository != self.repository
@@ -132,7 +134,7 @@ class SummaryPublicationStore:
         identifier = str(uuid4())
         member = SelectionMember(place, ResolvedChunk(identifier, version, place.name, 'summary',
             response, sha256(response).hexdigest()))
-        staged = StagedSummary(member, completed, level)
+        staged = StagedSummary(member, completed, level, label)
         self._staged[identifier] = staged
         return staged
 
@@ -242,6 +244,7 @@ class SummaryPublicationStore:
                 chunk_id=UUID(staged.member.chunk.identifier), place=staged.member.place, level=staged.level,
                 metadata=metadata, guarded_repositories=guarded_repositories,
                 reserved_version=staged.member.chunk.version)
+            retain_summary_label(self.connection, result.chunk_version, staged.label)
             results.append(result)
             plans.append((self._write_embedding(result, value), value))
         sentinel = summary_set_identifier(self.repository)
@@ -276,6 +279,9 @@ class SummaryPublicationStore:
             _fail('snapshot_corrupt')
         for identifier, value in plans:
             plan = value.plan
+            if (value.summary.label is not None
+                    and read_summary_label(self.connection, value.summary.member.chunk.version) != value.summary.label):
+                _fail()
             row = self.connection.execute('SELECT chunk_version,model,dimensions,plan_hash,place_line,provenance,failure '
                 'FROM public.mycel_embedding_plans WHERE id=%s', (identifier,)).fetchone()
             if row != (value.summary.member.chunk.version, plan.model, plan.dimensions, plan.plan_sha256,

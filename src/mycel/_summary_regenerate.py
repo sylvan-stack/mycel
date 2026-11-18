@@ -21,6 +21,7 @@ from ._source_refs import parse_source_address
 from ._staleness import detection_guards
 from ._store import checked_store
 from ._summary_evidence import GenerationEvidenceStore, GenerationMember, capture_generation
+from ._summary_labels import SummaryLabels, read_summary_label
 from ._summary_request import SummarySection, plan_summary_requests, summary_command, summary_configuration_guard
 from ._summary_store import StoreSummaries, _published, _request_member, _summary_members, summary_result_reply
 from ._summary_writer import SummaryWriter
@@ -103,6 +104,7 @@ def regenerate_summary_set(connection, settings, repository, identity, *, activi
     program = summary_command(settings, operation="regenerate")
     command, prompts = program.argv, program.prompts
     configuration = summary_configuration_guard(settings, "regenerate", program)
+    labels = SummaryLabels(settings, program, configuration) if writer is None else None
 
     original, _, initial_stale, _ = _snapshot(connection, settings, repository)
     work = tuple(summary for summary in original if summary.member.chunk.identifier in initial_stale)
@@ -189,6 +191,12 @@ def regenerate_summary_set(connection, settings, repository, identity, *, activi
                 lease = evidence.retain_response(identity, lease, result.response)
                 leases[lease.owner_id] = lease
                 version = mutation.reserve_response(summary, lease)
+                label = read_summary_label(connection, version)
+                if label is None and labels is not None:
+                    label, = labels.write_many((result.response,))
+                    if label is None:
+                        failed.append({"summary": place.address, "reason": "label_failed"})
+                        continue
                 configuration()
                 tokenizer = tokenizer or load_tokenizer(settings.values["embedding"]["model"])
                 plan = plan_chunk(repository, identifier, str(version), result.response.decode("utf-8"),
@@ -236,7 +244,7 @@ def regenerate_summary_set(connection, settings, repository, identity, *, activi
                         raise MycelError("busy", "Another invocation prevents this summary publication.")
                     with atomic_transaction(connection):
                         mutation.publish_in_transaction(summary, lease, plan, vectors,
-                            guarded_repositories=guards.writable, guard=guard)
+                            guarded_repositories=guards.writable, guard=guard, label=label)
                         if activity is not None:
                             activity.record_in_transaction(repository, "summaries_regenerate",
                                 AppliedMutation(True, reply(next_written=1)))
