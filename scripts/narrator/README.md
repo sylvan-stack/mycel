@@ -1,12 +1,10 @@
 # Narrator
 
-Narrator is an optional Mycel command that reads one complete MYC-8 summary
-request from stdin. It extracts claims with exact citations, checks proposed
-units independently, gives eligible rejections one repair and recheck, and
-assembles whole supported units up to the original source length. The default
-mode is `reasoned`. Length is measured in Unicode code points, including the
-newlines between summary units. Any amount of compression is valid, including
-an output of the same length as the source.
+Narrator is a standalone tool for generating labels and writing summaries.
+Run it directly with plain text and a word limit to get a short label. Mycel
+can also run Narrator as its RAPTOR summary writer when you configure it to
+do so. Mycel sends the writing instructions and the text to summarize.
+Narrator returns the summary.
 
 ## Generate a label
 
@@ -38,6 +36,18 @@ Narrator asks once more. Failure leaves stdout empty and writes a diagnostic
 to stderr.
 
 ## Configure a disposable Mycel run
+
+For each summary, Mycel sends one request on standard input. The request
+contains the writing instructions and the source sections, each with its
+location. Higher levels can use earlier summaries as source sections. The
+[Mycel summaries specification](https://github.com/sylvan-stack/mycel-artifacts/blob/main/specs/08-summaries.md#the-request)
+defines the request format, including how Mycel handles oversized input.
+
+Narrator extracts claims with exact citations, checks proposed text
+independently, and gives eligible rejections one repair and recheck. It
+assembles whole supported units up to the original source length. The default
+mode is `reasoned`. Length is measured in Unicode code points, including the
+newlines between units. A summary can be as long as the source.
 
 Use Python 3.13 or later and an absolute path to `narrator.py` in a Mycel
 checkout. Keep `selection.py`, `verification.py` and the checkout’s packaged
