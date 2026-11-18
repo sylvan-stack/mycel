@@ -242,6 +242,12 @@ retains independent committed successes and blocks parents of stale members.
 Removal atomically deletes the current set and returns its actual removed count.
 The [summary guide](summaries.md) describes lifecycle guards and complete replies.
 
+`mycel maintain --repo <name>` checks one enabled repository for a
+15-minute quiet period across its on-disk document inputs. When due, it
+ingests, embeds pending on-disk document sections, and regenerates stale
+summaries. See the [maintenance guide](summaries.md#quiet-period-maintenance)
+for scheduling, results and retry behavior.
+
 The contract below is checked against dispatch declarations. Change it in the same change as commands, common options or reply shapes. Feature handlers must extend their command guide and passing checks as they land. The complete 333-requirement registry and staged/release coverage gates distinguish accepted specifications from executed checks; unimplemented requirements remain pending. A release gate fails while any required proof is missing. Store proofs require an individually created and discarded `mycel_check_` database with private settings; mock store backends do not establish PostgreSQL acceptance.
 
 `mycel refs [--repo <name>] [--unresolved]` reads retained source declarations in one store snapshot. It returns each owning chunk with a portable address, original declaration and line, current resolution or fault, qualified ambiguity candidates, and separate baseline status. `--unresolved` selects resolution faults. Reporting does not retry refs or require their folders to be present. Explicit repository selectors preserve local selection errors alongside successful reports. The command writes no feature rows or activity.
@@ -574,6 +580,17 @@ no ingest or embedding and preserves verifications and source policy. See the
         ]
       },
       {
+        "name": "maintain",
+        "description": "Run one quiet-period maintenance check for a repository",
+        "available": true,
+        "rawArguments": false,
+        "options": [
+          "-h",
+          "--help",
+          "--repo <name>"
+        ]
+      },
+      {
         "name": "overview",
         "description": "Read the stored code overview",
         "available": true,
@@ -745,7 +762,7 @@ no ingest or embedding and preserves verifications and source policy. See the
       "--all (where supported)"
     ],
     "buildSelection": "Installed launcher: -v <number> must be first",
-    "stage": "CLI foundation, strict settings and diagnostics, repository listing and atomic removal, complete repository status, complete scoped ingest, read-only ordered activity history and exact entry details, retained reference reporting, guarded dependency and relation assertions, exact verification and read-only history, atomic stated justification and on-demand Origin Coverage, exact indexed chunk reading, evidence-bearing search, scoped embedding, atomic summary builds, summary regeneration and removal, read-only summary status and dry-runs, finite classification, guarded Origin recovery and human-settled Origin audit, local provenance reports, and private store initialization; system grep preserves its output and can append a read-only related search tail"
+    "stage": "CLI foundation, strict settings and diagnostics, repository listing and atomic removal, complete repository status, complete scoped ingest, read-only ordered activity history and exact entry details, retained reference reporting, guarded dependency and relation assertions, exact verification and read-only history, atomic stated justification and on-demand Origin Coverage, exact indexed chunk reading, evidence-bearing search, scoped embedding, atomic summary builds, summary regeneration and removal, read-only summary status and dry-runs, quiet-period maintenance, finite classification, guarded Origin recovery and human-settled Origin audit, local provenance reports, and private store initialization; system grep preserves its output and can append a read-only related search tail"
   },
   "errors": [
     "invalid_input",

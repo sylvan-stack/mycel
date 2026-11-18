@@ -494,6 +494,8 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
             {(), ("status",), ("build",), ("regenerate",), ("remove",)} or
             (parsed.dry_run and tuple(parsed.arguments) not in {("build",), ("regenerate",)})):
         raise MycelError(ErrorCode.INVALID_INPUT, "Summaries takes one repository and status, build, regenerate or remove; --dry-run requires build or regenerate.")
+    if name == "maintain" and (len(repos) != 1 or parsed.arguments):
+        raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel maintain --repo <name>.")
     arguments = (("--unresolved",) if getattr(parsed, "unresolved", False) else ()) + \
                 (("--remove",) if getattr(parsed, "remove", False) else ()) + \
                 (("--dry-run",) if getattr(parsed, "dry_run", False) else ()) + \
@@ -660,6 +662,8 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
             selected_handlers["evaluate"] = evaluate
             from ._summaries import handle_summaries
             selected_handlers["summaries"] = handle_summaries
+            from ._maintenance import handle_maintenance
+            selected_handlers["maintain"] = handle_maintenance
             from ._overview import handle_overview
             selected_handlers["overview"] = handle_overview
             from ._classify import handle_classify

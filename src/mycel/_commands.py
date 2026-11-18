@@ -44,6 +44,7 @@ COMMANDS = (
     CommandSpec("classify", "Explicitly classify dependency review work", all_repositories=True,
                 extra_options=("--k <count>", "--dry-run")),
     CommandSpec("summaries", "Report, build, regenerate or remove summaries", extra_options=("--dry-run",)),
+    CommandSpec("maintain", "Run one quiet-period maintenance check for a repository"),
     CommandSpec("overview", "Read the stored code overview", extra_options=("--dir <directory>",)),
     CommandSpec("grep", "Run grep with a related search tail", scope=False, raw_arguments=True),
     CommandSpec("read", "Read one exact chunk", extra_options=("--id <id>", "--context <lines>", "--no-fresh")),
@@ -76,7 +77,7 @@ def help_reply(command: str | None = None) -> dict:
         "version": "2.0.0",
         "usage": "mycel <command> [arguments]",
         "commands": [
-            {"name": s.name, "description": s.description, "available": s.name in {"audit", "recovery", "origins", "justify", "api-key", "info", "grep", "repos", "init", "ids", "pieces", "cues", "plan", "hub", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
+            {"name": s.name, "description": s.description, "available": s.name in {"audit", "recovery", "origins", "justify", "api-key", "info", "grep", "repos", "init", "ids", "pieces", "cues", "plan", "hub", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "summaries", "maintain", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
              "rawArguments": s.raw_arguments,
              "options": ([] if s.raw_arguments else
                          ["-h", "--help"] + (["--repo <name>"] if s.scope else []) +
@@ -85,5 +86,5 @@ def help_reply(command: str | None = None) -> dict:
         ],
         "options": ["-h", "--help", "--repo <name> (repeatable where supported)", "--all (where supported)"],
         "buildSelection": "Installed launcher: -v <number> must be first",
-        "stage": "CLI foundation, strict settings and diagnostics, repository listing and atomic removal, complete repository status, complete scoped ingest, read-only ordered activity history and exact entry details, retained reference reporting, guarded dependency and relation assertions, exact verification and read-only history, atomic stated justification and on-demand Origin Coverage, exact indexed chunk reading, evidence-bearing search, scoped embedding, atomic summary builds, summary regeneration and removal, read-only summary status and dry-runs, finite classification, guarded Origin recovery and human-settled Origin audit, local provenance reports, and private store initialization; system grep preserves its output and can append a read-only related search tail",
+        "stage": "CLI foundation, strict settings and diagnostics, repository listing and atomic removal, complete repository status, complete scoped ingest, read-only ordered activity history and exact entry details, retained reference reporting, guarded dependency and relation assertions, exact verification and read-only history, atomic stated justification and on-demand Origin Coverage, exact indexed chunk reading, evidence-bearing search, scoped embedding, atomic summary builds, summary regeneration and removal, read-only summary status and dry-runs, quiet-period maintenance, finite classification, guarded Origin recovery and human-settled Origin audit, local provenance reports, and private store initialization; system grep preserves its output and can append a read-only related search tail",
     }
