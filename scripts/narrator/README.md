@@ -14,6 +14,14 @@ Send one UTF-8 text on stdin and set `--max-words` to a positive integer. The
 same command works for a block, a message or the text of a Chat Session. It
 accepts up to 192,000 input bytes. The label can be a single word or a fragment.
 
+The budget counts words after ignoring case and surrounding punctuation.
+Standalone punctuation and symbols use no budget. Hyphenated terms such as
+`single-checkout` count as one word. The following words can appear without
+using the budget: `a`, `an`, `and`, `and/or`, `as`, `at`, `but`, `by`, `for`,
+`from`, `in`, `nor`, `of`, `on`, `or`, `so`, `the`, `to`, `with`, and `yet`.
+For example, `Progress and background jobs` uses three counted words. Every
+label needs at least one counted word.
+
 ```sh
 printf '%s\n' 'A final summary may be as long as its source.' |
   /absolute/path/to/python3.13 /absolute/checkout/mycel/scripts/narrator/narrator.py \
