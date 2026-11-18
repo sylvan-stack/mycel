@@ -155,7 +155,8 @@ _SCHEMA = {
                "review_command": "review_command",
                "review_provider": "identity", "review_model": "review_model",
                "review_revision": "revision"},
-    "summaries": {"command": "texts", "at_once": "positive_int", "instructions": "folder"},
+    "summaries": {"command": "texts", "model_command": "absolute_argv",
+                  "at_once": "positive_int", "instructions": "folder"},
 }
 _ORGANIZATION_SCHEMA = {"root": "folder", "artifact_root": "folder"}
 _REPO_SCHEMA = {"enabled": "boolean", "code_root": "folder", "artifact_root": "folder",
@@ -485,9 +486,10 @@ class _Validator:
             okay = (_relative_path(value) if kind == "relative_path" else
                     isinstance(value, list) and all(_relative_path(member) for member in value))
             message = "Expected a relative path inside its configured root, without ~, NUL or parent traversal."
-        elif kind == "review_command":
+        elif kind in {"review_command", "absolute_argv"}:
             okay = (isinstance(value, list) and bool(value)
-                    and all(isinstance(member, str) and bool(member) and "\0" not in member for member in value))
+                    and all(isinstance(member, str) and "\0" not in member for member in value)
+                    and (kind != "review_command" or all(value)))
             if okay:
                 executable = value[0]
                 okay = Path(executable).is_absolute() or executable.startswith("~/")

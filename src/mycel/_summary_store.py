@@ -344,7 +344,7 @@ class SummarySnapshot:
         embedded_members = sum(section.member.chunk.identifier in membership for section in self.sections)
         levels = sorted({summary.state.level for summary in self._summaries})
         reply = {"repository": self.repository,
-                 "commandSet": bool(self._settings.values["summaries"].get("command")),
+                 "commandSet": bool(self._settings.values["summaries"].get("model_command")),
                  "numericalVersions": {},
                  "levels": [{"level": level,
                              "summaries": sum(summary.state.level == level for summary in self._summaries),

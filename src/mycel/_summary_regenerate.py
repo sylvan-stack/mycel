@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 from dataclasses import dataclass, replace
-from hashlib import sha256
-from pathlib import Path
 
 from ._activity import AppliedMutation, MutationActivity
 from ._build_identity import current_build
@@ -17,13 +15,13 @@ from ._errors import MycelError
 from ._evidence import EvidenceError
 from ._locks import atomic_transaction, invocation_guard, operation_guard
 from ._resolver import SelectionMember, SourceResolver
-from ._safeguards import InvocationPolicy, _defer_cleanup_signals, require_model_call, resolve_command
+from ._safeguards import InvocationPolicy, _defer_cleanup_signals, require_model_call
 from ._settings import _freeze
 from ._source_refs import parse_source_address
 from ._staleness import detection_guards
 from ._store import checked_store
 from ._summary_evidence import GenerationEvidenceStore, GenerationMember, capture_generation
-from ._summary_request import SummarySection, load_summary_prompts, plan_summary_requests, summary_command
+from ._summary_request import SummarySection, plan_summary_requests, summary_command, summary_configuration_guard
 from ._summary_store import StoreSummaries, _published, _request_member, _summary_members, summary_result_reply
 from ._summary_writer import SummaryWriter
 from ._voyage import CommitReceipt, EmbeddingGuardFailure, PartIdentity, VoyageClient
@@ -102,20 +100,9 @@ def regenerate_summary_set(connection, settings, repository, identity, *, activi
     from ._summary_lifecycle import SummaryLifecycleStore
     policy = InvocationPolicy("summaries", action="regenerate")
     require_model_call(policy, "summary")
-    command, prompts = summary_command(settings, operation="regenerate"), load_summary_prompts(settings)
-    resolved_command = resolve_command(command, home=Path.home(), allow_path_search=True)
-    executable_hash = sha256(Path(resolved_command[0]).read_bytes()).hexdigest()
-
-    def configuration():
-        try:
-            settings.require_current()
-            if (summary_command(settings, operation="regenerate") != command
-                    or load_summary_prompts(settings) != prompts
-                    or resolve_command(command, home=Path.home(), allow_path_search=True) != resolved_command
-                    or sha256(Path(resolved_command[0]).read_bytes()).hexdigest() != executable_hash):
-                raise EvidenceError("inputs_changed")
-        except (OSError, MycelError):
-            raise EvidenceError("inputs_changed") from None
+    program = summary_command(settings, operation="regenerate")
+    command, prompts = program.argv, program.prompts
+    configuration = summary_configuration_guard(settings, "regenerate", program)
 
     original, _, initial_stale, _ = _snapshot(connection, settings, repository)
     work = tuple(summary for summary in original if summary.member.chunk.identifier in initial_stale)
@@ -303,8 +290,7 @@ def _regenerate_summaries(invocation, *, _store, _writer, _client, _tokenizer, _
     from ._summary_store import summary_repository
     settings = invocation.settings
     repository = summary_repository(settings, invocation.repositories)
-    command = summary_command(settings, operation="regenerate")
-    resolve_command(command, home=Path.home(), allow_path_search=True)
+    summary_command(settings, operation="regenerate")
     with ExitStack() as stack:
         connection, _ = (_store if _store is not None else
             stack.enter_context(invocation_store(invocation, operation="embed")))

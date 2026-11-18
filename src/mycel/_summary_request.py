@@ -1,18 +1,21 @@
-"""Complete, deterministic summary requests for the configured text writer.
+"""Complete, deterministic summary requests for Narrator.
 
 Planning is offline. Publication, grouping and summary command replies belong
 to their respective consumers; no request here makes searchable summary rows.
 """
 
 from dataclasses import dataclass
-from hashlib import sha256
+from hashlib import file_digest, sha256
 from importlib.resources import files
 import json
 from pathlib import Path
+import sys
 
 from ._embedding_plan import document_place_line
 from ._errors import MycelError
+from ._evidence import EvidenceError
 from ._resolver import SelectionMember, _validate_chunk
+from ._safeguards import resolve_command
 from ._settings import SettingsSnapshot
 from ._source_refs import SourceAddress
 
@@ -20,10 +23,12 @@ from ._source_refs import SourceAddress
 REQUEST_LIMIT = 48_000
 CUT_NOTICE = "[Mycel: source text cut at request limit]"
 SEPARATOR = "\n\n---\n\n"
+_NARRATOR_DIR = Path(__file__).resolve().with_name("_narrator")
+_NARRATOR_FILES = ("narrator.py", "selection.py", "verification.py")
 
 
 def _settings():
-    raise MycelError("settings", "The summary command or instruction/task framing is invalid or unavailable.")
+    raise MycelError("settings", "The summary instruction/task framing is invalid or unavailable.")
 
 
 @dataclass(frozen=True)
@@ -69,20 +74,56 @@ def load_summary_prompts(settings: SettingsSnapshot) -> SummaryPrompts:
         _settings()
 
 
-def summary_command(settings: SettingsSnapshot, *, operation: str, dry_run: bool = False) -> tuple[str, ...] | None:
-    """Apply the generation-only writer requirement before any requests."""
+@dataclass(frozen=True)
+class SummaryProgram:
+    argv: tuple[str, ...]
+    prompts: SummaryPrompts
+    file_hashes: tuple[str, ...]
+
+
+def _file_hash(path: Path) -> str:
+    with path.open("rb") as stream:
+        return file_digest(stream, "sha256").hexdigest()
+
+
+def summary_command(settings: SettingsSnapshot, *, operation: str, dry_run: bool = False) -> SummaryProgram | None:
+    """Resolve and pin the bundled writer and its configured model adapter."""
     settings.require_valid(require_store=False)
     if operation not in {"build", "regenerate", "status", "remove", "search"} or type(dry_run) is not bool:
         raise MycelError("invalid_input", "The summary operation is invalid.")
     if operation not in {"build", "regenerate"} or dry_run:
         return None
-    command = settings.values["summaries"].get("command")
-    if (not isinstance(command, tuple) or not command
-            or any(not isinstance(arg, str) or "\0" in arg for arg in command)
-            or not command[0].strip()):
-        _settings()
-    load_summary_prompts(settings)
-    return command
+    summary_settings = settings.values["summaries"]
+    adapter = summary_settings.get("model_command")
+    if not adapter:
+        raise MycelError("settings", "Set summaries.model_command to Narrator's reasoning adapter.")
+    writer, *components = (_NARRATOR_DIR / name for name in _NARRATOR_FILES)
+    try:
+        interpreter, = resolve_command((sys.executable,))
+        adapter = resolve_command(adapter)
+        file_hashes = tuple(_file_hash(path) for path in (Path(interpreter), writer, *components, Path(adapter[0])))
+    except (MycelError, OSError, RuntimeError, ValueError):
+        raise MycelError("settings", "Narrator or its configured model adapter is unavailable.") from None
+    argv = (interpreter, "-I", "-B", str(writer), "--mode", "reasoned",
+            "--model-command", json.dumps(adapter, ensure_ascii=False))
+    if (folder := summary_settings.get("instructions")) is not None:
+        argv += ("--instructions", folder)
+    return SummaryProgram(argv, load_summary_prompts(settings), file_hashes)
+
+
+def summary_configuration_guard(settings: SettingsSnapshot, operation: str, program: SummaryProgram):
+    """Revalidate the writer, model adapter and exact prompts before using them."""
+
+    def require_current():
+        try:
+            settings.require_current()
+            if summary_command(settings, operation=operation) == program:
+                return
+        except MycelError:
+            pass
+        raise EvidenceError("inputs_changed")
+
+    return require_current
 
 
 @dataclass(frozen=True)

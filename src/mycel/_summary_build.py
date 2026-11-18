@@ -5,8 +5,6 @@ from __future__ import annotations
 from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from hashlib import sha256
-from pathlib import Path
 
 from ._activity import AppliedMutation, MutationActivity
 from ._build_identity import current_build
@@ -17,14 +15,14 @@ from ._errors import MycelError
 from ._evidence import EvidenceError
 from ._locks import atomic_transaction, invocation_guard, operation_guard
 from ._resolver import SourceResolver
-from ._safeguards import InvocationPolicy, require_model_call, resolve_command, _defer_cleanup_signals
+from ._safeguards import InvocationPolicy, require_model_call, _defer_cleanup_signals
 from ._source_refs import SourceAddress, parse_source_address
 from ._staleness import detection_guards
 from ._store import checked_store
 from ._summary_evidence import GenerationMember, capture_generation
 from ._summary_grouping import (GROUPING_PROFILE, MAX_LEVELS, TOP_NODES, SummaryNode,
     group_summary_nodes, mean_vector, numerical_versions)
-from ._summary_request import SummarySection, load_summary_prompts, plan_summary_requests, summary_command
+from ._summary_request import SummarySection, plan_summary_requests, summary_command, summary_configuration_guard
 from ._summary_store import StoreSummaries, SummarySetMetadata, summary_result_reply
 from ._summary_writer import SummaryWriter
 from ._voyage import CommitReceipt, EmbeddingGuardFailure, PartIdentity, VoyageClient
@@ -99,22 +97,9 @@ def build_summary_tree(connection, settings, repository, identity, *, activity=N
     from ._summary_publication import SummaryPublicationStore, StagedSummaryEmbedding
     policy = InvocationPolicy("summaries", action="build")
     require_model_call(policy, "summary")
-    command, prompts = summary_command(settings, operation="build"), load_summary_prompts(settings)
-    resolved_command = resolve_command(command, home=Path.home(), allow_path_search=True)
-    executable_hash = sha256(Path(resolved_command[0]).read_bytes()).hexdigest()
-
-    def configuration():
-        try:
-            settings.require_current()
-            if (summary_command(settings, operation="build") != command
-                    or load_summary_prompts(settings) != prompts
-                    or resolve_command(command, home=Path.home(), allow_path_search=True) != resolved_command
-                    or sha256(Path(resolved_command[0]).read_bytes()).hexdigest() != executable_hash):
-                raise EvidenceError("inputs_changed")
-        except OSError:
-            raise EvidenceError("inputs_changed") from None
-        except MycelError:
-            raise EvidenceError("inputs_changed") from None
+    program = summary_command(settings, operation="build")
+    command, prompts = program.argv, program.prompts
+    configuration = summary_configuration_guard(settings, "build", program)
 
     inputs = BuildInputs.capture(connection, settings, repository)
     versions = numerical_versions()
@@ -273,8 +258,7 @@ def build_summaries(invocation, *, _store=None, _writer=None, _client=None, _tok
     from ._summary_store import summary_repository
     settings = invocation.settings
     repository = summary_repository(settings, invocation.repositories)
-    command = summary_command(settings, operation="build")
-    resolve_command(command, home=Path.home(), allow_path_search=True)
+    summary_command(settings, operation="build")
     with ExitStack() as stack:
         connection, _ = (_store if _store is not None else
             stack.enter_context(invocation_store(invocation, operation="embed")))

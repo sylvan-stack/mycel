@@ -8,8 +8,8 @@ from ._safeguards import InvocationPolicy, require_model_call
 from ._settings import SettingsSnapshot
 from ._summary_evidence import (GenerationEvidenceStore, GenerationLease,
     GenerationMember, capture_generation)
-from ._summary_request import (SummaryRequest, SummarySection,
-    load_summary_prompts, plan_summary_requests, summary_command)
+from ._summary_request import (SummaryRequest, SummarySection, plan_summary_requests,
+    summary_command, summary_configuration_guard)
 from ._summary_writer import SummaryWriter, WriterResult
 
 
@@ -29,7 +29,6 @@ def handle_summaries(invocation):
     if dry_run and action not in {"build", "regenerate"}:
         raise MycelError("invalid_input", "Only summaries build and regenerate accept --dry-run.")
     repository = summary_repository(invocation.settings, invocation.repositories)
-    summary_command(invocation.settings, operation=action, dry_run=dry_run)
     if action == "build" and not dry_run:
         from ._summary_build import build_summaries
         return build_summaries(invocation)
@@ -37,11 +36,6 @@ def handle_summaries(invocation):
         from ._summary_regenerate import regenerate_summaries
         return regenerate_summaries(invocation)
     if action == "remove":
-        from pathlib import Path
-        from ._safeguards import resolve_command
-        configured = invocation.settings.values["summaries"].get("command")
-        if configured:
-            resolve_command(configured, home=Path.home(), allow_path_search=True)
         from ._summary_lifecycle import remove_summaries
         return remove_summaries(invocation)
     with invocation_store(invocation) as (connection, _):
@@ -72,25 +66,24 @@ def generate_summary_requests(settings: SettingsSnapshot, sections: tuple[Summar
     or releases its evidence together with its own publication/discard work.
     """
     require_model_call(InvocationPolicy("summaries", action=operation), "summary")
-    command = summary_command(settings, operation=operation)
-    prompts = load_summary_prompts(settings)
+    program = summary_command(settings, operation=operation)
+    prompts = program.prompts
+    configuration = summary_configuration_guard(settings, operation, program)
     requests = plan_summary_requests(sections, prompts)
     if not isinstance(evidence_store, GenerationEvidenceStore) or not isinstance(invocation, InvocationIdentity):
         raise MycelError("invalid_input", "Summary generation requires its owning invocation and evidence store.")
-    writer = SummaryWriter(command, settings.values["summaries"]["at_once"])
+    writer = SummaryWriter(program.argv, settings.values["summaries"]["at_once"], before_launch=configuration)
     captures = tuple(capture_generation(request.sections[0].member.place.repository,
         tuple(GenerationMember(section.member, sent, section.member.place.address in request.cut,
                                position=section.position)
               for section, sent in zip(request.sections, request.sent_texts)),
         request=request.request, instruction=prompts.instruction, task=prompts.task,
-        command=command, prompt_profile=prompts.profile) for request in requests)
-    settings.require_current()
+        command=program.argv, prompt_profile=prompts.profile) for request in requests)
+    configuration()
     leases = tuple(evidence_store.retain(invocation, capture) for capture in captures)
-    settings.require_current()
-    current_prompts = load_summary_prompts(settings)
-    if current_prompts != prompts:
-        raise MycelError("settings", "The summary instruction/task changed before generation.")
-    results = writer.write_many(tuple(request.request for request in requests))
+    configuration()
+    results = writer.write_many(tuple(request.request for request in requests),
+                                source_characters=tuple(request.source_characters for request in requests))
     completed = []
     for request, lease, result in zip(requests, leases, results):
         if result.response is not None:
