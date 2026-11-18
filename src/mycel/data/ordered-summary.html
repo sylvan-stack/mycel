@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>Artifact summaries</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; color: CanvasText; background: Canvas; font: 1.125rem/1.6 system-ui, sans-serif; }
+    main { box-sizing: border-box; max-inline-size: 76ch; margin-inline: auto; padding: 2rem clamp(1rem, 5vw, 2rem); }
+    article + article { margin-block-start: 1.5rem; }
+    .artifact-name { margin: 0; overflow-wrap: anywhere; }
+    .source-tree { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .branch { display: contents; }
+    [data-view="label"], [data-view="summary"] { display: block; margin: .35em 0 .35em var(--indent); }
+    [data-view]:focus-visible { outline: 1px dotted currentColor; outline-offset: .12rem; }
+    [data-hover] { outline: 1px solid currentColor; outline-offset: .12rem; }
+    [data-hover="open"] { cursor: zoom-in; }
+    [data-hover="close"] { cursor: zoom-out; }
+  </style>
+</head>
+<body>
+  <main id="app"></main>
+  <script id="summary-data" type="application/json">__MYCEL_SUMMARY_DATA__</script>
+  <script>
+    "use strict";
+    const artifacts = JSON.parse(document.getElementById("summary-data").textContent);
+    const app = document.getElementById("app");
+    const actions = new WeakMap();
+    let pointer = null;
+    let highlighted = null;
+    let modifiers = { metaKey: false, shiftKey: false };
+
+    function actionable(text, view, open, close) {
+      const element = document.createElement("span");
+      element.textContent = text;
+      element.dataset.view = view;
+      if (open || close) element.tabIndex = 0;
+      if (open) element.setAttribute("role", "button");
+      actions.set(element, { open, close });
+      return element;
+    }
+
+    function branch(node, collapseParent, depth) {
+      const slot = document.createElement("span");
+      slot.className = "branch";
+      const restore = focus => show(node.summary != null ? "summary" : "label", focus);
+      function show(view, focus) {
+        if (view === "children") {
+          slot.replaceChildren(...node.children.map(child => branch(child, restore, depth + 1)));
+        } else {
+          const text = view === "source" ? node.source : view === "summary" ? node.summary : node.label;
+          const expand = view === "source" ? null : moveFocus => {
+            if (node.source !== undefined) show("source", moveFocus);
+            else if (view === "label" && node.summary != null) show("summary", moveFocus);
+            else show("children", moveFocus);
+          };
+          const collapse = view === "label" ? collapseParent : moveFocus => show("label", moveFocus);
+          const display = actionable(text, view, expand, collapse);
+          if (view !== "source") display.style.setProperty("--indent", depth * 4 + "ch");
+          slot.replaceChildren(display);
+        }
+        if (focus) slot.querySelector("[tabindex]")?.focus();
+      }
+      show("label", false);
+      return slot;
+    }
+
+    for (const artifact of artifacts) {
+      const article = document.createElement("article");
+      const heading = document.createElement("p");
+      heading.className = "artifact-name";
+      const content = document.createElement("div");
+      content.className = "source-tree";
+      function setExpanded(expanded, focus) {
+        heading.replaceChildren(actionable(artifact.artifact, "artifact", expanded ? null : open, expanded ? close : null));
+        if (expanded) content.replaceChildren(branch(artifact.root, close, 1));
+        else content.replaceChildren();
+        if (focus) (expanded ? content : heading).querySelector("[tabindex]")?.focus();
+      }
+      const open = focus => setExpanded(true, focus);
+      const close = focus => setExpanded(false, focus);
+      setExpanded(false, false);
+      article.append(heading, content);
+      app.append(article);
+    }
+
+    function updateHover() {
+      if (highlighted) delete highlighted.dataset.hover;
+      highlighted = null;
+      const target = pointer && document.elementFromPoint(pointer.x, pointer.y)?.closest("[data-view]");
+      const action = actions.get(target);
+      if (modifiers.shiftKey && action?.close) target.dataset.hover = "close";
+      else if (!modifiers.shiftKey && modifiers.metaKey && action?.open) target.dataset.hover = "open";
+      else return;
+      highlighted = target;
+    }
+
+    app.addEventListener("click", event => {
+      const action = actions.get(event.target.closest("[data-view]"));
+      const perform = event.shiftKey ? action?.close : event.metaKey ? action?.open : null;
+      if (!perform) return;
+      event.preventDefault();
+      perform(false);
+      updateHover();
+    });
+
+    app.addEventListener("keydown", event => {
+      const action = actions.get(document.activeElement);
+      const perform = event.key === "Escape" ? action?.close :
+        event.key === "Enter" || event.key === " " ? action?.open : null;
+      if (!perform) return;
+      event.preventDefault();
+      if (!event.repeat) perform(true);
+      updateHover();
+    });
+
+    document.addEventListener("pointermove", event => {
+      pointer = { x: event.clientX, y: event.clientY };
+      modifiers = event;
+      updateHover();
+    });
+    document.addEventListener("pointerleave", () => { pointer = null; updateHover(); });
+    for (const name of ["keydown", "keyup"]) {
+      window.addEventListener(name, event => { modifiers = event; updateHover(); });
+    }
+    window.addEventListener("blur", () => {
+      modifiers = { metaKey: false, shiftKey: false };
+      updateHover();
+    });
+    window.addEventListener("scroll", updateHover, { passive: true });
+  </script>
+</body>
+</html>

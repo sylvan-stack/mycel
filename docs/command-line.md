@@ -247,6 +247,11 @@ sets from one read-only snapshot to a private HTML file. Open the file offline
 to navigate each tree. See the [browser guide](summaries.md#browse-published-summary-trees)
 for the controls.
 
+`mycel summaries ordered <artifact> [<artifact> ...] --output <file>` creates
+independent source-ordered trees for selected UTF-8 text files. Fully
+expanded branches contain the exact original text. A configured Narrator
+adapter can supply overviews. See [source-ordered reading](summaries.md#read-artifacts-in-source-order).
+
 `mycel summaries labels --repo <name>` backfills missing sentence labels on
 published summary versions. It calls Narrator only when labels are missing and
 keeps the existing summary prose and vectors.
@@ -586,7 +591,8 @@ no ingest or embedding and preserves verifications and source policy. See the
           "--help",
           "--repo <name>",
           "--dry-run",
-          "--output <file>"
+          "--output <file>",
+          "ordered <artifact> [<artifact> ...]"
         ]
       },
       {

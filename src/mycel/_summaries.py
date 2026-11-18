@@ -26,6 +26,9 @@ def handle_summaries(invocation):
             raise MycelError("invalid_input", "Use summaries browse --output <file>.")
         from ._summary_browser import export_summary_browser
         return export_summary_browser(invocation, arguments[2])
+    if arguments[:1] == ("ordered",):
+        from ._ordered_summary import export_ordered_summaries
+        return export_ordered_summaries(invocation)
     dry_run = "--dry-run" in arguments
     actions = tuple(argument for argument in arguments if argument != "--dry-run")
     if (actions not in {(), ("status",), ("build",), ("regenerate",), ("remove",), ("labels",)}

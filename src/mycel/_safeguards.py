@@ -62,7 +62,7 @@ def model_call_allowed(policy: InvocationPolicy, purpose: str) -> bool:
             policy.command == "evaluate" and policy.kind == "drift" and policy.live
         )
     if purpose == "summary":
-        return policy.command == "summaries" and policy.action in {"build", "regenerate", "labels"}
+        return policy.command == "summaries" and policy.action in {"build", "regenerate", "labels", "ordered"}
     return False
 
 
