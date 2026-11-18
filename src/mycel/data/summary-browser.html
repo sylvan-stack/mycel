@@ -6,47 +6,26 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
   <title>Summary trees</title>
   <style>
-    :root {
-      color-scheme: light dark;
-      --page: light-dark(#f7f7f2, #161916);
-      --panel: light-dark(#fff, #202620);
-      --ink: light-dark(#1a2a23, #eef1eb);
-      --muted: light-dark(#52655b, #aebeb2);
-      --rule: light-dark(#d6ded5, #38433a);
-      --open: light-dark(#247453, #7bd8a9);
-      --close: light-dark(#8d531e, #edbc81);
-      font-family: system-ui, sans-serif;
-      line-height: 1.55;
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      color: CanvasText;
+      background: Canvas;
+      font: 1.125rem/1.6 system-ui, sans-serif;
     }
-    * { box-sizing: border-box; }
-    body { margin: 0; color: var(--ink); background: var(--page); }
-    main { width: min(54rem, 100%); margin: 0 auto; padding: 2.5rem clamp(1rem, 4vw, 2.5rem) 4rem; }
-    h1, h2, p { margin: 0; }
-    h1, .prose { font-family: Charter, Georgia, serif; }
-    h1 { font-size: clamp(2rem, 6vw, 3rem); line-height: 1.1; overflow-wrap: anywhere; }
-    h2 { font-size: 1rem; overflow-wrap: anywhere; }
-    .top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 1rem; }
-    .hint, .address, .count { color: var(--muted); }
-    .hint { margin-block: .8rem 1.75rem; }
-    .address { display: block; margin: .25rem 0 .8rem; font-size: .86rem; overflow-wrap: anywhere; }
-    .prose { font-size: clamp(1rem, 2vw, 1.16rem); white-space: pre-wrap; overflow-wrap: anywhere; }
-    .list { display: grid; gap: .55rem; margin-top: .7rem; }
-    .related { margin-top: 1.5rem; }
-    .block, .choice { background: var(--panel); border-radius: .35rem; }
-    .block { padding: 1.05rem 1.2rem; }
-    .block[data-hover="open"] { outline: 2px solid var(--open); cursor: zoom-in; }
-    .block[data-hover="close"] { outline: 2px solid var(--close); cursor: zoom-out; }
-    .block[data-hover] button { cursor: inherit; }
-    button { color: inherit; font: inherit; cursor: pointer; }
-    button:focus-visible { outline: 2px solid var(--open); outline-offset: 3px; }
-    .choice { padding: 1rem 1.2rem; border: 1px solid var(--rule); text-align: left; }
-    .choice:hover { border-color: var(--open); }
-    .choice strong, .choice span { display: block; }
-    .label-button { border: 0; padding: 0; background: none; text-align: left; width: 100%; }
-    .quiet-button { padding: .18rem .45rem; color: var(--open); background: none; border: 0; text-decoration: underline; }
-    .prose + button { margin: .8rem -.45rem 0; }
-    kbd { color: var(--ink); font-size: .87em; }
-    .empty { color: var(--muted); margin-top: 1rem; }
+    main {
+      box-sizing: border-box;
+      max-inline-size: 72ch;
+      margin-inline: auto;
+      padding: 2rem clamp(1rem, 5vw, 2rem) 3rem;
+    }
+    p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    p + p { margin-block-start: .65em; }
+    [data-view="repository"] { cursor: pointer; }
+    [data-view]:focus-visible { outline: 1px dotted currentColor; outline-offset: .2rem; }
+    [data-hover] { outline: 1px solid currentColor; outline-offset: .2rem; }
+    [data-hover="open"] { cursor: zoom-in; }
+    [data-hover="close"] { cursor: zoom-out; }
   </style>
 </head>
 <body>
@@ -62,147 +41,104 @@
     let highlighted = null;
     let modifiers = { metaKey: false, shiftKey: false };
 
-    function element(tag, text, className) {
-      const node = document.createElement(tag);
-      if (text !== undefined) node.textContent = text;
-      if (className) node.className = className;
-      return node;
-    }
-
-    function button(text, className, action) {
-      const control = element("button", text, className);
-      control.type = "button";
-      control.addEventListener("click", event => {
-        if (event.metaKey || event.shiftKey) return;
-        action();
-      });
-      return control;
-    }
-
-    function block(id, mode) {
-      const article = element("article", undefined, "block");
-      article.dataset.node = id;
-      article.dataset.mode = mode;
-      return article;
-    }
-
-    function labels(ids) {
-      const list = element("div", undefined, "list");
-      for (const id of ids) {
-        const item = block(id, "label");
-        item.append(button(tree.nodes[id].label, "label-button", () => open(id)));
-        list.append(item);
+    function paragraph(text, view, id) {
+      const item = document.createElement("p");
+      item.textContent = text;
+      if (view) {
+        item.dataset.view = view;
+        item.dataset.id = id;
+        item.tabIndex = 0;
+        if (canOpen(item)) item.setAttribute("role", "button");
       }
-      return list;
+      return item;
     }
 
-    function open(id) {
-      path.push({ id, children: false });
-      render(true);
-    }
-
-    function reveal() {
-      path.at(-1).children = true;
-      render();
-      const heading = app.querySelector(".related h2");
-      heading.tabIndex = -1;
-      heading.focus();
-    }
-
-    function back() {
-      let collapsed;
-      if (path.at(-1)?.children) path.at(-1).children = false;
-      else if (path.length) collapsed = path.pop().id;
-      else tree = null;
-      render(true);
-      if (collapsed) {
-        const item = [...app.querySelectorAll("[data-mode=label]")].find(block => block.dataset.node === collapsed);
-        item?.querySelector("button")?.focus();
-      }
-    }
-
-    function showPicker() {
-      path.length = 0;
-      tree = null;
-      render(true);
-    }
-
-    function render(moveFocus = false) {
-      if (highlighted) delete highlighted.dataset.hover;
-      highlighted = null;
-      app.replaceChildren();
-      const header = element("header", undefined, "top");
-      const title = element("h1", tree ? tree.repository : "Summary trees");
-      title.tabIndex = -1;
-      header.append(title);
-      app.append(header);
+    function render(focus = false, previousId) {
+      const current = path.at(-1);
+      let items;
       if (!tree) {
-        const list = element("div", undefined, "list");
-        for (const entry of trees) {
-          const select = button(undefined, "choice", () => { tree = entry; render(true); });
-          select.append(element("strong", entry.repository),
-                        element("span", entry.count + (entry.count === 1 ? " summary" : " summaries"), "count"));
-          list.append(select);
-        }
-        app.append(trees.length ? list : element("p", "No published summary trees.", "empty"));
+        items = trees.map(entry => paragraph(entry.repository, "repository", entry.repository));
+        if (!items.length) items.push(paragraph("No published summary trees."));
+      } else if (!current || current.children) {
+        const ids = current ? tree.nodes[current.id].children : tree.roots;
+        items = ids.map(id => paragraph(tree.nodes[id].label, "label", id));
       } else {
-        header.append(button(path.length ? "Back" : "All trees", "quiet-button", path.length ? back : showPicker));
-        const hint = element("p", undefined, "hint");
-        hint.append(element("kbd", "⌘ + click"), " to expand   ",
-                    element("kbd", "Shift + click"), " to collapse");
-        app.append(hint);
-        const current = path.at(-1);
-        if (!current) {
-          app.append(labels(tree.roots));
-        } else {
-          const node = tree.nodes[current.id];
-          const article = block(current.id, "text");
-          article.append(element("h2", node.label),
-                         element("small", node.address + (node.stale ? " · Stale" : ""), "address"),
-                         element("p", node.text ?? "Retained text is unavailable.", "prose"));
-          if (!current.children && node.children.length) {
-            article.append(button("Show children", "quiet-button", reveal));
-          }
-          app.append(article);
-          if (current.children) {
-            const section = element("section", undefined, "related");
-            section.append(element("h2", "Children"), labels(node.children));
-            app.append(section);
-          }
-        }
+        const node = tree.nodes[current.id];
+        items = [paragraph(node.text ?? "Retained text is unavailable.", "text", current.id)];
       }
-      if (moveFocus) title.focus();
+      app.replaceChildren(...items);
+      window.scrollTo(0, 0);
+      if (focus) {
+        const target = items.find(item => item.dataset.id === previousId) ?? items[0];
+        target?.focus();
+      }
       updateHover();
     }
 
-    function canExpand(target) {
-      if (!target || !tree) return false;
-      if (target.dataset.mode === "label") return true;
+    function canOpen(target) {
+      return target.dataset.view !== "text" || tree.nodes[target.dataset.id].children.length > 0;
+    }
+
+    function expand(target, focus) {
+      const id = target.dataset.id;
+      if (target.dataset.view === "repository") tree = trees.find(entry => entry.repository === id);
+      else if (target.dataset.view === "label") path.push({ id, children: false });
+      else path.at(-1).children = true;
+      render(focus);
+    }
+
+    function back(focus) {
       const current = path.at(-1);
-      return current && !current.children && tree.nodes[current.id].summary && tree.nodes[current.id].children.length > 0;
+      let previousId;
+      if (current?.children) {
+        current.children = false;
+      } else if (current) {
+        previousId = path.pop().id;
+      } else {
+        previousId = tree.repository;
+        tree = null;
+      }
+      render(focus, previousId);
     }
 
     function updateHover() {
-      const target = pointer && document.elementFromPoint(pointer.x, pointer.y)?.closest("[data-node]");
       if (highlighted) delete highlighted.dataset.hover;
       highlighted = null;
-      if (!target || !tree) return;
-      if (modifiers.shiftKey || (modifiers.metaKey && canExpand(target))) {
-        target.dataset.hover = modifiers.shiftKey ? "close" : "open";
-        highlighted = target;
+      const target = pointer && document.elementFromPoint(pointer.x, pointer.y)?.closest("[data-view]");
+      if (!target) return;
+      if (modifiers.shiftKey) {
+        if (!tree) return;
+        target.dataset.hover = "close";
+      } else if (modifiers.metaKey && canOpen(target)) {
+        target.dataset.hover = "open";
+      } else {
+        return;
       }
+      highlighted = target;
     }
 
     app.addEventListener("click", event => {
-      const target = event.target.closest("[data-node]");
-      if (!target || !tree) return;
-      if (event.shiftKey) {
+      const target = event.target.closest("[data-view]");
+      if (!target) return;
+      if (event.shiftKey && tree) {
         event.preventDefault();
-        back();
-      } else if (event.metaKey && canExpand(target)) {
+        back(false);
+      } else if (!event.shiftKey &&
+                 (event.metaKey || event.detail === 0 || target.dataset.view === "repository") && canOpen(target)) {
         event.preventDefault();
-        if (target.dataset.mode === "label") open(target.dataset.node);
-        else reveal();
+        expand(target, event.detail === 0);
+      }
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && tree) {
+        event.preventDefault();
+        if (!event.repeat) back(true);
+      } else if (event.key === "Enter" || event.key === " ") {
+        const target = event.target.closest("[data-view]");
+        if (!target || !canOpen(target)) return;
+        event.preventDefault();
+        if (!event.repeat) expand(target, true);
       }
     });
 

@@ -109,9 +109,12 @@ def _collect(connection) -> list[dict]:
                     if child not in nodes:
                         key = (repository, pin.chunk_id, pin.chunk_version, pin.snapshot_hash)
                         raw, label = versions.get(key, (snapshots.get((repository, pin.snapshot_hash)), None))
-                        nodes[child] = {"address": address, "label": stored_summary_label(label) or address,
+                        is_summary = pin.place.root == "index"
+                        title = (stored_summary_label(label) or address if is_summary
+                                 else pin.place.name or Path(pin.place.path).name)
+                        nodes[child] = {"address": address, "label": title,
                                         "text": None if raw is None else _text(raw, pin.snapshot_hash),
-                                        "summary": pin.place.root == "index",
+                                        "summary": is_summary,
                                         "stale": False, "children": []}
                 nodes[identifier]["children"].append(child)
         trees.append({"repository": repository, "roots": [key for key in summary_ids if key not in linked],

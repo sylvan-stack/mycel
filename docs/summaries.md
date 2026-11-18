@@ -234,15 +234,15 @@ to one private HTML file.
 mycel summaries browse --output ~/summary-trees.html
 ```
 
-Open the file in a browser and choose a repository. Its top summary labels
-appear in place of the repository picker. Cmd+Click a label to open the text,
-then Cmd+Click the text to reveal its children. Shift+Click reverses one
-step along the branch you took. Holding either modifier outlines the block
-under the pointer. The page also offers normal clickable labels, a
-**Show children** button and **Back** for keyboard and touch navigation.
-A source child opens the exact retained version pinned by its parent.
-An affected branch uses the current published Summary Nodes and can show
-stale summaries.
+Open the file in a browser and click a repository name. Cmd+Click a label to
+replace the list with its full text. Cmd+Click the text to see the child labels
+in its place. Shift+Click steps back along the same branch. Holding either
+modifier outlines the actionable text under the pointer. Use Tab to focus
+text, Enter or Space to open it, and Escape to go back.
+
+Source children are labeled with their section name or file name and open to
+the exact retained text pinned by their parent. An affected branch uses the
+current published Summary Nodes and can show stale summaries.
 
 The file contains the exported text and labels and works offline. It is a
 snapshot. Export to a fresh path to read later publications.
