@@ -14,6 +14,7 @@ import sys
 from ._embedding_plan import document_place_line
 from ._errors import MycelError
 from ._evidence import EvidenceError
+from ._narrator.summary_label import WORD_LIMIT
 from ._resolver import SelectionMember, _validate_chunk
 from ._safeguards import resolve_command
 from ._settings import SettingsSnapshot
@@ -24,7 +25,7 @@ REQUEST_LIMIT = 48_000
 CUT_NOTICE = "[Mycel: source text cut at request limit]"
 SEPARATOR = "\n\n---\n\n"
 _NARRATOR_DIR = Path(__file__).resolve().with_name("_narrator")
-_NARRATOR_FILES = ("narrator.py", "selection.py", "verification.py")
+_NARRATOR_FILES = ("narrator.py", "selection.py", "summary_label.py", "verification.py")
 
 
 def _settings():
@@ -79,6 +80,7 @@ class SummaryProgram:
     argv: tuple[str, ...]
     prompts: SummaryPrompts
     file_hashes: tuple[str, ...]
+    label_argv: tuple[str, ...]
 
 
 def _file_hash(path: Path) -> str:
@@ -89,9 +91,9 @@ def _file_hash(path: Path) -> str:
 def summary_command(settings: SettingsSnapshot, *, operation: str, dry_run: bool = False) -> SummaryProgram | None:
     """Resolve and pin the bundled writer and its configured model adapter."""
     settings.require_valid(require_store=False)
-    if operation not in {"build", "regenerate", "status", "remove", "search"} or type(dry_run) is not bool:
+    if operation not in {"build", "regenerate", "labels", "status", "remove", "search"} or type(dry_run) is not bool:
         raise MycelError("invalid_input", "The summary operation is invalid.")
-    if operation not in {"build", "regenerate"} or dry_run:
+    if operation not in {"build", "regenerate", "labels"} or dry_run:
         return None
     summary_settings = settings.values["summaries"]
     adapter = summary_settings.get("model_command")
@@ -104,11 +106,13 @@ def summary_command(settings: SettingsSnapshot, *, operation: str, dry_run: bool
         file_hashes = tuple(_file_hash(path) for path in (Path(interpreter), writer, *components, Path(adapter[0])))
     except (MycelError, OSError, RuntimeError, ValueError):
         raise MycelError("settings", "Narrator or its configured model adapter is unavailable.") from None
-    argv = (interpreter, "-I", "-B", str(writer), "--mode", "reasoned",
-            "--model-command", json.dumps(adapter, ensure_ascii=False))
+    executable = (interpreter, "-I", "-B", str(writer))
+    adapter_args = ("--model-command", json.dumps(adapter, ensure_ascii=False))
+    argv = (*executable, "--mode", "reasoned", *adapter_args)
+    label_argv = (*executable, "label", "--summary-sentence", "--max-words", str(WORD_LIMIT), *adapter_args)
     if (folder := summary_settings.get("instructions")) is not None:
         argv += ("--instructions", folder)
-    return SummaryProgram(argv, load_summary_prompts(settings), file_hashes)
+    return SummaryProgram(argv, load_summary_prompts(settings), file_hashes, label_argv)
 
 
 def summary_configuration_guard(settings: SettingsSnapshot, operation: str, program: SummaryProgram):
