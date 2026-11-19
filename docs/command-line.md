@@ -159,13 +159,13 @@ mycel:@code/src/mycel/_grep.py#append_tail
 
 ## Other command behavior
 
-Model and subprocess boundaries are internal. Allowed service purposes are explicit and dry-runs deny all service calls. Ingest may embed only when explicitly requested; searches may embed their queries; neither may classify or review dependencies. Classification and live drift evaluation may use Jev and the configured reviewer. Summary builds and regeneration may use Narrator's configured model adapter and Mycel's embedding service. Explicit label backfill may use the Narrator adapter. Child environments omit parent credentials and store addresses. Git operations are restricted to validated read-only forms.
+Model and subprocess boundaries are internal. Allowed service purposes are explicit and dry-runs deny all service calls. Ingest may embed only when explicitly requested; searches may embed their queries; neither may classify or review dependencies. Classification and live drift evaluation may use Jev and the configured reviewer. Child environments omit parent credentials and store addresses. Git operations are restricted to validated read-only forms.
 
 `mycel repos` reads settings only and returns `organizations` (name, checkout root, document root) and `repositories` (exact name, enabled state, optional organization, code/document folders with repository/organization provenance, and optional local fault). Disabled and faulty entries remain visible.
 
 `mycel info` reports all settings faults without refusing them or echoing invalid values. With valid settings it adds configured embedding model/dimensions, the exact classification model and reviewer identity, without probing the reviewer or acquiring model credentials. Store diagnostics use a read-only snapshot and report unavailable, empty, foreign, older, damaged or newer stores without changing them.
 
-`mycel repos remove <name> [<name> ...]` removes indexed state for each exact name, including disabled and orphan repositories. Repeated names run once. Each repository is one atomic transaction under the existing nonblocking removal guard; live passes, embedding, classification, summaries and evidence mutations make that member `busy`. Source checkouts and artifact files remain untouched. Each `result` reports `repository`, `known` and `removed` counts for documents, chunks, versions, vectors, edges, evidenceBlobs, evidenceManifests, drifts and verifications. Other repositories retain their independent evidence, pins and index state. Configured empty names succeed with zero counts; unknown names without indexed rows return `unknown_repository`. Numbered Builds record global removal activity with the feature transaction. A final audit/connection fault preserves acknowledged removed counts with `countsState: "committed_prefix"` and a sanitized error.
+`mycel repos remove <name> [<name> ...]` removes indexed state for each exact name, including disabled and orphan repositories. Repeated names run once. Each repository is one atomic transaction under the existing nonblocking removal guard; live passes, embedding, classification and evidence mutations make that member `busy`. Source checkouts and artifact files remain untouched. Each `result` reports `repository`, `known` and `removed` counts for documents, chunks, versions, vectors, edges, evidenceBlobs, evidenceManifests, drifts and verifications. Other repositories retain their independent evidence, pins and index state. Configured empty names succeed with zero counts; unknown names without indexed rows return `unknown_repository`. Numbered Builds record global removal activity with the feature transaction. A final audit/connection fault preserves acknowledged removed counts with `countsState: "committed_prefix"` and a sanitized error.
 
 Evaluation takes one enabled repository and returns one report; organizations and repeated selectors are refused. Non-live Drift evaluation uses deterministic Jev/reviewer stand-ins with the production finite routing and evidence lifecycle. It changes only invocation-local fixture state and reports simulated, unqualified outcomes. Interruption exits 2, other unfinished work exits 1, and a completed unqualified report exits 0. Explicit `--kind drift --live` selects the configured-provider fixture pipeline. Missing reviewer or Jev configuration produces an unqualified no-call report; complete unqualified reports retain status 0, interruption status 2, and unfinished work status 1. See the [evaluation guide](evaluation.md) for the exact file schema, null empty reports, normal retrieval measurement and explicit on-demand proof requirements.
 
@@ -232,29 +232,9 @@ run filesystem scans, freshness, provider work, evidence collection or writes.
 Every member reads the same committed repeatable-read snapshot.
 See the [classification guide](classification.md) and [Drift guide](drifts.md).
 
-`summaries` accepts `--dry-run`. Actual `build` and `regenerate` validate
-bundled Narrator, its configured model adapter and prompt overrides before
-opening the store. A missing or unavailable adapter returns `settings`.
-Dry runs, status and removal need no adapter. Actual build stages complete generated levels and real vectors
-privately, then atomically replaces the tree after final source/settings checks.
-Regeneration repairs stale members lowest-first in their existing places,
-retains independent committed successes and blocks parents of stale members.
-Removal atomically deletes the current set and returns its actual removed count.
-The [summary guide](summaries.md) describes lifecycle guards and complete replies.
-
-`mycel summaries browse --output <file>` exports all published nonempty summary
-sets from one read-only snapshot to a private HTML file. Open the file offline
-to navigate each tree. See the [browser guide](summaries.md#browse-published-summary-trees)
-for the controls.
-
-`mycel summaries labels --repo <name>` backfills missing sentence labels on
-published summary versions. It calls Narrator only when labels are missing and
-keeps the existing summary prose and vectors.
-
 `mycel maintain --repo <name>` checks one enabled repository for a
 15-minute quiet period across its on-disk document inputs. When due, it
-ingests, embeds pending on-disk document sections, and regenerates stale
-summaries. See the [maintenance guide](summaries.md#quiet-period-maintenance)
+ingests and embeds pending on-disk document sections. See the [maintenance guide](summaries.md#quiet-period-maintenance)
 for scheduling, results and retry behavior.
 
 The contract below is checked against dispatch declarations. Change it in the same change as commands, common options or reply shapes. Feature handlers must extend their command guide and passing checks as they land. The complete 333-requirement registry and staged/release coverage gates distinguish accepted specifications from executed checks; unimplemented requirements remain pending. A release gate fails while any required proof is missing. Store proofs require an individually created and discarded `mycel_check_` database with private settings; mock store backends do not establish PostgreSQL acceptance.
@@ -282,7 +262,6 @@ The `Verification` reply contains `id`, qualified `chunk`, logical `chunkId`, ex
 
 After any repository work starts, interrupted/stopped embedding retains committed batch progress and returns `stopped="interrupted"` with exit 2 or `stopped="gave_up"` with exit 1 and sanitized local errors. When every initial capture/plan read fails before work starts, the common envelope retains each selected repository's error; an interruption before work starts uses the common stopped reply with exit 2. Completed dry-run preparation, including empty results or local planning failures, keeps the full per-repository report. An unavailable/interrupted final recount is labeled `countsState="committed_prefix"`, preserving acknowledged progress without claiming a fresh full inventory. A settings change prevents further sends and late publication; disabled or removed repositories have no pending work. Numbered Builds record actual embedding mutations with final reply counts; empty passes and dry runs leave no activity entry. The [embedding guide](embedding.md) gives the complete planning, persistence and progress rules.
 
-`mycel summaries [status] [--repo <name>]` reads one enabled repository's stored summary levels and disjoint section membership/embedding counts. `mycel summaries build|regenerate --dry-run [--repo <name>]` returns complete ordered plans without freshness, writer, embedding, store mutations or activity. Organizations and repeated repository selectors are refused. Build plans use the pinned `mycel-summary-v1` profile, bounded exact leaf requests and explicitly estimated higher-level mean vectors/requests. Regeneration keeps stored membership and reports writes, missing-member removals and stale-member blockers. Empty scope results succeed. Actual summary build stages whole writer responses, embeds each level before grouping the next, and replaces the tree atomically after exact final guards; failures or changed inputs preserve the old set. Empty eligible replacement retains set metadata. The reply counts notEmbedded sections. Actual regeneration atomically publishes each stale summary with current vectors and pins, lowest-first in its existing place, retaining independent successes and blocking parents of still-stale generated members. `summaries remove` deletes the current set and its generated ownership atomically and succeeds with zero on empty scope. Missing generation configuration is checked before a real build/regeneration. The [summary guide](summaries.md) describes profile, eligibility, stored metadata and lifecycle replies.
 
 `mycel activity [--repo <name> | --all] [--kind <kind>] [--k <count>]` lists
 summary entries newest first by start time and ID, default 25 and capped at 500.
@@ -577,19 +556,6 @@ no ingest or embedding and preserves verifications and source policy. See the
         ]
       },
       {
-        "name": "summaries",
-        "description": "Report, build, regenerate, label, browse or remove summaries",
-        "available": true,
-        "rawArguments": false,
-        "options": [
-          "-h",
-          "--help",
-          "--repo <name>",
-          "--dry-run",
-          "--output <file>"
-        ]
-      },
-      {
         "name": "maintain",
         "description": "Run one quiet-period maintenance check for a repository",
         "available": true,
@@ -772,7 +738,7 @@ no ingest or embedding and preserves verifications and source policy. See the
       "--all (where supported)"
     ],
     "buildSelection": "Installed launcher: -v <number> must be first",
-    "stage": "CLI foundation, strict settings and diagnostics, repository listing and atomic removal, complete repository status, complete scoped ingest, read-only ordered activity history and exact entry details, retained reference reporting, guarded dependency and relation assertions, exact verification and read-only history, atomic stated justification and on-demand Origin Coverage, exact indexed chunk reading, evidence-bearing search, scoped embedding, atomic summary builds, summary regeneration and removal, read-only summary status and dry-runs, quiet-period maintenance, finite classification, guarded Origin recovery and human-settled Origin audit, local provenance reports, and private store initialization; system grep preserves its output and can append a read-only related search tail"
+    "stage": "CLI foundation, strict settings and diagnostics, repository listing and atomic removal, complete repository status, complete scoped ingest, read-only ordered activity history and exact entry details, retained reference reporting, guarded dependency and relation assertions, exact verification and read-only history, atomic stated justification and on-demand Origin Coverage, exact indexed chunk reading, evidence-bearing search, scoped embedding, quiet-period maintenance, finite classification, guarded Origin recovery and human-settled Origin audit, local provenance reports, and private store initialization; system grep preserves its output and can append a read-only related search tail"
   },
   "errors": [
     "invalid_input",

@@ -134,7 +134,6 @@ _DEFAULTS = {
                # effect must reach the question's floor (SYL-289).
                "origin_floor": 0.7, "conformance_floor": 0.7, "consistency_floor": 0.7,
                "ambiguity_floor": 0.8},
-    "summaries": {"at_once": 4},
     "organizations": {},
     "repos": {},
 }
@@ -155,8 +154,6 @@ _SCHEMA = {
                "review_command": "review_command",
                "review_provider": "identity", "review_model": "review_model",
                "review_revision": "revision"},
-    "summaries": {"command": "texts", "model_command": "absolute_argv",
-                  "at_once": "positive_int", "instructions": "folder"},
 }
 _ORGANIZATION_SCHEMA = {"root": "folder", "artifact_root": "folder"}
 _REPO_SCHEMA = {"enabled": "boolean", "code_root": "folder", "artifact_root": "folder",
@@ -542,6 +539,9 @@ class _Validator:
         result = _copy(self.defaults)
         accepted = tuple(_DEFAULTS)
         for table, value in supplied.items():
+            if table == "summaries" and isinstance(value, dict):
+                # Accept former writer configuration without making it effective.
+                continue
             if table not in _DEFAULTS:
                 self.unknown((table,), value, accepted)
             elif table in {"organizations", "repos"}:

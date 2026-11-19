@@ -112,12 +112,12 @@ write transaction, then retain its shared structure guard for the operation;
 the inspection starts its own read-only repeatable-read transaction and cannot
 change isolation inside an existing write transaction.
 Connection-owned advisory locks separate structure changes, repository passes,
-embedding, classification, summaries, removal/mutation and exact invocation
+embedding, classification, removal/mutation and exact invocation
 liveness. Advisory acquisitions use try-locks, and row guards use `NOWAIT` where
 available. Unavoidable uniqueness, foreign-key and table contention uses
 PostgreSQL's minimum positive lock timeout of 1 ms; a zero timeout would allow
 waiting without a limit. Different repositories and a pass
-plus an embed can coexist. Classification/summary callers retain their operation
+plus an embed can coexist. Classification callers retain their operation
 and liveness guards during model work, taking the short pass lock only for capture
 and publication. The [activity substrate](activity.md) binds injected feature writes and audit details
 to these transactions. Public command producers use this same transaction
@@ -147,13 +147,8 @@ checks use separately created/removed databases and never open `mycel`.
 The settings backup is kept beside the settings file. The server's durable
 volume is `mycel-pgdata`; Mycel itself has no resident process.
 
-Generated publication uses the chunk, index-location, dependency, evidence
-and generated-state tables retained by format 3. Its SQL catalogue and
-verification ownership are unchanged. Generated dependency rows use
-`mycel-generated-pin-v1` state and permanent `generated` evidence owners,
-separate from declared/asserted rows and invocation-owned private leases.
-The [generated provenance guide](generated.md) specifies transaction composition,
-final guards and public summary regeneration/removal.
+Historical generated-text records remain representable in the store. Current
+search and maintenance use documents, code and code overviews.
 
 ## Format 3: requirement and decision entities (MYC-17)
 

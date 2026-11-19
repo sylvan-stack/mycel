@@ -18,7 +18,6 @@ from ._embed import embed
 from ._errors import MycelError
 from ._ingest import ingest
 from ._scope import Repository, RepositoryLocations
-from ._summaries import handle_summaries
 
 
 QUIET_SECONDS = 900
@@ -143,28 +142,6 @@ def _maintain(invocation: Invocation, repository: Repository, path: Path) -> Res
         delay = changed()
         if delay is not None:
             return delay
-
-        stage = "summaries"
-        summary = replace(invocation, command="summaries", arguments=("status",))
-        result = handle_summaries(summary)
-        if result.status:
-            return incomplete(stage, result)
-        stale = sum(level["stale"] for level in result.value["levels"])
-        written = 0
-        if stale:
-            if not result.value["commandSet"]:
-                return incomplete(stage, error={"code": "settings",
-                    "message": "Stale summaries need a configured Narrator model adapter."})
-            delay = changed()
-            if delay is not None:
-                return delay
-            result = handle_summaries(replace(summary, arguments=("regenerate",)))
-            if result.status or result.value["failed"] or result.value["blocked"]:
-                return incomplete(stage, result)
-            written = result.value["written"]
-        delay = changed()
-        if delay is not None:
-            return delay
     except MycelError as error:
         return incomplete(stage, error=error.to_dict()["error"])
     except KeyboardInterrupt:
@@ -173,7 +150,7 @@ def _maintain(invocation: Invocation, repository: Repository, path: Path) -> Res
 
     _save(path, _Observation(digest, time_ns(), "complete"))
     return Result({"repository": name, "status": "complete",
-                   "embedded": counts.get("sent", 0), "summariesWritten": written})
+                   "embedded": counts.get("sent", 0)})
 
 
 def handle_maintenance(invocation: Invocation) -> Result:

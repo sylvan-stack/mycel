@@ -366,14 +366,12 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name == "undocumented":
         parser.add_argument("--path", action="append", default=[])
         parser.add_argument("--no-fresh", action="store_true")
-    if name in {"embed", "summaries", "classify", "recovery", "audit"}:
+    if name in {"embed", "classify", "recovery", "audit"}:
         parser.add_argument("--dry-run", action="store_true")
     if name in {"classify", "recovery", "audit"}:
         parser.add_argument("--k", type=int)
     if name == "embed":
         parser.add_argument("--retry-failed", action="store_true")
-    if name == "summaries":
-        parser.add_argument("--output")
     if name == "ingest":
         parser.add_argument("--embed", action="store_true")
         parser.add_argument("--confirm-empty", action="store_true")
@@ -492,17 +490,6 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
         _validate(repos, all_repositories, activity_entry, parsed.kind, activity_count)
     if name == 'ingest' and parsed.arguments:
         raise MycelError(ErrorCode.INVALID_INPUT, 'Ingest takes repository selectors and --embed or --confirm-empty only.')
-    if name == "summaries" and parsed.arguments == ["browse"]:
-        if repos or parsed.dry_run or not parsed.output or not parsed.output.strip() or "\0" in parsed.output:
-            raise MycelError(ErrorCode.INVALID_INPUT, "Use summaries browse --output <file>.")
-        return Invocation(name, arguments=("browse", "--output", parsed.output))
-    if name == "summaries" and parsed.output is not None:
-        raise MycelError(ErrorCode.INVALID_INPUT, "--output is available for summaries browse.")
-    if name == "summaries" and (len(repos) > 1 or tuple(parsed.arguments) not in
-            {(), ("status",), ("build",), ("regenerate",), ("remove",), ("labels",)} or
-            (tuple(parsed.arguments) == ("labels",) and len(repos) != 1) or
-            (parsed.dry_run and tuple(parsed.arguments) not in {("build",), ("regenerate",)})):
-        raise MycelError(ErrorCode.INVALID_INPUT, "Use summaries status, build, regenerate, remove or labels. Labels requires --repo and --dry-run requires build or regenerate.")
     if name == "maintain" and (len(repos) != 1 or parsed.arguments):
         raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel maintain --repo <name>.")
     arguments = (("--unresolved",) if getattr(parsed, "unresolved", False) else ()) + \
@@ -669,8 +656,6 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
             selected_handlers['activity'] = handle_activity
             from ._evaluate import evaluate
             selected_handlers["evaluate"] = evaluate
-            from ._summaries import handle_summaries
-            selected_handlers["summaries"] = handle_summaries
             from ._maintenance import handle_maintenance
             selected_handlers["maintain"] = handle_maintenance
             from ._overview import handle_overview

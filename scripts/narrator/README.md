@@ -102,9 +102,7 @@ completed arm and the failure in the receipt.
 Direct `reasoned` or `semantic` runs can also provide a new `--report` path.
 For existing framed requests, pass `--source-characters N` with the sum of the
 original section bodies' Unicode code point counts. Count the original text before
-Mycel adds framing or cuts an oversized input. The direct writer still emits
-the same prose on success. Leave `--source-characters` and `--report` out of
-the Mycel command for ordinary generation.
+framing is added or an oversized input is cut.
 
 The receipt records the request digest and exact admitted passages,
 extraction outcomes, per-arm starting allowance and events, supported and
@@ -112,16 +110,8 @@ repaired revisions, Selection and budget dispositions, prose and physical
 launch totals. Each completed arm reports source and summary character counts
 and the summary-to-source ratio. The receipt hashes the adapter argv.
 
-## Qualify a pinned candidate
+## Compare writer revisions
 
-Record the exact source revision and file digests for the writer, Selection,
-Verification and any adapters. Pin interpreter path and version, Mycel Build
-and numerical dependencies, the prompt bytes, literal adapter argv and model
-settings, the original source character count for each input, and the disposable
-Mycel configuration. Retain
-provider-free command-check results separately from live results.
-
-The live qualification manifest also pins provider dispositions, the total
-allowance, the case and rubric hashes, and the disposable retrieval fixture.
-Run the pinned comparison and the actual two-level build and retrieval
-checks before assessing the candidate for routine use.
+Pin the source, interpreter, exact case bytes, model adapters and scoring
+rubric. Run each revision on the same input, count failures, and keep the
+private receipts for coverage and evidence review.

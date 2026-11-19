@@ -54,15 +54,11 @@ def model_call_allowed(policy: InvocationPolicy, purpose: str) -> bool:
             return True
         if policy.command == "ingest":
             return policy.embed
-        if policy.command == "summaries":
-            return policy.action in {"build", "regenerate"}
         return policy.command == "evaluate" and policy.kind in {None, "retrieval"}
     if purpose in {"jev", "reviewer"}:
         return policy.command in {"classify", "recovery", "audit"} or (
             policy.command == "evaluate" and policy.kind == "drift" and policy.live
         )
-    if purpose == "summary":
-        return policy.command == "summaries" and policy.action in {"build", "regenerate", "labels"}
     return False
 
 
@@ -344,11 +340,11 @@ def run_model_child(
     cancelled: Callable[[], bool] | None = None,
 ) -> CompletedChild:
     require_model_call(policy, purpose)
-    if purpose not in {"summary", "reviewer"}:
+    if purpose != "reviewer":
         raise MycelError("refused", "This model boundary does not use a child program.")
-    if purpose == "reviewer" and any(not arg for arg in _command_argv(argv)):
+    if any(not arg for arg in _command_argv(argv)):
         raise MycelError("settings", "Reviewer command arguments must be nonempty strings.")
-    command = resolve_command(argv, home=home, allow_path_search=purpose == "summary")
+    command = resolve_command(argv, home=home, allow_path_search=False)
     return run_child(command, request, timeout_seconds=timeout_seconds, home=home, cancelled=cancelled)
 
 

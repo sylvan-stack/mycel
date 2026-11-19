@@ -117,21 +117,8 @@ citation ordering. Internal recursive freshness checks exact explicit upstream
 sources under one invocation deadline, using complete guarded ingest and
 mechanical propagation. Public search now composes these inputs into schema3 replies with exact-version
 dependency annotations and explicit wording-only fallback reasons.
-Summary status and build/regeneration dry-runs read exact current document
-coverage and stored summary membership in one read-only snapshot. The pinned
-`mycel-summary-v1` PCA/Gaussian profile produces deterministic groups and
-estimated higher levels without starting a writer, embedding or freshness pass.
-The internal generated-text publication hook commits complete response bytes,
-independent generated pins and retained request evidence together; mechanical
-detection propagates summary staleness as regeneration work. Public summary
-build now stages complete levels and their real vectors privately, then replaces
-the complete searchable tree, generated pins and evidence in one guarded
-transaction. Failed, interrupted or obsolete builds preserve the old tree;
-empty eligible replacements retain set metadata. Explicit regeneration repairs
-stale summaries in level order with their surviving stored members and places.
-Each successful text/vector/pin publication commits independently; failed or
-obsolete members block their parents. Empty-member summaries are deleted,
-and explicit removal atomically deletes the current set and its generated ownership.
+Quiet-period maintenance ingests document changes and embeds pending on-disk
+sections.
 Code reads now list every direct declared/asserted describing document section,
 with its direction and edge kind. Code search results expose a query-independent
 `described` flag; `undocumented` lists current disk code without such links,
@@ -242,9 +229,8 @@ The [Jev adapter guide](docs/jev.md) describes pinned provider requests, strict
 results, finite attempt limits and complete independent-review routing.
 The [reviewer guide](docs/reviewer.md) describes independent adapter setup,
 complete protocol fixtures, credential isolation and bounded process cleanup.
-The [summary guide](docs/summaries.md) describes deterministic grouping,
-read-only plans/reports, complete bounded requests, the bundled Narrator writer and
-private generation evidence.
+The [maintenance guide](docs/summaries.md) documents quiet-period ingest and
+embedding. [Narrator](scripts/narrator/README.md) runs directly on text.
 The [relation and verification guide](docs/relations.md) describes declared and asserted
 ownership, one-chunk commands, exact baselines, direct stale warnings and retained verification history.
 The [check guide](docs/checks.md) explains executed proofs, disposable stores,
