@@ -247,26 +247,9 @@ for name in ['mycel', *expected]:
                 raise RuntimeError('locked dependency closure is incomplete')
 dependency_modules = []
 for name in expected:
-    module = {'PyYAML': 'yaml', 'scikit-learn': 'sklearn'}.get(name, name.replace('-', '_'))
+    module = {'PyYAML': 'yaml'}.get(name, name.replace('-', '_'))
     dependency_modules.append(module)
 import mycel, mycel.cli, pathspec, yaml, tokenizers, tree_sitter, tree_sitter_javascript, tree_sitter_typescript, psycopg, psycopg_binary
-import numpy, scipy, sklearn
-from sklearn.decomposition import PCA
-from sklearn.mixture import GaussianMixture
-from threadpoolctl import threadpool_limits
-# Exercise the native numerical path used by mycel-summary-v1 under the same
-# offline, no-write boundary as the other product-used extensions.
-numerical_vectors = numpy.array([[float(i % 8), float((i % 8) ** 2), float(i // 8) * 20.0,
-                                  float((i % 3) + (i // 8) * 10)] for i in range(16)])
-with threadpool_limits(limits=1):
-    reduced = PCA(n_components=2, svd_solver='full', random_state=0).fit_transform(numerical_vectors)
-    mixture = GaussianMixture(n_components=2, covariance_type='spherical', reg_covar=1e-4,
-                              random_state=0, n_init=1, max_iter=100, tol=1e-3).fit(reduced)
-    probabilities = mixture.predict_proba(reduced)
-if (not mixture.converged_ or reduced.shape != (16, 2) or probabilities.shape != (16, 2)
-        or not numpy.isfinite(reduced).all() or not numpy.isfinite(probabilities).all()
-        or not numpy.isfinite(mixture.bic(reduced)) or not numpy.allclose(probabilities.sum(axis=1), 1.0)):
-    raise RuntimeError('bundled summary numerical PCA and spherical Gaussian fit failed')
 # Mycel's local tokenizer never imports hf_xet. Initializing that optional Hub
 # transport emits cache logs in 1.7.0, so prove its native relocation/loading
 # with the dynamic linker only; do not execute its unrelated transport API.
@@ -297,9 +280,7 @@ if importlib.util.find_spec('mycel_build') is not None:
     raise RuntimeError('development release tooling leaked into the product wheel')
 print(json.dumps({'python': platform.python_version(), 'machine': platform.machine(), 'macOS': platform.mac_ver()[0],
                   'isolated': bool(sys.flags.isolated), 'dontWriteBytecode': sys.dont_write_bytecode,
-                  'nativeModules': ['tokenizers', 'tree_sitter', 'tree_sitter_javascript', 'tree_sitter_typescript', 'psycopg_binary', 'hf_xet', 'numpy', 'scipy', 'sklearn'],
-                  'summaryNumericalProbe': {'pca': 'full', 'covariance': 'spherical', 'seed': 0, 'regularization': 1e-4,
-                                            'members': 16, 'dimensions': 2, 'components': 2, 'converged': bool(mixture.converged_)},
+                  'nativeModules': ['tokenizers', 'tree_sitter', 'tree_sitter_javascript', 'tree_sitter_typescript', 'psycopg_binary', 'hf_xet'],
                   'unusedHfXetValidation': 'dynamic link load and PyInit symbol only; no module initialization or transport call',
                   'cwd': str(pathlib.Path.cwd()), 'dependencyCount': len(expected), 'dependencyModuleOrigins': dependency_modules,
                   'importedDependencyModules': sorted(name for name in dependency_modules if name in sys.modules),

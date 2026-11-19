@@ -369,20 +369,6 @@
           ]
         },
         {
-          "name": "joblib",
-          "version": "1.6.0",
-          "filename": "joblib-1.6.0-py3-none-any.whl",
-          "url": "https://files.pythonhosted.org/packages/18/53/84099323c2ec4be98d935f63c033ac4151ee83836ca1050ede3b3aadf155/joblib-1.6.0-py3-none-any.whl",
-          "sha256": "3dbbf9f6e4b592a2357b854608e980fe6390d131d7a82f011a377ef2ebef7aba",
-          "size": 306115,
-          "licenses": [
-            {
-              "path": "licenses/joblib-1.6.0-joblib-1.6.0.dist-info-licenses-LICENSE.txt",
-              "sha256": "42612911c1872c5e4b43f6ae0e8ee59467cd350332241cf72ce90640264fae6a"
-            }
-          ]
-        },
-        {
           "name": "narwhals",
           "version": "2.27.1",
           "filename": "narwhals-2.27.1-py3-none-any.whl",
@@ -393,96 +379,6 @@
             {
               "path": "licenses/narwhals-2.27.1-narwhals-2.27.1.dist-info-licenses-LICENSE.md",
               "sha256": "811445f30147b8f0c9d444c9025fd528f9532c54b7b83f6e2368473dc91cfdf0"
-            }
-          ]
-        },
-        {
-          "name": "numpy",
-          "version": "2.5.4",
-          "filename": "numpy-2.5.4-cp314-cp314-macosx_14_0_arm64.whl",
-          "url": "https://files.pythonhosted.org/packages/d5/b2/c6ce165acffceb15a82c07b9cc77d391f86b3f379ba62911908ae5d34b91/numpy-2.5.4-cp314-cp314-macosx_14_0_arm64.whl",
-          "sha256": "956555e0603a4d38019ae6925711cb9dc43195c076a928accf7ea5d50bddfe53",
-          "size": 5455617,
-          "licenses": [
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-LICENSE.txt",
-              "sha256": "649a589ab31076e79e9ce62ba24eae9959598124176640dbc95f87bd10f34fcf"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-include-numpy-libdivide-LICENSE.txt",
-              "sha256": "fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-src-common-pythoncapi-compat-COPYING",
-              "sha256": "3f2c1ffa76383a55ae0aac01c9737cd70050dff63e1f026694fbe9d662573c98"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-src-highway-LICENSE",
-              "sha256": "e340270d4f64384569a91d546acb5b094d69ce47f0c015db77abb74dc6f815af"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-src-multiarray-dragon4_LICENSE.txt",
-              "sha256": "f7b14309e5f54e5022b26448eefd419988ada2aec01d3c1162d84a0ea8f21f2c"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-src-npysort-x86-simd-sort-LICENSE.md",
-              "sha256": "211e7d737d6179a08f791ebb0a99897ce7cd2457410c542876d125576edfe910"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-_core-src-umath-svml-LICENSE",
-              "sha256": "c17011467b4fe6e20fbfbeda4df09e58c2bca5480a063e55735a4000a379aad9"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-fft-pocketfft-LICENSE.md",
-              "sha256": "a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-linalg-lapack_lite-LICENSE.txt",
-              "sha256": "a14cc25e10d40a3aa705b7de2fb764a6535d8ee9b2db4e1724900585457dfd55"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-ma-LICENSE",
-              "sha256": "05f3b88351988ecfad10abe92c0c50e5875c6452d5009a0084cc291551ffcca6"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-LICENSE.md",
-              "sha256": "103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-distributions-LICENSE.md",
-              "sha256": "469778be8f33d54e1bcaab28c281cc472916d2d273f835e55bc487d30503face"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-mt19937-LICENSE.md",
-              "sha256": "0e111337b25494a773106695f0e799f642b8567aaacca4f116a74a8177179156"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-pcg64-LICENSE.md",
-              "sha256": "e7d4f4fb20358f314210a892ae17351e04993813646f697ec387385ca2a36918"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-philox-LICENSE.md",
-              "sha256": "6f5828a57223d4cc7f8ea505a2623e7b978b242752c1515e355f46ba2cec1800"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-sfc64-LICENSE.md",
-              "sha256": "9d4098846018319cd68e228ee6220361787f73bccbf00237a85e4fc9621b998f"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-2.5.4.dist-info-licenses-numpy-random-src-splitmix64-LICENSE.md",
-              "sha256": "268b0ca06759d31ea3ca68dd35f20e877916e927b1c2a835e4592a3c4354b1f9"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-_core-include-numpy-random-LICENSE.txt",
-              "sha256": "fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-ma-LICENSE",
-              "sha256": "05f3b88351988ecfad10abe92c0c50e5875c6452d5009a0084cc291551ffcca6"
-            },
-            {
-              "path": "licenses/numpy-2.5.4-macos-arm64-numpy-random-LICENSE.md",
-              "sha256": "103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f"
             }
           ]
         },
@@ -561,76 +457,6 @@
             {
               "path": "licenses/pyyaml-6.0.3-LICENSE",
               "sha256": "8d3928f9dc4490fd635707cb88eb26bd764102a7282954307d3e5167a577e8a4"
-            }
-          ]
-        },
-        {
-          "name": "scikit-learn",
-          "version": "1.9.1",
-          "filename": "scikit_learn-1.9.1-cp314-cp314-macosx_12_0_arm64.whl",
-          "url": "https://files.pythonhosted.org/packages/9b/ed/d68115577c8b42b0442ebd8180945d4008880a33176094640e00b585128e/scikit_learn-1.9.1-cp314-cp314-macosx_12_0_arm64.whl",
-          "sha256": "8893bc6331f60f18d4ac75e12ed356e2dcf6a564bf767918b5b7ca54c8c8be49",
-          "size": 8279175,
-          "licenses": [
-            {
-              "path": "licenses/scikit-learn-1.9.1-macos-arm64-scikit_learn-1.9.1.dist-info-licenses-COPYING",
-              "sha256": "fc8dc597df0e3f51da65e2a71021e7f92e0b481998ec572a53c03ac0441db040"
-            },
-            {
-              "path": "licenses/scikit-learn-1.9.1-macos-arm64-sklearn-externals-array_api_compat-LICENSE",
-              "sha256": "4ffd978e3fa18d058d98c66771cfea7ed634aaf7023cf9612b8b55eee9a8f0fe"
-            },
-            {
-              "path": "licenses/scikit-learn-1.9.1-macos-arm64-sklearn-externals-array_api_extra-LICENSE",
-              "sha256": "58494398fe147fdce76a68b2decd4c08ce3a1ea237b6d6785001c15f822c6ed6"
-            },
-            {
-              "path": "licenses/scikit-learn-1.9.1-macos-arm64-sklearn-svm-src-liblinear-COPYRIGHT",
-              "sha256": "36f048db5651dd450f03e513016b77036cc99a44a66b2fdcecf4f6418657e0e1"
-            }
-          ]
-        },
-        {
-          "name": "scipy",
-          "version": "1.18.1",
-          "filename": "scipy-1.18.1-cp314-cp314-macosx_14_0_arm64.whl",
-          "url": "https://files.pythonhosted.org/packages/70/e8/6b0c288c50942d78193696c9f15f9a0874f5178aa0ddf40f83d9924b3e8d/scipy-1.18.1-cp314-cp314-macosx_14_0_arm64.whl",
-          "sha256": "011413b7426b75012840e35649e00fe0a2c3bae89fed433876e3a99251572efc",
-          "size": 20466839,
-          "licenses": [
-            {
-              "path": "licenses/scipy-1.18.1-macos-arm64-scipy-1.18.1.dist-info-LICENSE.txt",
-              "sha256": "09a1b9e19573045b0784a181cc4bef677039d4f2111631c747bf72b7f19017d4"
-            },
-            {
-              "path": "licenses/scipy-1.18.1-macos-arm64-scipy-_lib-_uarray-LICENSE",
-              "sha256": "c80c39b5fce06ba4897e14e0b0a88b54458334d951eb1361402ffad2cfb863b4"
-            },
-            {
-              "path": "licenses/scipy-1.18.1-macos-arm64-scipy-fft-_duccfft-LICENSE.md",
-              "sha256": "c254b2b5fd30ae3c89d36ba061730563b9760fca04f1b746a1b2c3157da2c789"
-            },
-            {
-              "path": "licenses/scipy-1.18.1-macos-arm64-scipy-integrate-LICENSE_DOP",
-              "sha256": "ed9bf58c6d74d3fad9d92d1d67d9bff8141d8ab60de784516b0711364fd43357"
-            },
-            {
-              "path": "licenses/scipy-1.18.1-macos-arm64-scipy-spatial-qhull_src-COPYING_QHULL.txt",
-              "sha256": "106d55c931fd6a84822e5345d900273d059f1c27310d02567ccb313c5d18c55d"
-            }
-          ]
-        },
-        {
-          "name": "threadpoolctl",
-          "version": "3.7.0",
-          "filename": "threadpoolctl-3.7.0-py3-none-any.whl",
-          "url": "https://files.pythonhosted.org/packages/43/3f/f88a53f60a472b46f4023f56d204dd7de33d34c5d2acbfa0d70a674e639e/threadpoolctl-3.7.0-py3-none-any.whl",
-          "sha256": "cd8b60b5641b45c67bbf73c64c843235fc2d8a480c87389f52f5dbee893b86be",
-          "size": 26362,
-          "licenses": [
-            {
-              "path": "licenses/threadpoolctl-3.7.0-threadpoolctl-3.7.0.dist-info-licenses-LICENSE",
-              "sha256": "81ac619075248b06e53660b652d10e485f4675f5d0ae0f97ea22370da1f7e23b"
             }
           ]
         },
