@@ -1,7 +1,7 @@
 # Reading exact indexed chunks
 
 `mycel read` returns one complete current indexed chunk: a code symbol, a
-document section under either configured root, a summary, or an overview
+document section under either configured root, or an overview
 section. A class name selects its header alone. Stored text is returned even
 when its file is absent or unreadable; optional context comes from a readable
 code file and never replaces the indexed text.
@@ -10,7 +10,6 @@ code file and never replaces the indexed text.
 mycel read 'cellar:@code/src/net/retry.py#RetryPolicy.allow'
 mycel read 'cellar:src/net/retry.py#allow' --context 5
 mycel read 'cellar:@artifact/docs/net.md#Retry%20policy'
-mycel read 'handbook:@index/summaries#1%2F7'
 mycel read 'cellar:@index/overview#src%2Fnet'
 mycel read --id '<search-result-id>' --no-fresh
 ```
@@ -28,12 +27,12 @@ qualified places already name their repository.
 No match or several matches returns `invalid_input`; an ambiguity includes up
 to 20 root-aware candidate places. An unknown registration returns
 `unknown_repository` and a disabled repository returns `refused`. Only current
-disk or generated locations can be read; branch/stash-only text and retained
+disk and overview locations can be read; branch/stash-only text and retained
 evidence blobs are not current chunks. A known retained identifier seeds its
 repository check even when its chunk currently has only branch/stash locations.
 A normal fresh read can therefore observe a file restored onto disk; an absent
 chunk still fails the final current selection. `--no-fresh` requires a current
-indexed disk/generated match immediately.
+indexed disk or overview match immediately.
 
 Before the final read, the command checks and ingests changes in the requested
 repository and recursively enabled repositories of that chunk's explicit
@@ -61,7 +60,7 @@ the section, `dependant` when the section rests on code) and `edge` (`declared`
 or `asserted`). Whole-file and class-family refs include each selected code
 chunk. The list has no two-section limit and needs no vectors or query. Current
 stored disk endpoints count even when the code is stale; branch-only endpoints,
-relations, summaries, overviews and code-to-code edges do not. Document and
+relations, overviews and code-to-code edges do not. Document and
 index-only reads, and code with no describing section, return `documents: []`.
 
 <!-- sources:
@@ -70,15 +69,14 @@ mycel:@code/src/mycel/_read_store.py#read_from_store
 -->
 
 `--context N` accepts 0 through 50 lines on each side of a file-backed code
-symbol. Without it the reply has no context. Document/generated chunks receive
+symbol. Without it the reply has no context. Document and overview chunks receive
 no file context. The text is bounded to 5 MiB of UTF-8 without cutting a code
 point, with `cut: true` when truncation occurs; context does not alter the
 stored chunk text or identity.
 
 `mycel info` lists this Build's command names in `commands` and advertises
 `readReply: 1`. Help identifies currently implemented handlers and read options.
-There is no separate capabilities command. Summary creation uses `summaries`,
-and explicit Drift execution uses `classify`. Installed working-Build
+There is no separate capabilities command. Explicit Drift execution uses `classify`. Installed working-Build
 qualification and publication are owned by SYL-148; owner installation is
 owned by SYL-236.
 

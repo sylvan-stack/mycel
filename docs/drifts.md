@@ -102,12 +102,12 @@ closed while another pair keeps the dependant's work open.
 corresponding off-disk stages separately. `judgements` and `inactiveJudgements`
 count completed outcomes, including `still_supported` evidence on closed pairs.
 `unresolvedFaults` counts current active reference, baseline or execution faults;
-`inactiveVersions` counts retained versions away from disk. Generated summaries
-remain separate `regeneration` work. These counts cover all retained work,
+`inactiveVersions` counts retained versions away from disk. The legacy
+`regeneration` field is empty. These counts cover retained active work,
 independently of which listing flags were selected, and omit obsolete attempts
 stored in history.
 
-`stale` returns each current disk or generated-index chunk with every stored
+`stale` returns each current eligible chunk with every stored
 reason, direct reasons before propagated reasons. Sources use canonical
 repository/root/path addresses; each propagated reason retains the original
 source and its ordered path through intermediate chunks. A reason's exact

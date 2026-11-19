@@ -267,7 +267,7 @@ def _inputs(connection, resolver: SourceResolver):
         by_member.setdefault((str(row[0]), row[1]), []).append(row)
     origins = {}
     for key, member in members.items():
-        # Both generated index namespaces are document text, not source code.
+        # Overview text is a document input, not source code.
         if member.place.root == "index" and key not in owning_files:
             origins[key] = 'documents'
             continue

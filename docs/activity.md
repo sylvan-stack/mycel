@@ -1,10 +1,10 @@
 # Transaction-bound activity
 
 The internal `MutationActivity` substrate records applied mutations over injected
-transaction callers. Public ingest, embedding, summary generation and
-classification connect their producers and exact committed reply counts. Public `activity` lists
+transaction callers. Public ingest, embedding and classification connect their producers and exact committed reply counts. Public `activity` lists
 ordered history and `activity --entry <id>` exposes one pass with its ordered
-file, identity and classification details. Writer transactions retain bounded
+file, identity and classification details. Older activity entries can still
+carry retired summary operation kinds. Writer transactions retain bounded
 history while preserving exact live invocations and independent evidence.
 
 Activity requires the package's numbered Build identity. An unnumbered source

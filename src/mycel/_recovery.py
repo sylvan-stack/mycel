@@ -40,7 +40,7 @@ from ._undocumented import normalize_paths
 from ._verification import _located, _require_confirmable
 
 SOURCES = ('document', 'commit', 'issue', 'embedding')
-_TEXT_KINDS = frozenset({'document', 'req', 'dec', 'summary', 'overview'})
+_TEXT_KINDS = frozenset({'document', 'req', 'dec', 'overview'})
 _TEST_PATH = re.compile(r'(^|/)(?:tests?|__tests__)(/|_)|(^|/)test_')
 # Candidate counts that fit the owner's budget and a 24-hour series (SYL-289):
 # the nearest requirements and decisions by rank, since similarity did not

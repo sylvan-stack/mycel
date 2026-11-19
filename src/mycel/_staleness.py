@@ -1,6 +1,6 @@
 """Offline mechanical detection after complete located publication.
 
-Current disk and generated index versions participate. Immutable
+Current disk and eligible index versions participate. Immutable
 pins are read, never renewed. The authority graph retains every distinct
 reason/path; relations supply direct reasons only. The publication caller owns
 the transaction, exact source checks and activity.

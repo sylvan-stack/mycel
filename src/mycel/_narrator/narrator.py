@@ -791,7 +791,7 @@ def _run_label(argv: list[str], started: float) -> bytes:
     if options.max_words < 1:
         raise NarratorError("the maximum label word count must be positive")
     if options.summary_sentence and options.max_words != summary_label.WORD_LIMIT:
-        raise NarratorError("RAPTOR labels use a limit of 20 words")
+        raise NarratorError("Sentence labels use a limit of 20 words")
 
     meter = Meter(started + ATTEMPT_SECONDS, reject_duplicate_keys=True)
     input_limit = MODEL_OUTPUT_BYTES if options.summary_sentence else REQUEST_BYTES

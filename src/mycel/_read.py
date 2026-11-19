@@ -195,7 +195,7 @@ def read_chunk(resolver: SourceResolver, place=None, *, identifier=None, context
                           'document' if chunk.kind in {'document', 'req', 'dec'} else 'code')
     if origin == 'documents':
         origin = 'document'
-    if origin not in {'code', 'document', 'summary', 'overview'}:
+    if origin not in {'code', 'document', 'overview'}:
         raise MycelError('store_format', 'The read catalog has an incompatible chunk origin.')
     text = exact_text(chunk.source)
     cut = len(chunk.source) > MAX_TEXT_BYTES

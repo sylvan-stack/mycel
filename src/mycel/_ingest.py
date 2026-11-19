@@ -58,20 +58,21 @@ def _manifest_targets(manifest: CaptureManifest, resolver_factory=None):
 def _ownership(connection, settings):
     """Read existing natural targets and actual authority endpoints.
 
-    Natural refs include unresolved and retained anchors; concrete edges include
-    generated owners without declaration spelling. Both are needed to discover
+    Natural refs include unresolved and retained anchors. Concrete edges
+    capture indexed authority endpoints. Both are needed to discover
     upstream guards and downstream refresh/collection ownership before writes.
     """
     enabled = {name for name, value in settings.values['repos'].items() if value['enabled']}
     with read_snapshot(connection):
         dependencies = connection.execute('SELECT repository,declaration,source_place,state FROM '
-            'public.mycel_dependencies WHERE repository=ANY(%s)', (sorted(enabled),)).fetchall()
+            "public.mycel_dependencies WHERE repository=ANY(%s) AND kind IN ('declared','asserted')",
+            (sorted(enabled),)).fetchall()
         relations = connection.execute('SELECT repository,right_place,state FROM '
             'public.mycel_relations WHERE repository=ANY(%s)', (sorted(enabled),)).fetchall()
         edges = connection.execute('SELECT DISTINCT d.repository,c.repository FROM public.mycel_edges e '
             'JOIN public.mycel_dependencies d ON d.id=e.dependency JOIN public.mycel_chunk_versions v '
             'ON v.id=e.source_version JOIN public.mycel_chunks c ON c.id=v.chunk_id '
-            'WHERE d.repository=ANY(%s)', (sorted(enabled),)).fetchall()
+            "WHERE d.repository=ANY(%s) AND d.kind IN ('declared','asserted')", (sorted(enabled),)).fetchall()
     upstream = {name: set() for name in enabled}
     for owner, declaration, place, state in dependencies:
         raw = _text(state['rawRef']) if 'rawRef' in state else declaration

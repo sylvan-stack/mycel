@@ -233,8 +233,7 @@ absolute path checked within its actual configured root; missing, unavailable
 or escaping files have an `unreadable` reason. The serializer also supports
 index namespaces with stable IDs and no file. Applied overview sections now
 compete as own-repository documents, with normal current-model vectors and no
-code-only/shared inclusion or documentedIn bridge. Published summary nodes
-also compete as own-repository documents through their retained index locations.
+code-only/shared inclusion or documentedIn bridge.
 
 Each result and every `via`/`documentedIn` citation uses the same exact-version
 `stale`, complete `staleReasons` with original source and intermediate path,
