@@ -1,9 +1,8 @@
 # Narrator
 
-Narrator generates labels and writes RAPTOR summaries. Run it directly with
-plain text and a word limit to get a short label. Mycel ships Narrator as its
-RAPTOR writer. For each summary, Mycel sends the writing instructions and
-source text to Narrator, which checks its claims and returns the prose.
+Narrator is a standalone Python tool for short labels and source-grounded
+summaries. Supply a reasoning adapter as an absolute executable and its
+arguments. The tool reads text from stdin.
 
 ## Generate a label
 
@@ -34,54 +33,22 @@ limit and writes one newline-terminated line. If a reply fails validation,
 Narrator asks once more. Failure leaves stdout empty and writes a diagnostic
 to stderr.
 
-## Configure a disposable Mycel run
+## Summarize text
 
-For each summary, Mycel sends one request on standard input. The request
-contains the writing instructions and the source sections, each with its
-location. Higher levels can use earlier summaries as source sections. The
-[Mycel summaries specification](https://github.com/sylvan-stack/mycel-artifacts/blob/main/specs/08-summaries.md#the-request)
-defines the request format, including how Mycel handles oversized input.
-
-Narrator extracts claims with exact citations, checks proposed text
-independently, and gives eligible rejections one repair and recheck. It
-assembles whole supported units up to the original source length. The default
-mode is `reasoned`. Length is measured in Unicode code points, including the
-newlines between units. A summary can be as long as the source.
-
-Add the reasoning adapter to the `[summaries]` section of the disposable
-settings file. Mycel launches the Narrator bundled with that Build.
-
-```toml
-[summaries]
-model_command = ["/absolute/path/to/reasoning-adapter", "--model", "pinned-model"]
-```
-
-For an older `summaries.command` that launched Narrator, move the argv from
-its `--model-command` argument into `summaries.model_command` and remove the
-old writer entry.
-
-Set `MYCEL_CONFIG` to that disposable file and use a Mycel Build that bundles
-Narrator. Mycel supplies `MYCEL_SUMMARY_SOURCE_CHARACTERS`. The count comes
-from the original section bodies, before adding generated place lines and
-separators or cutting an oversized request. The repository's store, source
-folders and embeddings come from its configuration.
+Supply up to 48,000 Unicode code points of UTF-8 text on stdin with
+`--plain-text`. Narrator checks claims against the source, allows one bounded
+repair and recheck, and returns whole verified units. The output cannot exceed
+the input's character count.
 
 ```sh
-MYCEL_CONFIG=/absolute/private/path/mycel.toml \
-  /absolute/path/to/mycel -v "$MYCEL_BUILD" summaries build --repo fixture
+python3 scripts/narrator/narrator.py --plain-text \
+  --model-command '["/absolute/path/to/reasoning-adapter"]' < source.md
 ```
 
-Mycel launches the command with an empty working directory and a reduced
-environment. Narrator emits only the exact verified UTF-8 prose on success.
-A refusal exits nonzero with a short diagnostic on stderr and empty stdout.
-Mycel can retry the whole command once and owns summary publication.
-
-The default framing is the
-[packaged prompt profile](../../src/mycel/data/summary-prompts.json). For a
-Mycel `summaries.instructions` override, Mycel passes that directory to
-Narrator as `--instructions`. Narrator reads `raptor-summary.md` and
-`raptor-request.md.tmpl` and matches their exact rendered framing before
-launching a model command.
+The packaged entry point is `python3 -m mycel._narrator.narrator`.
+The standalone command also accepts previously framed requests with
+`--source-characters`. A previous custom framing profile can still be selected
+with `--instructions` for those requests.
 
 ## Model and embedding commands
 
@@ -122,8 +89,7 @@ Without a supported repair, the original supported units remain eligible.
 ## Compare and retain evidence
 
 Use `--mode compare` in a direct invocation with both adapter commands and
-`--report /absolute/private/path/new-receipt.json`. Supply the same original
-Mycel request on stdin. The receipt is created exclusively with owner-only
+`--report /absolute/private/path/new-receipt.json`. Supply the same source text on stdin with `--plain-text`. The receipt is created exclusively with owner-only
 permissions before any model launch. Keep it outside source control and
 indexes since it contains source excerpts, model proposals, and final prose.
 
@@ -134,8 +100,8 @@ It emits empty stdout. If either arm fails, it exits nonzero and keeps any
 completed arm and the failure in the receipt.
 
 Direct `reasoned` or `semantic` runs can also provide a new `--report` path.
-For any direct run, pass `--source-characters N` with the sum of the original
-section bodies' Unicode code point counts. Count the original text before
+For existing framed requests, pass `--source-characters N` with the sum of the
+original section bodies' Unicode code point counts. Count the original text before
 Mycel adds framing or cuts an oversized input. The direct writer still emits
 the same prose on success. Leave `--source-characters` and `--report` out of
 the Mycel command for ordinary generation.

@@ -1,4 +1,4 @@
-"""Check Narrator summary units against the exact RAPTOR request evidence."""
+"""Check Narrator summary units against exact source evidence."""
 
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy

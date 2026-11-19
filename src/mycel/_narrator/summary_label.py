@@ -1,4 +1,4 @@
-"""Sentence labels stored with RAPTOR summary versions."""
+"""Sentence labels for standalone Narrator."""
 
 import unicodedata
 
