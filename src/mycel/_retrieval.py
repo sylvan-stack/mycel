@@ -36,7 +36,7 @@ class RetrievalChunk:
     path: str
     name: str
     kind: str
-    origin: Literal["code", "documents", "summary", "overview"]
+    origin: Literal["code", "documents", "overview"]
     text: str = field(repr=False)
     artifact_paths: tuple[str, ...] = ()
     on_disk: bool = True
@@ -107,7 +107,7 @@ def _disk_chunks(chunks: Iterable[RetrievalChunk]) -> tuple[RetrievalChunk, ...]
     unique: dict[tuple[str, int], RetrievalChunk] = {}
     for chunk in chunks:
         if not chunk.on_disk or (chunk.root not in {"code", "artifact"}
-                and not (chunk.root == 'index' and chunk.origin in {'summary', 'overview'})):
+                and not (chunk.root == 'index' and chunk.origin == 'overview')):
             continue
         previous = unique.setdefault(chunk.key, chunk)
         if previous != chunk:
@@ -132,7 +132,7 @@ def select_chunks(settings: SettingsSnapshot, repository: str,
             continue
         if only == "code" and chunk.origin != "code":
             continue
-        if only == "docs" and chunk.origin not in {"documents", "summary", "overview"}:
+        if only == "docs" and chunk.origin not in {"documents", "overview"}:
             continue
         if chunk.repository == repository:
             selected.append(chunk)

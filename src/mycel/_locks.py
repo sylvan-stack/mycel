@@ -34,13 +34,12 @@ class LockNamespace(StrEnum):
     LOCATION_PASS = "location.pass"
     EMBED = "repository.embed"
     CLASSIFY = "repository.classify"
-    SUMMARIES = "repository.summaries"
     MUTATION = "repository.mutation"
     INVOCATION = "invocation.liveness"
 
 
 _OPERATIONS = {"pass": LockNamespace.PASS, "embed": LockNamespace.EMBED,
-               "classify": LockNamespace.CLASSIFY, "summaries": LockNamespace.SUMMARIES}
+               "classify": LockNamespace.CLASSIFY}
 
 
 def postgres_detail(error) -> str:

@@ -1,31 +1,17 @@
-"""Complete, deterministic summary requests for Narrator.
-
-Planning is offline. Publication, grouping and summary command replies belong
-to their respective consumers; no request here makes searchable summary rows.
-"""
+"""Deterministic framing for the standalone Narrator compatibility input."""
 
 from dataclasses import dataclass
-from hashlib import file_digest, sha256
-from importlib.resources import files
-import json
-from pathlib import Path
-import sys
+from hashlib import sha256
 
 from ._embedding_plan import document_place_line
 from ._errors import MycelError
-from ._evidence import EvidenceError
-from ._narrator.summary_label import WORD_LIMIT
 from ._resolver import SelectionMember, _validate_chunk
-from ._safeguards import resolve_command
-from ._settings import SettingsSnapshot
 from ._source_refs import SourceAddress
 
 
 REQUEST_LIMIT = 48_000
 CUT_NOTICE = "[Mycel: source text cut at request limit]"
 SEPARATOR = "\n\n---\n\n"
-_NARRATOR_DIR = Path(__file__).resolve().with_name("_narrator")
-_NARRATOR_FILES = ("narrator.py", "selection.py", "summary_label.py", "verification.py")
 
 
 def _settings():
@@ -57,77 +43,6 @@ class SummaryPrompts:
     @property
     def hashes(self):
         return {"instruction": sha256(self.instruction).hexdigest(), "task": sha256(self.task).hexdigest()}
-
-
-def load_summary_prompts(settings: SettingsSnapshot) -> SummaryPrompts:
-    settings.require_valid(require_store=False)
-    folder = settings.values["summaries"].get("instructions")
-    try:
-        if folder is not None:
-            root = Path(folder)
-            return SummaryPrompts((root / "raptor-summary.md").read_bytes(),
-                                  (root / "raptor-request.md.tmpl").read_bytes(), "override")
-        data = json.loads(files("mycel").joinpath("data/summary-prompts.json").read_bytes())
-        if data["schema_version"] != 1:
-            _settings()
-        return SummaryPrompts(data["instruction"].encode("utf-8"), data["task"].encode("utf-8"), data["profile"])
-    except (OSError, ValueError, KeyError, TypeError):
-        _settings()
-
-
-@dataclass(frozen=True)
-class SummaryProgram:
-    argv: tuple[str, ...]
-    prompts: SummaryPrompts
-    file_hashes: tuple[str, ...]
-    label_argv: tuple[str, ...]
-
-
-def _file_hash(path: Path) -> str:
-    with path.open("rb") as stream:
-        return file_digest(stream, "sha256").hexdigest()
-
-
-def summary_command(settings: SettingsSnapshot, *, operation: str, dry_run: bool = False) -> SummaryProgram | None:
-    """Resolve and pin the bundled writer and its configured model adapter."""
-    settings.require_valid(require_store=False)
-    if operation not in {"build", "regenerate", "labels", "status", "remove", "search"} or type(dry_run) is not bool:
-        raise MycelError("invalid_input", "The summary operation is invalid.")
-    if operation not in {"build", "regenerate", "labels"} or dry_run:
-        return None
-    summary_settings = settings.values["summaries"]
-    adapter = summary_settings.get("model_command")
-    if not adapter:
-        raise MycelError("settings", "Set summaries.model_command to Narrator's reasoning adapter.")
-    writer, *components = (_NARRATOR_DIR / name for name in _NARRATOR_FILES)
-    try:
-        interpreter, = resolve_command((sys.executable,))
-        adapter = resolve_command(adapter)
-        file_hashes = tuple(_file_hash(path) for path in (Path(interpreter), writer, *components, Path(adapter[0])))
-    except (MycelError, OSError, RuntimeError, ValueError):
-        raise MycelError("settings", "Narrator or its configured model adapter is unavailable.") from None
-    executable = (interpreter, "-I", "-B", str(writer))
-    adapter_args = ("--model-command", json.dumps(adapter, ensure_ascii=False))
-    argv = (*executable, "--mode", "reasoned", *adapter_args)
-    label_argv = (*executable, "label", "--summary-sentence", "--max-words", str(WORD_LIMIT), *adapter_args)
-    if (folder := summary_settings.get("instructions")) is not None:
-        argv += ("--instructions", folder)
-    return SummaryProgram(argv, load_summary_prompts(settings), file_hashes, label_argv)
-
-
-def summary_configuration_guard(settings: SettingsSnapshot, operation: str, program: SummaryProgram):
-    """Revalidate the writer, model adapter and exact prompts before using them."""
-
-    def require_current():
-        try:
-            settings.require_current()
-            if summary_command(settings, operation=operation) == program:
-                return
-        except MycelError:
-            pass
-        raise EvidenceError("inputs_changed")
-
-    return require_current
 
 
 @dataclass(frozen=True)

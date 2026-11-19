@@ -22,7 +22,7 @@ JOIN public.mycel_locations l ON l.chunk_version=v.id
 LEFT JOIN public.mycel_file_locations fl ON fl.id=l.file_location
 LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version AND fv.file_id=c.file_id
 LEFT JOIN public.mycel_files f ON f.id=fv.file_id
-WHERE c.repository=%s AND (NOT %s OR
+WHERE c.repository=%s AND c.kind<>'summary' AND (NOT %s OR
     (l.kind='disk' AND c.kind='document' AND COALESCE(l.metadata->>'kind',c.kind)='document'))
 ORDER BY v.id,
 CASE l.kind WHEN 'disk' THEN 0 WHEN 'branch' THEN 1 WHEN 'stash' THEN 2 ELSE 3 END,
@@ -46,10 +46,10 @@ def retained_contexts(connection, repository: str, *, in_snapshot=False, disk_do
         if version in contexts:
             continue
         located_kind = metadata.get('kind', chunk_kind) if isinstance(metadata, dict) else chunk_kind
-        kind = "document" if located_kind in {"document", "summary", "overview"} else "code"
+        kind = "document" if located_kind in {"document", "overview"} else "code"
         try:
             path = (file_metadata or {}).get("path", path)
-            if located_kind in {'summary', 'overview'}:
+            if located_kind == 'overview':
                 if file_metadata is not None or path is not None:
                     raise ValueError('A generated index chunk must have no file')
                 place = document_place_line(metadata['path'], (metadata['name'],))

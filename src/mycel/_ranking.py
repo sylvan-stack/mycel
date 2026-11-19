@@ -200,7 +200,7 @@ def rank_repository(settings: SettingsSnapshot, query: str,
     meaning = _arm(candidates.meaning, scope) if query_vector is not None else {}
     wording = _arm(candidates.wording, scope)
     visible_documents = select_chunks(settings, candidates.repository, graph.documents)
-    documents = tuple(chunk for chunk in visible_documents if chunk.origin in {"documents", "summary", "overview"}
+    documents = tuple(chunk for chunk in visible_documents if chunk.origin in {"documents", "overview"}
                       and (only != "code" or chunk.repository == candidates.repository))
     document_scope = {chunk.key: chunk for chunk in documents}
     cosines = _cosines(query_vector, (*selected, *documents))
@@ -249,7 +249,7 @@ def rank_repository(settings: SettingsSnapshot, query: str,
         direct_cosine = direct[0].score if direct else None
         bridge_cosine = inherited[2] if inherited else None
         via = inherited[1] if inherited else None
-        if chunk.origin in {"documents", "summary", "overview"} and only != "docs":
+        if chunk.origin in {"documents", "overview"} and only != "docs":
             similarity = cosines.get(chunk.key)
             if (PurePosixPath(chunk.path).name in _ROUTING_FILES or similarity is None
                     or not _clears_margin(similarity, code_bar)):
@@ -274,7 +274,7 @@ def rank_repository(settings: SettingsSnapshot, query: str,
     entries.sort(key=lambda entry: (entry.score_tier == "wording_tail", -entry.score, _tie(entry.chunk)))
     results, document_count = [], 0
     for entry in entries:
-        if entry.chunk.origin in {"documents", "summary", "overview"} and only != "docs":
+        if entry.chunk.origin in {"documents", "overview"} and only != "docs":
             if document_count == _DOCUMENT_LIMIT:
                 continue
             document_count += 1

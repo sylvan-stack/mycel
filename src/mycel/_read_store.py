@@ -24,7 +24,6 @@ from ._errors import MycelError
 from ._freshness import (ChunkRequirement, DeadlineExceeded, DependencyFault, FreshnessDiscovery,
                         FreshnessScope, RepositoryStatus, run_freshness)
 from ._freshness_store import StoreFreshnessAdapter, _DEPENDENCIES, _fault_order, _raw, _target
-from ._generated import generated_resolution
 from ._identity import reconcile_file
 from ._located_reconciliation import _catalog
 from ._locks import snapshot_transaction
@@ -38,13 +37,6 @@ from ._source_refs import (SourceAddress, SourceAddressError, parse_entity_uri, 
 from ._store import checked_store
 
 
-_READ_DEPENDENCIES = _DEPENDENCIES.replace(' ORDER BY d.repository,d.dependant_version,d.id', '') + """
-    UNION ALL
-    SELECT d.repository,d.dependant_version,d.kind,d.declaration,d.source_place,d.state
-    FROM public.mycel_dependencies d
-    JOIN public.mycel_locations l ON l.chunk_version=d.dependant_version AND l.kind='index'
-    WHERE d.kind='generated' ORDER BY 1,2"""
-
 _READ_FAULTS = """SELECT f.declaration,f.fault,
       COALESCE((SELECT d.state->>'rawRef' FROM public.mycel_dependencies d WHERE d.id=f.id),
                (SELECT r.state->>'rawRef' FROM public.mycel_relations r WHERE r.id=f.id))
@@ -56,9 +48,8 @@ _READ_FAULTS = """SELECT f.declaration,f.fault,
         JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version
         JOIN public.mycel_chunks c ON c.id=v.chunk_id
         WHERE d.id=f.id AND d.repository=f.repository AND d.dependant_version=f.chunk_version
-          AND ((d.kind='generated' AND l.kind='index' AND c.file_id IS NULL)
-            OR (l.kind='disk' AND fl.kind='disk' AND l.location=fl.location
-              AND fl.id::text=d.state->'declarationLocation'->>'file' AND fl.id::text=%s)))
+          AND l.kind='disk' AND fl.kind='disk' AND l.location=fl.location
+          AND fl.id::text=d.state->'declarationLocation'->>'file' AND fl.id::text=%s)
       OR EXISTS (SELECT 1 FROM public.mycel_relations r
         JOIN public.mycel_locations l ON l.chunk_version=r.left_version
         JOIN public.mycel_file_locations fl ON fl.id=l.file_location
@@ -83,12 +74,6 @@ def selection_file_location(connection, settings, selected):
     if len(rows) != 1:
         raise MycelError('store_format','A read requires one exact current file location.')
     return str(rows[0][0])
-
-
-def _generated_resolution(resolver, row):
-    # The common generated resolver retains one exact logical member across
-    # recognized moves and never expands a pinned class header to its family.
-    return generated_resolution(resolver, (None, row[0], row[1], row[3], row[4], row[2], row[5]))
 
 
 class StoreReadFreshnessAdapter(StoreFreshnessAdapter):
@@ -129,8 +114,8 @@ class StoreReadFreshnessAdapter(StoreFreshnessAdapter):
                 origins = {str(identifier): corpus for identifier, corpus in self.connection.execute(
                     'SELECT id,corpus FROM public.mycel_files WHERE id=ANY(%s::uuid[])', (file_ids,)).fetchall()}
                 rows = defaultdict(list)
-                for row in self.connection.execute(_READ_DEPENDENCIES).fetchall():
-                    if row[2] == 'generated' or resolver.owns_policy(row[0], row[5]):
+                for row in self.connection.execute(_DEPENDENCIES).fetchall():
+                    if resolver.owns_policy(row[0], row[5]):
                         rows[row[1]].append(row)
                 declarations = {}
                 for file in resolver.files:
@@ -222,14 +207,12 @@ class StoreReadFreshnessAdapter(StoreFreshnessAdapter):
                     for ref in declared:
                         retained = next((row for row in stored if row[2] == 'declared' and _raw(row) == ref.ref), None)
                         references.append((ref.ref, ref.fault, retained))
-                    references.extend((_raw(row), None, row) for row in stored if row[2] in {'asserted', 'generated'})
+                    references.extend((_raw(row), None, row) for row in stored if row[2] == 'asserted')
                     for raw, syntax_fault, retained in references:
                         deadline.check()
                         anchor = retained[5].get('anchor') if retained else None
-                        generated = retained is not None and retained[2] == 'generated'
-                        selected = (_generated_resolution(resolver, retained) if generated else
-                            RetainedDependencyResolver(resolver, {raw: anchor} if anchor else {},
-                            {raw: syntax_fault} if syntax_fault else {}).resolve(raw))
+                        selected = RetainedDependencyResolver(resolver, {raw: anchor} if anchor else {},
+                            {raw: syntax_fault} if syntax_fault else {}).resolve(raw)
                         targets = set()
                         target = _target(self.settings, raw)
                         if target is not None and selected.state != 'invalid':
@@ -256,9 +239,8 @@ class StoreReadFreshnessAdapter(StoreFreshnessAdapter):
                         # the old index. Follow only its exact source selection
                         # so its own declared refs extend the same frontier
                         # before the complete producer can safely publish it.
-                        captured_selection = ((_generated_resolution(prospective, retained) if generated else
-                            RetainedDependencyResolver(prospective,
-                            {raw: anchor} if anchor else {}).resolve(raw)) if not syntax_fault
+                        captured_selection = (RetainedDependencyResolver(prospective,
+                            {raw: anchor} if anchor else {}).resolve(raw) if not syntax_fault
                             and selected.state != 'invalid' else None)
                         traversal = (captured_selection.selection if captured_selection is not None
                             and captured_selection.selection is not None else selected.selection)

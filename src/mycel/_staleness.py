@@ -156,7 +156,7 @@ _NODES = """SELECT c.id,c.repository,v.id,l.id,l.metadata,f.metadata
     SELECT c.id,c.repository,v.id,l.id,l.metadata,'{}'::jsonb
     FROM public.mycel_locations l JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version
     JOIN public.mycel_chunks c ON c.id=v.chunk_id
-    WHERE l.kind='index' AND c.file_id IS NULL AND c.kind<>'overview'
+    WHERE l.kind='index' AND c.file_id IS NULL AND c.kind NOT IN ('overview','summary')
       AND c.repository=ANY(%s) ORDER BY 2,1,4"""
 
 
@@ -165,13 +165,8 @@ def _eligible(settings):
 
 
 def _links(connection, eligible):
-    generated = connection.execute('SELECT d.id,d.repository,d.dependant_version,d.declaration,d.source_place,d.kind,'
-        'd.state,d.baseline_owner,r.manifest_hash FROM public.mycel_dependencies d '
-        "JOIN public.mycel_locations l ON l.chunk_version=d.dependant_version AND l.kind='index' "
-        'LEFT JOIN public.mycel_evidence_references r ON r.owner=d.baseline_owner AND r.ordinal=0 '
-        "WHERE d.kind='generated' AND d.repository=ANY(%s) ORDER BY d.repository,d.id", (eligible,)).fetchall()
     return (tuple(connection.execute(_DEPENDENCIES, (eligible,)).fetchall()) +
-            tuple(connection.execute(_RELATIONS, (eligible,)).fetchall()) + tuple(generated))
+            tuple(connection.execute(_RELATIONS, (eligible,)).fetchall()))
 
 
 def inactive_policy_links(connection, settings):
@@ -199,8 +194,8 @@ def current_stale_reasons(connection, settings, versions):
 
 def _relation_evidence(connection, rows):
     """Observe exact related pin ownership without locking a busy owner."""
-    owners = list({row[7] for row in rows if row[5] in {'related', 'generated'} and row[7] is not None})
-    versions = list({row[2] for row in rows if row[5] in {'related', 'generated'}})
+    owners = list({row[7] for row in rows if row[5] == 'related' and row[7] is not None})
+    versions = list({row[2] for row in rows if row[5] == 'related'})
     return (
         tuple(connection.execute("""SELECT id,repository,kind,identity,invocation FROM public.mycel_evidence_owners
             WHERE id=ANY(%s) ORDER BY id""", (owners,)).fetchall()),
@@ -209,14 +204,11 @@ def _relation_evidence(connection, rows):
             (owners,)).fetchall()),
         tuple(connection.execute("""SELECT v.id,c.id,c.repository,c.file_id,v.snapshot_hash,v.source_bytes,v.comparison,v.metadata
             FROM public.mycel_chunk_versions v JOIN public.mycel_chunks c ON c.id=v.chunk_id
-            WHERE v.id=ANY(%s) ORDER BY v.id""", (versions,)).fetchall()),
-        tuple(connection.execute("""SELECT g.chunk_id,g.repository,g.kind,g.state FROM public.mycel_generated_state g
-            JOIN public.mycel_chunk_versions v ON v.chunk_id=g.chunk_id WHERE v.id=ANY(%s) ORDER BY g.chunk_id""",
-            (versions,)).fetchall()))
+            WHERE v.id=ANY(%s) ORDER BY v.id""", (versions,)).fetchall()))
 
 
 def _validate_relation(row, baseline, observed):
-    owners, references, versions, _ = observed
+    owners, references, versions = observed
     identifier, owner, version, _, natural, _, state, baseline_owner, _ = row
     owning = next((value[1:4] for value in owners if value[0] == baseline_owner), None)
     refs = tuple(value[2:] for value in references if value[:2] == (baseline_owner, owner))
@@ -233,9 +225,6 @@ def _raw(row):
 
 
 def _resolve(catalog, row):
-    if row[5] == 'generated':
-        from ._generated import generated_resolution
-        return generated_resolution(catalog, row)
     raw = _raw(row)
     return RetainedDependencyResolver(catalog,
         {raw: row[6]['anchor']} if row[6].get('anchor') else {},
@@ -329,7 +318,7 @@ class MechanicalStalenessStore:
         if any(value.get('code_clones') for value in settings.values['repos'].values()):
             from ._scope import RepositoryLocations
             locations = {repository.name: repository for repository in RepositoryLocations(settings).repositories}
-            rows = tuple(row for row in rows if row[5] == 'generated' or
+            rows = tuple(row for row in rows if
                 row[6].get('declarationLocation', {}).get('location', 'disk') == locations[row[1]].disk_location)
             index_ids = {chunk.identifier for _, chunk in catalog.index}
             selected_versions = {chunk.version for file in catalog.files for chunk in file.chunks}
@@ -381,9 +370,6 @@ class MechanicalStalenessStore:
             if file.repository == address.repository and any(alias.path == address.path
                 and address.root in {None, alias.root} for alias in file.aliases))
         manifests = {(row[1], row[8]) for row in selected if row[8] is not None}
-        generated_owners = {row[7] for row in selected if row[5] == 'generated'}
-        manifests.update((owner, digest) for identifier, owner, _, _, digest in relation_evidence[1]
-                         if identifier in generated_owners and digest is not None)
         evidence = tuple(row for row in evidence if (row[0], row[1]) in manifests)
         snapshot_keys = set()
         for owner, _, _, raw, _ in evidence:
@@ -394,22 +380,17 @@ class MechanicalStalenessStore:
             if not isinstance(payload, dict):
                 continue
             try:
-                if 'dependant' in payload:
-                    snapshot_keys.add((owner, payload['dependant']['hash']))
-                    snapshot_keys.update((owner, member['evidence']['hash']) for member in payload['members'])
-                else:
-                    snapshot_keys.update((owner, payload[key]['hash']) for key in ('request', 'instruction', 'task', 'response') if key in payload)
-                    snapshot_keys.update((owner, member[key]['hash']) for member in payload['members'] for key in ('source', 'sent'))
+                snapshot_keys.add((owner, payload['dependant']['hash']))
+                snapshot_keys.update((owner, member['evidence']['hash']) for member in payload['members'])
             except (ValueError, TypeError, KeyError):
                 pass  # Shape validation reports the fault; CAS retains exact manifest bytes.
         snapshots = tuple(row for row in snapshots if (row[0], row[1]) in snapshot_keys)
-        owners, references, versions, states = relation_evidence
-        selected_owners = {row[7] for row in selected if row[5] in {'related', 'generated'}}
-        selected_versions = {row[2] for row in selected if row[5] in {'related', 'generated'}}
+        owners, references, versions = relation_evidence
+        selected_owners = {row[7] for row in selected if row[5] == 'related'}
+        selected_versions = {row[2] for row in selected if row[5] == 'related'}
         related = (tuple(row for row in owners if row[0] in selected_owners),
                    tuple(row for row in references if row[0] in selected_owners),
-                   tuple(row for row in versions if row[0] in selected_versions),
-                   tuple(row for row in states if row[0] in {value[1] for value in versions if value[0] in selected_versions}))
+                   tuple(row for row in versions if row[0] in selected_versions))
         return (tuple(file for file in catalog.files if file.identifier in files),
                 tuple(selected), current, evidence, snapshots, related)
 
@@ -574,18 +555,11 @@ class MechanicalStalenessStore:
                     for file in catalog.files if file.repository == address.repository and any(
                         alias.path == address.path and address.root in {None, alias.root} for alias in file.aliases)))
                 physical_bad = physical_bad or observed_declarations[-1][2] != expected_candidates
-            if baseline_owner is None and not state.get('everResolved') and kind != 'generated':
+            if baseline_owner is None and not state.get('everResolved'):
                 continue  # A never-resolved declaration is a ref fault, not removed evidence.
             try:
                 if manifest_hash is None:
                     raise EvidenceError('baseline_missing')
-                if kind == 'generated':
-                    from ._generated import generated_capture, compare_generated
-                    if physical_bad:
-                        raise EvidenceError('changed_since_ingest')
-                    capture, member = generated_capture(self.connection, row)
-                    direct[dependant].extend((str(identifier), reason) for reason in compare_generated(member, resolution))
-                    continue
                 capture = evidence._read_baseline(owner, manifest_hash)
                 baseline = capture.manifest.payload
                 if physical_bad:
@@ -661,7 +635,9 @@ class MechanicalStalenessStore:
         for owner, counts in replies.items():
             counts['stale'] = self.connection.execute("""SELECT count(DISTINCT r.chunk_version)
                 FROM public.mycel_stale_reasons r JOIN public.mycel_locations l ON l.chunk_version=r.chunk_version
-                WHERE r.repository=%s AND l.kind IN ('disk','index')""", (owner,)).fetchone()[0]
+                JOIN public.mycel_chunk_versions v ON v.id=l.chunk_version
+                JOIN public.mycel_chunks c ON c.id=v.chunk_id
+                WHERE r.repository=%s AND l.kind IN ('disk','index') AND c.kind<>'summary' """, (owner,)).fetchone()[0]
         from ._drift_store import DriftStore
         drift_changed = DriftStore(self.connection).sync_in_transaction(settings, guards.writable,
             versions=tuple(node.version for node in nodes if node.identifier in affected), pending=pending)

@@ -183,7 +183,7 @@ def _disk_inputs(connection, resolver: SourceResolver, *,
         for chunk in file.chunks:
             inputs.append((file.repository, file.primary, chunk, origin, aliases))
     for place, chunk in resolver.index:
-        if chunk.kind not in {'summary', 'overview'}:
+        if chunk.kind != 'overview':
             raise MycelError('store_format', 'The generated retrieval catalog has an incompatible origin.')
         inputs.append((place.repository, place, chunk, chunk.kind, ()))
     for repository, place, chunk, origin, aliases in inputs:

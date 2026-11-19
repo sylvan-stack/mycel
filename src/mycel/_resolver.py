@@ -269,7 +269,7 @@ class SourceResolver:
                 # fault. A published typed namespace is generated text even
                 # when the requested readable section no longer exists.
                 generated = any(place.repository == address.repository and place.path == address.path
-                                and chunk.kind in {"summary", "overview"} for place, chunk in self.index)
+                                and chunk.kind == "overview" for place, chunk in self.index)
                 return Resolution(declaration, "invalid",
                                   fault="generated_text" if generated else "ineligible_index")
             matches = tuple((place, chunk) for place, chunk in self.index
@@ -285,7 +285,7 @@ class SourceResolver:
         files = tuple(file for file in self.files if file.repository == address.repository and any(
             alias.path == address.path and (address.root is None or alias.root == address.root)
             for alias in file.aliases))
-        if purpose == "read" and address.root is None and files and address.path in {"summaries", "overview"}:
+        if purpose == "read" and address.root is None and files and address.path == "overview":
             indexed = tuple(place for place, _chunk in self.index
                             if place.repository == address.repository and place.path == address.path)
             if indexed:
@@ -298,7 +298,7 @@ class SourceResolver:
                 return _ambiguous(declaration, "ambiguous_path",
                                   (*candidates, *(file.primary.address for file in files)))
         if not files:
-            if address.root is None and address.path in {"summaries", "overview"} and any(
+            if address.root is None and address.path == "overview" and any(
                     place.repository == address.repository and place.path == address.path for place, _ in self.index):
                 qualified = SourceAddress(address.repository, "index", address.path, address.name)
                 return replace_resolution(self.resolve(qualified.address, purpose=purpose), declaration)
@@ -586,7 +586,7 @@ WHERE fl.kind = l.kind AND fl.location = l.location AND """ + _LOCATION_FILTER
 _INDEX_SQL = """SELECT DISTINCT c.repository, c.id, v.id, v.snapshot_hash, v.source_bytes, v.comparison, v.metadata
 FROM public.mycel_chunks c JOIN public.mycel_chunk_versions v ON v.chunk_id = c.id
 JOIN public.mycel_locations l ON l.chunk_version = v.id
-WHERE c.file_id IS NULL AND l.kind = 'index' AND c.repository = ANY(%s)"""
+WHERE c.file_id IS NULL AND c.kind <> 'summary' AND l.kind = 'index' AND c.repository = ANY(%s)"""
 
 _CATALOG_SQL = """WITH scope AS (SELECT %s::text AS kind,%s::text AS location,%s::text[] AS eligible,%s::jsonb AS selectors)
 SELECT DISTINCT 'file' AS category,jsonb_build_array(f.id,f.repository,f.root,f.path,v.snapshot_hash,
@@ -618,6 +618,6 @@ SELECT DISTINCT 'index',jsonb_build_array(c.repository,c.id,v.id,v.snapshot_hash
     encode(v.source_bytes,'hex'),v.comparison,v.metadata)
 FROM public.mycel_chunks c JOIN public.mycel_chunk_versions v ON v.chunk_id=c.id
 JOIN public.mycel_locations l ON l.chunk_version=v.id CROSS JOIN scope s
-WHERE c.file_id IS NULL AND l.kind='index' AND c.repository=ANY(s.eligible)
+WHERE c.file_id IS NULL AND c.kind<>'summary' AND l.kind='index' AND c.repository=ANY(s.eligible)
     AND (c.kind<>'overview' OR (s.kind='disk' AND COALESCE(l.metadata->>'cloneLocation','disk')=
         COALESCE(s.selectors->>c.repository,'disk')))"""

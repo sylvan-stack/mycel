@@ -164,16 +164,7 @@ class ProvenanceReports:
         store = DriftStore(self.connection)
         records = [store._wire(row) for row in store._rows((repository,))]
         records.sort(key=lambda drift: (drift['chunk']['address'], drift['version'], drift['openedAt'], drift['id']))
-        rows = self.connection.execute(_REGENERATION_SQL, (repository,)).fetchall()
-        regeneration = []
-        for identifier, version, metadata in rows:
-            try:
-                place = _place(SourceAddress(repository, 'index', metadata['path'], metadata['name']))
-            except (KeyError, TypeError, ValueError, SourceAddressError):
-                _bad()
-            regeneration.append({'chunkId': str(identifier), 'version': version,
-                                 'state': 'regeneration', 'place': place})
-        return records, regeneration
+        return records, []
 
     def drifts_in_snapshot(self, repository, *, closed=False, all_versions=False):
         if type(closed) is not bool or type(all_versions) is not bool:
@@ -268,7 +259,7 @@ JOIN public.mycel_locations l ON l.chunk_version=v.id AND l.kind IN ('disk','ind
 LEFT JOIN public.mycel_file_locations fl ON fl.id=l.file_location AND fl.kind='disk'
 LEFT JOIN public.mycel_file_versions fv ON fv.id=fl.file_version
 LEFT JOIN public.mycel_files f ON f.id=fv.file_id AND f.repository=c.repository
-WHERE r.repository=%s ORDER BY c.id,v.id,r.id,l.id"""
+WHERE r.repository=%s AND c.kind<>'summary' ORDER BY c.id,v.id,r.id,l.id"""
 
 _CURRENT_COUNTS_SQL = """SELECT count(DISTINCT v.id),
        count(DISTINCT v.id) FILTER (WHERE EXISTS (
@@ -276,11 +267,4 @@ _CURRENT_COUNTS_SQL = """SELECT count(DISTINCT v.id),
          WHERE r.chunk_version=v.id AND r.repository=c.repository))
 FROM public.mycel_chunk_versions v JOIN public.mycel_chunks c ON c.id=v.chunk_id
 JOIN public.mycel_locations l ON l.chunk_version=v.id AND l.kind IN ('disk','index')
-WHERE c.repository=%s"""
-
-_REGENERATION_SQL = """SELECT DISTINCT c.id,v.snapshot_hash,l.metadata
-FROM public.mycel_generated_state g JOIN public.mycel_chunks c ON c.id=g.chunk_id
-JOIN public.mycel_chunk_versions v ON v.chunk_id=c.id
-JOIN public.mycel_locations l ON l.chunk_version=v.id AND l.kind='index'
-JOIN public.mycel_stale_reasons s ON s.chunk_version=v.id
-WHERE c.repository=%s ORDER BY c.id,v.snapshot_hash"""
+WHERE c.repository=%s AND c.kind<>'summary'"""

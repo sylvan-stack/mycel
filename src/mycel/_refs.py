@@ -190,7 +190,7 @@ def _needs_generated_context(report: dict) -> bool:
         place = parse_source_address(report["parsedRef"])
     except SourceAddressError:
         return False
-    return place.root in {None, "index"} and place.path in {"summaries", "overview"}
+    return place.root in {None, "index"} and place.path == "overview"
 
 
 def refs(invocation: Invocation) -> Result:
@@ -222,7 +222,7 @@ def refs(invocation: Invocation) -> Result:
             if not generated_context_loaded and any(_needs_generated_context(ref) for ref in retained):
                 catalog = SourceResolver.from_read_transaction(connection, invocation.settings)
                 namespaces = frozenset((place.repository, place.path) for place, chunk in catalog.index
-                                       if chunk.kind in {"summary", "overview"})
+                                       if chunk.kind == "overview")
                 physical_paths = frozenset((file.repository, alias.path) for file in catalog.files
                                            for alias in file.aliases)
                 generated_context_loaded = True

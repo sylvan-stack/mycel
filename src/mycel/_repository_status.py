@@ -38,7 +38,7 @@ _CHUNKS_SQL = """WITH chunks AS (
  FROM public.mycel_chunks c
  JOIN public.mycel_chunk_versions v ON v.chunk_id=c.id
  JOIN public.mycel_locations l ON l.chunk_version=v.id
- WHERE c.repository=%s GROUP BY c.id
+ WHERE c.repository=%s AND c.kind<>'summary' GROUP BY c.id
 )
 SELECT count(*) FILTER (WHERE on_disk),
        count(*) FILTER (WHERE NOT on_disk AND elsewhere) FROM chunks"""
@@ -85,7 +85,7 @@ class RepositoryReports:
         result = {**provenance, 'known': known, 'enabled': known and configured.enabled,
                   'folders': folders,
                   'documents': {'onDisk': documents[0], 'elsewhere': documents[1]},
-                  # Generated index chunks are current alongside disk chunks,
+                  # Code overviews are current alongside disk chunks,
                   # matching the provenance stale total and current read scope.
                   'chunks': {'onDisk': chunks[0], 'elsewhere': chunks[1], 'stale': provenance['stale']},
                   'vectors': vectors, 'parts': parts}

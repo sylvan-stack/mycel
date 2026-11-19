@@ -39,13 +39,13 @@ _COUNT_CONTEXT = ("tokenizer_repository", "tokenizer_revision", "tokenizer_file"
 _VERSIONS_SQL = """SELECT c.repository, c.id, c.kind, c.metadata,
 v.id, v.snapshot_hash, v.source_bytes, v.metadata
 FROM public.mycel_chunks c JOIN public.mycel_chunk_versions v ON v.chunk_id = c.id
-WHERE c.repository = %s AND EXISTS
+WHERE c.repository = %s AND c.kind <> 'summary' AND EXISTS
 (SELECT 1 FROM public.mycel_locations l WHERE l.chunk_version = v.id)
 ORDER BY c.id, v.id"""
 _PLANS_SQL = """SELECT p.id, p.chunk_version, p.plan_hash, p.place_line, p.provenance, p.failure
 FROM public.mycel_embedding_plans p JOIN public.mycel_chunk_versions v ON v.id=p.chunk_version
 JOIN public.mycel_chunks c ON c.id=v.chunk_id
-WHERE c.repository=%s AND p.model=%s AND p.dimensions=%s ORDER BY p.chunk_version"""
+WHERE c.repository=%s AND c.kind<>'summary' AND p.model=%s AND p.dimensions=%s ORDER BY p.chunk_version"""
 _PARTS_SQL = """SELECT p.plan_id,p.part_order,p.byte_start,p.byte_end,p.input_bytes,
 p.submitted_tokens,p.planning_tokens,p.failure,v.embedding::text
 FROM public.mycel_embedding_parts p LEFT JOIN public.mycel_vectors v

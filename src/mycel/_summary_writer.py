@@ -1,4 +1,4 @@
-"""The bounded external command boundary for MYC-8 summary generation."""
+"""Bounded subprocess execution for standalone summary writers."""
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
