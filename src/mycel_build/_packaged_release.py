@@ -70,7 +70,8 @@ def _policy(source_root: Path) -> str:
     policy = '(version 1)(allow default)(deny network*)(deny file-write*)'
     owner = Path.home().resolve()
     denied = {source_root.resolve(), Path(sys.executable).resolve().parents[1],
-              owner / '.mycel', owner / 'Artifacts/arbol', owner / 'repos/arbol',
+              owner / '.mycel', default_registry(owner), owner / '.local/lib/sylvan-stack/mycel',
+              owner / 'Artifacts/arbol', owner / 'repos/arbol',
               Path('/usr/bin/python3'), Path('/usr/local/bin/python3'), Path('/opt/homebrew/bin/python3')}
     for path in sorted(denied):
         policy += '(deny file-read* (subpath ' + json.dumps(str(path)) + '))'

@@ -26,7 +26,7 @@ def main(arguments=None) -> int:
     if arguments in (["--help"], ["-h"]):
         print(json.dumps({"tool": "python -m mycel_build", "commands": ["prepare", "create", "list", "verify-source", "install-launcher", "withdraw", "prune", "replacement-plan", "replacement-validate"],
                           "createStatus": "working only after complete qualification and final publication; unavailable required checks fail",
-                          "requiredFlags": {"prepare": ["--target", "--assets"], "create": ["--target", "--assets"],
+                          "requiredFlags": {"prepare": ["--target", "--assets"], "create": ["--target", "--assets", "--registry"],
                                             "verify-source": ["build"], "install-launcher": ["--bundle"],
                                             "withdraw": ["build", "--reason"], "prune": ["build"],
                                             "replacement-plan": ["--inventory"],

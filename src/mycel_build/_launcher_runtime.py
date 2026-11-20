@@ -104,11 +104,11 @@ def _manifest(program):
 
 
 def default_registry(home: Path | None = None) -> Path:
-    return (Path.home() if home is None else home) / 'Builds/registries/mycel'
+    return (Path.home() if home is None else home).resolve() / 'Builds/registries/mycel'
 
 
 def payload_directory(root: Path, number: str, *, home: Path | None = None) -> Path:
-    home = Path.home() if home is None else home
+    home = (Path.home() if home is None else home).resolve()
     if root == default_registry(home):
         return home / '.local/lib/sylvan-stack/mycel/stable' / number
     return root / number
