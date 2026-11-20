@@ -103,6 +103,17 @@ def _manifest(program):
     return result
 
 
+def default_registry(home: Path | None = None) -> Path:
+    return (Path.home() if home is None else home) / 'Builds/registries/mycel'
+
+
+def payload_directory(root: Path, number: str, *, home: Path | None = None) -> Path:
+    home = Path.home() if home is None else home
+    if root == default_registry(home):
+        return home / '.local/lib/sylvan-stack/mycel/stable' / number
+    return root / number
+
+
 def _available(root, number, target, *, withdrawn=False):
     folder = root / number
     if folder.is_symlink() or not folder.is_dir() or not folder.resolve().is_relative_to(root.resolve()):
@@ -129,7 +140,10 @@ def _available(root, number, target, *, withdrawn=False):
             or type(checks['passed']) is not int or checks['passed'] != checks['required']
             or type(checks['failed']) is not int or checks['failed'] != 0):
         _refuse()
-    program = folder / 'program'
+    package = payload_directory(root, number)
+    if package != folder and package.resolve() != package:
+        _refuse()
+    program = package / 'program'
     manifest = _json(folder / 'files.json')
     if _digest(_bytes(manifest)) != record['filesSha256'] or _manifest(program) != manifest:
         _refuse()
@@ -266,7 +280,7 @@ def main(arguments=None, *, registry=None, target=None, stdout=None, stderr=None
     stdout, stderr = sys.stdout if stdout is None else stdout, sys.stderr if stderr is None else stderr
     selected = None
     try:
-        selected = select_build(Path.home() / '.mycel/builds' if registry is None else registry,
+        selected = select_build(default_registry() if registry is None else registry,
                                 sys.argv[1:] if arguments is None else arguments, target=target)
         if selected.warning is not None:
             reason = json.dumps(selected.warning, ensure_ascii=True)[1:-1]

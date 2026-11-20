@@ -11,6 +11,7 @@ import stat
 import tempfile
 
 from ._core import BuildError, TARGETS, atomic_json, json_bytes, read_json, utc_now
+from ._launcher_runtime import default_registry
 
 
 def build_number(value: str) -> int:
@@ -20,7 +21,7 @@ def build_number(value: str) -> int:
 
 
 def registry_path(root: Path | None = None) -> Path:
-    path = Path.home() / ".mycel" / "builds" if root is None else Path(root).absolute()
+    path = default_registry() if root is None else Path(root).absolute()
     if path.is_symlink():
         raise BuildError("refused", "The Build registry cannot be a symbolic link.")
     return path

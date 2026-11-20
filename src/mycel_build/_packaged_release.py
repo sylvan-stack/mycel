@@ -21,6 +21,7 @@ import time
 
 from ._core import BuildError, atomic_json, digest, file_manifest, json_bytes, validate_manifest
 from ._launcher import install_launcher, _remove_private
+from ._launcher_runtime import default_registry, payload_directory
 from ._process import _defer_cleanup_signals, owned_process, run_group
 from ._qualification import required_packaged_cases
 
@@ -172,14 +173,16 @@ def signal_case(command, *, cwd, env, interpreter: Path, grep: Path, stop_signal
 def _relocation(program, bundle, record, target, destination, *, source_root, timeout, progress=None):
     progress = {'label': destination.name, 'activeCase': 'prepare_private_fixture', 'cases': []} if progress is None else progress
     home = destination / 'home'
-    registry = home / '.mycel/builds'
+    registry = default_registry(home)
     folder = registry / record['build']
     folder.mkdir(parents=True)
     (registry / '.registry.lock').write_bytes(b'')
     (folder / 'run.lock').write_bytes(b'')
     (folder / 'run.lock').chmod(0o444)
-    shutil.copytree(program, folder / 'program', symlinks=True)
-    manifest = file_manifest(folder / 'program')
+    installed_program = payload_directory(registry, record['build'], home=home) / 'program'
+    installed_program.parent.mkdir(parents=True)
+    shutil.copytree(program, installed_program, symlinks=True)
+    manifest = file_manifest(installed_program)
     atomic_json(folder / 'files.json', manifest)
     fixture = {**record, 'status': 'working', 'packagedReleaseFixture': True,
         'checks': {'required': 1, 'passed': 1, 'failed': 0, 'report': 'checks.json'}}
@@ -275,13 +278,13 @@ def _relocation(program, bundle, record, target, destination, *, source_root, ti
         progress['activeCase'] = 'selected_pid_signal_' + str(stop)
         before = tree_state(destination)
         row = signal_case([*boundary, str(entry), 'grep', '--line-buffered', '-F', '-e', 'packaged readiness'],
-            cwd=cwd, env=env, interpreter=folder / 'program/runtime/bin/python3', grep=Path('/usr/bin/grep'),
+            cwd=cwd, env=env, interpreter=installed_program / 'runtime/bin/python3', grep=Path('/usr/bin/grep'),
             stop_signal=stop, timeout=timeout)
         if tree_state(destination) != before:
             raise ValueError('signal invocation changed inputs')
         cases.append(row)
     progress['activeCase'] = 'retained_manifest'
-    validate_manifest(folder / 'program', manifest, record['filesSha256'])
+    validate_manifest(installed_program, manifest, record['filesSha256'])
     if tuple(row['name'] for row in cases) != required_packaged_cases(record['build']):
         raise ValueError('incomplete ordered packaged case inventory')
     return {'label': destination.name, 'passed': True, 'executed': True, 'cases': cases,

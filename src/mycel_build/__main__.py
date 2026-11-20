@@ -2,7 +2,9 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
+import pwd
 import sys
 
 from ._core import BuildError, TARGETS, prepare
@@ -81,6 +83,14 @@ def main(arguments=None) -> int:
         elif options.command == "prepare":
             result = prepare(options.source / "packaging/build-lock.json", options.target, options.assets)
         else:
+            owner = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
+            builds = owner / "Builds"
+            destination = registry.resolve()
+            protected = builds / "registries"
+            if (not options.registry or Path(str(destination).casefold()).is_relative_to(str(protected).casefold())
+                    or destination.is_relative_to(owner)
+                    and (destination == builds or not destination.is_relative_to(builds))):
+                raise BuildError("refused", "Set --registry to an isolated temporary run under ~/Builds.")
             result = create_release(options.source, options.source / "packaging/build-lock.json",
                                   options.assets, registry, options.target, store_settings=options.store_settings)
         print(json.dumps(result, separators=(",", ":")))

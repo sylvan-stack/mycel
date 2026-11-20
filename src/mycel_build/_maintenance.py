@@ -7,6 +7,7 @@ from pathlib import Path
 import stat
 
 from ._core import BuildError, atomic_json, utc_now
+from ._launcher_runtime import payload_directory
 from ._registry import _folder, build_number, maintenance, read_record, registry_path, run_guard
 
 
@@ -136,8 +137,11 @@ def prune(root: Path, number: str) -> dict:
         if record["status"] not in {"failed", "withdrawn"}:
             raise BuildError("refused", "Pruning requires an explicitly named failed or withdrawn Build.")
         with run_guard(root, number, exclusive=True):
-            parents = [folder]
-            bundle = folder / "launcher-bundle"
+            package = payload_directory(root, number)
+            if package != folder and package.resolve() != package:
+                raise BuildError("refused", "The installed Build payload is not a physical directory.")
+            parents = [package] if package.exists() else []
+            bundle = package / "launcher-bundle"
             if record.get("launcherBundle") == "launcher-bundle":
                 if bundle.is_symlink() or (bundle.exists() and not bundle.is_dir()):
                     raise BuildError("refused", "The Build-local launcher bundle is not a real directory.")
