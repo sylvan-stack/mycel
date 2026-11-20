@@ -21,9 +21,10 @@ from typing import BinaryIO, TypedDict
 import unicodedata
 
 if __package__:
-    from . import selection, summary_label, verification
+    from . import bash_label, selection, summary_label, verification
 else:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import bash_label
     import selection
     import summary_label
     import verification
@@ -693,7 +694,7 @@ class _ArgumentParser(argparse.ArgumentParser):
 
 def _arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = _ArgumentParser(description=__doc__, allow_abbrev=False,
-                             epilog="Use 'label --help' for the standalone label command.")
+                             epilog="Use 'label --help' or 'bash-label --help' for the label commands.")
     parser.add_argument("--model-command", required=True, type=command_argument,
                         help="absolute executable and arguments as JSON argv")
     parser.add_argument("--embedding-command", type=command_argument,
@@ -948,10 +949,27 @@ def _run_writer(
     return 0, output
 
 
+def _run_bash_label(argv: list[str]) -> str:
+    parser = _ArgumentParser(prog=f"{Path(sys.argv[0]).name} bash-label", allow_abbrev=False,
+                             description="Label shell command text without running it.")
+    parser.parse_args(argv)
+    maximum = bash_label.MAX_COMMAND_CHARS * 4
+    raw = sys.stdin.buffer.read(maximum + 1)
+    if len(raw) > maximum:
+        raise NarratorError("shell label input exceeds the byte limit")
+    command = raw.decode("utf-8")
+    if not command.strip() or "\0" in command or len(command) > bash_label.MAX_COMMAND_CHARS:
+        raise NarratorError("shell label requires nonblank text of at most 8192 characters")
+    return bash_label.label_bash(command)
+
+
 def main(argv: list[str] | None = None) -> int:
     started = time.monotonic()
     arguments = sys.argv[1:] if argv is None else argv
     try:
+        if arguments[:1] == ["bash-label"]:
+            print(_run_bash_label(arguments[1:]))
+            return 0
         if arguments[:1] == ["label"]:
             with _interrupt_on_termination():
                 output = _run_label(arguments[1:], started)

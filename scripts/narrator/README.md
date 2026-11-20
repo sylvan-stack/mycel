@@ -33,6 +33,15 @@ limit and writes one newline-terminated line. If a reply fails validation,
 Narrator asks once more. Failure leaves stdout empty and writes a diagnostic
 to stderr.
 
+## Label a Bash command
+
+Use `narrator.py bash-label` and send the command text on stdin. For example,
+`cd docs && cat README.md | head -20` returns `Read README.md`. The
+shell label uses bounded static tokenization and does not invoke a shell or
+reasoning adapter. It describes a recognizable action in one short line and
+uses `Run shell command` for unsupported syntax or actions. The original command
+is unchanged and remains available to the caller.
+
 ## Summarize text
 
 Supply up to 48,000 Unicode code points of UTF-8 text on stdin with
