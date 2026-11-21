@@ -33,6 +33,15 @@ limit and writes one newline-terminated line. If a reply fails validation,
 Narrator asks once more. Failure leaves stdout empty and writes a diagnostic
 to stderr.
 
+The installed Mycel launcher also exposes Label Generation without opening the
+index or loading repository settings. Use `--count-all-words` when the limit
+must include every whitespace-separated word.
+
+```sh
+mycel narrator label --max-words 12 --count-all-words \
+  --model-command '["/absolute/path/to/reasoning-adapter"]' < message.txt
+```
+
 ## Label a Bash command
 
 Use `narrator.py bash-label` and send the command text on stdin. For example,

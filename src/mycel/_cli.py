@@ -317,6 +317,8 @@ def parse(argv: Sequence[str]) -> Invocation | Result:
     if name not in BY_NAME:
         raise MycelError(ErrorCode.INVALID_INPUT, "Unknown command; use --help for the command list.")
     spec = BY_NAME[name]
+    if name == "narrator" and (not rest or rest in (["--help"], ["-h"])):
+        return Result(help_reply(name))
     if spec.raw_arguments:
         return Invocation(name, arguments=tuple(rest), raw=True)
     parser = _Parser(prog=f"mycel {name}", add_help=False, allow_abbrev=False)
@@ -599,6 +601,11 @@ def run(argv: Sequence[str], *, handlers: dict[str, Handler] | None = None,
     parsed: Invocation | Result | None = None
     try:
         parsed = parse(argv)
+        if isinstance(parsed, Invocation) and parsed.command == "narrator":
+            if parsed.arguments[:1] != ("label",):
+                raise MycelError(ErrorCode.INVALID_INPUT, "Use mycel narrator label --help.")
+            from ._narrator import narrator
+            return narrator.main(list(parsed.arguments))
         if (isinstance(parsed, Invocation) and parsed.command == 'grep'
                 and (handlers is None or 'grep' not in handlers)):
             # Literal grep is independent of settings and every optional

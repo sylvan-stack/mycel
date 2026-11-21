@@ -46,6 +46,7 @@ COMMANDS = (
     CommandSpec("maintain", "Run one quiet-period maintenance check for a repository"),
     CommandSpec("overview", "Read the stored code overview", extra_options=("--dir <directory>",)),
     CommandSpec("grep", "Run grep with a related search tail", scope=False, raw_arguments=True),
+    CommandSpec("narrator", "Generate a short label from text on standard input", scope=False, raw_arguments=True),
     CommandSpec("read", "Read one exact chunk", extra_options=("--id <id>", "--context <lines>", "--no-fresh")),
     CommandSpec("undocumented", "List code that no document section describes", extra_options=("--path <path>", "--no-fresh")),
     CommandSpec("activity", "Report recorded work", all_repositories=True,
@@ -76,7 +77,7 @@ def help_reply(command: str | None = None) -> dict:
         "version": "2.0.0",
         "usage": "mycel <command> [arguments]",
         "commands": [
-            {"name": s.name, "description": s.description, "available": s.name in {"audit", "recovery", "origins", "justify", "api-key", "info", "grep", "repos", "init", "ids", "pieces", "cues", "plan", "hub", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "maintain", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
+            {"name": s.name, "description": s.description, "available": s.name in {"audit", "recovery", "origins", "justify", "api-key", "info", "grep", "narrator", "repos", "init", "ids", "pieces", "cues", "plan", "hub", "refs", "derive", "relate", "confirm", "verifications", "ingest", "activity", "embed", "evaluate", "maintain", "read", "search", "undocumented", "overview", "classify", "drifts", "stale", "status"},
              "rawArguments": s.raw_arguments,
              "options": ([] if s.raw_arguments else
                          ["-h", "--help"] + (["--repo <name>"] if s.scope else []) +
