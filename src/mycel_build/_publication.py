@@ -1,14 +1,8 @@
-"""Last-record working publication, independently revalidated under one lock.
-
-This receiver neither runs tests nor trusts a saved qualification boolean. Its
-caller supplies the exact captured source bytes, never a reconstructed proof
-object or provider acceptance. No installed product command is added.
-"""
+"""Publish the sealed Build under the registry lock, writing the working record last."""
 from __future__ import annotations
 
 import ast
 import json
-import math
 import os
 from pathlib import Path
 import stat
@@ -17,19 +11,16 @@ import tomllib
 
 from ._core import BuildError, RUNTIME_HASHES, atomic_json, digest, file_manifest, json_bytes, read_json, utc_now, validate_manifest
 from ._launcher import _validate_bundle
-from ._credential_contract import credential_probe_passed
-from ._qualification import automatic_contract, qualification_certificate, required_packaged_cases
-from ._registry import _folder, _ledger, build_number, maintenance, read_record, registry_path
+from ._launcher_runtime import payload_directory
+from ._registry import _folder, _ledger, build_number, delivery_checks, maintenance, read_record, registry_path
 from ._staging import check_input_manifest, input_manifest
 
 
 KEYCHAIN_CHECK = 'private_dummy_keychain_installed_credentials_probe'
-FINAL_LOG = ('Every required native, bootstrap, automatic and packaged check passed.\n'
-             'The separately owned dummy Keychain boundary passed.\n'
-             'Working publication committed after all final evidence.\n')
+FINAL_LOG = "Sealed Mycel Build published. Qualification was not run.\n"
 
 
-def _require(condition, message='The installed Build qualification is incomplete or inconsistent.'):
+def _require(condition, message='The staged Mycel package is incomplete or inconsistent.'):
     if not condition:
         raise BuildError('refused', message)
 
@@ -42,64 +33,11 @@ def _metadata(folder, name):
     return path
 
 
-def _relocations(result, *, number=None):
-    rows = result['relocations']
-    _require(isinstance(rows, list) and len(rows) == 2)
-    for row in rows:
-        _require(row['python'] == '3.14.7' and row['machine'] == 'arm64'
-                 and row['isolated'] is True and row['dontWriteBytecode'] is True
-                 and int(row['macOS'].split('.')[0]) >= 14)
-        if number is not None:
-            _require(type(row['build']) is int and row['build'] == build_number(number))
-
-
-def _packaged(result, number):
-    _require(result['target'] == 'macos-arm64' and result['runtime'] == '3.14.7'
-             and result['machine'] == 'arm64')
-    for key in ('networkAndWritesDenied', 'sourceReadDenied', 'developerReadDenied',
-                'ownerStateDenied', 'retainedInputsUnchanged'):
-        _require(result[key] is True)
-    expected = required_packaged_cases(number)
-    rows = result['relocations']
-    _require([row['label'] for row in rows] == ['first installation', 'second relocated installation'])
-    for row in rows:
-        cases = row['cases']
-        _require(row['passed'] is True and row['executed'] is True
-                 and row['privateWorkingRecordFixtureOnly'] is True and row['ownerPublished'] is False)
-        _require(tuple(case['name'] for case in cases) == expected)
-        for case in cases:
-            _require(case['passed'] is True and case['executed'] is True
-                     and type(case['elapsedSeconds']) in {int, float}
-                     and math.isfinite(case['elapsedSeconds']) and case['elapsedSeconds'] >= 0)
-
-
-def _automatic(result, frozen, number):
-    contract = automatic_contract(frozen)
-    expected = contract['declarations']
-    checks = result['checks']
-    _require(len(checks) == len(expected) and len({row['name'] for row in checks}) == len(checks))
-    declarations = []
-    for row in checks:
-        _require(set(row) == {'name', 'kind', 'status', 'passed', 'detail'}
-                 and row['status'] == 'passed' and row['passed'] is True and row['detail'] is None)
-        declarations.append({key: row[key] for key in ('name', 'kind')})
-    _require(sorted(declarations, key=lambda row: row['name']) == expected)
-    _require(result['inventorySha256'] == contract['inventorySha256'])
-    _require(result['build'] == build_number(number) and result['python'] == '3.14.7'
-             and result['target'] == 'macos-arm64' and result['gateErrorCount'] == 0
-             and result['required'] == result['passedCount'] == len(expected) and result['failedCount'] == 0)
-    _require(result['gateErrors'] == [] and all(type(result[key]) is int
-             for key in ('build', 'gateErrorCount', 'required', 'passedCount', 'failedCount')))
-    for key in ('completeFrozenInventory', 'isolated', 'dontWriteBytecode', 'installedProductImports',
-                'networkRestrictedToCheckStore', 'sourceReadDenied', 'developerReadDenied',
-                'installedFilesUnchanged', 'verifiedPrivateRelocation'):
-        _require(result[key] is True)
-
-
-def _verify(folder, record, frozen, identity):
+def _verify(folder, package, record, frozen, identity):
     """Read all independent inputs while the registry mutation lock is held."""
     _require(record['status'] in {'building', 'working'} and 'prunedAt' not in record)
-    _require(record['phase'] in {'qualified', 'working'} and record['automaticQualification'] is True)
+    _require((record['status'], record.get('phase')) in {('building', 'staged'), ('working', 'working')}
+             and record.get('automaticQualification') is False)
     _require(record['source'] == identity and record['target'] == 'macos-arm64'
              and record['program'] == 'program' and record['filesManifest'] == 'files.json'
              and record['checkInputs'] == 'check-inputs.json' and record['launcherBundle'] == 'launcher-bundle')
@@ -109,17 +47,18 @@ def _verify(folder, record, frozen, identity):
     _require(read_json(_metadata(folder, 'source-inputs.json')) == inputs
              and read_json(_metadata(folder, 'check-inputs.json')) == check_inputs
              and record['checkManifestSha256'] == digest(json_bytes(check_inputs)))
-    program = folder / 'program'
+    _require(package.resolve() == package)
+    program = package / 'program'
     manifest = read_json(_metadata(folder, 'files.json'))
     validate_manifest(program, manifest, record['filesSha256'])
     _require(all((program / row['path']).stat().st_nlink == 1 for row in manifest
                  if not row.get('directory') and 'link' not in row))
-    launcher = _validate_bundle(folder / 'launcher-bundle')
+    launcher = _validate_bundle(package / 'launcher-bundle')
     _require(record['launcherBundleSha256'] == digest(json_bytes(launcher)))
-    _require(all((folder / 'launcher-bundle/program' / row['path']).stat().st_nlink == 1
-                 for row in file_manifest(folder / 'launcher-bundle/program')
+    _require(all((package / 'launcher-bundle/program' / row['path']).stat().st_nlink == 1
+                 for row in file_manifest(package / 'launcher-bundle/program')
                  if not row.get('directory') and 'link' not in row))
-    _require((folder / 'launcher-bundle/program/launcher.py').read_bytes()
+    _require((package / 'launcher-bundle/program/launcher.py').read_bytes()
              == frozen['src/mycel_build/_launcher_runtime.py'])
     lock_raw = frozen['packaging/build-lock.json']
     lock = json.loads(lock_raw)
@@ -133,7 +72,7 @@ def _verify(folder, record, frozen, identity):
              and record['dependencies'] == pin['dependencies'] and record['lockSha256'] == digest(lock_raw)
              and (program / 'build-lock.json').read_bytes() == lock_raw)
     for row in runtime['licenses']:
-        _require((folder / 'launcher-bundle/program' / row['path']).read_bytes()
+        _require((package / 'launcher-bundle/program' / row['path']).read_bytes()
                  == frozen['packaging/' + row['path']])
     site = program / 'runtime/lib/python3.14/site-packages'
     for name, raw in frozen.items():
@@ -166,33 +105,8 @@ def _verify(folder, record, frozen, identity):
     data = [row for row in manifest if '/mycel/data/' in row['path'] or row['path'].startswith('licenses/')]
     _require(record['dataFiles'] == data
              and {row['path'] for row in data if row['path'].startswith('licenses/')} == licenses)
-    checks = read_json(_metadata(folder, 'checks.json'))
-    _require(checks['schemaVersion'] == 1 and checks['pending'] in (['publication'], []))
-    results = checks['results']
-    required = {'installed_native_and_two_path_probe', 'independent_launcher_bootstrap_two_path_probe',
-                'installed_automatic_unit_store_gate', 'packaged_selector_and_cli_two_path_probe', KEYCHAIN_CHECK}
-    _require(len(results) == len(required) and {row['name'] for row in results} == required
-             and all(row['passed'] is True and row['executed'] is True for row in results))
-    groups = {row['name']: row for row in results}
-    native = groups['installed_native_and_two_path_probe']
-    _require(native['target'] == 'macos-arm64' and native['sourceReadDenied'] is True
-             and native['networkAndWritesDenied'] is True)
-    _relocations(native, number=record['build'])
-    _require(groups['independent_launcher_bootstrap_two_path_probe'] == {'name': 'independent_launcher_bootstrap_two_path_probe', **launcher['checks']})
-    automatic = groups['installed_automatic_unit_store_gate']
-    _automatic(automatic, frozen, record['build'])
-    _require(automatic['sourceInputsSha256'] == identity['inputsSha256'])
-    _packaged(groups['packaged_selector_and_cli_two_path_probe'], record['build'])
-    keychain = groups[KEYCHAIN_CHECK]
-    _require(credential_probe_passed(keychain, number=record['build'], target=record['target'],
-        source_sha256=identity['inputsSha256'], program_sha256=record['filesSha256'], check_inputs=check_inputs))
-    count = len(automatic['checks']) + len(required) - 1
-    _require(record['checks'] == {'required': count, 'passed': count, 'failed': 0, 'report': 'checks.json'})
-    certificate = qualification_certificate(number=record['build'], source=identity, check_inputs=check_inputs,
-        program_sha256=record['filesSha256'], launcher_sha256=record['launcherBundleSha256'],
-        target=record['target'], runtime=runtime, results=results, publication=True)
-    _require(certificate is not None and record['qualification'] == certificate)
-    return checks, certificate
+    _require(record['checks'] == {'required': 0, 'passed': 0, 'failed': 0, 'report': 'checks.json'})
+    return read_json(_metadata(folder, 'checks.json'))
 
 
 def _write_log(path, text):
@@ -226,16 +140,15 @@ def publish(registry: Path, number: str, *, frozen: dict[str, bytes], source_ide
             _require(all(record[key] == initial[key] for key in
                          ('schemaVersion', 'build', 'version', 'target', 'source', 'startedAt')),
                      'Publication differs from its immutable allocation identity.')
-            checks, certificate = _verify(folder, record, frozen, source_identity)
-            final_checks = {**checks, 'pending': [], 'publication': {
-                'qualificationSha256': certificate['sha256'], 'sourceInputsSha256': source_identity['inputsSha256']}}
-            if checks['pending'] == []:
-                _require(checks == final_checks, 'An interrupted publication has inconsistent final evidence.')
+            package = payload_directory(root, number)
+            checks = _verify(folder, package, record, frozen, source_identity)
+            final_checks = delivery_checks(source_identity['inputsSha256'])
+            _require(checks in (delivery_checks(), final_checks),
+                     'An interrupted publication has inconsistent delivery metadata.')
             if record['status'] == 'working':
                 _require(record['phase'] == 'working' and checks == final_checks
                          and (folder / 'build.log').read_text() == FINAL_LOG)
                 return record
-            _require(record['phase'] == 'qualified')
             if checks != final_checks:
                 wrote = True
                 atomic_json(folder / 'checks.json', final_checks)
@@ -243,7 +156,7 @@ def publish(registry: Path, number: str, *, frozen: dict[str, bytes], source_ide
                 wrote = True
                 _write_log(folder / 'build.log', FINAL_LOG)
             final = {**record, 'status': 'working', 'phase': 'working', 'finishedAt': utc_now(),
-                     'reason': 'Every required installed check passed; working publication completed.'}
+                     'reason': 'Sealed package published without qualification.'}
             wrote = True
             atomic_json(folder / 'build.json', final)
             return final

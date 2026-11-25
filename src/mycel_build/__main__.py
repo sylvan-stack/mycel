@@ -9,7 +9,8 @@ import sys
 
 from ._core import BuildError, TARGETS, prepare
 from ._registry import list_records, registry_path
-from ._staging import create_stage, verify_source
+from ._launcher_runtime import default_registry
+from ._staging import verify_source
 from ._release import create_release
 from ._launcher import install_launcher
 from ._maintenance import withdraw, prune
@@ -25,7 +26,7 @@ def main(arguments=None) -> int:
     arguments = list(sys.argv[1:] if arguments is None else arguments)
     if arguments in (["--help"], ["-h"]):
         print(json.dumps({"tool": "python -m mycel_build", "commands": ["prepare", "create", "list", "verify-source", "install-launcher", "withdraw", "prune", "replacement-plan", "replacement-validate"],
-                          "createStatus": "working only after complete qualification and final publication; unavailable required checks fail",
+                          "createStatus": "working after package integrity validation and publication; qualification does not run",
                           "requiredFlags": {"prepare": ["--target", "--assets"], "create": ["--target", "--assets", "--registry"],
                                             "verify-source": ["build"], "install-launcher": ["--bundle"],
                                             "withdraw": ["build", "--reason"], "prune": ["build"],
@@ -87,12 +88,16 @@ def main(arguments=None) -> int:
             builds = owner / "Builds"
             destination = registry.resolve()
             protected = builds / "registries"
-            if (not options.registry or Path(str(destination).casefold()).is_relative_to(str(protected).casefold())
+            if not options.registry:
+                raise BuildError("refused", "Choose an explicit temporary or installed Build registry with --registry.")
+            installed_registry = default_registry(owner)
+            if destination != installed_registry and (
+                    Path(str(destination).casefold()).is_relative_to(str(protected).casefold())
                     or destination.is_relative_to(owner)
                     and (destination == builds or not destination.is_relative_to(builds))):
-                raise BuildError("refused", "Set --registry to an isolated temporary run under ~/Builds.")
+                raise BuildError("refused", "Use a temporary registry under ~/Builds or the installed Mycel registry.")
             result = create_release(options.source, options.source / "packaging/build-lock.json",
-                                  options.assets, registry, options.target, store_settings=options.store_settings)
+                                  options.assets, destination, options.target)
         print(json.dumps(result, separators=(",", ":")))
         if options.command == "verify-source":
             return 0 if result["matches"] else 1

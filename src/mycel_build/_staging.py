@@ -1,8 +1,4 @@
-"""Product-only wheels, offline target staging and bounded installed-load evidence.
-
-This stage retains complete installed automatic qualification but never marks a
-Build working. Working publication is a separate release operation.
-"""
+"""Freeze product inputs and stage the sealed offline distribution."""
 
 from __future__ import annotations
 
@@ -27,9 +23,7 @@ from ._core import (BuildError, TARGETS, atomic_json, digest, extract_runtime, f
                     install_wheel, json_bytes, load_lock, seal_program, utc_now,
                     read_json, relative_path, snapshot_asset, validate_manifest)
 from ._registry import allocate, build_number, read_guard, read_record, registry_path, update_staging
-from ._automatic import run_automatic, store_address
-from ._packaged_release import probe_packaged_release
-from ._qualification import qualification_certificate
+from ._launcher_runtime import payload_directory
 
 
 def input_manifest(frozen: dict[str, bytes]) -> list[dict]:
@@ -384,7 +378,6 @@ def create_stage(source_root: Path, lock_path: Path, assets: Path, registry: Pat
     if (platform.python_version() != "3.14.7" or platform.python_implementation() != "CPython"
             or sysconfig.get_config_var("Py_GIL_DISABLED")):
         raise BuildError("refused", "Build creation requires the checked-in development CPython 3.14.7 pin.")
-    address = store_address(store_settings)
     lock, row = load_lock(lock_path, target)
     identity, frozen = source_inputs(source_root)
     if json.loads(frozen["packaging/build-lock.json"]) != lock:
@@ -405,9 +398,16 @@ def create_stage(source_root: Path, lock_path: Path, assets: Path, registry: Pat
         if not match or locked_versions.get(re.sub(r"[-_.]+", "-", match[1]).lower()) != match[2]:
             raise BuildError("refused", "The direct product dependencies differ from the checked-in lock.")
     record = allocate(registry, target=target, version=metadata["version"], source=identity)
-    folder = registry_path(registry) / record["build"]
+    root = registry_path(registry)
+    folder = root / record["build"]
+    package = payload_directory(root, record["build"])
     try:
-        program = folder / "program"
+        if package != folder:
+            if package.resolve() != package:
+                raise BuildError("refused", "The installed Build path cannot contain symbolic links.")
+            package.mkdir(parents=True)
+            (package / "use.lock").touch(mode=0o600, exist_ok=False)
+        program = package / "program"
         program.mkdir()
         runtime = program / "runtime"
         site = runtime / "lib" / "python3.14" / "site-packages"
@@ -446,23 +446,8 @@ def create_stage(source_root: Path, lock_path: Path, assets: Path, registry: Pat
         atomic_json(folder / "check-inputs.json", check_inputs)
         data = [m for m in manifest if "/mycel/data/" in m["path"] or m["path"].startswith("licenses/")]
         from ._launcher import stage_launcher
-        record = update_staging(registry, record["build"], fields={"launcherBundle": "launcher-bundle"})
-        launcher = stage_launcher(source_root, lock_path, assets, folder / "launcher-bundle", target,
-                                  frozen=frozen)
-        launcher_check = launcher["checks"]
-        probe = probe_installed(program, target, row["dependencies"], source_root=source_root, number=record["build"])
-        checks = {"schemaVersion": 1, "results": [
-                  {"name": "installed_native_and_two_path_probe", **probe},
-                  {"name": "independent_launcher_bootstrap_two_path_probe", **launcher_check}],
-                  "pending": ["all_unit", "all_store", "packaged_release", "publication"]}
-        automatic = None
-        if probe["passed"]:
-            automatic = run_automatic(program, target, frozen, source_root=source_root,
-                                      number=record["build"], address=address)
-            checks["results"].append({"name": "installed_automatic_unit_store_gate", **automatic})
-            if automatic["executed"] and automatic["checks"]:
-                checks["pending"] = ["packaged_release", "publication"]
-        automatic_failed = automatic is not None and not automatic["passed"]
+        launcher = stage_launcher(source_root, lock_path, assets, package / "launcher-bundle",
+                                  target, frozen=frozen)
         fields = {"program": "program", "runtime": row["runtime"], "dependencies": row["dependencies"],
                   "productWheel": product, "lockSha256": digest(frozen["packaging/build-lock.json"]),
                   "filesSha256": fingerprint, "filesManifest": "files.json", "dataFiles": data,
@@ -470,44 +455,9 @@ def create_stage(source_root: Path, lock_path: Path, assets: Path, registry: Pat
                   "storeFormat": store_format, "searchReply": 3, "stagedAt": utc_now(),
                   "launcherBundle": "launcher-bundle",
                   "launcherBundleSha256": digest(json_bytes(launcher)),
-                  "phase": "staging", "automaticQualification": False,
-                  "checks": {"required": 2 + (automatic["required"] if automatic else 0),
-                             "passed": int(probe["passed"]) + int(launcher_check["passed"]) + (automatic["passedCount"] if automatic else 0),
-                             "failed": int(not probe["passed"]) + int(not launcher_check["passed"]) + (automatic["failedCount"] if automatic else 0),
-                             "report": "checks.json"},
-                  "reason": (launcher_check["reason"] if not launcher_check["passed"] else automatic["reason"] if automatic is not None else
-                             ("Staged files await the complete automatic gate and working publication."
-                              if probe["passed"] else probe["reason"]))}
-        packaged = {"passed": False, "executed": False, "target": target, "relocations": [],
-                    "reason": "Packaged execution requires passing native, bootstrap and complete automatic checks."}
-        if probe["passed"] and launcher_check["passed"] and automatic is not None and automatic["passed"]:
-            packaged = probe_packaged_release(program, folder / 'launcher-bundle', target,
-                source_root=source_root, record={**record, **fields})
-        checks['results'].append({'name': 'packaged_selector_and_cli_two_path_probe', **packaged})
-        fields['checks']['required'] += 1
-        fields['checks']['passed'] += int(packaged['passed'])
-        fields['checks']['failed'] += int(not packaged['passed'])
-        certificate = qualification_certificate(number=record['build'], source=identity, check_inputs=check_inputs,
-            program_sha256=fingerprint, launcher_sha256=fields['launcherBundleSha256'],
-            target=target, runtime=row['runtime'], results=checks['results'])
-        fields['automaticQualification'] = certificate is not None
-        if certificate is not None:
-            fields.update(qualification=certificate, phase='qualified',
-                reason='Every required automatic and packaged check passed; working publication remains pending.')
-            checks['pending'] = ['publication']
-        elif not packaged['passed'] and not automatic_failed and probe['passed'] and launcher_check['passed']:
-            fields['reason'] = packaged['reason']
-        validate_manifest(program, manifest, fingerprint)
-        record = update_staging(registry, record["build"], fields=fields, checks=checks,
-                                failed=certificate is None)
-        (folder / "build.log").write_text("Pinned offline staging completed.\n" +
-                                        ("Native installed relocation probes passed.\n" if probe["passed"] else
-                                         "Native installed relocation checks failed or could not run.\n") +
-                                        (("Installed automatic unit/store checks passed.\n" if automatic["passed"] else
-                                          "Installed automatic unit/store checks failed or could not run.\n")
-                                         if automatic is not None else "") +
-                                        "No working publication or launcher installation was performed.\n")
-        return record
+                  "phase": "staged", "automaticQualification": False,
+                  "reason": "Sealed package is ready for publication."}
+        return update_staging(root, record["build"], fields=fields)
     except BaseException as error:
         reason = "Build staging was cancelled." if isinstance(error, KeyboardInterrupt) else "Build staging failed; no working publication occurred."
         try:

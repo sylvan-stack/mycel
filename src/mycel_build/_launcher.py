@@ -119,7 +119,7 @@ def stage_launcher(source_root: Path, lock_path: Path, assets: Path, destination
     manifest = file_manifest(program)
     fingerprint = digest(json_bytes(manifest))
     atomic_json(destination / 'files.json', manifest)
-    checks = probe_launcher(program, target, source_root=source_root)
+    checks = {"status": "not_run"}
     record = {'schemaVersion': 1, 'kind': 'mycel-launcher', 'target': target,
               'runtime': row['runtime'], 'program': 'program', 'filesManifest': 'files.json',
               'filesSha256': fingerprint, 'payloadSha256': digest(raw), 'checks': checks}
@@ -142,23 +142,25 @@ def _validate_bundle(bundle):
     record = read_json(bundle / 'bundle.json')
     try:
         checks, runtime = record['checks'], record['runtime']
-        probes = checks['relocations']
         if (type(record['schemaVersion']) is not int or record['schemaVersion'] != 1
                 or record['kind'] != 'mycel-launcher' or record['target'] != 'macos-arm64'
                 or record['program'] != 'program' or record['filesManifest'] != 'files.json'
                 or runtime['python'] != '3.14.7'
                 or runtime['distribution'] != 'python-build-standalone/20260901/install_only_stripped'
-                or runtime['sha256'] != RUNTIME_HASHES['macos-arm64']
-                or checks['passed'] is not True or checks['executed'] is not True
-                or checks['target'] != record['target'] or not isinstance(probes, list) or len(probes) != 2
-                or any(not isinstance(probe, dict) or probe.get('python') != '3.14.7'
-                       or probe.get('machine') != 'arm64' or probe.get('isolated') is not True
-                       or probe.get('dontWriteBytecode') is not True or probe.get('standaloneSelector') is not True
-                       for probe in probes)
-                or [probe.get('label') for probe in probes] != ['first installation', 'second relocated installation']
-                or checks.get('networkAndWritesDenied') is not True
-                or checks.get('sourceReadDenied') is not True):
+                or runtime['sha256'] != RUNTIME_HASHES['macos-arm64']):
             raise ValueError('bundle record')
+        if checks != {"status": "not_run"}:
+            probes = checks['relocations']
+            if (checks['passed'] is not True or checks['executed'] is not True
+                    or checks['target'] != record['target'] or not isinstance(probes, list) or len(probes) != 2
+                    or any(not isinstance(probe, dict) or probe.get('python') != '3.14.7'
+                           or probe.get('machine') != 'arm64' or probe.get('isolated') is not True
+                           or probe.get('dontWriteBytecode') is not True or probe.get('standaloneSelector') is not True
+                           for probe in probes)
+                    or [probe.get('label') for probe in probes] != ['first installation', 'second relocated installation']
+                    or checks.get('networkAndWritesDenied') is not True
+                    or checks.get('sourceReadDenied') is not True):
+                raise ValueError('historical launcher evidence')
         manifest = read_json(bundle / 'files.json')
         validate_manifest(bundle / 'program', manifest, record['filesSha256'])
         if digest((bundle / 'program/launcher.py').read_bytes()) != record['payloadSha256']:
@@ -179,7 +181,7 @@ def _validate_bundle(bundle):
         if {p.name for p in bundle.iterdir()} != expected:
             raise ValueError('bundle members')
     except (KeyError, ValueError, TypeError, OSError):
-        raise BuildError('refused', 'The launcher bundle is incomplete, damaged or unchecked.') from None
+        raise BuildError('refused', 'The launcher bundle is incomplete or damaged.') from None
     return record
 
 

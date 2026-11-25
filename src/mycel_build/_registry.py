@@ -155,6 +155,14 @@ def _write_allocation_log(path: Path, text: str) -> None:
         Path(temporary).unlink(missing_ok=True)
 
 
+def delivery_checks(source_sha256: str | None = None) -> dict:
+    record = {"schemaVersion": 1, "results": [], "qualification": "not_run",
+              "pending": ["publication"]}
+    if source_sha256 is not None:
+        record.update(pending=[], publication={"sourceInputsSha256": source_sha256})
+    return record
+
+
 def _materialize(root: Path, number: str, initial: dict, *, recovered: bool = False) -> None:
     folder = _folder(root, number)
     folder.mkdir(exist_ok=True)
@@ -163,8 +171,7 @@ def _materialize(root: Path, number: str, initial: dict, *, recovered: bool = Fa
         record.update(status="failed", finishedAt=utc_now(),
                       reason="Allocation was interrupted before its complete record was written.")
     atomic_json(folder / "build.json", record)
-    atomic_json(folder / "checks.json", {"schemaVersion": 1, "results": [],
-                                        "pending": ["all_unit", "all_store", "packaged_release", "publication"]})
+    atomic_json(folder / "checks.json", delivery_checks())
     _write_allocation_log(folder / "build.log", "Interrupted allocation recovered.\n" if recovered else "Build number allocated.\n")
     fd = os.open(folder / "run.lock", os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o444)
     try:
@@ -193,9 +200,9 @@ def _recover_initial_allocation(root: Path, number: str, initial: dict) -> None:
             if record.exists() and json_bytes(read_json(record)) != json_bytes(initial):
                 return
             checks = folder / "checks.json"
-            if checks.exists() and json_bytes(read_json(checks)) != json_bytes({
-                    "schemaVersion": 1, "results": [],
-                    "pending": ["all_unit", "all_store", "packaged_release", "publication"]}):
+            if checks.exists() and read_json(checks) not in (
+                    delivery_checks(), {"schemaVersion": 1, "results": [],
+                                        "pending": ["all_unit", "all_store", "packaged_release", "publication"]}):
                 return
             log = folder / "build.log"
             if log.exists() and log.read_bytes() != b"Build number allocated.\n":

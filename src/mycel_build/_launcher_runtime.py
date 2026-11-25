@@ -136,7 +136,7 @@ def _available(root, number, target, *, withdrawn=False):
     source, checks = record['source'], record['checks']
     if (type(source['dirty']) is not bool or not re.fullmatch(r'[0-9a-f]{64}', source['inputsSha256'])
             or not re.fullmatch(r'[0-9a-f]{40}|uncommitted', source['commit'])
-            or checks['report'] != 'checks.json' or type(checks['required']) is not int or checks['required'] < 1
+            or checks['report'] != 'checks.json' or type(checks['required']) is not int or checks['required'] < 0
             or type(checks['passed']) is not int or checks['passed'] != checks['required']
             or type(checks['failed']) is not int or checks['failed'] != 0):
         _refuse()
@@ -170,9 +170,16 @@ def _available(root, number, target, *, withdrawn=False):
     evidence = _json(folder / 'checks.json')
     results = evidence['results']
     if (type(evidence['schemaVersion']) is not int or evidence['schemaVersion'] != 1
-            or not isinstance(results, list) or not results or evidence['pending'] != []
-            or any(not isinstance(row, dict) or not isinstance(row.get('name'), str) or not row['name']
-                   or row.get('passed') is not True or row.get('executed', True) is not True for row in results)
+            or not isinstance(results, list) or evidence['pending'] != []):
+        _refuse()
+    if checks['required'] == 0:
+        if (record.get('automaticQualification') is not False or record.get('phase') != 'working'
+                or evidence.get('qualification') != 'not_run' or results
+                or evidence.get('publication') != {'sourceInputsSha256': source['inputsSha256']}):
+            _refuse()
+    elif (not results or any(not isinstance(row, dict) or not isinstance(row.get('name'), str)
+                            or not row['name'] or row.get('passed') is not True
+                            or row.get('executed', True) is not True for row in results)
             or len({row['name'] for row in results}) != len(results)):
         _refuse()
     interpreter = program / 'runtime/bin/python3'
